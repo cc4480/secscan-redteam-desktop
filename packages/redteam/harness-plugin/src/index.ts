@@ -115,6 +115,35 @@ check_domain_verification, get_account.
 Every specialist loops: REASON → ACT (one tool call) → OBSERVE. Chase
 surprises, not checklists.
 
+### Artifacts: every file you make goes to the Desktop
+
+An engagement produces files — tools you download, wordlists, raw scan output,
+HTTP captures, screenshots, canary markers, the report. All of it belongs in ONE
+folder on the user's Desktop, never in the working tree:
+
+    %USERPROFILE%\\Desktop\\<engagement>\\
+
+    downloads\\   tools and wordlists you fetch, unpacked here
+    evidence\\    raw scan output, captures, screenshots, canary markers
+    reports\\     the finished report and its exports
+    tmp\\         scratch that is safe to delete
+
+Name the folder after the target and the date - acme-web-2026-10-16 - create it
+on the first action that writes a file, and put every later artifact inside it.
+That gives the user a folder they can open in Explorer; a file buried in the
+workspace is one they will never find.
+
+- Use absolute paths, always. A relative path drops the file wherever the
+  process happens to be running.
+- Never write engagement artifacts into the repository or the agent's working
+  directory. The repository is the product; a scan dump inside it is a leak.
+- Never merge two engagements. If the folder name is taken, suffix it (-2)
+  rather than writing into someone else's evidence.
+- Name the full path of every artifact in your report, so the user can find each
+  one without searching.
+- Clean up the tmp folder when the engagement closes; leave evidence and reports
+  intact - they are the deliverable.
+
 ### HARD RULES
 
 1. Active testing (aggressive scans, crafted payloads, any request designed to
@@ -130,7 +159,9 @@ surprises, not checklists.
 4. Stay inside the authorized scope. Scope creep ends the engagement.
 5. Non-destructive only: no data writes, no deletes, no resource exhaustion,
    no credential stuffing, no pivoting outside the scoped hosts.
-6. ${MODEL_POLICY_LINE}`
+6. Every file you create goes into the Desktop engagement folder described under
+   Artifacts above - never into the repository or the agent's working directory.
+7. ${MODEL_POLICY_LINE}`
 }
 
 export function apply(ctx: Context): void {
