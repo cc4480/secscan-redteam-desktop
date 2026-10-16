@@ -2223,7 +2223,7 @@ Source: [`packages/experimental/tool-agent-team/src/index.ts`](../packages/exper
 
 ### `team_task_update`
 
-Compare-and-set a shared task action using the latest revision from team_task_get or team_task_list.
+Compare-and-set a shared task action using the latest revision from team_task_get or team_task_list. Completion is gated: it requires a current verification recorded by a member other than the task owner, so a different member first records action "verify" at the task's revision and the owner then completes that revision. Only the Team Lead may complete without one, and only by passing waiver with the recorded reason no member other than the owner could reproduce the work.
 
 ```json
 {
@@ -2239,12 +2239,13 @@ Compare-and-set a shared task action using the latest revision from team_task_ge
     },
     "action": {
       "type": "string",
-      "description": "Task transition to apply.",
+      "description": "Task transition to apply. \"verify\" records your independent verification of an in-progress task another member owns, and is what lets its owner complete it.",
       "enum": [
         "claim",
         "release",
         "edit",
         "set_dependencies",
+        "verify",
         "complete",
         "reopen",
         "reassign",
@@ -2276,6 +2277,10 @@ Compare-and-set a shared task action using the latest revision from team_task_ge
     "owner": {
       "type": "string",
       "description": "Member target from spawn_teammate or list_agents for Lead-only reassign; omit to unassign."
+    },
+    "waiver": {
+      "type": "string",
+      "description": "Lead-only reason for complete when no member other than the owner could verify the work. Recorded on the task and visible to every member, so it is never a silent shortcut around verification."
     }
   },
   "required": [

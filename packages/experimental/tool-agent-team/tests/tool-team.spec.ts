@@ -241,8 +241,17 @@ describe('dsh-tool-team', () => {
     expect(leadPrompt).toContain('Bash, formatters, code generators, and scripts are not fully protected')
     expect(leadPrompt).toContain('Task readiness never starts an owner')
     expect(leadPrompt).toContain('returns noProgress immediately')
+    // The gate is only fair if the model is told about it before it hits it, so
+    // the shared policy, the tool description, the action enum, and the task
+    // value all publish it.
+    expect(leadPrompt).toContain('Completion is refused without a current verification by a member other than the task owner')
     expect(leadPrompt).not.toContain('Your Team role')
     expect(renderContextSnapshot(leadAssembly)).toBe('')
+    const update = ctx.tools.get('team_task_update', scopeOf(lead.ctx))
+    expect(update?.description).toContain('Completion is gated')
+    expect(JSON.stringify(update?.parameters)).toContain('"verify"')
+    expect(JSON.stringify(update?.parameters)).toContain('"waiver"')
+    expect(update?.output.schema.properties?.attestation?.properties).toHaveProperty('revision')
 
     const spawned = await execute(ctx, lead, 'spawn_teammate', {
       name: 'tool-worker',
@@ -534,12 +543,31 @@ describe('dsh-tool-team', () => {
     expect(stale.isError).toBe(true)
     expect(text(stale)).toContain('stale team task')
 
+    // Completion through the tool is gated the same way the board gates it: the
+    // owner's own call is refused with the reason, and a peer's `verify` at that
+    // revision is what clears the owner to complete it.
+    const unverified = await execute(ctx, child, 'team_task_update', {
+      task_id: task.id,
+      expected_revision: JSON.parse(text(claimed)).revision,
+      action: 'complete',
+    })
+    expect(unverified.isError).toBe(true)
+    expect(text(unverified)).toContain('no verification is recorded against it')
+    const verified = await execute(ctx, lead, 'team_task_update', {
+      task_id: task.id,
+      expected_revision: JSON.parse(text(claimed)).revision,
+      action: 'verify',
+    })
+    expect(JSON.parse(text(verified))).toMatchObject({
+      attestation: { kind: 'verification', byName: 'lead' },
+    })
+
     const wait = execute(ctx, lead, 'wait_agent', { timeout_ms: 10_000 })
     const completedCall = new Promise<Awaited<ReturnType<typeof execute>>>((resolve, reject) => {
       setTimeout(() => {
         void execute(ctx, child, 'team_task_update', {
           task_id: task.id,
-          expected_revision: 2,
+          expected_revision: JSON.parse(text(verified)).revision,
           action: 'complete',
         }).then(resolve, reject)
       }, 0)

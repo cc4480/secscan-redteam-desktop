@@ -24,6 +24,13 @@ const TASK_GRAPH_ERROR_CODES: Record<TeamTaskGraphViolation, string> = {
   cycle: 'TEAM_TASK_DEPENDENCY_CYCLE',
 }
 
+const MAX_WAIVER_REASON = 1_024
+/**
+ * A waiver is a recorded justification, not a flag: this is the shortest text
+ * that can say why no member other than the owner could verify the task.
+ */
+const MIN_WAIVER_REASON = 16
+
 /** Owns Team task limits, authorization, transitions, and derived views. */
 export class TeamTaskBoard {
   /**
@@ -121,6 +128,7 @@ export class TeamTaskBoard {
       if (current.status === 'deleted') throw new TeamError(`team task "${current.id}" is deleted`, 'TEAM_TASK_DELETED')
       const lead = membership.role === 'lead'
       const owner = current.ownerId === caller.id
+      const nextRevision = current.revision + 1
       const authorizeOwner = (): void => {
         if (!lead && !owner) throw new TeamError('task mutation requires its owner or Team Lead', 'TEAM_TASK_UNAUTHORIZED')
       }
@@ -159,11 +167,63 @@ export class TeamTaskBoard {
           if (request.blockedBy === undefined) throw new TeamError('set_dependencies requires blocked_by', 'TEAM_INVALID_ARGUMENT')
           next = { ...current, blockedBy: this.dependencies(request.blockedBy, state, current.id) }
           break
-        case 'complete':
+        case 'verify':
+          // Verification is the one transition no owner authorization can grant:
+          // the point is that somebody other than the owner looked at the work.
+          if (current.ownerId === caller.id) {
+            throw new TeamError(
+              `team task "${current.id}" is owned by you; a verification by the owner does not count. Ask a different member — the Lead or another specialist — to record it.`,
+              'TEAM_TASK_SELF_VERIFICATION',
+            )
+          }
+          if (current.status !== 'in_progress') {
+            throw new TeamError('only an in-progress task can be verified', 'TEAM_TASK_INVALID_TRANSITION')
+          }
+          next = {
+            ...current,
+            attestation: { kind: 'verification', by: caller.id, revision: nextRevision },
+          }
+          break
+        case 'complete': {
           authorizeOwner()
           if (current.status !== 'in_progress') throw new TeamError('only an in-progress task can complete', 'TEAM_TASK_INVALID_TRANSITION')
-          next = { ...current, status: 'completed' }
+          const attestation = current.attestation
+          const verified = attestation !== undefined
+            && attestation.revision === current.revision
+            && attestation.by !== current.ownerId
+          if (verified) {
+            if (request.waiver !== undefined) {
+              throw new TeamError(
+                `team task "${current.id}" already carries a current independent verification; complete it without a waiver.`,
+                'TEAM_INVALID_ARGUMENT',
+              )
+            }
+            next = { ...current, status: 'completed' }
+            break
+          }
+          if (request.waiver === undefined) {
+            throw new TeamError(this.completionRefusal(state, current), 'TEAM_TASK_VERIFICATION_REQUIRED')
+          }
+          if (!lead) {
+            throw new TeamError(
+              `only the Team Lead may complete team task "${current.id}" with a waiver; ask a different member to record a verification instead.`,
+              'TEAM_LEAD_REQUIRED',
+            )
+          }
+          const reason = requiredText(request.waiver, 'waiver reason', MAX_WAIVER_REASON)
+          if (reason.length < MIN_WAIVER_REASON) {
+            throw new TeamError(
+              `waiver reason must be at least ${MIN_WAIVER_REASON} characters: record why no member other than the owner could verify team task "${current.id}".`,
+              'TEAM_INVALID_ARGUMENT',
+            )
+          }
+          next = {
+            ...current,
+            status: 'completed',
+            attestation: { kind: 'waiver', by: caller.id, revision: nextRevision, reason },
+          }
           break
+        }
         case 'reopen':
           authorizeOwner()
           if (current.status !== 'completed') throw new TeamError('only a completed task can reopen', 'TEAM_TASK_INVALID_TRANSITION')
@@ -202,12 +262,29 @@ export class TeamTaskBoard {
       }
       const task: TeamTaskSnapshot = {
         ...next,
-        revision: current.revision + 1,
+        revision: nextRevision,
       }
       this.assertTaskGraph(state, task)
       await this.journal.appendAndFlush(root, 'team/task', { version: 2, teamId: TeamId(root.id), task })
       return projectTaskView(state, task)
     })
+  }
+
+  /**
+   * Explain exactly what a refused completion is missing and how to satisfy the
+   * gate. The board is the last thing between the model and a stamped ticket, so
+   * the refusal names the current revision, the recorded attestation if any, the
+   * member that has to act, and both ways through.
+   */
+  private completionRefusal(state: TeamState, task: TeamTaskSnapshot): string {
+    const owner = projectTaskView(state, task).ownerName ?? 'no member'
+    const attestation = task.attestation
+    const missing = attestation === undefined
+      ? 'no verification is recorded against it'
+      : attestation.revision === task.revision
+        ? `its verification was recorded by "${owner}", its own owner`
+        : `its verification was recorded at revision ${attestation.revision}, and any later change to the task supersedes it`
+    return `team task "${task.id}" cannot complete at revision ${task.revision}: ${missing}. A verification by the owner does not count. Have a different member — the Lead or another specialist — record a verification with the "verify" action at revision ${task.revision}, then complete revision ${task.revision}. If no member other than the owner can reproduce this work, the Team Lead may complete it with a waiver that records the reason instead.`
   }
 
   /** Validate and de-duplicate dependency ids against the current task graph. */

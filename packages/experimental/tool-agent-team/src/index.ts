@@ -34,7 +34,7 @@ The Team Lead and all teammates share the same working directory and filesystem.
 
 Prefer read/edit/write for file changes. If a file operation returns FS_STALE_VERSION, read the current file, rebase your intended change onto the new content, and retry. Bash, formatters, code generators, and scripts are not fully protected by the filesystem version guard; coordinate them explicitly and have the Lead review the final diff and run tests.
 
-Use the target returned by spawn_teammate or list_agents for send_message and interrupt_agent, or as owner when assigning or filtering shared tasks. send_message steers a running target at its nearest step boundary and starts or resumes an inactive target. inactive means no turn is executing; it does not describe task completion, success, failure, or waiting for other agents. provisioning means member creation is in progress; failed means member creation failed. A delivered peer item starts with its stable message id and sender name. A successful send is already durable even when its result says queued; do not resend it. Shared-task workflow is list, get, claim with the current revision, perform the work, then complete. Task readiness never starts an owner. Before wait_agent, use list_agents and make sure another required member is running or provisioning; use send_message first when the required member is inactive. wait_agent observes only changes after that call starts, never wakes a member, and returns noProgress immediately when no other member can produce a change. Re-list after wakeup or timeout. The Lead must wait for required teammates before giving the final answer.`
+Use the target returned by spawn_teammate or list_agents for send_message and interrupt_agent, or as owner when assigning or filtering shared tasks. send_message steers a running target at its nearest step boundary and starts or resumes an inactive target. inactive means no turn is executing; it does not describe task completion, success, failure, or waiting for other agents. provisioning means member creation is in progress; failed means member creation failed. A delivered peer item starts with its stable message id and sender name. A successful send is already durable even when its result says queued; do not resend it. Shared-task workflow is list, get, claim with the current revision, perform the work, have a different member record action "verify" on it, then complete. Completion is refused without a current verification by a member other than the task owner, and a verification by the owner does not count: a verification is superseded by any later change to the task, so verify the revision you actually read and complete that revision. Only the Team Lead may complete without one, by passing waiver with the recorded reason no member other than the owner could reproduce the work; a waiver is visible on the task and is not a shortcut around peer verification. Task readiness never starts an owner. Before wait_agent, use list_agents and make sure another required member is running or provisioning; use send_message first when the required member is inactive. wait_agent observes only changes after that call starts, never wakes a member, and returns noProgress immediately when no other member can produce a change. Re-list after wakeup or timeout. The Lead must wait for required teammates before giving the final answer.`
 
 const ACTIVE_WAIT_STATUSES: ReadonlySet<TeamMemberView['status']> = new Set(['running', 'provisioning'])
 const NO_ACTIVE_PEER_MESSAGE = 'No other Team member is running or provisioning. wait_agent cannot make progress or wake inactive teammates. Re-list with list_agents and team_task_list, then use send_message to wake each required inactive teammate before waiting again.'
@@ -100,6 +100,24 @@ const TASK_VIEW_SCHEMA = {
     writeScopes: { type: 'array', required: true, items: { type: 'string' } },
     ready: { type: 'boolean', required: true },
     writeScopeWarnings: { type: 'array', required: true, items: { type: 'string' } },
+    // The durable record that clears this task to complete. `revision` is the
+    // task revision it was recorded at, so a reader can see at a glance whether
+    // it still stands: completion needs one recorded at the task's current
+    // revision whose `byName` is not the owner.
+    attestation: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        kind: { type: 'string', required: true, enum: ['verification', 'waiver'] },
+        byName: { type: 'string' },
+        revision: {
+          type: 'integer',
+          required: true,
+          description: 'Task revision this attestation was recorded at; a later change to the task supersedes it.',
+        },
+        reason: { type: 'string' },
+      },
+    },
   },
 } as const
 
@@ -379,21 +397,25 @@ To message another teammate, use send_message({ target: "<teammate name>", messa
 
     register(scoped.tools.register(defineTool({
       name: 'team_task_update',
-      description: 'Compare-and-set a shared task action using the latest revision from team_task_get or team_task_list.',
+      description: 'Compare-and-set a shared task action using the latest revision from team_task_get or team_task_list. Completion is gated: it requires a current verification recorded by a member other than the task owner, so a different member first records action "verify" at the task\'s revision and the owner then completes that revision. Only the Team Lead may complete without one, and only by passing waiver with the recorded reason no member other than the owner could reproduce the work.',
       parameters: {
         task_id: { type: 'string', required: true, description: 'Shared task id.' },
         expected_revision: { type: 'integer', required: true, description: 'Current task revision used as the CAS precondition.' },
         action: {
           type: 'string',
           required: true,
-          enum: ['claim', 'release', 'edit', 'set_dependencies', 'complete', 'reopen', 'reassign', 'delete'],
-          description: 'Task transition to apply.',
+          enum: ['claim', 'release', 'edit', 'set_dependencies', 'verify', 'complete', 'reopen', 'reassign', 'delete'],
+          description: 'Task transition to apply. "verify" records your independent verification of an in-progress task another member owns, and is what lets its owner complete it.',
         },
         subject: { type: 'string', description: 'Replacement title for edit.' },
         description: { type: 'string', description: 'Replacement details for edit.' },
         blocked_by: { type: 'array', items: { type: 'string' }, description: 'Complete blocker list for set_dependencies.' },
         write_scopes: { type: 'array', items: { type: 'string' }, description: 'Replacement advisory write scopes for edit.' },
         owner: { type: 'string', description: 'Member target from spawn_teammate or list_agents for Lead-only reassign; omit to unassign.' },
+        waiver: {
+          type: 'string',
+          description: 'Lead-only reason for complete when no member other than the owner could verify the work. Recorded on the task and visible to every member, so it is never a silent shortcut around verification.',
+        },
       },
       output: jsonOutput(TASK_VIEW_SCHEMA),
       async execute(args, exec) {
@@ -406,6 +428,7 @@ To message another teammate, use send_message({ target: "<teammate name>", messa
           ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(TeamTaskId) },
           ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
           ...args.owner === undefined ? {} : { owner: args.owner },
+          ...args.waiver === undefined ? {} : { waiver: args.waiver },
         })
       },
     })))

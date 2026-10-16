@@ -684,9 +684,38 @@ describe('Team shared task DAG', () => {
       action: 'complete',
     })).rejects.toMatchObject({ code: 'TEAM_TASK_STALE_REVISION' })
 
-    const completed = await ctx.agentTeams.updateTask(alpha, {
+    // Completion is gated on a verification by a different member. The owner
+    // cannot supply it, the owner cannot complete without it, and a waiver is
+    // refused while a real verification stands — a waiver asserts that nobody
+    // else could check the work, which is false here.
+    await expect(ctx.agentTeams.updateTask(alpha, {
       taskId: first.id,
       expectedRevision: claimed.revision,
+      action: 'verify',
+    })).rejects.toMatchObject({ code: 'TEAM_TASK_SELF_VERIFICATION' })
+    await expect(ctx.agentTeams.updateTask(alpha, {
+      taskId: first.id,
+      expectedRevision: claimed.revision,
+      action: 'complete',
+    })).rejects.toMatchObject({ code: 'TEAM_TASK_VERIFICATION_REQUIRED' })
+    const verified = await ctx.agentTeams.updateTask(beta, {
+      taskId: first.id,
+      expectedRevision: claimed.revision,
+      action: 'verify',
+    })
+    expect(verified.attestation).toEqual({
+      kind: 'verification', byName: 'beta', revision: claimed.revision + 1,
+    })
+    await expect(ctx.agentTeams.updateTask(lead, {
+      taskId: first.id,
+      expectedRevision: verified.revision,
+      action: 'complete',
+      waiver: 'a peer verification already stands on this task',
+    })).rejects.toMatchObject({ code: 'TEAM_INVALID_ARGUMENT' })
+
+    const completed = await ctx.agentTeams.updateTask(alpha, {
+      taskId: first.id,
+      expectedRevision: verified.revision,
       action: 'complete',
     })
     expect(completed.status).toBe('completed')
@@ -798,9 +827,17 @@ describe('Team shared task DAG', () => {
       action: 'reassign',
       owner: 'lead',
     })).rejects.toMatchObject({ code: 'TEAM_LEAD_REQUIRED' })
-    const complete = await ctx.agentTeams.updateTask(owner, {
+    // The Lead counts as a different member: the Lead verifying a specialist is
+    // exactly the correction the gate exists to require.
+    const verified = await ctx.agentTeams.updateTask(lead, {
       taskId: task.id,
       expectedRevision: assigned.revision,
+      action: 'verify',
+    })
+    expect(verified.attestation).toMatchObject({ kind: 'verification', byName: 'lead' })
+    const complete = await ctx.agentTeams.updateTask(owner, {
+      taskId: task.id,
+      expectedRevision: verified.revision,
       action: 'complete',
     })
     await expect(ctx.agentTeams.updateTask(lead, {
@@ -819,6 +856,16 @@ describe('Team shared task DAG', () => {
       expectedRevision: reopened.revision,
       action: 'claim',
     })
+    // Reopening supersedes the verification by comparison, not by erasing it:
+    // the record survives on the task and no longer stands for the revision the
+    // owner is trying to complete.
+    await expect(ctx.agentTeams.updateTask(owner, {
+      taskId: task.id,
+      expectedRevision: claimed.revision,
+      action: 'complete',
+    })).rejects.toThrow(
+      `cannot complete at revision ${claimed.revision}: its verification was recorded at revision ${verified.revision}, and any later change to the task supersedes it`,
+    )
     const deleted = await ctx.agentTeams.updateTask(owner, {
       taskId: task.id,
       expectedRevision: claimed.revision,
@@ -834,6 +881,132 @@ describe('Team shared task DAG', () => {
     })).rejects.toMatchObject({ code: 'TEAM_TASK_DELETED' })
     ctx.agentTeams.interrupt(lead, 'owner')
     await waitNoAgent(ctx, owner.id)
+  })
+
+  it('gates completion on an independent verification and records the Lead waiver', async () => {
+    const { ctx, lead } = await setup(['hang'])
+    const started = await spawn(ctx, lead, 'gate-owner')
+    const owner = await waitRunning(ctx, started.member.id)
+    const task = await ctx.agentTeams.createTask(owner, { subject: 'gated', description: 'gated work' })
+    const claimed = await ctx.agentTeams.updateTask(owner, {
+      taskId: task.id,
+      expectedRevision: task.revision,
+      action: 'claim',
+    })
+    // The refusal is the whole product of the gate, so it states the revision,
+    // what is missing, and both ways to satisfy it rather than denying bare.
+    await expect(ctx.agentTeams.updateTask(owner, {
+      taskId: task.id,
+      expectedRevision: claimed.revision,
+      action: 'complete',
+    })).rejects.toThrow(
+      `team task "${task.id}" cannot complete at revision ${claimed.revision}: no verification is recorded against it. A verification by the owner does not count. Have a different member — the Lead or another specialist — record a verification with the "verify" action at revision ${claimed.revision}, then complete revision ${claimed.revision}. If no member other than the owner can reproduce this work, the Team Lead may complete it with a waiver that records the reason instead.`,
+    )
+
+    // Verification attests performed work, so an unstarted task has nothing to
+    // verify: this is what stops a peer pre-clearing a task before it is claimed.
+    const unstarted = await ctx.agentTeams.createTask(lead, { subject: 'unstarted', description: 'unstarted work' })
+    await expect(ctx.agentTeams.updateTask(lead, {
+      taskId: unstarted.id,
+      expectedRevision: unstarted.revision,
+      action: 'verify',
+    })).rejects.toMatchObject({ code: 'TEAM_TASK_INVALID_TRANSITION' })
+
+    // The escape hatch is the Lead's alone, and it is a recorded justification
+    // rather than a flag: a specialist cannot waive, and neither can a stub.
+    const reason = 'the owner performed the only console write and no peer can replay it'
+    await expect(ctx.agentTeams.updateTask(owner, {
+      taskId: task.id,
+      expectedRevision: claimed.revision,
+      action: 'complete',
+      waiver: reason,
+    })).rejects.toMatchObject({ code: 'TEAM_LEAD_REQUIRED' })
+    for (const waiver of ['   ', 'too short']) {
+      await expect(ctx.agentTeams.updateTask(lead, {
+        taskId: task.id,
+        expectedRevision: claimed.revision,
+        action: 'complete',
+        waiver,
+      })).rejects.toMatchObject({ code: 'TEAM_INVALID_ARGUMENT' })
+    }
+    const waived = await ctx.agentTeams.updateTask(lead, {
+      taskId: task.id,
+      expectedRevision: claimed.revision,
+      action: 'complete',
+      waiver: reason,
+    })
+    expect(waived).toMatchObject({
+      status: 'completed',
+      attestation: { kind: 'waiver', byName: 'lead', revision: claimed.revision + 1, reason },
+    })
+    // Recorded and visible: the waiver is on the durable task, not in a log
+    // line, so a later reader sees this completion was never peer-verified.
+    expect(durable(lead).tasks.find(candidate => candidate.id === task.id)?.attestation).toEqual({
+      kind: 'waiver', by: lead.id, revision: claimed.revision + 1, reason,
+    })
+    // Reopening clears it by supersession, so the waiver cannot be inherited by
+    // the next attempt: a waived task cannot be re-completed silently.
+    const reopened = await ctx.agentTeams.updateTask(lead, {
+      taskId: task.id,
+      expectedRevision: waived.revision,
+      action: 'reopen',
+    })
+    const reclaimed = await ctx.agentTeams.updateTask(lead, {
+      taskId: task.id,
+      expectedRevision: reopened.revision,
+      action: 'claim',
+    })
+    await expect(ctx.agentTeams.updateTask(lead, {
+      taskId: task.id,
+      expectedRevision: reclaimed.revision,
+      action: 'complete',
+    })).rejects.toMatchObject({ code: 'TEAM_TASK_VERIFICATION_REQUIRED' })
+
+    ctx.agentTeams.interrupt(lead, 'gate-owner')
+    await waitNoAgent(ctx, owner.id)
+  })
+
+  it('refuses a durable self-attestation that no board transition could produce', async () => {
+    const { ctx, lead } = await setup(['hang'])
+    const started = await spawn(ctx, lead, 'forger')
+    const forger = await waitRunning(ctx, started.member.id)
+    const task = await ctx.agentTeams.createTask(forger, { subject: 'forged', description: 'forged attestation' })
+    const claimed = await ctx.agentTeams.updateTask(forger, {
+      taskId: task.id,
+      expectedRevision: task.revision,
+      action: 'claim',
+    })
+    // The board refuses a self-verification outright, so this record can only
+    // have been written outside it. The gate re-checks the owner instead of
+    // trusting the stored attestation, and names which case it refused.
+    const forged = claimed.revision + 1
+    lead.session.append('team/task', {
+      version: 2,
+      teamId: TeamId(lead.id),
+      task: {
+        id: task.id,
+        revision: forged,
+        subject: 'forged',
+        description: 'forged attestation',
+        status: 'in_progress',
+        ownerId: forger.id,
+        blockedBy: [],
+        writeScopes: [],
+        attestation: { kind: 'verification', by: forger.id, revision: forged },
+      },
+    })
+    await ctx.sessions.flush(lead.session)
+    expect(ctx.agentTeams.getTask(forger, task.id)).toMatchObject({
+      revision: forged,
+      attestation: { kind: 'verification', byName: 'forger', revision: forged },
+    })
+    await expect(ctx.agentTeams.updateTask(forger, {
+      taskId: task.id,
+      expectedRevision: forged,
+      action: 'complete',
+    })).rejects.toThrow(/its verification was recorded by "forger", its own owner/)
+    ctx.agentTeams.interrupt(lead, 'forger')
+    await waitNoAgent(ctx, forger.id)
   })
 
   it('covers partial edits, Lead ownership, unassignment, and blocked reassignment', async () => {
@@ -857,8 +1030,14 @@ describe('Team shared task DAG', () => {
       taskId: blocker.id, expectedRevision: blocker.revision, action: 'claim',
     })
     expect(leadClaim.ownerName).toBe('lead')
+    // A Lead-owned task is verified by a specialist, which is the same rule in
+    // the other direction: the Lead may not attest its own work either.
+    const verifiedBlocker = await ctx.agentTeams.updateTask(editor, {
+      taskId: blocker.id, expectedRevision: leadClaim.revision, action: 'verify',
+    })
+    expect(verifiedBlocker.attestation).toMatchObject({ kind: 'verification', byName: 'editor' })
     const completedBlocker = await ctx.agentTeams.updateTask(lead, {
-      taskId: blocker.id, expectedRevision: leadClaim.revision, action: 'complete',
+      taskId: blocker.id, expectedRevision: verifiedBlocker.revision, action: 'complete',
     })
     expect(completedBlocker.status).toBe('completed')
     const assigned = await ctx.agentTeams.updateTask(lead, {

@@ -12,6 +12,8 @@ import type {
   TeamMessageId,
   TeamMessageSnapshot,
   TeamProjection,
+  TeamTaskAttestation,
+  TeamTaskAttestationView,
   TeamTaskSnapshot,
   TeamTaskView,
 } from './types.ts'
@@ -75,6 +77,13 @@ const teamMemberSnapshotSchema = z.object({
   error: z.string().optional(),
 }).strict() as z.ZodType<TeamMemberSnapshot>
 
+const teamTaskAttestationSchema = z.object({
+  kind: z.enum(['verification', 'waiver']),
+  by: sessionIdSchema,
+  revision: positiveSafeInteger,
+  reason: z.string().optional(),
+}).strict() as z.ZodType<TeamTaskAttestation>
+
 const teamTaskSnapshotSchema = z.object({
   id: teamTaskIdSchema,
   revision: positiveSafeInteger,
@@ -84,6 +93,7 @@ const teamTaskSnapshotSchema = z.object({
   ownerId: sessionIdSchema.optional(),
   blockedBy: z.array(teamTaskIdSchema),
   writeScopes: z.array(z.string()),
+  attestation: teamTaskAttestationSchema.optional(),
 }).strict() as z.ZodType<TeamTaskSnapshot>
 
 const teamMessageSnapshotSchema = z.object({
@@ -321,6 +331,13 @@ const teamMemberProjectionSchema = z.object({
   error: z.string().optional(),
 }).strict() as z.ZodType<TeamMemberProjection>
 
+const teamTaskAttestationViewSchema = z.object({
+  kind: z.enum(['verification', 'waiver']),
+  byName: z.string().optional(),
+  revision: positiveSafeInteger,
+  reason: z.string().optional(),
+}).strict() as z.ZodType<TeamTaskAttestationView>
+
 const teamTaskViewSchema = z.object({
   id: teamTaskIdSchema,
   revision: positiveSafeInteger,
@@ -332,6 +349,7 @@ const teamTaskViewSchema = z.object({
   ownerName: z.string().optional(),
   ready: z.boolean(),
   writeScopeWarnings: z.array(z.string()),
+  attestation: teamTaskAttestationViewSchema.optional(),
 }).strict() as z.ZodType<TeamTaskView>
 
 const teamProjectionSchema = z.object({

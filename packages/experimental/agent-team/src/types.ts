@@ -91,6 +91,30 @@ export interface TeamMemberView {
 /** Durable task lifecycle. */
 export type TeamTaskStatus = 'pending' | 'in_progress' | 'completed' | 'deleted'
 
+/** How one completion attestation was recorded. */
+export type TeamTaskAttestationKind = 'verification' | 'waiver'
+
+/**
+ * Durable record clearing one task to complete. A `verification` is a peer's
+ * independent confirmation of the work; a `waiver` is the Lead recording, in the
+ * open, that no independent verification was possible. Stamped with the task
+ * revision it was recorded at, so a later mutation supersedes it by comparison
+ * instead of relying on every transition to remember to clear it.
+ */
+export interface TeamTaskAttestation {
+  readonly kind: TeamTaskAttestationKind
+  /** Durable identity of the member that recorded the attestation. */
+  readonly by: SessionId
+  /**
+   * Task revision the attestation was recorded at. Completion requires an
+   * attestation recorded at the task's current revision, so editing, reopening
+   * or reassigning the task invalidates it.
+   */
+  readonly revision: number
+  /** Recorded Lead justification on a waiver; absent on a verification. */
+  readonly reason?: string
+}
+
 /** Whole durable task snapshot; every mutation increments {@link revision}. */
 export interface TeamTaskSnapshot {
   readonly id: TeamTaskId
@@ -101,6 +125,19 @@ export interface TeamTaskSnapshot {
   readonly ownerId?: SessionId
   readonly blockedBy: TeamTaskId[]
   readonly writeScopes: string[]
+  /** Attestation clearing this task to complete; absent until a member records one. */
+  readonly attestation?: TeamTaskAttestation
+}
+
+/** Runtime view of one durable completion attestation. */
+export interface TeamTaskAttestationView {
+  readonly kind: TeamTaskAttestationKind
+  /** Model-facing name of the member that recorded the attestation. */
+  readonly byName?: string
+  /** Task revision the attestation was recorded at. */
+  readonly revision: number
+  /** Recorded Lead justification on a waiver. */
+  readonly reason?: string
 }
 
 /** Runtime-enriched task view returned to tools and hosts. */
@@ -115,6 +152,8 @@ export interface TeamTaskView {
   readonly ownerName?: string
   readonly ready: boolean
   readonly writeScopeWarnings: string[]
+  /** Completion attestation as recorded, including the revision it was recorded at. */
+  readonly attestation?: TeamTaskAttestationView
 }
 
 /** One durable roster row published through the `agentTeam` Session projection. */
@@ -233,6 +272,7 @@ export type TeamTaskAction =
   | 'release'
   | 'edit'
   | 'set_dependencies'
+  | 'verify'
   | 'complete'
   | 'reopen'
   | 'reassign'
@@ -248,6 +288,11 @@ export interface UpdateTeamTaskRequest {
   readonly blockedBy?: readonly TeamTaskId[]
   readonly writeScopes?: readonly string[]
   readonly owner?: string
+  /**
+   * Recorded reason a Lead completion carries when no independent verification
+   * is possible. Valid only on `complete`, and only for the Team Lead.
+   */
+  readonly waiver?: string
 }
 
 /** Result of waiting for Team activity. */

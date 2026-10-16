@@ -510,5 +510,87 @@ for (const backend of backends) {
       await rootHandle.dispose()
       await second.dispose()
     })
+
+    it('keeps an independent verification and its completion gate across a cold restart', {
+      timeout: PERSISTENCE_TEST_TIMEOUT_MS,
+    }, async () => {
+      const storageRoot = mkdtempSync(join(tmpdir(), `dsh-team-gate-${backend.name.toLowerCase()}-`))
+      roots.push(storageRoot)
+      const rootId = SessionId(`${backend.name.toLowerCase()}-gate-root`)
+
+      const first = await stack(backend, storageRoot, [textResponse('verifier initial answer')])
+      const firstLead = await first.ctx.agentLoop.create(rootId, { provider: 'mock', model: 'mock' })
+      const started = await first.ctx.agentTeams.spawnTeammate(firstLead, {
+        name: 'gate-worker',
+        description: 'gate verification worker',
+        prompt: [{ type: 'text', text: 'finish the slice' }],
+        context: 'fresh',
+        provider: 'spawn',
+        signal: SIGNAL,
+      })
+      await vi.waitFor(() => { expect(first.ctx.agents.get(started.member.id)).toBeUndefined() }, { timeout: 5_000 })
+
+      // The Lead verifies a specialist's task: the attestation is a durable task
+      // field, so this is exactly the record a restart has to bring back.
+      const task = await first.ctx.agentTeams.createTask(firstLead, {
+        subject: 'verified before the restart',
+        description: 'work the Lead verified',
+      })
+      const assigned = await first.ctx.agentTeams.updateTask(firstLead, {
+        taskId: task.id,
+        expectedRevision: task.revision,
+        action: 'reassign',
+        owner: 'gate-worker',
+      })
+      const verified = await first.ctx.agentTeams.updateTask(firstLead, {
+        taskId: task.id,
+        expectedRevision: assigned.revision,
+        action: 'verify',
+      })
+      expect(verified.attestation).toMatchObject({ kind: 'verification', byName: 'lead' })
+      expect(durable(firstLead).tasks.find(candidate => candidate.id === task.id)?.attestation)
+        .toMatchObject({ kind: 'verification', by: rootId, revision: verified.revision })
+      await first.dispose()
+
+      const second = await stack(backend, storageRoot, [])
+      const rootHandle = await second.ctx.agents.resume({
+        resumeSessionId: rootId,
+        agentOptions: { provider: 'mock', model: 'mock' },
+      })
+      const restored = second.ctx.agentTeams.getTask(rootHandle.agent, task.id)
+      expect(restored).toMatchObject({
+        status: 'in_progress',
+        revision: verified.revision,
+        attestation: { kind: 'verification', byName: 'lead', revision: verified.revision },
+      })
+      // The gate accepts a verification recorded before the restart...
+      const completed = await second.ctx.agentTeams.updateTask(rootHandle.agent, {
+        taskId: task.id,
+        expectedRevision: restored.revision,
+        action: 'complete',
+      })
+      expect(completed).toMatchObject({
+        status: 'completed',
+        attestation: { kind: 'verification', byName: 'lead' },
+      })
+      // ...and is still enforced in the restarted process for a task without one.
+      const unverified = await second.ctx.agentTeams.createTask(rootHandle.agent, {
+        subject: 'unverified after the restart',
+        description: 'work nobody verified',
+      })
+      const claimed = await second.ctx.agentTeams.updateTask(rootHandle.agent, {
+        taskId: unverified.id,
+        expectedRevision: unverified.revision,
+        action: 'claim',
+      })
+      await expect(second.ctx.agentTeams.updateTask(rootHandle.agent, {
+        taskId: unverified.id,
+        expectedRevision: claimed.revision,
+        action: 'complete',
+      })).rejects.toMatchObject({ code: 'TEAM_TASK_VERIFICATION_REQUIRED' })
+
+      await rootHandle.dispose()
+      await second.dispose()
+    })
   })
 }

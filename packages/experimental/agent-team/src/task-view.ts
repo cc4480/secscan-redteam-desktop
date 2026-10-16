@@ -3,7 +3,12 @@
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { TeamState } from './projection.ts'
-import type { TeamTaskSnapshot, TeamTaskView } from './types.ts'
+import type {
+  TeamTaskAttestation,
+  TeamTaskAttestationView,
+  TeamTaskSnapshot,
+  TeamTaskView,
+} from './types.ts'
 
 /**
  * Whether two normalized file or directory prefixes overlap on path components.
@@ -13,6 +18,35 @@ import type { TeamTaskSnapshot, TeamTaskView } from './types.ts'
  */
 function scopesOverlap(left: string, right: string): boolean {
   return left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`)
+}
+
+/**
+ * Resolve one durable member identity to its model-facing name.
+ * @param state - Team state supplying the roster and Lead identity.
+ * @param id - member identity, or undefined for an absent optional owner.
+ * @returns `lead` for the root, the roster name otherwise, or undefined when the identity names nobody.
+ */
+function memberName(state: TeamState, id: SessionId | undefined): string | undefined {
+  if (id === undefined) return undefined
+  return id === brandString<SessionId>(state.id)
+    ? 'lead'
+    : state.members.find(member => member.id === id)?.name
+}
+
+/**
+ * Derive one attestation view, naming the member that recorded it.
+ * @param state - Team state supplying the roster and Lead identity.
+ * @param attestation - durable attestation to view.
+ * @returns a detached attestation view.
+ */
+function projectAttestation(state: TeamState, attestation: TeamTaskAttestation): TeamTaskAttestationView {
+  const byName = memberName(state, attestation.by)
+  return {
+    kind: attestation.kind,
+    revision: attestation.revision,
+    ...byName === undefined ? {} : { byName },
+    ...attestation.reason === undefined ? {} : { reason: attestation.reason },
+  }
 }
 
 /**
@@ -35,11 +69,7 @@ export function taskReady(state: TeamState, task: TeamTaskSnapshot): boolean {
  * @returns a detached task view.
  */
 export function projectTaskView(state: TeamState, task: TeamTaskSnapshot): TeamTaskView {
-  const ownerName = task.ownerId === undefined
-    ? undefined
-    : task.ownerId === brandString<SessionId>(state.id)
-      ? 'lead'
-      : state.members.find(member => member.id === task.ownerId)?.name
+  const ownerName = memberName(state, task.ownerId)
   const warnings = new Set<string>()
   for (const other of state.tasks) {
     if (other.id === task.id || other.status !== 'in_progress') continue
@@ -58,5 +88,8 @@ export function projectTaskView(state: TeamState, task: TeamTaskSnapshot): TeamT
     ...ownerName === undefined ? {} : { ownerName },
     ready: task.status === 'pending' && taskReady(state, task),
     writeScopeWarnings: [...warnings],
+    // The attestation is shown exactly as recorded, revision included, so the
+    // board never rewrites a member's own record to look more current than it is.
+    ...task.attestation === undefined ? {} : { attestation: projectAttestation(state, task.attestation) },
   }
 }
