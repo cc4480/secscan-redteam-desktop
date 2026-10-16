@@ -106,9 +106,9 @@ export function createElectronBuilderConfig(
       ...buildVersion === productVersion ? {} : { version: buildVersion },
       ...packaged === undefined ? {} : { dshBuildCommit: packaged.commit, dshBuildDirty: packaged.dirty },
     },
-    // Renamed from 'DeepSeek Harness': this is a separate product built from
-    // DeepSeek's MIT-licensed source. The name, the exe and the Start-menu
-    // entry must not read as a DeepSeek release. Pairs with
+    // Named 'SecScan RedTeam' rather than 'DeepSeek Harness': this is a separate
+    // product built from DeepSeek's MIT-licensed source. The name, the exe and
+    // the Start-menu entry must not read as a DeepSeek release. Pairs with
     // DSH_DESKTOP_APP_ID=com.secscan.redteam in apps/desktop/.env.windows.
     productName: 'SecScan RedTeam',
     // Unsigned builds carry their own suffix so a shared file can never pass for a release artifact.

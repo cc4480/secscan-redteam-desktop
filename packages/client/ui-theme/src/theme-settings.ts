@@ -17,8 +17,15 @@ export const FONT_SIZE_FIELD = 'fontSize'
 /** Theme preference persisted by the product Appearance row. */
 export type ThemePreference = typeof THEME_PREFERENCES[number]
 
-/** Default preference when the user-settings document has no override. */
-export const DEFAULT_PREFERENCE: ThemePreference = 'system'
+/**
+ * Default preference when the user-settings document has no override.
+ *
+ * Dark by product decision for SecScan RedTeam: the app ships dark-first, and
+ * `light` / `system` remain selectable in the Appearance row. Because
+ * `boot-theme.ts` derives its pre-plugin canvas CSS from this same constant,
+ * a fresh install paints dark on the first frame rather than flashing light.
+ */
+export const DEFAULT_PREFERENCE: ThemePreference = 'dark'
 
 /** Smallest accepted content font size (px). */
 export const FONT_SIZE_MIN = 12

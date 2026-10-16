@@ -22,14 +22,15 @@ const make = (host = stubConfigForm<ThemeSettings>()): {
 }
 
 describe('ThemeRuntime', () => {
-  it('defaults to the system preference resolved against prefers-color-scheme', () => {
+  it('defaults to the dark preference', () => {
     const { theme } = make()
     const snapshot = theme.getTheme()
-    expect(snapshot.preference).toBe('system')
+    expect(snapshot.preference).toBe('dark')
     expect(snapshot.fontSize).toBe(14)
-    // jsdom matchMedia is absent; system resolves to light.
-    expect(snapshot.active.id).toBe('light')
-    expect(snapshot.active.colorScheme).toBe('light')
+    // SecScan RedTeam ships dark-first, so the default is not mediated by
+    // prefers-color-scheme (jsdom does not even provide matchMedia).
+    expect(snapshot.active.id).toBe('dark')
+    expect(snapshot.active.colorScheme).toBe('dark')
     expect(snapshot.themes.map(t => t.id)).toEqual(['light', 'dark'])
   })
 
@@ -76,27 +77,31 @@ describe('ThemeRuntime', () => {
 
   it('setTheme switches, writes through the scope, republishes, and keeps DOM untouched', () => {
     const { theme, events, host } = make()
-    theme.setTheme('dark')
-    expect(theme.getTheme().preference).toBe('dark')
-    expect(theme.getTheme().active.colorScheme).toBe('dark')
-    expect(host.set).toHaveBeenCalledWith('preference', 'dark')
+    // Dark is the product default now, so switch to light to exercise a real
+    // preference change.
+    theme.setTheme('light')
+    expect(theme.getTheme().preference).toBe('light')
+    expect(theme.getTheme().active.colorScheme).toBe('light')
+    expect(host.set).toHaveBeenCalledWith('preference', 'light')
     expect(events).toHaveLength(1)
     expect(events[0]).toBe(theme.getTheme())
     // The service never touches presentation state.
     expect(document.body.hasAttribute('data-ds-dark-theme')).toBe(false)
     // Same-value set is a no-op (no extra event).
-    theme.setTheme('dark')
+    theme.setTheme('light')
     expect(events).toHaveLength(1)
     expect(host.set).toHaveBeenCalledOnce()
   })
 
   it('adopts a published Host section without writing it back', () => {
     const { theme, events, host } = make()
-    host.publish({ status: 'ready', value: { preference: 'dark', fontSize: 14 }, revision: 1, writable: true })
-    expect(theme.getTheme().preference).toBe('dark')
+    // Publish a preference that differs from the dark product default, so
+    // adoption is observable as a change event.
+    host.publish({ status: 'ready', value: { preference: 'light', fontSize: 14 }, revision: 1, writable: true })
+    expect(theme.getTheme().preference).toBe('light')
     expect(events).toHaveLength(1)
     expect(host.set).not.toHaveBeenCalled()
-    host.publish({ value: { preference: 'dark', fontSize: 14 }, revision: 2 })
+    host.publish({ value: { preference: 'light', fontSize: 14 }, revision: 2 })
     expect(events).toHaveLength(1)
   })
 
@@ -121,7 +126,7 @@ describe('ThemeRuntime', () => {
     theme.setTheme('sepia')
     expect(theme.getTheme().active.tokens['--dsw-alias-bg-base']).toBe('red')
     dispose()
-    expect(theme.getTheme().preference).toBe('system')
+    expect(theme.getTheme().preference).toBe('dark')
     expect(theme.getTheme().themes.map(t => t.id)).toEqual(['light', 'dark'])
     // Custom ids are in-process extension themes; only the built-in product
     // preferences cross the Host settings schema.
@@ -142,8 +147,8 @@ describe('ThemeRuntime', () => {
 
   it('revision increases monotonically across every publish', () => {
     const { theme, events } = make()
-    theme.setTheme('dark')
     theme.setTheme('light')
+    theme.setTheme('dark')
     const dispose = theme.register({ id: 'sepia', colorScheme: 'dark', tokens: {} })
     dispose()
     expect(events.map(e => e.revision)).toEqual([1, 2, 3, 4])
@@ -151,6 +156,8 @@ describe('ThemeRuntime', () => {
 
   it('stacks reversible token overrides in call order and selects the active palette value', () => {
     const { theme } = make()
+    // This test needs both palettes; dark is the default, so start from light.
+    theme.setTheme('light')
     const firstTokens: ThemeTokenOverrides = {
       '--shared': { light: 'first-light', dark: 'first-dark' },
       '--first': { light: 'first-only-light', dark: 'first-only-dark' },
@@ -186,7 +193,7 @@ describe('ThemeRuntime', () => {
       '--new': { light: 'new-light', dark: 'new-dark' },
     })
     stale()
-    expect(theme.getTheme().active.tokens).toEqual({ '--new': 'new-light' })
+    expect(theme.getTheme().active.tokens).toEqual({ '--new': 'new-dark' })
     current()
     current()
     expect(theme.getTheme().active.tokens).toEqual({})
@@ -264,11 +271,15 @@ describe('ThemeRuntime', () => {
     it('system resolves against the media query and follows OS flips', () => {
       const media = stubMedia(true)
       const { theme, events } = make()
+      // Pin `system` explicitly: the product default is dark, so the media
+      // query is no longer consulted until the preference asks for it.
+      theme.setTheme('system')
       expect(theme.getTheme().preference).toBe('system')
       expect(theme.getTheme().active.id).toBe('dark')
       media.flip()
       expect(theme.getTheme().active.id).toBe('light')
-      expect(events).toHaveLength(1)
+      // One publish for setTheme('system'), one for the OS flip.
+      expect(events).toHaveLength(2)
     })
 
     it('OS flips do not republish while a concrete preference is set', () => {

@@ -49,7 +49,7 @@ export const en = {
   welcomeSignIn: 'Sign in',
   welcomeApiKey: 'Add API Key',
   welcomeKeyTitle: 'Add an API key to get started',
-  welcomeKeyDescription: 'Configure official DeepSeek models to start using Harness',
+  welcomeKeyDescription: 'Configure official DeepSeek models to start using SecScan RedTeam',
   welcomeKeyPlaceholder: 'Enter API key',
   welcomeKeySave: 'Save and continue',
   welcomeKeyLater: 'Set up later',
