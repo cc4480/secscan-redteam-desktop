@@ -205,6 +205,12 @@ describe('Team identity and provisioning', () => {
       diagnostics: [],
     }))
     expect(service.listMembers(lead)[1]).not.toHaveProperty('model')
+    // A roster row written before `spawnedBy` existed names no creator, so it
+    // reads as what it is: a specialist the Lead created, at depth 1. The view
+    // assigns depth to every row, so the bound is legible on an old roster too.
+    expect(service.listMembers(lead)[1]).toMatchObject({ depth: 1 })
+    expect(service.listMembers(lead)[1]).not.toHaveProperty('spawnedBy')
+    expect(service.listMembers(lead)[0]).toMatchObject({ name: 'lead', depth: 0 })
     await Promise.resolve()
   })
 
@@ -440,6 +446,16 @@ describe('Team identity and provisioning', () => {
       ['worker', 'lead'],
       ['nested', 'worker'],
     ])
+    // The bound is legible from the roster the model reads, not only from a
+    // refused spawn: the Lead is depth 0 and every helper one deeper than its
+    // creator, which is exactly the value the depth limit compares.
+    expect(ctx.agentTeams.listMembers(lead).map(row => [row.name, row.spawnedBy, row.depth])).toEqual([
+      ['lead', undefined, 0],
+      ['worker', 'lead', 1],
+      ['nested', 'worker', 2],
+    ])
+    expect(started.member).toMatchObject({ spawnedBy: 'lead', depth: 1 })
+    expect(nested.member).toMatchObject({ spawnedBy: 'worker', depth: 2 })
     // The depth limit is what stops the widening from recursing without bound:
     // the helper is at the configured depth and may not raise a helper of its
     // own, so a specialist's slice is worked, not re-delegated forever.

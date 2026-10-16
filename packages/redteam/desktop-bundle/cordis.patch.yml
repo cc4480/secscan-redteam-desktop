@@ -5,7 +5,7 @@
 # and before the profile's own cordis.patch.yml - so a person can still override
 # or disable any row by id in their own patch layer.
 #
-# Five rows:
+# Six rows:
 #   1. mcp-secscan      - the harness-NATIVE MCP client
 #                         (@deepseek-ai/dsh-mcp-client) over Streamable HTTP.
 #                         Tools appear namespaced mcp__secscan__scan_url,
@@ -13,15 +13,19 @@
 #   2. secscan-redteam  - @secscan/redteam-harness-plugin: the authorization
 #                         gate as a `tools/pre-execute` hook, plus the
 #                         engagement-protocol system-prompt section.
-#   3. agent-team       - the Agent Teams roster, durable peer mailbox and
+#   3. mcp-redteam-runner - the engagement ENGINE (battery, safety core, proof
+#                         bundles, compliance packs) as a second MCP client, over
+#                         the console's POST /mcp. Tools appear namespaced
+#                         mcp__redteam__*.
+#   4. agent-team       - the Agent Teams roster, durable peer mailbox and
 #                         shared task DAG. This is what makes the engagement a
 #                         TEAM: the session agent is the Lead and creates named
 #                         teammates (recon, exploiter, reporter) that persist
 #                         across crashes and restarts.
-#   4. tool-agent-team  - the model-facing Team tools: spawn_teammate,
+#   5. tool-agent-team  - the model-facing Team tools: spawn_teammate,
 #                         send_message, list_agents, wait_agent,
 #                         interrupt_agent, team_task_{create,list,get,update}.
-#   5. ui-agent-team    - the Web UI for viewing the roster and task board.
+#   6. ui-agent-team    - the Web UI for viewing the roster and task board.
 #
 # Secrets are cordis-native: schemastery Config with env fallbacks.
 # NEVER put a raw key in this file.
@@ -45,6 +49,25 @@
   disabled: true
 
 - id: tool-subagent-fork
+  disabled: true
+
+# The same reasoning applies one layer out. `workflow`'s agent() starts fresh
+# child runs that never appear on the roster and take no part in the board, so
+# it is a second door to exactly the untracked work the four rows above close.
+# It also has its own concurrency and total-agent caps and can fan out far wider
+# than the team, which makes it the greater exposure of the two.
+#
+# Both rows go together: `tool-workflow` is the tool the model calls and
+# `workflow-ptc` is the engine behind it. Disabling only the tool leaves a live
+# backend, and only the engine leaves the tool present but broken.
+#
+# This is a real capability given up, not just a hole plugged: scripted
+# mass-parallelism over many files or targets is gone. The engagement's own
+# delegation covers the same ground and keeps the trail, which is the point.
+- id: tool-workflow
+  disabled: true
+
+- id: workflow-ptc
   disabled: true
 
 - insert:

@@ -13,6 +13,31 @@
  * allowlist or any other out-of-band bypass, matching the runner's own gate
  * (runner/src/gate.ts) and the safety case's "no operator exceptions" claim.
  * The gate never issues tokens and performs no DNS of its own.
+ *
+ * Host-family probes (`mcp__redteam__*`, every one of which takes a required
+ * `targetProfile` of secscan, seclayer, windows or linux — see
+ * {@link isHostFamilyProbe}) are deliberately NOT checked here. They are
+ * enforced by the engagement engine, which owns host scope, and that is the
+ * right split rather than a gap:
+ *
+ *   - The gate can enforce the scan half because its authority is a fact it can
+ *     fetch from the SecScan server WITHOUT the model. It has no such fact for
+ *     host scope: "is this host in the engagement's scope?" is answered only by
+ *     the engine (`mcp__redteam__get_engagement`, `list_live_engagements`,
+ *     `update_target_map`), and the engine is the runner the tool call reaches
+ *     anyway. Asking it from the hook would spend the SAME model-held token the
+ *     model already has, so the answer would carry no authority the caller did
+ *     not already have.
+ *   - Cross-checking scope here would need a second copy of the in-scope host
+ *     list. That copy could only be stricter (blocking work the engine's scope
+ *     allows) or looser (a check that never fires). Either way the product would
+ *     have two answers to one question, which is worse than one. The
+ *     constraint is explicit: the engine stays the authority on host scope.
+ *
+ * So this hook's honest claim is narrow and exact: it enforces the scan half of
+ * the authorization rule at the tool layer, and it is not a second scope
+ * authority. Host-family scope lives with the engine — see the doctrine's
+ * "The authorization gate" section, which says the same thing to the model.
  */
 
 import { verificationInstructions } from './verify.js'
@@ -39,9 +64,42 @@ function baseName(toolName: string): string {
   return parts[parts.length - 1] ?? toolName
 }
 
+/** The MCP namespace segment that marks a tool as belonging to the engagement engine. */
+function mcpNamespace(toolName: string): string | undefined {
+  const parts = toolName.split('__')
+  return parts.length > 2 ? parts[1] : undefined
+}
+
 /** True for the scan-dispatching tool, namespaced or not. */
 export function isScanTool(toolName: string): boolean {
   return baseName(toolName) === 'scan_url'
+}
+
+/** The target families the engagement engine scopes; also the only values `targetProfile` accepts. */
+const HOST_TARGET_PROFILES: readonly string[] = ['secscan', 'seclayer', 'windows', 'linux']
+
+/**
+ * True for an engagement-engine host-family probe: a tool under the engine's
+ * `mcp__redteam__` namespace carrying a `targetProfile` of secscan, seclayer,
+ * windows or linux. Every `mcp__redteam__*` executor tool declares that
+ * argument as required, so its presence is what distinguishes a host probe from
+ * the engine's engagement-state tools (`get_engagement`, `record_finding`, ...).
+ *
+ * Exported for the same reason the doctrine names the split: the boundary
+ * between "this gate enforces it" and "the engine enforces it" should be
+ * readable in code, not inferred. This predicate decides NOTHING — the hook
+ * lets these calls through to the engine, which owns host scope.
+ * @param toolName - full tool name as dispatched, namespaced or not.
+ * @param args - the call's arguments.
+ * @returns whether the call is an engine host-family probe.
+ */
+export function isHostFamilyProbe(
+  toolName: string,
+  args: Record<string, unknown>,
+): boolean {
+  if (mcpNamespace(toolName) !== 'redteam') return false
+  const profile = args['targetProfile']
+  return typeof profile === 'string' && HOST_TARGET_PROFILES.includes(profile)
 }
 
 const URL_KEYS = ['url', 'target', 'target_url', 'site', 'site_url']
@@ -83,8 +141,11 @@ export async function decide(
   event: PreExecuteEvent,
   ctx: GateContext,
 ): Promise<GateDecision> {
-  // Non-scan tools never need authorization: read-only tools, the domain
-  // verification workflow itself, and everything else pass through.
+  // Non-scan tools never need this gate's authorization: read-only tools, the
+  // domain verification workflow itself, and everything else pass through.
+  // That includes the engine's host-family probes, which the engagement engine
+  // scopes runner-side — why that is the correct split, and not a gap in this
+  // hook, is argued in the module doc comment.
   if (!isScanTool(event.toolName)) {
     return { kind: 'allow' }
   }

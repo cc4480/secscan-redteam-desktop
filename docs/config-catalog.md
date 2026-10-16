@@ -754,7 +754,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/experimental/agent-team/src/types.ts:160`](../packages/experimental/agent-team/src/types.ts)
+Source: [`packages/experimental/agent-team/src/types.ts:173`](../packages/experimental/agent-team/src/types.ts)
 
 <a id="deepseek-aidsh-experimental-api-speech-to-text"></a>
 

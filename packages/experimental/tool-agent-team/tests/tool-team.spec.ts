@@ -164,10 +164,30 @@ describe('dsh-tool-team', () => {
         expect(schema?.properties).not.toHaveProperty('id')
         expect(schema?.properties).not.toHaveProperty('name')
         expect(schema?.properties?.status?.enum).toEqual(['running', 'inactive', 'provisioning', 'failed'])
+        // Creator and depth reach the model only because they are declared here:
+        // the output schema is validated with `additionalProperties: false`, so an
+        // undeclared roster field fails the call instead of being published.
+        expect(schema?.properties).toHaveProperty('spawnedBy')
+        expect(schema?.properties?.depth?.type).toBe('integer')
       }
       expect(ctx.agentTeams.listMembers(lead)).toEqual([member])
     },
   )
+
+  it('publishes the roster creator and nesting depth with the spawn result', async () => {
+    const { ctx, lead } = await setup([])
+    const member = {
+      id: SessionId('private-member-session'), name: 'reviewer', role: 'teammate' as const,
+      status: 'inactive' as const, description: 'review changes', diagnostics: [],
+      spawnedBy: 'lead', depth: 1,
+    }
+    vi.spyOn(ctx.agentTeams, 'spawnTeammate').mockResolvedValue({ member })
+    const spawned = await execute(ctx, lead, 'spawn_teammate', {
+      name: 'reviewer', description: 'review changes', prompt: 'review',
+    })
+    expect(spawned.isError).toBe(false)
+    expect(JSON.parse(text(spawned))).toMatchObject({ member: { target: 'reviewer', spawnedBy: 'lead', depth: 1 } })
+  })
 
   it.each(['running', 'inactive'] as const)('returns interrupted %s status', async (previousStatus) => {
     const { ctx, lead } = await setup([])
@@ -475,8 +495,8 @@ describe('dsh-tool-team', () => {
 
     const roster = await execute(ctx, child, 'list_agents', {})
     expect(JSON.parse(text(roster))).toMatchObject([
-      { target: 'lead', role: 'lead' },
-      { target: 'json-worker', role: 'teammate' },
+      { target: 'lead', role: 'lead', depth: 0 },
+      { target: 'json-worker', role: 'teammate', spawnedBy: 'lead', depth: 1 },
     ])
     // Every Team result reaches the model as compact JSON: indentation would
     // spend tokens on every roster, task, and receipt without adding meaning.

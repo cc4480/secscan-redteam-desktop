@@ -51,6 +51,22 @@ function memberDepth(members: readonly TeamMemberSnapshot[], teammate: TeamMembe
   return depth
 }
 
+/**
+ * Nesting depth of one durable roster row as the model sees it: the Lead is 0
+ * and a helper is one deeper than its creator. The chain is walked over the
+ * same durable rows the `spawn_teammate` limit reads, so a listed row and an
+ * enforced refusal always agree on how deep a member sits.
+ * @param members - current durable roster rows.
+ * @param teammate - the row whose published depth is being resolved.
+ * @returns its nesting depth, 0 for the Lead and 1 at minimum for a teammate.
+ */
+function viewDepth(
+  members: readonly TeamMemberSnapshot[],
+  teammate: TeamMemberSnapshot,
+): number {
+  return memberDepth(members, teammate)
+}
+
 /** Caller identity inside one implicit Team. */
 export interface TeamMembership {
   readonly root: Agent
@@ -150,7 +166,9 @@ export class TeamRoster {
   }
 
   /**
-   * List the runtime-enriched roster visible to one Team member.
+   * List the runtime-enriched roster visible to one Team member. Each row
+   * carries the member that created it and its nesting depth, so the shape of
+   * the team is readable without waiting for a refused `spawn_teammate`.
    * @param membership - exact caller membership resolved by this roster.
    * @returns Lead and teammate rows in creation order.
    */
@@ -163,6 +181,9 @@ export class TeamRoster {
       role: 'lead',
       status: availability(root),
       ...root.options.model === undefined ? {} : { model: root.options.model },
+      // Nobody created the Lead, so it has no creator name. It is the root of
+      // the nesting chain every other row's depth is measured against.
+      depth: 0,
       diagnostics: [],
     }]
     for (const member of state.members) {
@@ -181,6 +202,10 @@ export class TeamRoster {
         provider: member.provider,
         context: member.context,
         ...model === undefined ? {} : { model },
+        // Absent only on rows written before the field existed, which the Lead
+        // created; `viewDepth` reads that absence as depth 1.
+        ...member.spawnedBy === undefined ? {} : { spawnedBy: member.spawnedBy },
+        depth: viewDepth(state.members, member),
         diagnostics: member.error === undefined ? [] : [member.error],
       })
     }
@@ -385,7 +410,7 @@ export class TeamRoster {
       }
       throw conflict
     }
-    return { member: this.memberView(active) }
+    return { member: this.memberView(root, active) }
   }
 
   /** Flush the accepted initial inbox item before the Lead can commit `active`. */
@@ -485,8 +510,16 @@ export class TeamRoster {
     }
   }
 
-  /** Build one runtime member row after successful creation. */
-  private memberView(member: TeamMemberSnapshot & { readonly phase: 'active' }): TeamMemberView {
+  /**
+   * Build one runtime member row after successful creation.
+   * @param root - exact live Team Lead owning the roster the member was added to.
+   * @param member - the durable row that just settled as active.
+   * @returns its runtime-enriched roster row.
+   */
+  private memberView(
+    root: Agent,
+    member: TeamMemberSnapshot & { readonly phase: 'active' },
+  ): TeamMemberView {
     const live = this.ctx.agents.get(member.id)
     return {
       id: member.id,
@@ -497,6 +530,10 @@ export class TeamRoster {
       provider: member.provider,
       context: member.context,
       ...live?.options.model === undefined ? {} : { model: live.options.model },
+      ...member.spawnedBy === undefined ? {} : { spawnedBy: member.spawnedBy },
+      // The freshly created row is already durable, so the depth reported here
+      // is the same one list_agents publishes for it.
+      depth: viewDepth(this.journal.state(root).members, member),
       diagnostics: [],
     }
   }

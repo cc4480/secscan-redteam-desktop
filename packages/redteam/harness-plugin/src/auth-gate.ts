@@ -16,6 +16,16 @@
  * gate issues no tokens and does no DNS of its own. Any check error or
  * timeout fails closed (deny).
  *
+ * SCOPE OF THIS HOOK — the scan half only. Host-family probes (`mcp__redteam__*`
+ * with a `targetProfile` of secscan, seclayer, windows or linux) pass through
+ * here by design: host scope is the engagement engine's authority, and the
+ * engine is the runner those calls reach. A second scope check at this layer
+ * would have to either duplicate the engine's in-scope host list — two sources
+ * of truth about one authorization question — or assert nothing the model could
+ * not already read with its own token. Neither is defence in depth, so neither
+ * is done. The full argument lives in
+ * @secscan/redteam-auth-gate's src/hook.ts module doc comment.
+ *
  * Field names verified against @deepseek-ai/dsh-tools 0.2.0-rc.2:
  * ToolExecution has `name` (tool name) and `arguments` (unknown).
  */

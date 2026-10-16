@@ -52,6 +52,20 @@ const MEMBER_VIEW_SCHEMA = {
     role: { type: 'string', required: true, enum: ['lead', 'teammate'] },
     status: { type: 'string', required: true, enum: ['running', 'inactive', 'provisioning', 'failed'] },
     description: { type: 'string' },
+    // Who created this member, absent only for the Lead. The roster view always
+    // computed it, but `MEMBER_VIEW_SCHEMA` is the model-facing contract and
+    // `additionalProperties: false` rejects an undeclared key outright, so the
+    // field could not be published: a member saw no creator and had to infer
+    // how deep it sat, learning the nesting bound only from a refused
+    // spawn_teammate. Declaring it is what makes the bound legible up front.
+    spawnedBy: { type: 'string' },
+    // The bound itself, for the same reason: depth is derived from the durable
+    // roster on every list, so the row states where it sits instead of leaving
+    // a member to count creator names.
+    depth: {
+      type: 'integer',
+      description: 'Nesting depth: the Lead is 0, and a helper is one deeper than its creator.',
+    },
     provider: { type: 'string' },
     context: { type: 'string', enum: ['fresh', 'fork'] },
     model: { type: 'string' },
@@ -59,7 +73,13 @@ const MEMBER_VIEW_SCHEMA = {
   },
 } as const
 
-/** Expose the member name as its model-facing target. */
+/**
+ * Expose the member name as its model-facing target. `depth` and `spawnedBy`
+ * are spread exactly as the roster supplied them: both are optional on a row,
+ * and defaulting either here would publish a nesting fact this layer has not
+ * been told — and an explicit `undefined` would fail the output value's
+ * lossless-JSON check.
+ */
 function modelMember(member: TeamMemberView): InferValue<typeof MEMBER_VIEW_SCHEMA> {
   const { id: _id, name, ...details } = member
   return { target: name, ...details }
@@ -231,7 +251,7 @@ To message another teammate, use send_message({ target: "<teammate name>", messa
 
     register(scoped.tools.register(defineTool({
       name: 'list_agents',
-      description: 'List the Lead and every durable teammate with an addressable target and current availability. inactive means no turn is executing, not a task result. provisioning and failed describe member creation.',
+      description: 'List the Lead and every durable teammate with an addressable target, current availability, the member that created each one, and its nesting depth. inactive means no turn is executing, not a task result. provisioning and failed describe member creation.',
       parameters: {},
       output: jsonOutput(MEMBER_LIST_VALUE_SCHEMA),
       execute(_args, exec) {

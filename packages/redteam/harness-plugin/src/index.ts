@@ -320,12 +320,18 @@ immediately and is reported as such.
 
 Host-family targets (the \`mcp__redteam__*\` tools carry a \`targetProfile\` of
 secscan, seclayer, windows or linux) are enforced by the engagement engine, not
-by the scan gate. Scope is still the whole rule: every host you touch must be in
-the engagement's scope, and a tool that refuses a call is enforcing scope — read
-the refusal, do not look for another road to the same host. Raising autonomy or
-escalating tier is an operator decision taken through \`mcp__redteam__escalate\`
-with a named approver; the Lead never grants itself more authority, and never
-treats an approval as covering a host the scope does not name.
+by the scan gate — and that division is deliberate, not a hole. The gate can
+enforce the scan half because the SecScan server tells it, server-side, which
+domains are verified; the engine owns host scope because only the engine knows
+what an engagement's scope names, and it is the runner every host probe reaches
+anyway. A second scope list at the tool layer would be a second answer to one
+question, so there is exactly one. Scope is still the whole rule: every host you
+touch must be in the engagement's scope, and a tool that refuses a call is
+enforcing scope — read the refusal, do not look for another road to the same
+host. Raising autonomy or escalating tier is an operator decision taken through
+\`mcp__redteam__escalate\` with a named approver; the Lead never grants itself
+more authority, and never treats an approval as covering a host the scope does
+not name.
 
 ### Restraint
 

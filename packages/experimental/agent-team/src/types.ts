@@ -72,6 +72,19 @@ export interface TeamMemberView {
   readonly provider?: string
   readonly context?: 'fresh' | 'fork'
   readonly model?: string
+  /**
+   * Model-facing name of the member that created this one, `lead` for the
+   * Lead's own specialists. Omitted on the Lead row itself, which nobody
+   * created. Exposed so a member can see who raised it without waiting for a
+   * refused `spawn_teammate`.
+   */
+  readonly spawnedBy?: string
+  /**
+   * Nesting depth of this member: the Lead is 0 and a helper is one deeper than
+   * its creator, so a member at {@link Config.maxMemberDepth} may not create
+   * helpers. Derived from the durable roster, so it survives a restart.
+   */
+  readonly depth?: number
   readonly diagnostics: string[]
 }
 

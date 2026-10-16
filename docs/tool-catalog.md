@@ -2045,7 +2045,7 @@ Source: [`packages/experimental/tool-agent-team/src/index.ts`](../packages/exper
 
 ### `list_agents`
 
-List the Lead and every durable teammate with an addressable target and current availability. inactive means no turn is executing, not a task result. provisioning and failed describe member creation.
+List the Lead and every durable teammate with an addressable target, current availability, the member that created each one, and its nesting depth. inactive means no turn is executing, not a task result. provisioning and failed describe member creation.
 
 ```json
 {
