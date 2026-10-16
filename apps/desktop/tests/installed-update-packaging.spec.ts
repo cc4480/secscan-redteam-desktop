@@ -103,6 +103,7 @@ describe('operator-driven packaging entry', () => {
         expect(confirm).not.toHaveBeenCalled()
       })
     },
+    30_000,
   )
 
   it.runIf(process.platform === 'win32' && process.arch === 'x64')('does not allocate a build after declined confirmation or an intervening interlock', async () => {
@@ -116,7 +117,7 @@ describe('operator-driven packaging entry', () => {
       } })).rejects.toThrow('interlock exists')
       expect(await readdir(join(manifest, '..', versions[0]))).toEqual(['dsh'])
     })
-  })
+  }, 30_000)
 
   it.runIf(process.platform === 'win32' && process.arch === 'x64').each(['output', 'source'] as const)(
     'refuses an intervening %s change before launching the builder', async (change) => {

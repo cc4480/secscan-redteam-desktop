@@ -8,7 +8,7 @@ import { expect, it } from 'vitest'
 import { composeEntries, loadProfileDirectory } from '@deepseek-ai/dsh-app-boot'
 import { createPluginProfile } from '../src/project-manager.ts'
 
-it('retains one shared resource consumer in the Desktop Web profile', () => {
+it('keeps one shared resource consumer beside the fork MCP clients', () => {
   const home = mkdtempSync(join(tmpdir(), 'dsh-desktop-profile-mcp-'))
   try {
     const profileDir = join(home, 'profiles', 'desktop')
@@ -24,7 +24,13 @@ it('retains one shared resource consumer in the Desktop Web profile', () => {
     expect(rows.filter(row => row.name === '@deepseek-ai/dsh-mcp-resources')).toEqual([
       { id: 'mcp-resources', name: '@deepseek-ai/dsh-mcp-resources' },
     ])
-    expect(rows.filter(row => row.name === '@deepseek-ai/dsh-mcp-client')).toEqual([])
+    // This fork deliberately composes two MCP clients alongside that single
+    // shared resource consumer: mcp-secscan (the SecScan scan service) and
+    // mcp-redteam-runner (the local engagement console). Upstream shipped none.
+    expect(rows.filter(row => row.name === '@deepseek-ai/dsh-mcp-client').map(row => row.id)).toEqual([
+      'mcp-secscan',
+      'mcp-redteam-runner',
+    ])
     expect(rows.find(row => row.id === 'webserver')).toMatchObject({ name: '@deepseek-ai/dsh-host-webserver' })
     expect(rows.find(row => row.id === 'webserver')?.disabled).not.toBe(true)
     expect(warnings).toEqual([])
