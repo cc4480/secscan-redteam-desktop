@@ -119,12 +119,20 @@
     - id: agent-team
       name: '@deepseek-ai/dsh-experimental-agent-team'
       config:
-        # A full engagement is lead + recon + exploiter + reporter. The margin
-        # is for extra specialists (a second exploiter on a large surface, or a
-        # dedicated verifier), and because a teammate whose creation FAILED
-        # still consumes a name permanently.
-        maxMembers: 8
-        maxTasks: 256
+        # The starter roster is lead + recon + exploiter + reporter, but an
+        # engagement is NOT capped at four: every member may spawn helpers for its
+        # own slice, so a large surface can legitimately grow into a swarm - a
+        # second and third exploiter per host, dedicated verifiers re-testing a
+        # peer's findings, parallel report authors.
+        #
+        # 64 is a safety valve on API cost and machine load, not a statement about
+        # how many specialists an engagement wants. Raise it in this row to go
+        # wider. The audit trail does not depend on this number: every member,
+        # however spawned, is still an entry on the one roster. (A teammate whose
+        # creation FAILED still consumes a name permanently, which is part of why
+        # the valve exists at all.)
+        maxMembers: 64
+        maxTasks: 1024
         maxPendingMessagesPerMember: 64
         maxMessageBytes: 65536
         disposalTimeoutMs: 5000

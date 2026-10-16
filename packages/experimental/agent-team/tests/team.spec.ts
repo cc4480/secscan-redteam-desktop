@@ -422,14 +422,17 @@ describe('Team identity and provisioning', () => {
     await rejected
   })
 
-  it('validates names and permits only the Lead to create or interrupt teammates', async () => {
+  it('validates names, lets any member create teammates, and reserves interrupt for the Lead', async () => {
     const { ctx, lead } = await setup(['hang'])
     for (const name of ['Lead', 'lead', '-bad', 'bad-', 'bad_name', 'x'.repeat(65)]) {
       await expect(spawn(ctx, lead, name)).rejects.toMatchObject({ code: 'TEAM_INVALID_MEMBER_NAME' })
     }
     const started = await spawn(ctx, lead, 'worker')
     const worker = await waitRunning(ctx, started.member.id)
-    await expect(spawn(ctx, worker, 'nested')).rejects.toMatchObject({ code: 'TEAM_LEAD_REQUIRED' })
+    // Every member may create helpers for its own slice, not only the Lead; the
+    // helper lands on the same roster. Interrupting a peer stays Lead-only.
+    const nested = await spawn(ctx, worker, 'nested')
+    expect(nested.member.name).toBe('nested')
     expect(() => ctx.agentTeams.interrupt(worker, 'worker')).toThrow(expect.objectContaining({ code: 'TEAM_LEAD_REQUIRED' }))
     expect(ctx.agentTeams.interrupt(lead, 'worker')).toEqual({ previousStatus: 'running' })
     await waitNoAgent(ctx, worker.id)

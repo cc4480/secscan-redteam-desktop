@@ -160,8 +160,10 @@ export class TeamRoster {
   }
 
   /**
-   * Create one named, continuable direct child of the Team Lead.
-   * @param caller - exact live Lead Agent.
+   * Create one named, continuable child of the calling Team member. The Lead
+   * spawns a specialist; a specialist spawns helpers for its own slice. Every
+   * child is recorded on the Team's one roster, whatever its parent.
+   * @param caller - exact live Team member: the Lead or any teammate.
    * @param request - immutable name, description, prompt, context mode, provider, and cancellation.
    * @returns the active roster row.
    */
@@ -248,9 +250,13 @@ export class TeamRoster {
     request: SpawnTeammateRequest,
   ): Promise<SpawnTeammateResult> {
     const membership = this.membership(caller)
-    if (membership.role !== 'lead') {
-      throw new TeamError('only the Team Lead can create teammates', 'TEAM_LEAD_REQUIRED')
-    }
+    // Any member may create helpers for its own slice, not only the Lead: a
+    // specialist that must hand every errand back to the Lead serialises the
+    // engagement and makes the Lead the bottleneck. The roster stays the
+    // authority - names are unique per Team and `maxMembers` caps the total no
+    // matter how deep the spawning goes - so this widens WHO may create, not
+    // what creation records. Every helper is still a roster entry on the board,
+    // so the audit trail the Team exists to provide is unchanged.
     const signal = AbortSignal.any([request.signal, this.lifecycle.signal])
     signal.throwIfAborted()
     const root = membership.root

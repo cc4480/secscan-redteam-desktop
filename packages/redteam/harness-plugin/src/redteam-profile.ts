@@ -1,25 +1,26 @@
 /**
- * Red-team team DEFINITION for the harness — not yet wired to a spawner.
+ * Red-team team DEFINITION for the harness.
  *
  * Shape mirrors the proven dsh-agent-teams profile format
  * (NanmiCoder/dsh-agent-teams src/profiles.ts): named members with
  * {name, role, provider, model, reasoning_effort, executionPrompt} and seed
- * tasks with dependencies. Intent: a harness team plugin consumes this to
- * spawn the coordinator + specialists as durable continuable subagents.
+ * tasks with dependencies.
  *
- * HONEST STATUS: no such team plugin exists in this repo yet. Today the
- * harness path (index.ts `apply()`) only installs the auth gate and injects
- * one system-prompt section (USAGE_SECTION) describing this same team to a
- * single agent — it does not spawn these members as separate subagents.
- * The live multi-agent implementation is the standalone runner
- * (runner/src/agents.ts + runner/src/prompts/), which is independent of this
- * profile. This file is forward scaffolding for when/if a harness team
- * plugin is built; REDTEAM_PROFILE is currently unconsumed (see the `void`
- * reference in index.ts) and kept as a shape reference, not live config.
+ * CONSUMED, not scaffolding: the harness path (index.ts `apply()`) installs the
+ * auth gate and injects ONE system-prompt section whose roster and task DAG are
+ * generated from this file, and the section makes the session's agent the
+ * ENGAGEMENT LEAD — the members below are spawned as durable harness teammates
+ * by the model through the Agent Teams tools. `coordinator` is therefore a role
+ * description for the Lead, not a teammate the Lead spawns.
  *
- * Per-role models are PULLED from llm-router's ROLE_MODEL_POLICY (the
- * actual routing policy used by the runner) rather than hardcoded here, so
- * this scaffold can't silently drift from reality if the policy changes.
+ * NOTE: the standalone runner this shape was borrowed from is NOT in this
+ * tree — only its `@secscan/redteam-runner` MCP endpoint is reachable (see
+ * ../desktop-bundle/cordis.patch.yml, `mcp-redteam-runner`). Do not document
+ * runner/src paths as if they were readable here.
+ *
+ * Per-role models are PULLED from llm-router's ROLE_MODEL_POLICY (the actual
+ * routing policy) rather than hardcoded here, so this file cannot silently
+ * drift from reality if the policy changes.
  */
 
 import { ROLE_MODEL_POLICY } from '@secscan/redteam-llm-router'

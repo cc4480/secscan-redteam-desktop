@@ -245,11 +245,13 @@ describe('dsh-tool-team', () => {
       ? initialPrompt.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
       : []).toEqual(['<system-reminder>\nYou are teammate "tool-worker".\nYour Team Lead is named "lead".\nUse list_agents({}) to find your teammates and their names.\nTo message your Team Lead, use send_message({ target: "lead", message: "..." }).\nTo message another teammate, use send_message({ target: "<teammate name>", message: "..." }).\n</system-reminder>\n\n', 'stay available'])
 
-    const denied = await execute(ctx, child, 'spawn_teammate', {
-      name: 'nested', description: 'not allowed', prompt: 'no',
+    // Spawning is no longer Lead-only: a teammate may create helpers for its own
+    // slice so it does not have to hand every errand back to the Lead. The helper
+    // is an ordinary roster entry, so the audit trail is unchanged.
+    const nestedSpawn = await execute(ctx, child, 'spawn_teammate', {
+      name: 'nested', description: 'teammate helper', prompt: 'assist the worker',
     })
-    expect(denied.isError).toBe(true)
-    expect(text(denied)).toContain('only the Team Lead')
+    expect(nestedSpawn.isError).toBe(false)
     await execute(ctx, lead, 'interrupt_agent', { target: 'tool-worker' })
     await vi.waitFor(() => { expect(ctx.agents.get(childId)).toBeUndefined() }, { timeout: 5_000 })
   })
