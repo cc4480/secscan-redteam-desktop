@@ -49,6 +49,7 @@ kind: "package-reference"
 | 字段 | 默认值 | 含义 |
 |---|---|---|
 | `maxMembers` | `16` | 一支团队最多可创建的 teammate 数，包括失败的 |
+| `maxMemberDepth` | `2` | 成员的嵌套深度上限：Lead 为 `0`，Lead 创建的成员为 `1`；达到上限的成员不能再创建成员 |
 | `maxTasks` | `256` | 任务板上最多的活动任务数 |
 | `maxPendingMessagesPerMember` | `64` | 单个成员最多可排队的消息数 |
 | `maxMessageBytes` | `65,536` | 单条发送消息的最大尺寸 |
@@ -62,7 +63,7 @@ kind: "package-reference"
 
 roster 显示每个成员的职责（`lead` 或 `teammate`）与当前状态：`running`、`inactive`（当前没有执行轮次，包括已加载和仅存储的成员）、`provisioning` 或 `failed`。未加载的成员会在唤醒后收到其消息。
 
-只有 Lead 可以创建 teammate 或中断它们。
+任何成员都可以创建 teammate，但受嵌套深度上限约束：Lead 与它创建的成员可以为自己的 slice 招募 helper，达到上限的 helper 不能再创建。中断某个 teammate 仍由 Lead 决定。
 
 ### teammate 之间的消息
 

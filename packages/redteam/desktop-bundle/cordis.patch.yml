@@ -132,6 +132,18 @@
         # creation FAILED still consumes a name permanently, which is part of why
         # the valve exists at all.)
         maxMembers: 64
+        # Depth is the other half of the bound: maxMembers caps how WIDE the team
+        # grows, maxMemberDepth caps how DEEP. The Lead is depth 0, each specialist
+        # the Lead spawns is depth 1, and a helper one of those raises is depth 2.
+        # At the limit spawn_teammate is refused, so the recursion cannot run away.
+        #
+        # 4, not 2, deliberately. Two levels is enough for a specialist to raise a
+        # helper but forbids that helper from delegating again, which is the wrong
+        # ceiling for a large surface where a helper may itself need to split work.
+        # Four keeps delegation genuinely recursive while still bounding the chain,
+        # and the wide cap above is the real limit on engagement size: a failure
+        # inside a very long chain would consume names and seats for nothing.
+        maxMemberDepth: 4
         maxTasks: 1024
         maxPendingMessagesPerMember: 64
         maxMessageBytes: 65536

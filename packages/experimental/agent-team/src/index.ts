@@ -39,6 +39,7 @@ declare module '@deepseek-ai/cordis' {
 }
 
 const DEFAULT_MAX_MEMBERS = 16
+const DEFAULT_MAX_MEMBER_DEPTH = 2
 const DEFAULT_MAX_TASKS = 256
 const DEFAULT_MAX_PENDING_MESSAGES = 64
 const DEFAULT_MAX_MESSAGE_BYTES = 65_536
@@ -58,6 +59,7 @@ export class TeamService extends Service {
 
   static Config: z<Config> = z.object({
     maxMembers: z.number().step(1).min(1).default(DEFAULT_MAX_MEMBERS),
+    maxMemberDepth: z.number().step(1).min(1).default(DEFAULT_MAX_MEMBER_DEPTH),
     maxTasks: z.number().step(1).min(1).default(DEFAULT_MAX_TASKS),
     maxPendingMessagesPerMember: z.number().step(1).min(1).default(DEFAULT_MAX_PENDING_MESSAGES),
     maxMessageBytes: z.number().step(1).min(1).default(DEFAULT_MAX_MESSAGE_BYTES),
@@ -78,6 +80,7 @@ export class TeamService extends Service {
     super(ctx, 'agentTeams')
     this.config = {
       maxMembers: positiveLimit('maxMembers', config.maxMembers ?? DEFAULT_MAX_MEMBERS),
+      maxMemberDepth: positiveLimit('maxMemberDepth', config.maxMemberDepth ?? DEFAULT_MAX_MEMBER_DEPTH),
       maxTasks: positiveLimit('maxTasks', config.maxTasks ?? DEFAULT_MAX_TASKS),
       maxPendingMessagesPerMember: positiveLimit(
         'maxPendingMessagesPerMember',
@@ -93,7 +96,7 @@ export class TeamService extends Service {
     this.activity = new TeamActivity()
     this.lifecycle = new TeamRuntimeLifecycle(this.config.disposalTimeoutMs)
     this.journal = new TeamJournal(ctx, (root) => { this.activity.notify(TeamId(root.id)) })
-    this.roster = new TeamRoster(ctx, this.journal, this.lifecycle, this.config.maxMembers)
+    this.roster = new TeamRoster(ctx, this.journal, this.lifecycle, this.config.maxMembers, this.config.maxMemberDepth)
     this.mailbox = new TeamMailbox(
       ctx,
       this.journal,

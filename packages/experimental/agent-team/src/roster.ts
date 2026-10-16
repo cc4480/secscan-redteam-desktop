@@ -25,6 +25,32 @@ import { requiredText } from './validation.ts'
 
 const MEMBER_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u
 
+/**
+ * Nesting depth of one teammate inside its Team, derived from who created whom:
+ * a member the Lead created is depth 1, and a helper is one deeper than the
+ * member that created it. The chain is walked over the roster rather than
+ * counted in memory, so the answer survives a restart, and it always
+ * terminates: names are unique and never reused, and a creator is recorded
+ * before the member it created.
+ * @param members - current durable roster rows.
+ * @param teammate - the row whose depth is being resolved.
+ * @returns its nesting depth, 1 at minimum.
+ */
+function memberDepth(members: readonly TeamMemberSnapshot[], teammate: TeamMemberSnapshot): number {
+  let depth = 1
+  let creatorName = teammate.spawnedBy
+  while (creatorName !== undefined) {
+    const creator = members.find(candidate => candidate.name === creatorName)
+    // A creator name is unique and its row is permanent, so a miss means the
+    // roster was truncated rather than a shorter chain; stop at what is known.
+    /* v8 ignore next -- requires a roster missing a name that is never reused. */
+    if (creator === undefined) break
+    depth += 1
+    creatorName = creator.spawnedBy
+  }
+  return depth
+}
+
 /** Caller identity inside one implicit Team. */
 export interface TeamMembership {
   readonly root: Agent
@@ -63,12 +89,14 @@ export class TeamRoster {
    * @param journal - authoritative Lead-log transaction owner.
    * @param lifecycle - shared Team runtime admission cutoff.
    * @param maxMembers - maximum immutable roster entries per Team.
+   * @param maxMemberDepth - deepest a member may sit before it may no longer create helpers.
    */
   constructor(
     private readonly ctx: Context,
     private readonly journal: TeamJournal,
     private readonly lifecycle: TeamRuntimeLifecycle,
     private readonly maxMembers: number,
+    private readonly maxMemberDepth: number,
   ) {}
 
   /**
@@ -252,11 +280,12 @@ export class TeamRoster {
     const membership = this.membership(caller)
     // Any member may create helpers for its own slice, not only the Lead: a
     // specialist that must hand every errand back to the Lead serialises the
-    // engagement and makes the Lead the bottleneck. The roster stays the
-    // authority - names are unique per Team and `maxMembers` caps the total no
-    // matter how deep the spawning goes - so this widens WHO may create, not
-    // what creation records. Every helper is still a roster entry on the board,
-    // so the audit trail the Team exists to provide is unchanged.
+    // engagement and makes the Lead the bottleneck. What creation records is
+    // unchanged - every helper is a roster entry under a unique name, with the
+    // member that created it recorded alongside - so this widens WHO may create,
+    // not what the audit trail holds. The two bounds below keep that widening
+    // finite: `maxMembers` caps how wide the Team grows, `maxMemberDepth` caps
+    // how deep the creating recurses.
     const signal = AbortSignal.any([request.signal, this.lifecycle.signal])
     signal.throwIfAborted()
     const root = membership.root
@@ -270,6 +299,7 @@ export class TeamRoster {
       provider: requiredText(request.provider, 'provider', 200),
       context: request.context,
       phase: 'provisioning',
+      spawnedBy: membership.name,
     }
 
     await this.journal.transact(root.id, async () => {
@@ -279,6 +309,22 @@ export class TeamRoster {
       }
       if (state.members.length >= this.maxMembers) {
         throw new TeamError(`Team member limit ${this.maxMembers} reached`, 'TEAM_MEMBER_LIMIT')
+      }
+      // The Lead sits at depth 0 and any member it created at depth 1, so a
+      // limit of 2 lets the roster's specialists raise helpers of their own
+      // while those helpers cannot raise more. Depth is read back off the
+      // durable roster rather than counted in memory, so a restart cannot reset
+      // the nesting and start the recursion over.
+      if (membership.role !== 'lead') {
+        const self = state.members.find(candidate => candidate.id === caller.id)
+        /* v8 ignore next -- a teammate membership is resolved from this same roster state. */
+        const depth = self === undefined ? this.maxMemberDepth : memberDepth(state.members, self)
+        if (depth >= this.maxMemberDepth) {
+          throw new TeamError(
+            `member "${membership.name}" is at nesting depth ${depth} of ${this.maxMemberDepth} and may not create helpers`,
+            'TEAM_MEMBER_DEPTH',
+          )
+        }
       }
       await this.journal.appendAndFlush(root, 'team/member', { version: 2, teamId: TeamId(root.id), member })
     })

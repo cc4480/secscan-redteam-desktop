@@ -49,6 +49,7 @@ With the tools installed, the model does the rest on request — for example, "c
 | Field | Default | Meaning |
 |---|---|---|
 | `maxMembers` | `16` | Maximum teammates a team may ever create, including failed ones |
+| `maxMemberDepth` | `2` | Maximum member nesting depth: the Lead is `0`, a member the Lead created is `1`, and a member at the limit may not create another |
 | `maxTasks` | `256` | Maximum active tasks on the board |
 | `maxPendingMessagesPerMember` | `64` | Maximum queued messages for one member |
 | `maxMessageBytes` | `65,536` | Maximum size of one sent message |
@@ -62,7 +63,7 @@ Ask the Lead to create a teammate: give it a unique lowercase name such as `revi
 
 The roster shows every member with its role (`lead` or `teammate`) and current status: `running`, `inactive` (no turn is executing, whether loaded or stored), `provisioning`, or `failed`. A member that is not loaded receives its messages when it wakes.
 
-Only the Lead can create teammates or interrupt them.
+Any member can create teammates, bounded by the nesting limit: the Lead and the members it created raise helpers for their own slice, and a helper at the limit cannot create another. Interrupting a teammate stays the Lead's call.
 
 ### Messages between teammates
 

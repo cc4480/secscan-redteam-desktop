@@ -735,6 +735,14 @@ Requires: `agents` · `sessions` · `sessionPersistence` · `sessionProjections`
 export interface Config {
   /** Maximum immutable teammate names retained by one Team. */
   readonly maxMembers?: number
+  /**
+   * Maximum nesting depth of a roster member: the Lead is depth 0, a member the
+   * Lead created is depth 1, and a helper is one deeper than its creator. A
+   * member already at this depth may not create further helpers, so spawning
+   * cannot recurse without bound. `maxMembers` remains the separate cap on how
+   * wide one Team may grow. Set 1 to restore Lead-only creation.
+   */
+  readonly maxMemberDepth?: number
   /** Maximum non-deleted tasks retained by one Team. */
   readonly maxTasks?: number
   /** Maximum queued-minus-delivered messages for one target member. */
@@ -746,7 +754,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/experimental/agent-team/src/types.ts:152`](../packages/experimental/agent-team/src/types.ts)
+Source: [`packages/experimental/agent-team/src/types.ts:160`](../packages/experimental/agent-team/src/types.ts)
 
 <a id="deepseek-aidsh-experimental-api-speech-to-text"></a>
 
@@ -4208,6 +4216,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-user-questions` ([`packages/interaction/user-questions/src/index.ts`](../packages/interaction/user-questions/src/index.ts))
 - `@deepseek-ai/dsh-webhook` — requires `agents` · `agentDefaultModel` · `agentPresets` · `permissionPresets` · `sessionTitle` · `workspaceRegistry` ([`packages/webhook/webhook/src/index.ts`](../packages/webhook/webhook/src/index.ts))
 - `@deepseek-ai/dsh-workspace` — requires `storageDomain` · `sessionPersistence` ([`packages/workspace/workspace/src/index.ts`](../packages/workspace/workspace/src/index.ts))
+- `@secscan/redteam-harness-plugin` — requires `tools` · `systemPrompt` ([`packages/redteam/harness-plugin/src/index.ts`](../packages/redteam/harness-plugin/src/index.ts))
 
 ## Seam packages (not directly loadable)
 
@@ -4289,3 +4298,6 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 - `@deepseek-ai/dsh-util-values` ([`packages/util/values/src/index.ts`](../packages/util/values/src/index.ts))
 - `@deepseek-ai/dsh-util-workspace-path` ([`packages/util/workspace-path/src/index.ts`](../packages/util/workspace-path/src/index.ts))
 - `@deepseek-ai/dsh-win32-process` ([`packages/subprocess/win32-process/src/index.ts`](../packages/subprocess/win32-process/src/index.ts))
+- `@secscan/redteam-auth-gate` ([`packages/redteam/auth-gate/src/index.ts`](../packages/redteam/auth-gate/src/index.ts))
+- `@secscan/redteam-desktop-bundle` ([`packages/redteam/desktop-bundle/src/index.ts`](../packages/redteam/desktop-bundle/src/index.ts))
+- `@secscan/redteam-llm-router` ([`packages/redteam/llm-router/src/index.ts`](../packages/redteam/llm-router/src/index.ts))

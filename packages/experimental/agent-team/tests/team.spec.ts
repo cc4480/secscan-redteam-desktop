@@ -156,6 +156,7 @@ describe('Team identity and provisioning', () => {
   it('rejects deployment limits that are not positive safe integers', async () => {
     const fields = [
       'maxMembers',
+      'maxMemberDepth',
       'maxTasks',
       'maxPendingMessagesPerMember',
       'maxMessageBytes',
@@ -423,7 +424,7 @@ describe('Team identity and provisioning', () => {
   })
 
   it('validates names, lets any member create teammates, and reserves interrupt for the Lead', async () => {
-    const { ctx, lead } = await setup(['hang'])
+    const { ctx, lead } = await setup(['hang', 'hang'])
     for (const name of ['Lead', 'lead', '-bad', 'bad-', 'bad_name', 'x'.repeat(65)]) {
       await expect(spawn(ctx, lead, name)).rejects.toMatchObject({ code: 'TEAM_INVALID_MEMBER_NAME' })
     }
@@ -433,11 +434,30 @@ describe('Team identity and provisioning', () => {
     // helper lands on the same roster. Interrupting a peer stays Lead-only.
     const nested = await spawn(ctx, worker, 'nested')
     expect(nested.member.name).toBe('nested')
+    // Who created whom is durable, so nesting is attributable and its depth is
+    // re-derivable after a restart rather than counted in memory.
+    expect(durable(lead).members.map(row => [row.name, row.spawnedBy])).toEqual([
+      ['worker', 'lead'],
+      ['nested', 'worker'],
+    ])
+    // The depth limit is what stops the widening from recursing without bound:
+    // the helper is at the configured depth and may not raise a helper of its
+    // own, so a specialist's slice is worked, not re-delegated forever.
+    const helper = await waitRunning(ctx, nested.member.id)
+    await expect(spawn(ctx, helper, 'nested-deeper')).rejects.toMatchObject({ code: 'TEAM_MEMBER_DEPTH' })
     expect(() => ctx.agentTeams.interrupt(worker, 'worker')).toThrow(expect.objectContaining({ code: 'TEAM_LEAD_REQUIRED' }))
     expect(ctx.agentTeams.interrupt(lead, 'worker')).toEqual({ previousStatus: 'running' })
     await waitNoAgent(ctx, worker.id)
     expect(ctx.agentTeams.interrupt(lead, 'worker')).toEqual({ previousStatus: 'inactive' })
     expect(() => ctx.agentTeams.interrupt(lead, 'lead')).toThrow(expect.objectContaining({ code: 'TEAM_INVALID_TARGET' }))
+  })
+
+  it('tightens the nesting limit to Lead-only creation when the deployment asks for it', async () => {
+    const { ctx, lead } = await setup(['hang'], { maxMemberDepth: 1 })
+    const started = await spawn(ctx, lead, 'worker')
+    const worker = await waitRunning(ctx, started.member.id)
+    expect(durable(lead).members).toEqual([expect.objectContaining({ name: 'worker', spawnedBy: 'lead' })])
+    await expect(spawn(ctx, worker, 'nested')).rejects.toMatchObject({ code: 'TEAM_MEMBER_DEPTH' })
   })
 
   it('validates teammate text fields and pre-provisioning cancellation', async () => {

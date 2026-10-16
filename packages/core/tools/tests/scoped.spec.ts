@@ -33,6 +33,16 @@ async function mintAgentScope(ctx: Context, name: string): Promise<{ scope: Scop
   return { scope, key }
 }
 
+/** Mint a child scope parented to `parentKey`, as a subagent's creation window does. */
+async function mintChild(ctx: Context, parentKey: Agent, name: string): Promise<{ scope: Scope; key: Agent }> {
+  const key = { id: name as SessionId } as Agent
+  bindScopeParent(key, parentKey)
+  let scope!: Scope
+  await ctx.plugin(Object.assign((inner: Context) => { scope = createScope(inner, key) },
+    { inject: ['tools', 'systemPrompt'] }))
+  return { scope, key }
+}
+
 function tool(name: string, reply = `ran:${name}`): ToolDefinition {
   return {
     name,
@@ -202,16 +212,6 @@ describe('restrict()', () => {
 })
 
 describe('restrict() over an inherited scope layer', () => {
-  /** Mint a child scope parented to `parent`, as a subagent's creation window does. */
-  async function mintChild(ctx: Context, parentKey: Agent, name: string): Promise<{ scope: Scope; key: Agent }> {
-    const key = { id: name as SessionId } as Agent
-    bindScopeParent(key, parentKey)
-    let scope!: Scope
-    await ctx.plugin(Object.assign((inner: Context) => { scope = createScope(inner, key) },
-      { inject: ['tools', 'systemPrompt'] }))
-    return { scope, key }
-  }
-
   it('filters tools the child inherits from an ancestor scope, not only global ones', async () => {
     // The shape every preset deployment has: no model-facing row in the global
     // layer, all of them contributed by an ancestor scope the child joined.
@@ -279,6 +279,29 @@ describe('scoped execution dispatch', () => {
     expect(await run(ctx, 't', other)).toBe('ran:t')
     expect(await run(ctx, 't')).toBe('ran:t')
     expect(seen).toEqual(['a'])
+  })
+
+  it('an unscoped pre-execute listener gates a nested subagent, not only its direct child', async () => {
+    // The composition every deployment has: a plugin registers the listener on
+    // its own unscoped context, and each Agent — the Lead and every subagent
+    // beneath it — gets its own scope. The listener must still run for ALL of
+    // them, or a permission hook is one delegation away from being bypassed.
+    const ctx = await mount()
+    const lead = await mintAgentScope(ctx, 'lead')
+    const child = await mintChild(ctx, lead.key, 'child')
+    const grandchild = await mintChild(ctx, child.key, 'grandchild')
+    ctx.tools.register(tool('t'))
+
+    const seen: (string | undefined)[] = []
+    ctx.on('tools/pre-execute', (exec: ToolExecution, _next: () => Promise<PreToolDecision>) => {
+      seen.push(exec.agent?.id)
+      return Promise.resolve<PreToolDecision>({ kind: 'deny', reason: 'root veto' })
+    })
+
+    expect(await run(ctx, 't', grandchild.key)).toBe('Error: root veto')
+    expect(await run(ctx, 't', child.key)).toBe('Error: root veto')
+    expect(await run(ctx, 't', lead.key)).toBe('Error: root veto')
+    expect(seen).toEqual(['grandchild', 'child', 'lead'])
   })
 
   it('applies scoped guards after pre-execute and unwinds duplicate registrations independently', async () => {

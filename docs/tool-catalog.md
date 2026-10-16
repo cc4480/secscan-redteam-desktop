@@ -2084,7 +2084,7 @@ Source: [`packages/experimental/tool-agent-team/src/index.ts`](../packages/exper
 
 ### `spawn_teammate`
 
-Create one named, durable teammate. Only the Team Lead may call this tool.
+Create one named, durable teammate. The Team Lead and any teammate may call this tool, up to the Team's nesting depth limit.
 
 ```json
 {

@@ -51,6 +51,14 @@ export interface TeamMemberSnapshot {
   readonly provider: string
   readonly context: 'fresh' | 'fork'
   readonly phase: TeamMemberPhase
+  /**
+   * Model-facing name of the member that created this one — `lead` for the
+   * Lead's own specialists. Durable so nesting is attributable after the fact
+   * and so the depth limit is derivable rather than counted in memory. Absent
+   * only on records written before this field existed, all of which the Lead
+   * created.
+   */
+  readonly spawnedBy?: string
   readonly error?: string
 }
 
@@ -152,6 +160,14 @@ declare module '@deepseek-ai/dsh-llm' {
 export interface Config {
   /** Maximum immutable teammate names retained by one Team. */
   readonly maxMembers?: number
+  /**
+   * Maximum nesting depth of a roster member: the Lead is depth 0, a member the
+   * Lead created is depth 1, and a helper is one deeper than its creator. A
+   * member already at this depth may not create further helpers, so spawning
+   * cannot recurse without bound. `maxMembers` remains the separate cap on how
+   * wide one Team may grow. Set 1 to restore Lead-only creation.
+   */
+  readonly maxMemberDepth?: number
   /** Maximum non-deleted tasks retained by one Team. */
   readonly maxTasks?: number
   /** Maximum queued-minus-delivered messages for one target member. */
