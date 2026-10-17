@@ -11,6 +11,7 @@
  * policy for an argv and runs it.
  */
 import { realNmapSpawn, parseNmapXml } from "./runner.js";
+import { connectScanArgv, isNmapPrivilegeFailure } from "./privilege.js";
 import { NMAP_PROFILES, buildNmapRunArgv, buildNmapProfileListArgv, checkNmapFlags, checkNmapScriptCategories, findProfile, resolveNmapBinary, resolveNmapTimeoutS, } from "./policy.js";
 export class NmapExecutor {
     /**
@@ -95,12 +96,30 @@ export class NmapExecutor {
             timeoutS,
             skipPing: args.skipPing,
         });
-        const r = await this.spawn({
+        let r = await this.spawn({
             file: argv[0],
             args: argv.slice(1),
             timeoutMs: timeoutS * 1000,
             signal: args.signal,
         });
+        // An unprivileged runner cannot send raw packets (-sS needs Administrator +
+        // Npcap on Windows, CAP_NET_RAW on Linux). Retry once as a TCP connect scan so
+        // the host battery still gets its port map; see nmap/privilege.ts.
+        let connectFallback = false;
+        if (!r.timedOut && r.code !== 0 && isNmapPrivilegeFailure(r.stderr)) {
+            const fallbackArgs = connectScanArgv(argv);
+            if (fallbackArgs) {
+                connectFallback = true;
+                r = await this.spawn({
+                    file: fallbackArgs[0],
+                    args: fallbackArgs.slice(1),
+                    timeoutMs: timeoutS * 1000,
+                    signal: args.signal,
+                });
+            }
+        }
+        const effectiveArgv = connectFallback ? (connectScanArgv(argv) ?? argv) : argv;
+        const fallbackNote = connectFallback ? " (connect-scan fallback: no raw-socket privilege)" : "";
         if (r.timedOut) {
             // A partial scan is still evidence; report it as partial rather than
             // discarding it, but never as complete.
@@ -123,7 +142,7 @@ export class NmapExecutor {
                     ok: true,
                     action: "scan",
                     run,
-                    message: `${run.summary} (profile ${profile.id}, ${run.elapsedS.toFixed(1)}s, ${run.upHostCount} host(s) up, exit ${r.code} = some hosts down/partial). Command: nmap ${argv.slice(1).join(" ")}`,
+                    message: `${run.summary} (profile ${profile.id}, ${run.elapsedS.toFixed(1)}s, ${run.upHostCount} host(s) up, exit ${r.code} = some hosts down/partial). Command: nmap ${effectiveArgv.slice(1).join(" ")}${fallbackNote}`,
                 };
             }
             return {
@@ -138,7 +157,7 @@ export class NmapExecutor {
             action: "scan",
             run,
             message: `${run.summary} (profile ${profile.id}, ${run.elapsedS.toFixed(1)}s, ${run.upHostCount} host(s) up). ` +
-                `Command: nmap ${argv.slice(1).join(" ")}`,
+                `Command: nmap ${effectiveArgv.slice(1).join(" ")}${fallbackNote}`,
         };
     }
 }

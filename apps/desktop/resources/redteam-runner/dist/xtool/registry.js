@@ -195,10 +195,26 @@ export function buildXToolArgv(spec, opts) {
     const style = opts.profile.target ?? (spec.targetFlag ? "flag" : "positional");
     if (style === "none")
         return argv;
+    // ffuf requires the FUZZ keyword somewhere in the request. The agent supplies a
+    // target, not a template, so add the placeholder here: path profiles get /FUZZ
+    // appended, vhost discovery fuzzes the Host header. Only a real URL target is
+    // rewritten; a flag-like value passes through verbatim (the security contract is
+    // that a target value can never be reinterpreted as a flag).
+    let target = opts.target;
+    const urlTarget = /^https?:\/\//i.test(target);
+    if (spec.id === "ffuf" && style === "flag" && opts.profile.wordlist && urlTarget) {
+        if (opts.profile.id === "vhosts") {
+            if (!argv.includes("-H"))
+                argv.push("-H", "Host: FUZZ");
+        }
+        else if (!target.includes("FUZZ")) {
+            target = `${target.replace(/\/+$/, "")}/FUZZ`;
+        }
+    }
     if (style === "flag" && spec.targetFlag)
-        argv.push(spec.targetFlag, opts.target);
+        argv.push(spec.targetFlag, target);
     else
-        argv.push(opts.target);
+        argv.push(target);
     return argv;
 }
 //# sourceMappingURL=registry.js.map

@@ -7,13 +7,13 @@
  * The agent substitutes canary infrastructure it controls.
  */
 import type { VariantPayload } from "./types.js";
-/** Path traversal Ã¢â‚¬â€ separators, encodings, bypass shapes. Read-only targets. */
+/** Path traversal — separators, encodings, bypass shapes. Read-only targets. */
 export declare const TRAVERSAL_VARIANTS: VariantPayload[];
 /**
- * SSRF Ã¢â‚¬â€ guard-verdict shapes. Every "internal-looking" value below is a
+ * SSRF — guard-verdict shapes. Every "internal-looking" value below is a
  * canary-shaped probe: the question is whether the GUARD refuses it, not
  * whether a fetch succeeds. Never a real internal address.
  */
 export declare const SSRF_VARIANTS: VariantPayload[];
-/** Open redirect Ã¢â‚¬â€ landing-control shapes. */
+/** Open redirect — landing-control shapes. */
 export declare const REDIRECT_VARIANTS: VariantPayload[];

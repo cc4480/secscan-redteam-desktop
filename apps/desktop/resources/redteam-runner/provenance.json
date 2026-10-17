@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "package": "@secscan/redteam-runner",
-  "version": "0.22.0",
-  "source": "C:\\Users\\Cho-zen\\secscan-redteam\\runner",
+  "version": "0.34.0",
+  "source": "C:\\Users\\looko\\Documents\\deepseek-harness\\Default workspace\\secscan-redteam\\runner",
   "packages": [
     {
       "name": "@marsaud/smb2",

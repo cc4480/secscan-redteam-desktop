@@ -3,6 +3,7 @@ import { checkTierAllows, recordExploitStep, readTierFile, TIER_NAMES } from "..
 import { isTargetDistress, readAbortFile, consumeAbortFile } from "../safety/index.js";
 import { recordItemAttempt } from "./verdicts.js";
 import { checkVariantCap, recordVariantExecution } from "../variants/index.js";
+import { postDispatchHooks, preDispatchGate } from "./policy-gate.js";
 import { handleWebTools } from "./web.js";
 import { handleHostTools } from "./host.js";
 import { handleMsfTools } from "./msf.js";
@@ -230,7 +231,13 @@ export async function dispatchTool(ctx, role, phase, call) {
     if (variantDenial) {
         return { result: variantDenial, target: host };
     }
-    const d = await dispatchToolInner(ctx, role, phase, call);
+    // v0.34.0 operator controls: policy (deny-wins) and pre-execute hooks, then
+    // post-hooks — all audited individually. A denial sends nothing.
+    const gate = await preDispatchGate(ctx, phase, call, host);
+    if (gate.denial)
+        return gate.denial;
+    let d = await dispatchToolInner(ctx, role, phase, gate.call);
+    d = await postDispatchHooks(ctx, phase, gate.call, d, host);
     if (host) {
         const haltReason = ctx.safety.autoHalt.recordOutcome(host, isTargetDistress(d.result));
         if (haltReason) {

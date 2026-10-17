@@ -22,6 +22,8 @@ import { countVariants, variantCountLine, variantProgressSuffix } from "../varia
 import { nucleiCountLine } from "../nuclei/index.js";
 import { buildProofSection } from "./proof.js";
 import { buildIntegrationsSection } from "./integrations.js";
+import { buildActivitySection } from "./activity.js";
+import { readEvents } from "../events.js";
 import { writeSafetyArtifacts } from "./safety.js";
 import { writeComplianceArtifacts } from "./compliance.js";
 import { extractNarrative } from "./narrative.js";
@@ -188,6 +190,7 @@ export async function reportPhase(ctx, reconBrief, exploitSummary, opts = {}) {
                     `See Honest limits.\n`;
         }
     }
+    reportMd += buildActivitySection(readEvents(ctx.events.dir, 0, 100000));
     reportMd += await buildIntegrationsSection(ctx, findings, pocBundleMap);
     writeFileSync(join(ctx.events.dir, "report.md"), reportMd);
     // The HTML twin is the human-facing deliverable — self-contained, severity

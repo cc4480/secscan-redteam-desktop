@@ -1,7 +1,7 @@
 function v(kind, payload, whatItTests) {
     return { kind, payload, whatItTests };
 }
-/** Path traversal Ã¢â‚¬â€ separators, encodings, bypass shapes. Read-only targets. */
+/** Path traversal — separators, encodings, bypass shapes. Read-only targets. */
 export const TRAVERSAL_VARIANTS = [
     v("traversal", "../../../etc/passwd", "classic dot-dot-slash"),
     v("traversal", "..\\..\\..\\windows\\win.ini", "windows backslash"),
@@ -26,7 +26,7 @@ export const TRAVERSAL_VARIANTS = [
     v("traversal", "../../../var/log/app.log", "log file access detection (benign)"),
 ];
 /**
- * SSRF Ã¢â‚¬â€ guard-verdict shapes. Every "internal-looking" value below is a
+ * SSRF — guard-verdict shapes. Every "internal-looking" value below is a
  * canary-shaped probe: the question is whether the GUARD refuses it, not
  * whether a fetch succeeds. Never a real internal address.
  */
@@ -52,7 +52,7 @@ export const SSRF_VARIANTS = [
     v("ssrf", "http://canary.127.0.0.1.nip.io/", "DNS rebinding detection shape"),
     v("ssrf", "http://target.com\t@{{CANARY}}/", "tab-in-userinfo parser confusion"),
 ];
-/** Open redirect Ã¢â‚¬â€ landing-control shapes. */
+/** Open redirect — landing-control shapes. */
 export const REDIRECT_VARIANTS = [
     v("redirect", "//evil.example/", "scheme-relative redirect"),
     v("redirect", "https://evil.example/", "absolute external URL"),
