@@ -176,6 +176,41 @@ describe('Agent Teams projection events', () => {
     }, SessionSeq(1))])).toThrow(/revision is not contiguous/)
   })
 
+  it('keeps a completion attestation in the strict persisted task schema', () => {
+    const projected = project(ROOT, [
+      event('team/task', { version: 2, teamId: TEAM, task: task() }, SessionSeq(0)),
+      event('team/task', {
+        version: 2,
+        teamId: TEAM,
+        task: task({
+          revision: 2,
+          status: 'in_progress',
+          ownerId: CHILD,
+          attestation: { kind: 'verification', by: ROOT, revision: 2 },
+        }),
+      }, SessionSeq(1)),
+    ])
+    // The attestation is part of the persisted state, so a checkpoint carries it
+    // back verbatim: this is what makes the rule survive a cold restart.
+    expect(teamProjectionDefinition.stateSchema.parse(JSON.parse(JSON.stringify(projected)))).toEqual(projected)
+    expect(teamProjectionView(teamState(projected)).tasks[0]?.attestation)
+      .toEqual({ kind: 'verification', byName: 'lead', revision: 2 })
+    // The durable record is checked as it is read back, not trusted: an unknown
+    // kind, an unknown field, or a revision outside the safe range cannot enter
+    // the log at all.
+    for (const attestation of [
+      { kind: 'self-signed', by: ROOT, revision: 2 },
+      { kind: 'verification', by: ROOT, revision: 2, unexpected: true },
+      { kind: 'verification', by: ROOT, revision: 0 },
+    ]) {
+      expect(() => projectTeam(ROOT, [event('team/task', {
+        version: 2,
+        teamId: TEAM,
+        task: task({ attestation: attestation as never }),
+      }, SessionSeq(0))])).toThrow(/team\/task payload is invalid/)
+    }
+  })
+
   it('rejects every invalid persisted task dependency relation', () => {
     const first = event('team/task', { version: 2, teamId: TEAM, task: task() }, SessionSeq(0))
     const second = event('team/task', {

@@ -1,6 +1,7 @@
 import { WINDOWS_TITLEBAR_HEIGHT } from './windows-layout.ts'
 /** Electron shell: desktop project ownership, custom protocol, windows, and lifecycle. */
 
+import { readFileSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -1112,6 +1113,31 @@ async function main(): Promise<void> {
   }
   publishUpdate(updateState)
 }
+
+// Give this build its own Electron profile instead of the package-derived one.
+//
+// Both desktop apps are built from this same package, so Electron derives the
+// SAME userData directory (@deepseek-ai/dsh-desktop) for each of them - and
+// requestSingleInstanceLock() is keyed to that directory. The two apps could
+// therefore never run at the same time: whichever started second failed to
+// acquire the lock and called app.quit() without printing anything, which is
+// indistinguishable from a crash on launch. Keying the profile to this build's
+// own application id separates them, so each app owns its own lock.
+//
+// Only browser-level state moves. Engagements, sessions and settings live in the
+// harness home, not here, so they are untouched; a fresh profile costs only
+// cache and cookies for this window.
+const productProfile = ((): string | undefined => {
+  try {
+    const pkg: unknown = JSON.parse(readFileSync(join(app.getAppPath(), 'package.json'), 'utf8'))
+    if (typeof pkg !== 'object' || pkg === null || !('dshDesktopAppId' in pkg)) return undefined
+    const id = (pkg as { dshDesktopAppId?: unknown }).dshDesktopAppId
+    return typeof id === 'string' && id.trim() !== '' ? id.trim() : undefined
+  } catch {
+    return undefined // fall back to the Electron default rather than fail to start
+  }
+})()
+if (productProfile !== undefined) app.setPath('userData', join(app.getPath('appData'), productProfile))
 
 const ownsDesktopInstance = claimDesktopSingleInstance(app, () => { focusPrimaryWindow() })
 
