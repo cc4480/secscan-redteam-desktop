@@ -45,6 +45,18 @@ const operations = {
   copySignInLink: async () => undefined,
   saveApiKey: () => Promise.resolve({ ok: true as const }),
   skip: () => Promise.resolve(),
+  readMcp: async () => ({
+    required: true,
+    entryRequired: true,
+    endpoint: 'http://127.0.0.1:8787/mcp',
+    storePath: '/profile/mcp-credentials.json',
+    stored: false,
+    fingerprints: {},
+    fromEnvironment: [],
+  }),
+  saveMcp: () => Promise.resolve({ ok: true as const }),
+  clearMcp: () => Promise.resolve({ ok: true as const }),
+  finishMcp: () => Promise.resolve(),
 }
 
 describe('desktop welcome window', () => {
@@ -177,5 +189,37 @@ describe('desktop welcome window', () => {
     expect(needsWelcome({ loggedIn: false, hasApiKey: false })).toBe(true)
     expect(needsWelcome({ loggedIn: false, hasApiKey: true })).toBe(false)
     expect(needsWelcome({ loggedIn: true, hasApiKey: true })).toBe(false)
+  })
+
+  it('opens the MCP step only when first run asks for it', () => {
+    expect(welcomeWindowOptions('win32', resolveDesktopLocale('en')).webPreferences?.additionalArguments)
+      .toEqual(['--dsh-welcome-locale=en'])
+    expect(welcomeWindowOptions('win32', resolveDesktopLocale('en'), 'mcp').webPreferences?.additionalArguments)
+      .toEqual(['--dsh-welcome-locale=en', '--dsh-welcome-page=mcp'])
+  })
+
+  it('accepts MCP actions only from its own top frame and validates the transport shape', async () => {
+    const window = createWindow()
+    electron.create.mockReturnValue(window)
+    const readMcp = vi.fn(operations.readMcp)
+    const saveMcp = vi.fn(operations.saveMcp)
+    const clearMcp = vi.fn(operations.clearMcp)
+    const finishMcp = vi.fn(operations.finishMcp)
+    await openWelcomeWindow(resolveDesktopLocale('en'), { ...operations, readMcp, saveMcp, clearMcp, finishMcp }, 'mcp')
+    const own = { sender: window.webContents, senderFrame: window.webContents.mainFrame }
+    const read = electron.handlers.get(WELCOME_IPC.readMcp)!
+    await expect(read({ ...own, senderFrame: {} })).rejects.toThrow('unowned frame')
+    expect(await read(own)).toMatchObject({ required: true, stored: false })
+    const save = electron.handlers.get(WELCOME_IPC.saveMcp)!
+    expect(await save(own, 'ssk-not-an-object')).toEqual({ ok: false })
+    expect(await save(own, { secscan: 42, runner: '', endpoint: '' })).toEqual({ ok: false })
+    expect(await save(own, { secscan: 'x'.repeat(5000), runner: '', endpoint: '' })).toEqual({ ok: false })
+    expect(saveMcp).not.toHaveBeenCalled()
+    expect(await save(own, { secscan: 'ssk_window-test-token', runner: '', endpoint: '' })).toEqual({ ok: true })
+    expect(saveMcp).toHaveBeenCalledExactlyOnceWith({ secscan: 'ssk_window-test-token', runner: '', endpoint: '' })
+    expect(await electron.handlers.get(WELCOME_IPC.clearMcp)!(own)).toEqual({ ok: true })
+    expect(clearMcp).toHaveBeenCalledOnce()
+    await electron.handlers.get(WELCOME_IPC.finishMcp)!(own)
+    expect(finishMcp).toHaveBeenCalledOnce()
   })
 })

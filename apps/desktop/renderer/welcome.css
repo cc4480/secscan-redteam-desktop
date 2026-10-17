@@ -86,6 +86,7 @@ body {
 
 .welcome > .tagline,
 .welcome > .key-form,
+.welcome > .mcp-form,
 .welcome > #auth-page {
   grid-row: 2;
   grid-column: 1;
@@ -232,6 +233,43 @@ body {
   align-items: center;
   gap: 40px;
   width: 440px;
+}
+
+/* Three fields and their audit notes need a tighter rhythm than the single-key form. */
+.mcp-form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  width: 440px;
+}
+
+.mcp-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.mcp-note {
+  margin: 0;
+  width: 100%;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--dsw-font-family);
+  font-size: 12px;
+  font-weight: 300;
+  line-height: 18px;
+  text-align: center;
+  word-break: break-all;
+}
+
+.mcp-error {
+  margin: 0;
+  width: 100%;
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 22px;
+  text-align: center;
 }
 
 .key-heading {

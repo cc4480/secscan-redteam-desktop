@@ -1,0 +1,10 @@
+SecScan RedTeam
+SecScan RedTeam
+连接 SecScan MCP 访问
+粘贴本机用于 SecScan 扫描与对抗引擎的令牌。它们只保存在本机，不会写入安装包。
+SecScan MCP 令牌（ssk_…） [password]
+对抗引擎运行器令牌 [password]
+运行器控制台地址 [url]
+保存位置：/profile/engagement-credentials.json
+保存并继续 [disabled]
+稍后配置

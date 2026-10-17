@@ -6,42 +6,72 @@ import { Welcome } from '../src/client/WelcomePage.tsx'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveDesktopLocale } from '../src/locale.ts'
 import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
-import type { WelcomeSaveResult } from '../src/welcome-api.ts'
+import type { WelcomeMcpState, WelcomeSaveResult } from '../src/welcome-api.ts'
 
 const html = readFileSync(join(import.meta.dirname, '../renderer/welcome.html'), 'utf8')
 afterEach(cleanup)
 
-function mount(language = 'zh-CN') {
+/** First-run MCP state the shell reports before anything has been stored. */
+const unconfiguredMcp: WelcomeMcpState = {
+  required: true,
+  entryRequired: true,
+  endpoint: 'http://127.0.0.1:8787/mcp',
+  storePath: '/profile/engagement-credentials.json',
+  stored: false,
+  fingerprints: {},
+  fromEnvironment: [],
+}
+
+function mount(language = 'zh-CN', options: { page?: 'entry' | 'mcp'; mcp?: Partial<WelcomeMcpState> } = {}) {
   cleanup()
   const stopAccount = vi.fn()
+  const mcp: WelcomeMcpState = { ...unconfiguredMcp, ...options.mcp }
   const api = {
     onAccountState: vi.fn((_listener: (state: AccountView) => void) => stopAccount),
     startSignIn: vi.fn(async (): Promise<AccountView> => ({ links: { usageUrl: 'http://localhost/usage', topUpUrl: 'http://localhost/top_up' }, status: 'signed-out', attempt: null })),
     cancelSignIn: vi.fn(async (): Promise<AccountView> => ({ links: { usageUrl: 'http://localhost/usage', topUpUrl: 'http://localhost/top_up' }, status: 'signed-out', attempt: null })),
     copySignInLink: vi.fn(async () => undefined),
     ...resolveDesktopLocale(language),
+    initialPage: options.page ?? ('entry' as const),
     saveApiKey: vi.fn<(value: string) => Promise<WelcomeSaveResult>>().mockResolvedValue({ ok: true }),
     skip: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    readMcp: vi.fn<() => Promise<WelcomeMcpState>>().mockResolvedValue(mcp),
+    saveMcp: vi.fn().mockResolvedValue({ ok: true }),
+    clearMcp: vi.fn().mockResolvedValue({ ok: true }),
+    finishMcp: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
   }
   const mounted = render(<Welcome api={api} />)
-  const input = document.querySelector('input')!
+  const input = document.querySelector<HTMLInputElement>('#key-input')!
   const button = (id: string) => document.querySelector<HTMLButtonElement>(id)!
+  const field = (id: string) => document.querySelector<HTMLInputElement>(id)!
   const enterKey = (value: string) => {
     fireEvent.change(input, { target: { value } })
   }
-  const submit = () => fireEvent.submit(document.querySelector('form')!)
+  const submit = () => fireEvent.submit(document.querySelector('#key-form')!)
+  const submitMcp = () => fireEvent.submit(document.querySelector('#mcp-form')!)
   const copy = () => {
     const heading = document.querySelector('main')!.getAttribute('aria-labelledby')!
+    const note = (id: string) => {
+      const element = document.querySelector<HTMLElement>(id)!
+      return element.hidden ? [] : [element.textContent]
+    }
     return [
       document.title, document.querySelector('img')!.alt, document.getElementById(heading)!.textContent,
       ...heading === 'welcome-heading' ? [document.querySelector('#welcome-description')!.textContent] : [],
       ...heading === 'key-title' ? [document.querySelector('#key-description')!.textContent, `${input.placeholder} [password]`] : [],
+      ...heading === 'mcp-title' ? [
+        document.querySelector('#mcp-description')!.textContent,
+        `${field('#mcp-secscan').placeholder} [password]`,
+        `${field('#mcp-runner').placeholder} [password]`,
+        `${field('#mcp-endpoint').placeholder} [url]`,
+        ...note('#mcp-store'), ...note('#mcp-stored'), ...note('#mcp-environment'),
+      ] : [],
       ...[...document.querySelectorAll('button')].filter(item => item.closest('[hidden]') === null)
         .map(item => `${item.textContent || item.getAttribute('aria-label')}${item.disabled ? ' [disabled]' : ''}`),
       '',
     ].join('\n')
   }
-  return { document, api, input, button, enterKey, submit, copy, unmount: mounted.unmount, stopAccount }
+  return { document, api, input, button, field, enterKey, submit, submitMcp, copy, unmount: mounted.unmount, stopAccount }
 }
 
 describe('desktop welcome presentation', () => {
@@ -259,4 +289,120 @@ it.each(['copied', 'failed'] as const)('restores the copy action after %s feedba
     cleanup()
     vi.useRealTimers()
   }
+})
+
+describe('desktop welcome MCP access step', () => {
+  const loaded = async (view: ReturnType<typeof mount>) => {
+    await vi.waitFor(() => { expect(view.button('#mcp-later').disabled).toBe(false) })
+  }
+
+  it.each(['zh-CN', 'en'])('opens on the %s setup step instead of the account entry', async (language) => {
+    const view = mount(language, { page: 'mcp' })
+    await loaded(view)
+    expect(view.document.querySelector<HTMLElement>('#mcp-form')!.hidden).toBe(false)
+    expect(view.document.querySelector<HTMLElement>('#key-form')!.hidden).toBe(true)
+    expect(view.document.querySelector<HTMLElement>('#tagline')!.hidden).toBe(true)
+    expect(view.field('#mcp-secscan').type).toBe('password')
+    expect(view.field('#mcp-runner').type).toBe('password')
+    expect(view.field('#mcp-endpoint').value).toBe('http://127.0.0.1:8787/mcp')
+    expect(view.document.activeElement).toBe(view.field('#mcp-secscan'))
+    expect(view.api.readMcp).toHaveBeenCalledOnce()
+    expect(view.button('#mcp-save').disabled).toBe(true)
+    await expect(view.copy()).toMatchFileSnapshot(`./expected/welcome/${language}-mcp.expected.txt`)
+  })
+
+  it('stores one trimmed draft and continues to the account step', async () => {
+    const view = mount('en', { page: 'mcp' })
+    await loaded(view)
+    fireEvent.change(view.field('#mcp-secscan'), { target: { value: '  ssk_onetime-test-token  ' } })
+    fireEvent.change(view.field('#mcp-runner'), { target: { value: 'runner-onetime-test-token' } })
+    expect(view.button('#mcp-save').disabled).toBe(false)
+    view.submitMcp()
+    view.submitMcp()
+    expect(view.api.saveMcp).toHaveBeenCalledExactlyOnceWith({
+      secscan: '  ssk_onetime-test-token  ', runner: 'runner-onetime-test-token', endpoint: 'http://127.0.0.1:8787/mcp',
+    })
+    await vi.waitFor(() => { expect(view.document.querySelector<HTMLElement>('#mcp-form')!.hidden).toBe(true) })
+    expect(view.document.querySelector<HTMLElement>('#tagline')!.hidden).toBe(false)
+    expect(view.api.finishMcp).not.toHaveBeenCalled()
+    // A token must never survive in the rendered document once it has been stored.
+    expect(view.document.body.textContent).not.toContain('ssk_onetime-test-token')
+    expect(view.document.body.textContent).not.toContain('runner-onetime-test-token')
+    expect(view.field('#mcp-secscan').value).toBe('')
+  })
+
+  it('finishes first run directly when the account step has nothing to ask', async () => {
+    const view = mount('en', { page: 'mcp', mcp: { required: false, entryRequired: false } })
+    await loaded(view)
+    expect(view.button('#mcp-later').textContent).toBe(view.api.messages.welcomeMcpClose)
+    fireEvent.change(view.field('#mcp-secscan'), { target: { value: 'ssk_rotation-test-token' } })
+    view.submitMcp()
+    await vi.waitFor(() => { expect(view.api.finishMcp).toHaveBeenCalledOnce() })
+    // The host closes this window or opens the workspace; the step never routes to the account entry.
+    expect(view.document.querySelector<HTMLElement>('#mcp-form')!.hidden).toBe(false)
+    expect(view.document.querySelector<HTMLElement>('#tagline')!.hidden).toBe(true)
+  })
+
+  it('leaves the step without storing anything when it is dismissed', async () => {
+    const view = mount('en', { page: 'mcp' })
+    await loaded(view)
+    expect(view.button('#mcp-later').textContent).toBe(view.api.messages.welcomeMcpLater)
+    fireEvent.click(view.button('#mcp-later'))
+    await vi.waitFor(() => { expect(view.api.finishMcp).toHaveBeenCalledOnce() })
+    expect(view.api.saveMcp).not.toHaveBeenCalled()
+    expect(view.api.clearMcp).not.toHaveBeenCalled()
+  })
+
+  it.each(['bad token', 'SECSCAN_MCP_TOKEN=ssk_assignment'])('refuses %s before the host sees it', async (value) => {
+    const view = mount('en', { page: 'mcp' })
+    await loaded(view)
+    fireEvent.change(view.field('#mcp-secscan'), { target: { value } })
+    view.submitMcp()
+    expect(view.api.saveMcp).not.toHaveBeenCalled()
+    expect(view.document.querySelector<HTMLElement>('#mcp-error')!.hidden).toBe(false)
+    expect(view.document.querySelector('#mcp-error')!.textContent).toBe(view.api.messages.welcomeMcpInvalid)
+  })
+
+  it('refuses a console address that would send the token off the loopback', async () => {
+    const view = mount('en', { page: 'mcp' })
+    await loaded(view)
+    fireEvent.change(view.field('#mcp-secscan'), { target: { value: 'ssk_loopback-test-token' } })
+    fireEvent.change(view.field('#mcp-endpoint'), { target: { value: 'http://console.example.test/mcp' } })
+    view.submitMcp()
+    expect(view.api.saveMcp).not.toHaveBeenCalled()
+    expect(view.document.querySelector('#mcp-error')!.textContent).toBe(view.api.messages.welcomeMcpEndpointInvalid)
+    expect(view.document.querySelector<HTMLElement>('#mcp-error')!.hidden).toBe(false)
+  })
+
+  it('retains the drafts when the host refuses a save', async () => {
+    const view = mount('en', { page: 'mcp' })
+    await loaded(view)
+    view.api.saveMcp.mockResolvedValue({ ok: false })
+    fireEvent.change(view.field('#mcp-secscan'), { target: { value: 'ssk_refused-test-token' } })
+    view.submitMcp()
+    await vi.waitFor(() => { expect(view.document.querySelector<HTMLElement>('#mcp-error')!.hidden).toBe(false) })
+    expect(view.document.querySelector('#mcp-error')!.textContent).toBe(view.api.messages.welcomeMcpFailed)
+    expect(view.field('#mcp-secscan').value).toBe('ssk_refused-test-token')
+    expect(view.document.body.textContent).not.toContain('ssk_refused-test-token')
+  })
+
+  it('shows stored fingerprints, an environment note, and removes the document on request', async () => {
+    const view = mount('en', {
+      page: 'mcp',
+      mcp: {
+        required: false, entryRequired: false, stored: true,
+        fingerprints: { SECSCAN_MCP_TOKEN: 'ssk_…0001', REDTEAM_UI_TOKEN: 'rtr_…0002' },
+        fromEnvironment: ['REDTEAM_MCP_URL'],
+      },
+    })
+    await loaded(view)
+    expect(view.document.querySelector('#mcp-stored')!.textContent).toContain('ssk_…0001')
+    expect(view.document.querySelector('#mcp-stored')!.textContent).toContain('rtr_…0002')
+    expect(view.document.querySelector<HTMLElement>('#mcp-environment')!.hidden).toBe(false)
+    view.api.readMcp.mockResolvedValue({ ...unconfiguredMcp, stored: false })
+    fireEvent.click(view.button('#mcp-remove'))
+    await vi.waitFor(() => { expect(view.api.clearMcp).toHaveBeenCalledOnce() })
+    await vi.waitFor(() => { expect(view.document.querySelector('#mcp-remove')).toBeNull() })
+    expect(view.api.readMcp).toHaveBeenCalledTimes(2)
+  })
 })

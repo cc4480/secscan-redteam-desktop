@@ -2,6 +2,7 @@ vi.mock('../src/web-document.ts', () => ({ authenticateWebHost: async () => 'tes
 /** Welcome startup uses the Host before transitioning to the workspace. */
 
 import { afterEach, expect, it, vi } from 'vitest'
+import { join } from 'node:path'
 import type { BrowserWindowConstructorOptions } from 'electron'
 import type { DesktopLocale } from '../src/locale.ts'
 import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
@@ -32,6 +33,7 @@ const state = vi.hoisted(() => ({
   menu: vi.fn(),
   operations: undefined as WelcomeOperations | undefined,
   nativeTheme: { themeSource: 'system', shouldUseDarkColors: false },
+  hostEnvironments: [] as (NodeJS.ProcessEnv | undefined)[],
 }))
 
 vi.mock('../src/crash-report.ts', async importOriginal => ({
@@ -41,6 +43,8 @@ vi.mock('../src/crash-report.ts', async importOriginal => ({
 }))
 vi.mock('electron', () => ({
   clipboard: { writeText: state.copy },
+  // No OS credential store on this host, so the store's owner-only fallback is the one under test.
+  safeStorage: { isEncryptionAvailable: () => false, encryptString: vi.fn(), decryptString: vi.fn() },
   app: {
     isPackaged: false,
     name: 'Harness',
@@ -95,6 +99,11 @@ vi.mock('../src/project-manager.ts', () => ({ DesktopProjectManager: class {
 } }))
 vi.mock('../src/host-process.ts', () => ({
   DesktopHostProcess: class {
+    constructor(_node: string, _dsh: string, _project: string, _port?: number, environment?: NodeJS.ProcessEnv) {
+      // The environment here is the one the Host child is spawned with, so it is what
+      // cordis composes the MCP rows from.
+      state.hostEnvironments.push(environment)
+    }
     start = state.startHost
     stop = state.stopHost
     fetch() {
@@ -133,6 +142,52 @@ vi.mock('../src/welcome-window.ts', () => ({
     await state.beforeWelcome()
     return { once: vi.fn(), close: state.closeWelcome }
   },
+}))
+/**
+ * The credential document is driven in memory here: this suite covers what main
+ * does with stored values - the process environment the Host is constructed with,
+ * and the Host restart that re-composes the MCP rows - not file permissions.
+ */
+const mcp = vi.hoisted(() => {
+  const stored: { values: Record<string, string>; fingerprints: Record<string, string>; exists: boolean; declined: boolean } =
+    { values: {}, fingerprints: {}, exists: false, declined: false }
+  const installed = new Set<string>()
+  return {
+    required: true,
+    stored,
+    load: vi.fn(async (environment: NodeJS.ProcessEnv) => {
+      // Stands in for the real loader: a removed entry leaves the environment, but only a name this
+      // process installed from the document is replaced; an inherited variable is never touched.
+      for (const name of [...installed]) {
+        if (stored.values[name] !== undefined) continue
+        Reflect.deleteProperty(environment, name)
+        installed.delete(name)
+      }
+      for (const [name, value] of Object.entries(stored.values)) {
+        if (!installed.has(name) && (environment[name] ?? '') !== '') continue
+        environment[name] = value
+        installed.add(name)
+      }
+      return { values: { ...stored.values }, fingerprints: { ...stored.fingerprints }, exists: stored.exists, declined: stored.declined }
+    }),
+    read: vi.fn(async () => ({ values: { ...stored.values }, fingerprints: { ...stored.fingerprints }, exists: stored.exists, declined: stored.declined })),
+    write: vi.fn(async (_file: string, _protector: unknown, draft: { secscan: string | null; runner: string | null }, declined = false) => {
+      if (draft.secscan !== null) { stored.values.SECSCAN_MCP_TOKEN = draft.secscan; stored.fingerprints.SECSCAN_MCP_TOKEN = 'ssk_…oken' }
+      if (draft.runner !== null) stored.values.REDTEAM_UI_TOKEN = draft.runner
+      if (declined) stored.declined = true
+      stored.exists = true
+      return true
+    }),
+    clear: vi.fn(async () => { stored.values = {}; stored.fingerprints = {}; stored.exists = false; return true }),
+  }
+})
+vi.mock('../src/mcp-credentials.ts', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/mcp-credentials.ts')>(),
+  loadStoredMcpCredentials: mcp.load,
+  readStoredMcpCredentials: mcp.read,
+  writeStoredMcpCredentials: mcp.write,
+  clearStoredMcpCredentials: mcp.clear,
+  mcpSetupRequired: () => mcp.required,
 }))
 
 afterEach(() => {
@@ -223,4 +278,45 @@ it('starts the Host for welcome onboarding and opens the workspace on skip witho
   expect(state.dialogLocale!().id).toBe('en')
   expect(state.menu).toHaveBeenCalledTimes(initialMenus + 1)
   expect(await bootstrap(event)).toEqual({ languages: ['en-US'], preference: 'en' })
+
+  // First-run MCP access. The document reaches the Host through the process environment, and only a
+  // restart re-composes the MCP rows, so both have to happen before the step is reported as stored.
+  const mcpView = await state.operations!.readMcp()
+  expect(mcpView).toMatchObject({
+    required: true, entryRequired: true, storePath: join('/development-userData', 'engagement-credentials.json'),
+    endpoint: 'http://127.0.0.1:8787/mcp', stored: false, fingerprints: {},
+  })
+  // The launch load runs on the real process environment, before the first Host exists.
+  expect(mcp.load).toHaveBeenCalledWith(process.env, mcpView.storePath, expect.anything(), expect.anything())
+  expect(mcp.load.mock.invocationCallOrder[0]!).toBeLessThan(state.startHost.mock.invocationCallOrder[0]!)
+
+  // A refused value reaches neither the document nor the environment, and starts no Host.
+  const hostsBefore = state.startHost.mock.calls.length
+  expect(await state.operations!.saveMcp({ secscan: 'SECSCAN_MCP_TOKEN=ssk_pasted-line', runner: '', endpoint: '' })).toEqual({ ok: false })
+  expect(await state.operations!.saveMcp({ secscan: '', runner: '', endpoint: 'http://10.0.0.5:8787/mcp' })).toEqual({ ok: false })
+  expect(mcp.write).not.toHaveBeenCalled()
+  expect(state.startHost).toHaveBeenCalledTimes(hostsBefore)
+  expect(process.env.SECSCAN_MCP_TOKEN).toBeUndefined()
+
+  expect(await state.operations!.saveMcp({ secscan: 'ssk_first-run-token', runner: 'runner-first-run-token', endpoint: '' })).toEqual({ ok: true })
+  expect(mcp.write).toHaveBeenCalledExactlyOnceWith(mcpView.storePath, expect.anything(), {
+    secscan: 'ssk_first-run-token', runner: 'runner-first-run-token', endpoint: null,
+  })
+  // The stored values are in the environment the replacement Host is constructed with, which is
+  // exactly what its MCP rows read while cordis composes the profile.
+  expect(state.stopHost).toHaveBeenCalledOnce()
+  expect(state.startHost).toHaveBeenCalledTimes(hostsBefore + 1)
+  expect(state.hostEnvironments.at(-1)).toBe(process.env)
+  expect(state.hostEnvironments.at(-1)!.SECSCAN_MCP_TOKEN).toBe('ssk_first-run-token')
+  expect(state.hostEnvironments.at(-1)!.REDTEAM_UI_TOKEN).toBe('runner-first-run-token')
+
+  // Revocation removes the document, and the environment with it, on another restart.
+  expect(await state.operations!.clearMcp()).toEqual({ ok: true })
+  expect(mcp.clear).toHaveBeenCalledOnce()
+  expect(state.startHost).toHaveBeenCalledTimes(hostsBefore + 2)
+  expect(state.hostEnvironments.at(-1)!.SECSCAN_MCP_TOKEN).toBeUndefined()
+
+  // Leaving the step records the decision so first run does not ask again.
+  await state.operations!.finishMcp()
+  expect(mcp.write).toHaveBeenLastCalledWith(mcpView.storePath, expect.anything(), { secscan: null, runner: null, endpoint: null }, true)
 })

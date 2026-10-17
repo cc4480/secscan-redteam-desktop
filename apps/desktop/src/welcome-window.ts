@@ -5,15 +5,16 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { app, BrowserWindow, ipcMain, type BrowserWindowConstructorOptions, type IpcMainInvokeEvent } from 'electron'
 import type { DesktopLocale } from './locale.ts'
-import { WELCOME_IPC, type WelcomeOperations } from './welcome-api.ts'
+import { WELCOME_IPC, type WelcomeOperations, type WelcomePage } from './welcome-api.ts'
 
 /**
  * Resolve the fixed-size welcome window's native material and controls.
  * @param platform - operating system hosting Electron.
  * @param locale - shell-owned localized copy.
+ * @param startPage - page the window opens on; the account entry unless this run has to ask for MCP access.
  * @returns sandboxed window options with a locale-only preload.
  */
-export function welcomeWindowOptions(platform: NodeJS.Platform, locale: DesktopLocale): BrowserWindowConstructorOptions {
+export function welcomeWindowOptions(platform: NodeJS.Platform, locale: DesktopLocale, startPage: WelcomePage = 'entry'): BrowserWindowConstructorOptions {
   return {
     width: 600,
     height: 700,
@@ -38,7 +39,10 @@ export function welcomeWindowOptions(platform: NodeJS.Platform, locale: DesktopL
     } as const : {}),
     webPreferences: {
       preload: fileURLToPath(new URL('./preload-welcome.cjs', import.meta.url)),
-      additionalArguments: [`--dsh-welcome-locale=${locale.id}`],
+      additionalArguments: [
+        `--dsh-welcome-locale=${locale.id}`,
+        ...startPage === 'mcp' ? ['--dsh-welcome-page=mcp'] : [],
+      ],
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
@@ -54,16 +58,18 @@ let disposeActiveHandlers: (() => void) | undefined
  * Replaces IPC ownership immediately; the caller closes the previous native window.
  * @param locale - shell-owned localized copy.
  * @param operations - credential write and this-launch-only skip actions.
+ * @param startPage - page the window opens on.
  * @returns the visible window; a failed load destroys it before rejecting.
  */
-export async function openWelcomeWindow(locale: DesktopLocale, operations: WelcomeOperations): Promise<BrowserWindow> {
-  const window = new BrowserWindow(welcomeWindowOptions(process.platform, locale))
+export async function openWelcomeWindow(locale: DesktopLocale, operations: WelcomeOperations, startPage: WelcomePage = 'entry'): Promise<BrowserWindow> {
+  const window = new BrowserWindow(welcomeWindowOptions(process.platform, locale, startPage))
   disposeActiveHandlers?.()
   let active = true
   const disposeHandlers = (): void => {
     if (!active) return
     active = false
-    for (const channel of [WELCOME_IPC.saveApiKey, WELCOME_IPC.skip, WELCOME_IPC.start, WELCOME_IPC.cancel, WELCOME_IPC.copyLink]) {
+    for (const channel of [WELCOME_IPC.saveApiKey, WELCOME_IPC.skip, WELCOME_IPC.start, WELCOME_IPC.cancel, WELCOME_IPC.copyLink,
+      WELCOME_IPC.readMcp, WELCOME_IPC.saveMcp, WELCOME_IPC.clearMcp, WELCOME_IPC.finishMcp]) {
       ipcMain.removeHandler(channel)
     }
     disposeActiveHandlers = undefined
@@ -94,6 +100,19 @@ export async function openWelcomeWindow(locale: DesktopLocale, operations: Welco
     if (typeof id !== 'string') throw new Error('desktop welcome: invalid attempt')
     return operations.copySignInLink(id as SignInAttemptId)
   })
+  ipcMain.handle(WELCOME_IPC.readMcp, async (event) => { assertSender(event); return operations.readMcp() })
+  ipcMain.handle(WELCOME_IPC.saveMcp, async (event, input: unknown) => {
+    assertSender(event)
+    // Only the transport shape is checked here; the credential rules live with the document, so a
+    // refused value leaves the shell's failure copy to the renderer and reaches no log.
+    if (typeof input !== 'object' || input === null) return { ok: false }
+    const fields = input as Record<string, unknown>
+    if (typeof fields.secscan !== 'string' || typeof fields.runner !== 'string' || typeof fields.endpoint !== 'string') return { ok: false }
+    if (fields.secscan.length > 4096 || fields.runner.length > 4096 || fields.endpoint.length > 4096) return { ok: false }
+    return operations.saveMcp({ secscan: fields.secscan, runner: fields.runner, endpoint: fields.endpoint })
+  })
+  ipcMain.handle(WELCOME_IPC.clearMcp, async (event) => { assertSender(event); return operations.clearMcp() })
+  ipcMain.handle(WELCOME_IPC.finishMcp, async (event) => { assertSender(event); await operations.finishMcp() })
   window.once('closed', disposeHandlers)
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   window.webContents.on('will-navigate', (event) => { event.preventDefault() })

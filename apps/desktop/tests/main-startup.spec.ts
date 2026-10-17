@@ -296,6 +296,22 @@ vi.mock('../src/welcome-backend.ts', () => ({
     account: { watch: harness.watchAccount, state: async () => ({ status: 'signed-out', attempt: null }) },
   }),
 }))
+/**
+ * The credential document is an external dependency of this suite: its fake
+ * profile never has one, and the real gate would then ask for MCP access on
+ * every launch here and open the welcome window in every test.
+ */
+const mcp = vi.hoisted(() => ({
+  required: false,
+  write: vi.fn(async () => true),
+  load: vi.fn(async () => ({ values: {}, fingerprints: {}, exists: false, declined: false })),
+}))
+vi.mock('../src/mcp-credentials.ts', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/mcp-credentials.ts')>(),
+  writeStoredMcpCredentials: mcp.write,
+  loadStoredMcpCredentials: mcp.load,
+  mcpSetupRequired: () => mcp.required,
+}))
 
 function invoke(channel: string, origin = channel === DESKTOP_IPC.boot ? 'app' : 'shell', ...args: unknown[]): unknown {
   const handler = harness.handlers.get(channel)
@@ -324,6 +340,7 @@ beforeEach(() => {
   testAuth.login.mockResolvedValue('cancelled')
   vi.useFakeTimers()
   harness.reset()
+  mcp.required = false
   harness.dialog.showMessageBox.mockImplementation((options: { title?: string }) => {
     if (options.title !== en.startupFailed) return Promise.resolve({ response: 1 })
     harness.dialogShown.resolve()
@@ -760,7 +777,7 @@ describe('desktop main startup', () => {
     expect(() => handler(event, 'application', NaN, 34)).toThrow('invalid popup request')
     const application = handler(event, 'application', 48, 34)
     expect(harness.menu.buildFromTemplate.mock.lastCall![0].map(item => item.label ?? item.type)).toEqual([
-      '关于 SecScan RedTeam', 'separator', '检查更新…', 'separator', '退出',
+      '关于 SecScan RedTeam', 'separator', '检查更新…', 'MCP 访问与令牌…', 'separator', '退出',
     ])
     expect(harness.popup.mock.lastCall![0]).toMatchObject({ window, x: 48, y: 34 })
     expect(harness.popup.mock.lastCall![0].callback).toBeTypeOf('function')
@@ -797,8 +814,8 @@ describe('desktop main startup', () => {
       : ['Application', 'editMenu'])
     const application = template[0]!.submenu as MenuItemConstructorOptions[]
     expect(application.filter(item => item.visible !== false).map(describeItem)).toEqual(platform === 'darwin'
-      ? ['about', 'separator', en.checkUpdatesMenu, 'separator', 'hide', 'hideOthers', 'unhide', 'separator', 'quit']
-      : ['about', 'separator', en.checkUpdatesMenu, 'separator', 'quit'])
+      ? ['about', 'separator', en.checkUpdatesMenu, en.mcpSettingsMenu, 'separator', 'hide', 'hideOthers', 'unhide', 'separator', 'quit']
+      : ['about', 'separator', en.checkUpdatesMenu, en.mcpSettingsMenu, 'separator', 'quit'])
     expect(harness.menu.setApplicationMenu).toHaveBeenCalledOnce()
   })
 

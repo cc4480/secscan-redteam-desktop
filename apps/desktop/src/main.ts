@@ -16,6 +16,7 @@ import {
   nativeTheme,
   net,
   protocol,
+  safeStorage,
   session,
   shell,
   type IpcMainInvokeEvent,
@@ -36,8 +37,23 @@ import { serveWebDocument, authenticateWebHost, forwardWebRequest } from './web-
 import { DesktopFatalRecovery } from './fatal-recovery.ts'
 import { pruneCrashReports, RendererConsoleTail, writeCrashReport, type CrashReportSource } from './crash-report.ts'
 import { openWelcomeWindow } from './welcome-window.ts'
-import { WELCOME_IPC, needsWelcome } from './welcome-api.ts'
+import { WELCOME_IPC, needsWelcome, type WelcomeMcpState, type WelcomePage } from './welcome-api.ts'
 import { connectDesktopWelcome, type DesktopWelcomeBackend } from './welcome-backend.ts'
+import {
+  DEFAULT_REDTEAM_MCP_URL,
+  MCP_TOKEN_NAMES,
+  clearStoredMcpCredentials,
+  loadStoredMcpCredentials,
+  mcpCredentialFile,
+  mcpSetupRequired,
+  normalizeMcpCredentialDraft,
+  plainMcpSecretProtector,
+  readStoredMcpCredentials,
+  writeStoredMcpCredentials,
+  type McpEnvironmentName,
+  type McpSecretProtector,
+  type StoredMcpCredentials,
+} from './mcp-credentials.ts'
 import { DesktopUpdateJournal } from './update-journal.ts'
 import { DesktopUpdatePreparationError } from './update-error.ts'
 import { DesktopUpdateSchedule, resolveDesktopUpdateScheduleConfig } from './update-schedule.ts'
@@ -60,6 +76,9 @@ let windowsLanguage: string | undefined
  * failure while tearing down a ready backend still reads as `running`.
  */
 let backendReady = false
+/** Where the welcome window was opened from; finishing the MCP step ends first run, or only closes it. */
+type WelcomePurpose = 'onboarding' | 'mcp-settings'
+
 /** Error-level console output of the primary window, attached to crash reports. */
 const rendererConsole = new RendererConsoleTail()
 
@@ -343,6 +362,15 @@ async function main(): Promise<void> {
       detail: formatDesktopMessage(locale.messages.aboutVersion, { version: app.getVersion() }),
       buttons: [locale.messages.updateAcknowledge], cancelId: 0 })
   }
+  /**
+   * Open the MCP step as a settings surface, which is how a token is rotated or revoked later.
+   * @returns completion after the window is visible.
+   */
+  const openMcpSettings = async (): Promise<void> => {
+    if (quitting || recovery.active) return
+    // The workspace is already live, so nothing follows this step.
+    await showWelcome('mcp-settings', 'mcp', false)
+  }
   const appPreload = fileURLToPath(new URL('./preload-app.cjs', import.meta.url))
   const applicationUrl = `${SCHEME}://app/`
   let hostUrl: string | undefined
@@ -350,6 +378,10 @@ async function main(): Promise<void> {
   const browserGuests = new DesktopBrowserGuests(() => hostUrl)
   let injections: readonly unknown[] = []
   let welcomeBackend: DesktopWelcomeBackend | undefined
+  /** Where the welcome window was opened from, which decides what finishing the MCP step does. */
+  let welcomePurpose: WelcomePurpose = 'onboarding'
+  /** Whether the account or API-key entry still follows the MCP step in this window. */
+  let welcomeAccountEntryRequired = false
   let stopAccount: (() => void) | undefined
   let openedAttempt: string | undefined
   let returnedAttempt: string | undefined
@@ -408,7 +440,7 @@ async function main(): Promise<void> {
           if (attempt?.phase === 'succeeded' && welcomeWindow !== undefined) void enterWorkspace().catch(() => undefined)
           if (previousAccountStatus === 'credential-stored' && state.status === 'signed-out') {
             void readWelcomeState().then((value) => {
-              if (!value.hasApiKey && !quitting) { enteredWorkspace = false; return showWelcome() }
+              if (!value.hasApiKey && !quitting) { enteredWorkspace = false; return showWelcome('onboarding', 'entry', true) }
               return undefined
             }).catch(() => undefined)
           }
@@ -828,6 +860,7 @@ async function main(): Promise<void> {
       : { label: currentDesktopLocale().messages.aboutMenu, role: 'about' },
     { type: 'separator' },
     { label: currentDesktopLocale().messages.checkUpdatesMenu, click: () => { void openUpdatePrompt(true) } },
+    { label: currentDesktopLocale().messages.mcpSettingsMenu, click: () => { void openMcpSettings().catch((error: unknown) => { console.error(error) }) } },
     ...development ? [
       { type: 'separator' as const },
       { label: currentDesktopLocale().messages.reloadPageMenu, role: 'reload' as const },
@@ -946,8 +979,46 @@ async function main(): Promise<void> {
     }
   }
   let openingWelcome: Promise<void> | undefined
-  const showWelcome = (): Promise<void> => {
+  /** Masked MCP state for the setup window; built from the document and the environment, never from a value. */
+  const welcomeMcpState = (): WelcomeMcpState => ({
+    required: mcpSetupRequired(process.env, storedMcpCredentials),
+    entryRequired: welcomeAccountEntryRequired,
+    endpoint: process.env.REDTEAM_MCP_URL ?? storedMcpCredentials.values.REDTEAM_MCP_URL ?? DEFAULT_REDTEAM_MCP_URL,
+    storePath: mcpCredentialPath,
+    stored: storedMcpCredentials.exists,
+    fingerprints: storedMcpCredentials.fingerprints,
+    fromEnvironment: MCP_TOKEN_NAMES.filter(name => !installedMcpNames.has(name) && (process.env[name] ?? '') !== ''),
+  })
+  /**
+   * Restart the Host so it composes the profile with the credentials just stored.
+   * The MCP rows are built while cordis composes the profile, so a Host that is
+   * already running keeps the tools it started with.
+   * @returns whether the replacement Host is ready and the application document reloaded.
+   */
+  const restartWorkspaceHost = async (): Promise<boolean> => {
+    try {
+      await backend.stop()
+      navigation = undefined
+      await backend.start(async () => { await manager.applyRelease() })
+      await navigateMain(applicationUrl)
+      return true
+    } catch {
+      // The backend publishes the failure with its own diagnostics; this line must carry no credential.
+      console.warn('desktop mcp credentials: the Host could not be restarted with the new credentials')
+      return false
+    }
+  }
+  /**
+   * Open the welcome window for first run or for MCP access changes.
+   * @param purpose - first run, or the settings surface that leaves the workspace live.
+   * @param startPage - page the window opens on.
+   * @param accountEntry - whether the account or API-key entry follows the MCP step.
+   * @returns completion after the native window is visible.
+   */
+  const showWelcome = (purpose: WelcomePurpose, startPage: WelcomePage, accountEntry: boolean): Promise<void> => {
     if (quitting) return Promise.resolve()
+    welcomePurpose = purpose
+    welcomeAccountEntryRequired = accountEntry
     if (welcomeWindow !== undefined && !welcomeWindow.isDestroyed()) {
       welcomeWindow.show()
       welcomeWindow.focus()
@@ -978,7 +1049,35 @@ async function main(): Promise<void> {
           return { ok: true }
         },
         skip: enterWorkspace,
-      })
+        readMcp: async () => welcomeMcpState(),
+        saveMcp: async (input) => {
+          const draft = normalizeMcpCredentialDraft(input)
+          if (draft === undefined) return { ok: false }
+          if (!await writeStoredMcpCredentials(mcpCredentialPath, desktopMcpSecretProtector(), draft)) return { ok: false }
+          storedMcpCredentials = await loadStoredMcpCredentials(process.env, mcpCredentialPath, desktopMcpSecretProtector(), installedMcpNames)
+          return await restartWorkspaceHost() ? { ok: true } : { ok: false }
+        },
+        clearMcp: async () => {
+          if (!await clearStoredMcpCredentials(mcpCredentialPath)) return { ok: false }
+          storedMcpCredentials = await loadStoredMcpCredentials(process.env, mcpCredentialPath, desktopMcpSecretProtector(), installedMcpNames)
+          await restartWorkspaceHost()
+          return { ok: true }
+        },
+        finishMcp: async () => {
+          // Record the decision so first run does not ask again; anything already stored is preserved.
+          if (!MCP_TOKEN_NAMES.some(name => storedMcpCredentials.values[name] !== undefined)) {
+            const protector = desktopMcpSecretProtector()
+            if (await writeStoredMcpCredentials(mcpCredentialPath, protector, { secscan: null, runner: null, endpoint: null }, true)) {
+              storedMcpCredentials = await readStoredMcpCredentials(mcpCredentialPath, protector)
+            }
+          }
+          if (welcomePurpose === 'mcp-settings') {
+            if (welcomeWindow !== undefined && !welcomeWindow.isDestroyed()) welcomeWindow.close()
+            return
+          }
+          await enterWorkspace()
+        },
+      }, startPage)
       const window = welcomeWindow
       window.once('closed', () => {
         void welcomeBackend?.account.state().then((state) => {
@@ -990,8 +1089,9 @@ async function main(): Promise<void> {
         if (welcomeWindow === window) welcomeWindow = undefined
         if (!enteredWorkspace && !recovery.active) mainWindow?.close()
       })
-      if (isQuitting() || recovery.active || enteredWorkspace) window.close()
-      else mainWindow?.hide()
+      // First run owns the window; the settings surface leaves a live workspace behind it.
+      if (isQuitting() || recovery.active || (purpose === 'onboarding' && enteredWorkspace)) window.close()
+      else if (purpose === 'onboarding') mainWindow?.hide()
     })().finally(() => { openingWelcome = undefined })
     return openingWelcome
   }
@@ -1002,8 +1102,12 @@ async function main(): Promise<void> {
     locale = resolveDesktopStartupLocale(state.localePreference, systemLanguages)
     windowsLanguage = locale.id
     installMenu()
-    if (!enteredWorkspace && needsWelcome({ loggedIn: state.loggedIn, hasApiKey: state.hasApiKey })) {
-      await showWelcome()
+    const accountEntry = needsWelcome({ loggedIn: state.loggedIn, hasApiKey: state.hasApiKey })
+    // First-run MCP access is asked for even on a machine that already signs in: without it the
+    // mcp__* tools are absent and nothing else in the product would say why.
+    const mcpEntry = mcpSetupRequired(process.env, storedMcpCredentials)
+    if (!enteredWorkspace && (accountEntry || mcpEntry)) {
+      await showWelcome('onboarding', mcpEntry ? 'mcp' : 'entry', accountEntry)
     } else {
       await enterWorkspace()
     }
@@ -1139,12 +1243,14 @@ const productProfile = ((): string | undefined => {
 })()
 if (productProfile !== undefined) app.setPath('userData', join(app.getPath('appData'), productProfile))
 
-// Load engagement credentials from this profile's own config file, so a machine
-// that received the installer does not need hand-set environment variables.
+// First-run MCP credentials live in this profile's own document, so a machine that
+// received the installer does not need hand-set environment variables.
 //
-// The MCP client rows read process.env at cordis composition time, so this has to
-// run here, at module scope - before the single-instance claim below starts the
-// runtime. The harness home (`~/.dsh`) is not the place for it: the two desktop
+// The MCP client rows read process.env at cordis composition time, so these values
+// have to be in the environment before the single-instance claim below starts the
+// runtime. Loading waits for `ready`, because the OS credential store the document
+// is protected with is only available then, and it still runs before `main()` spawns
+// the Host. The harness home (`~/.dsh`) is not the place for it: the two desktop
 // apps share that home, and a token belongs to one installation, not to both.
 //
 // An environment variable that is ALREADY set always wins. Someone with a working
@@ -1152,31 +1258,48 @@ if (productProfile !== undefined) app.setPath('userData', join(app.getPath('appD
 // token for one run must not have it overridden by a leftover file.
 //
 // Absent is a valid state: the product deliberately starts without tokens and the
-// mcp__* tools simply do not appear, so a missing or unreadable file is ignored
+// mcp__* tools simply do not appear, so a missing or unreadable document is ignored
 // rather than fatal. Values are never logged - not on success, not on failure.
-const engagementEnvKeys = ['SECSCAN_MCP_TOKEN', 'REDTEAM_UI_TOKEN', 'REDTEAM_MCP_URL'] as const
-if (productProfile !== undefined) {
+/** Environment names this process took from the document, so a later rotation replaces them. */
+const installedMcpNames = new Set<McpEnvironmentName>()
+/** Document contents as of the last read, shared by the first-run gate and the setup window. */
+let storedMcpCredentials: StoredMcpCredentials = { values: {}, fingerprints: {}, exists: false, declined: false }
+/**
+ * Credential document of this installation. An unpackaged run pins no product
+ * profile, so the path falls back to Electron's own `userData` directory - still
+ * per-user and per-application. Computing it cannot fail and no read happens
+ * until `ready`, so a broken manifest still cannot stop the application from
+ * starting; skipping the step instead would leave the setup flow unrunnable in
+ * exactly the build a developer tests it in.
+ */
+const mcpCredentialPath = mcpCredentialFile(app.getPath('userData'))
+
+/**
+ * Resolve the at-rest protection for stored token values: Electron's OS credential
+ * store when this host exposes one, otherwise owner-only file permission bits.
+ * @returns the protector this host writes and reads with.
+ */
+function desktopMcpSecretProtector(): McpSecretProtector {
   try {
-    const configPath = join(app.getPath('userData'), 'engagement-credentials.json')
-    const parsed: unknown = JSON.parse(readFileSync(configPath, 'utf8'))
-    if (typeof parsed === 'object' && parsed !== null) {
-      const values = parsed as Record<string, unknown>
-      for (const key of engagementEnvKeys) {
-        const value = values[key]
-        // Only a non-empty string, and only when the environment is silent.
-        if (typeof value === 'string' && value.trim() !== '' && !process.env[key]) {
-          process.env[key] = value.trim()
-        }
+    if (safeStorage.isEncryptionAvailable()) {
+      return {
+        kind: 'safeStorage',
+        protect: value => safeStorage.encryptString(value).toString('base64'),
+        unprotect: value => safeStorage.decryptString(Buffer.from(value, 'base64')),
       }
     }
   } catch {
-    // No file, or an unreadable one: keep the environment as-is.
+    // A locked or absent keyring cannot open protected values; owner-only file bits remain the protection.
   }
+  return plainMcpSecretProtector
 }
 
 const ownsDesktopInstance = claimDesktopSingleInstance(app, () => { focusPrimaryWindow() })
 
-if (ownsDesktopInstance) void app.whenReady().then(main).catch(async (error: unknown) => {
+if (ownsDesktopInstance) void app.whenReady().then(async () => {
+  storedMcpCredentials = await loadStoredMcpCredentials(process.env, mcpCredentialPath, desktopMcpSecretProtector(), installedMcpNames)
+  return main()
+}).catch(async (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error)
   console.error(error)
   const diagnosticFile = process.env.DSH_DESKTOP_DIAGNOSTIC_FILE
