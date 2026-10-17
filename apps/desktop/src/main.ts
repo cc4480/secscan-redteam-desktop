@@ -1139,6 +1139,41 @@ const productProfile = ((): string | undefined => {
 })()
 if (productProfile !== undefined) app.setPath('userData', join(app.getPath('appData'), productProfile))
 
+// Load engagement credentials from this profile's own config file, so a machine
+// that received the installer does not need hand-set environment variables.
+//
+// The MCP client rows read process.env at cordis composition time, so this has to
+// run here, at module scope - before the single-instance claim below starts the
+// runtime. The harness home (`~/.dsh`) is not the place for it: the two desktop
+// apps share that home, and a token belongs to one installation, not to both.
+//
+// An environment variable that is ALREADY set always wins. Someone with a working
+// setup must not be silently switched to a file, and an operator who exported a
+// token for one run must not have it overridden by a leftover file.
+//
+// Absent is a valid state: the product deliberately starts without tokens and the
+// mcp__* tools simply do not appear, so a missing or unreadable file is ignored
+// rather than fatal. Values are never logged - not on success, not on failure.
+const engagementEnvKeys = ['SECSCAN_MCP_TOKEN', 'REDTEAM_UI_TOKEN', 'REDTEAM_MCP_URL'] as const
+if (productProfile !== undefined) {
+  try {
+    const configPath = join(app.getPath('userData'), 'engagement-credentials.json')
+    const parsed: unknown = JSON.parse(readFileSync(configPath, 'utf8'))
+    if (typeof parsed === 'object' && parsed !== null) {
+      const values = parsed as Record<string, unknown>
+      for (const key of engagementEnvKeys) {
+        const value = values[key]
+        // Only a non-empty string, and only when the environment is silent.
+        if (typeof value === 'string' && value.trim() !== '' && !process.env[key]) {
+          process.env[key] = value.trim()
+        }
+      }
+    }
+  } catch {
+    // No file, or an unreadable one: keep the environment as-is.
+  }
+}
+
 const ownsDesktopInstance = claimDesktopSingleInstance(app, () => { focusPrimaryWindow() })
 
 if (ownsDesktopInstance) void app.whenReady().then(main).catch(async (error: unknown) => {
