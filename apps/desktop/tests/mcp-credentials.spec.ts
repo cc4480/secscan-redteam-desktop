@@ -202,6 +202,10 @@ describe('first-run environment', () => {
     expect(mcpSetupRequired({}, fresh)).toBe(true)
     expect(mcpSetupRequired({ SECSCAN_MCP_TOKEN: SECSCAN }, fresh)).toBe(false)
     expect(mcpSetupRequired({ REDTEAM_UI_TOKEN: RUNNER }, fresh)).toBe(false)
+    // A token this process generated for the bundled engagement engine is not the
+    // operator's answer, so the step still asks for the scan token they have to supply.
+    expect(mcpSetupRequired({ REDTEAM_UI_TOKEN: RUNNER }, fresh, new Set(['REDTEAM_UI_TOKEN']))).toBe(true)
+    expect(mcpSetupRequired({ SECSCAN_MCP_TOKEN: SECSCAN, REDTEAM_UI_TOKEN: RUNNER }, fresh, new Set(['REDTEAM_UI_TOKEN']))).toBe(false)
 
     await writeStoredMcpCredentials(file, plainMcpSecretProtector, draft({ secscan: SECSCAN }))
     const configured = await readStoredMcpCredentials(file, plainMcpSecretProtector)

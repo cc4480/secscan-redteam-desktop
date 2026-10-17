@@ -34,6 +34,10 @@ const state = vi.hoisted(() => ({
   operations: undefined as WelcomeOperations | undefined,
   nativeTheme: { themeSource: 'system', shouldUseDarkColors: false },
   hostEnvironments: [] as (NodeJS.ProcessEnv | undefined)[],
+  /** Environments the supervised engagement runner was handed, in construction order. */
+  runnerEnvironments: [] as NodeJS.ProcessEnv[],
+  startRunner: vi.fn<() => Promise<undefined>>().mockResolvedValue(undefined),
+  stopRunner: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
 }))
 
 vi.mock('../src/crash-report.ts', async importOriginal => ({
@@ -110,6 +114,22 @@ vi.mock('../src/host-process.ts', () => ({
       return Promise.resolve(Response.json({ loggedIn: false, hasApiKey: false, writable: true, localePreference: state.preference }))
     }
   },
+}))
+/**
+ * The bundled engagement runner is a child process, so this suite owns only the part of
+ * main's contract that is about the environment: it receives the same object the Host is
+ * constructed with, and it is started before the Host exists. Its own lifecycle is
+ * covered by tests/redteam-runner.spec.ts.
+ */
+vi.mock('../src/redteam-runner.ts', () => ({
+  DesktopRedteamRunner: class {
+    constructor(_resources: unknown, environment: NodeJS.ProcessEnv) { state.runnerEnvironments.push(environment) }
+    consoleEnvironmentNames = new Set<string>()
+    start = state.startRunner
+    stop = state.stopRunner
+    killNow() {}
+  },
+  redteamRunnerResources: () => ({ node: '/runtime/electron', directory: '/runtime/redteam-runner' }),
 }))
 vi.mock('../src/welcome-backend.ts', () => ({
   connectDesktopWelcome: async () => ({
@@ -231,6 +251,13 @@ it('starts the Host for welcome onboarding and opens the workspace on skip witho
   }
   await vi.waitFor(() => { expect(state.operations).toBeDefined() })
   expect(state.startHost).toHaveBeenCalledOnce()
+  // The engagement runner is handed the very environment object the Host child is spawned
+  // with, so the endpoint and token it installs are the ones cordis reads while composing
+  // the MCP rows - and it has to be started before the Host exists.
+  expect(state.runnerEnvironments).toHaveLength(1)
+  expect(state.runnerEnvironments[0]).toBe(process.env)
+  expect(state.startRunner).toHaveBeenCalledOnce()
+  expect(state.startRunner.mock.invocationCallOrder[0]!).toBeLessThan(state.startHost.mock.invocationCallOrder[0]!)
   expect(state.loadWorkspace).toHaveBeenCalledExactlyOnceWith('dsh-app://app/')
   expect(state.showWorkspace).not.toHaveBeenCalled()
   state.loadWorkspace.mockClear()

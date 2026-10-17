@@ -312,6 +312,20 @@ vi.mock('../src/mcp-credentials.ts', async importOriginal => ({
   loadStoredMcpCredentials: mcp.load,
   mcpSetupRequired: () => mcp.required,
 }))
+/**
+ * The bundled engagement runner is a child process; this suite owns window, Host and
+ * update behaviour, so the supervisor is inert here. Its lifecycle and the environment
+ * it publishes are covered by tests/redteam-runner.spec.ts.
+ */
+vi.mock('../src/redteam-runner.ts', () => ({
+  DesktopRedteamRunner: class {
+    consoleEnvironmentNames = new Set<string>()
+    start = async (): Promise<undefined> => undefined
+    stop = async (): Promise<void> => {}
+    killNow(): void {}
+  },
+  redteamRunnerResources: () => ({ node: 'electron-executable', directory: 'redteam-runner-payload' }),
+}))
 
 function invoke(channel: string, origin = channel === DESKTOP_IPC.boot ? 'app' : 'shell', ...args: unknown[]): unknown {
   const handler = harness.handlers.get(channel)

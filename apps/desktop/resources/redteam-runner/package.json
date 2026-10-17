@@ -1,0 +1,36 @@
+{
+  "bin": {
+    "redteam-runner": "dist/cli.js"
+  },
+  "dependencies": {
+    "@marsaud/smb2": "^0.18.0",
+    "@secscan/redteam-auth-gate": "0.1.0",
+    "@secscan/redteam-llm-router": "0.2.0",
+    "js-md4": "^0.3.2",
+    "ldapts": "^9.2.0",
+    "ssh2": "^1.17.0",
+    "winrm-client": "^0.0.12"
+  },
+  "description": "Live engagement runner for the secscan red-team: executes the full red/black-team loop as code — authorize → plan → recon → exploit → report — with streaming event logs.",
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "@types/ssh2": "^1.15.6",
+    "typescript": "^5.6.0"
+  },
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "license": "UNLICENSED",
+  "name": "@secscan/redteam-runner",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node ../scripts/copy-dir.mjs src/ui/public dist/ui/public && node ../scripts/dist-hash.mjs write .",
+    "test": "tsc -p tsconfig.test.json && node --test dist-test/test/*.test.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json"
+  },
+  "type": "module",
+  "version": "0.22.0",
+  "engines": {
+    "node": ">=20"
+  }
+}

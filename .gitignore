@@ -46,3 +46,10 @@ worktrees/
 .agents/worktrees/
 .typert-*/
 native/system/test/bin/
+# The engagement runner's payload is shipped bytes, not an install artifact: a
+# packaged app executes these files from its own resources, so they have to be in
+# the tree even where a repository-wide rule would drop them — `node_modules/`
+# for the dependency closure, and `coverage/`, which is a runner MODULE under
+# dist/ here. Regenerated with `node apps/desktop/scripts/vendor-redteam-runner.mjs`.
+!apps/desktop/resources/redteam-runner/
+!apps/desktop/resources/redteam-runner/**

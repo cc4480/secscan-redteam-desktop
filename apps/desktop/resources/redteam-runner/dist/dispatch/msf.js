@@ -1,0 +1,86 @@
+/**
+ * Metasploit bridge tool handler: msf_exec (v0.19.0 refactor — extracted from dispatch.ts).
+ */
+import { BATTERY_CATEGORIES } from "../battery.js";
+import { isTargetId } from "../targets.js";
+import { techniqueAllowed } from "../gate.js";
+import { sleep } from "../util.js";
+import { noteCategoryCoverage, optStr } from "./prelude.js";
+export async function handleMsfTools(ctx, _role, phase, call, args) {
+    if (call.name !== "msf_exec")
+        return null;
+    if (call.name === "msf_exec") {
+        const attackId = typeof args["attackId"] === "string" ? args["attackId"].toUpperCase() : undefined;
+        const rawCat = typeof args["category"] === "string" ? args["category"].toLowerCase() : "";
+        const category = BATTERY_CATEGORIES.includes(rawCat) ? rawCat : undefined;
+        if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe)) {
+            return { result: `DENIED by ROE: technique ${attackId} is excluded for this engagement.`, attackId, target: String(args["host"] ?? "") };
+        }
+        const rawTp = typeof args["targetProfile"] === "string" ? args["targetProfile"].toLowerCase() : "";
+        if (!isTargetId(rawTp) || (rawTp !== "windows" && rawTp !== "linux")) {
+            return {
+                result: `DENIED: msf_exec requires targetProfile "windows"|"linux" (host targets are never inferred) — got ${JSON.stringify(args["targetProfile"] ?? null)}.`,
+                attackId,
+                target: String(args["host"] ?? ""),
+            };
+        }
+        const action = args["action"] === "run" ? "run" : args["action"] === "suggest" ? "suggest" : "search";
+        if (action === "run" && phase !== "exploit") {
+            return {
+                result: `DENIED: msf_exec run fires exploits — allowed in the exploit phase only, after the recon→exploit coordinator sign-off (candidate modules from 'suggest' go to the coordinator for approval first). Current phase: ${phase}.`,
+                attackId,
+                target: String(args["host"] ?? ""),
+            };
+        }
+        const host = String(args["host"] ?? "");
+        ctx.probesUsed++;
+        noteCategoryCoverage(ctx, category, rawTp);
+        const ctrl = new AbortController();
+        ctx.hostKill.controllers.add(ctrl);
+        try {
+            if (ctx.input.mode === "black")
+                await sleep(Math.random() * 2500); // jitter
+            const exec = ctx.msfExecutor;
+            exec.killSwitch = ctx.hostKill;
+            const t = { host, scopeHosts: ctx.hosts, signal: ctrl.signal };
+            const platform = args["platform"] === "linux" ? "linux" : args["platform"] === "windows" ? "windows" : rawTp === "linux" ? "linux" : "windows";
+            const res = action === "search"
+                ? await exec.search({ ...t, query: optStr(args["query"]), cve: optStr(args["cve"]), service: optStr(args["service"]), platform })
+                : action === "suggest"
+                    ? await exec.suggest({
+                        ...t,
+                        service: optStr(args["service"]),
+                        version: optStr(args["version"]),
+                        cve: optStr(args["cve"]),
+                        platform,
+                    })
+                    : await exec.run({
+                        ...t,
+                        moduleType: args["moduleType"] === "auxiliary" ? "auxiliary" : "exploit",
+                        module: String(args["module"] ?? ""),
+                        options: args["options"] && typeof args["options"] === "object"
+                            ? Object.fromEntries(Object.entries(args["options"])
+                                .filter(([, v]) => typeof v === "string")
+                                .map(([k, v]) => [k, v]))
+                            : undefined,
+                        payload: optStr(args["payload"]),
+                        // Runner-generated canary — the agent never chooses the marker.
+                        marker: `${Date.now().toString(36)}${Math.floor(Math.random() * 0xffffff).toString(16)}`,
+                    });
+            if (/kill switch/i.test(res.summary)) {
+                return { result: `ABORTED by coordinator kill switch — engagement halting. ${res.summary}`, attackId, target: host };
+            }
+            if (res.refused) {
+                return { result: `DENIED by msf safety policy: ${res.refused}`, attackId, target: host };
+            }
+            const cveTag = /^CVE-\d{4}-\d{4,7}$/i.test(String(args["cve"] ?? "")) ? ` [${String(args["cve"]).toUpperCase()}]` : "";
+            const out = res.output ? ` Output: ${res.output.slice(0, 600)}` : "";
+            return { result: `${res.summary}.${cveTag}${out}`, attackId, target: host, ok: res.ok };
+        }
+        finally {
+            ctx.hostKill.controllers.delete(ctrl);
+        }
+    }
+    return null;
+}
+//# sourceMappingURL=msf.js.map

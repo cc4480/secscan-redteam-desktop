@@ -14,6 +14,7 @@ export {
   DEFAULT_REDTEAM_MCP_URL,
   MCP_ENVIRONMENT_NAMES,
   MCP_TOKEN_NAMES,
+  REDTEAM_CONSOLE_ENVIRONMENT_NAMES,
   type McpCredentialDraftInput,
   type McpEnvironmentName,
   type McpTokenName,
@@ -332,11 +333,17 @@ export async function clearStoredMcpCredentials(file: string): Promise<boolean> 
  * silently absent.
  * @param environment - process environment the Host will inherit.
  * @param stored - result of {@link readStoredMcpCredentials}.
+ * @param provided - names this process supplied itself, such as the token it generated
+ *   for the bundled engagement engine; they are not an operator's answer to the step.
  * @returns whether the setup step belongs in first run.
  */
-export function mcpSetupRequired(environment: NodeJS.ProcessEnv, stored: StoredMcpCredentials): boolean {
+export function mcpSetupRequired(
+  environment: NodeJS.ProcessEnv,
+  stored: StoredMcpCredentials,
+  provided: ReadonlySet<McpEnvironmentName> = new Set(),
+): boolean {
   if (stored.declined) return false
-  if (MCP_TOKEN_NAMES.some(name => (environment[name] ?? '') !== '')) return false
+  if (MCP_TOKEN_NAMES.some(name => !provided.has(name) && (environment[name] ?? '') !== '')) return false
   return !MCP_TOKEN_NAMES.some(name => stored.values[name] !== undefined)
 }
 

@@ -114,10 +114,23 @@
     # get_feed, get_findings, get_proof, get_coverage, get_compliance,
     # escalate, reverify, abort_engagement, watch_profiles, watch_trigger.
     #
-    # The console must be running for this row to connect:
-    #     npx redteam-runner ui            # 127.0.0.1:8787
-    # If it is not, the harness still starts and the mcp__redteam__* tools are
-    # simply unavailable - same failure mode as an unset SECSCAN_MCP_TOKEN.
+    # In the desktop application this console is BUNDLED and supervised, so an
+    # operator installs nothing: apps/desktop/src/redteam-runner.ts starts the
+    # packaged runner with the application's own Node runtime before the Host
+    # composes this profile, waits for its MCP `initialize` reply, publishes the
+    # loopback endpoint and a generated token into process.env (which is exactly
+    # what the two `!!js` scalars below read), and stops it with the app. A
+    # console that cannot start is a visible startup failure, not the silence
+    # described next.
+    #
+    # An operator-set value always wins and suppresses the bundled console - that
+    # person is driving a shared or remote one:
+    #     REDTEAM_MCP_URL=https://console.example.test/mcp REDTEAM_UI_TOKEN=... \
+    #       npx redteam-runner ui        # or their own console, 127.0.0.1:8787
+    # If no console is reachable at all, the harness still starts and the
+    # mcp__redteam__* tools are simply unavailable - the same failure mode as an
+    # unset SECSCAN_MCP_TOKEN. That is why the bundled console failing to start
+    # is reported instead of ignored.
     #
     # Safety: every tool delegates to the same handler the console UI calls, so
     # the safety core, launch validation, tier rules and approval logging all
@@ -128,7 +141,9 @@
         serverName: redteam
         transport: streamable-http
         # Loopback by default. The console binds 127.0.0.1 unless explicitly
-        # overridden, and it drives live pentest tooling - keep it there.
+        # overridden, and it drives live pentest tooling - keep it there. The
+        # bundled supervisor never listens on anything else, and picks a free
+        # loopback port when this one is taken.
         url: !!js "process.env.REDTEAM_MCP_URL || 'http://127.0.0.1:8787/mcp'"
         headers:
           # The console's startup token. Stable across restarts if you set

@@ -44,9 +44,14 @@ describe('desktop macOS release signature', () => {
     expect(config.protocols).toEqual([{ name: 'SecScan RedTeam', schemes: ['dsh'] }])
     expect(portablePath(config.directories.output)).toContain('/.desktop-build/targets/mac-arm64/artifacts')
     expect(config.mac.extendInfo.NSMicrophoneUsageDescription).toContain('microphone')
-    expect(config.extraResources).toHaveLength(2)
+    expect(config.extraResources).toHaveLength(4)
     expect(config.extraResources[0]?.to).toBe('runtime')
     expect(portablePath(config.extraResources[0]?.from ?? '')).toContain('/.desktop-build/targets/mac-arm64/runtime')
+    // The engagement runner ships beside the runtime, in the layout its supervisor resolves;
+    // its node_modules needs its own entry because electron-builder skips a source's root one.
+    expect(config.extraResources.slice(1).map(resource => resource.to))
+      .toEqual(['icon.png', 'redteam-runner', 'redteam-runner/node_modules'])
+    expect(portablePath(config.extraResources[2]?.from ?? '')).toContain('/apps/desktop/resources/redteam-runner')
     const [dshFiles, dshNodeModules] = config.files.slice(-2)
     if (!dshFiles || !dshNodeModules || typeof dshFiles === 'string' || typeof dshNodeModules === 'string') {
       throw new Error('desktop DSH resources must use electron-builder file mappings')

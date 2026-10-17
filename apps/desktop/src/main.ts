@@ -55,6 +55,7 @@ import {
   type StoredMcpCredentials,
 } from './mcp-credentials.ts'
 import { DesktopUpdateJournal } from './update-journal.ts'
+import { DesktopRedteamRunner, redteamRunnerResources } from './redteam-runner.ts'
 import { DesktopUpdatePreparationError } from './update-error.ts'
 import { DesktopUpdateSchedule, resolveDesktopUpdateScheduleConfig } from './update-schedule.ts'
 import { desktopUpdateErrorSummary, presentDesktopUpdate } from './update-presentation.ts'
@@ -322,6 +323,31 @@ async function main(): Promise<void> {
     : join(process.resourcesPath, 'runtime', 'primary-runtime')
   const activeProject = paths.profile
   const manager = new DesktopProjectManager(paths, resources)
+  /**
+   * The engagement engine this application ships, as a child of this process.
+   *
+   * It starts before the Host composes the profile because the MCP client rows read
+   * their endpoint and token from the environment at that moment: a console that is
+   * not listening by then leaves the engagement tools silently absent, which is the
+   * failure this child exists to remove. An operator who pointed the product at their
+   * own console is visible in that same environment, and there the runner stays off.
+   */
+  const engagementRunner = new DesktopRedteamRunner(
+    redteamRunnerResources({
+      packaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+      appPath: app.getAppPath(),
+      node: resources.node,
+      environment: process.env,
+    }),
+    process.env,
+    {
+      // Engagement state belongs to this installation's profile - not to the resources
+      // the runner is packaged in, and not to whatever directory the shell started in.
+      engagementsDir: join(app.getPath('userData'), 'engagements', 'live'),
+      installed: installedMcpNames,
+    },
+  )
   let quitting = false
   let startup: Promise<void> | undefined
   let workspaceRecovery: Promise<void> | undefined
@@ -514,7 +540,10 @@ async function main(): Promise<void> {
     if (backend.host === undefined || welcomeBackend === undefined) throw new Error('desktop welcome: backend unavailable')
     return welcomeBackend.read()
   }
-  stopForRecovery = () => backend.close()
+  stopForRecovery = async () => {
+    // The recovery dialog restarts or exits this process; the console must go with it either way.
+    await Promise.all([backend.close(), engagementRunner.stop()])
+  }
 
   const reconcileBackend = (): Promise<void> => {
     startup ??= (async () => {
@@ -981,13 +1010,16 @@ async function main(): Promise<void> {
   let openingWelcome: Promise<void> | undefined
   /** Masked MCP state for the setup window; built from the document and the environment, never from a value. */
   const welcomeMcpState = (): WelcomeMcpState => ({
-    required: mcpSetupRequired(process.env, storedMcpCredentials),
+    required: mcpSetupRequired(process.env, storedMcpCredentials, engagementRunner.consoleEnvironmentNames),
     entryRequired: welcomeAccountEntryRequired,
     endpoint: process.env.REDTEAM_MCP_URL ?? storedMcpCredentials.values.REDTEAM_MCP_URL ?? DEFAULT_REDTEAM_MCP_URL,
     storePath: mcpCredentialPath,
     stored: storedMcpCredentials.exists,
     fingerprints: storedMcpCredentials.fingerprints,
-    fromEnvironment: MCP_TOKEN_NAMES.filter(name => !installedMcpNames.has(name) && (process.env[name] ?? '') !== ''),
+    // A token this process minted for the bundled console is not an operator's environment
+    // value, so the step must not present it as one - and must still ask for a missing one.
+    fromEnvironment: MCP_TOKEN_NAMES.filter(name => !installedMcpNames.has(name)
+      && !engagementRunner.consoleEnvironmentNames.has(name) && (process.env[name] ?? '') !== ''),
   })
   /**
    * Restart the Host so it composes the profile with the credentials just stored.
@@ -1105,7 +1137,7 @@ async function main(): Promise<void> {
     const accountEntry = needsWelcome({ loggedIn: state.loggedIn, hasApiKey: state.hasApiKey })
     // First-run MCP access is asked for even on a machine that already signs in: without it the
     // mcp__* tools are absent and nothing else in the product would say why.
-    const mcpEntry = mcpSetupRequired(process.env, storedMcpCredentials)
+    const mcpEntry = mcpSetupRequired(process.env, storedMcpCredentials, engagementRunner.consoleEnvironmentNames)
     if (!enteredWorkspace && (accountEntry || mcpEntry)) {
       await showWelcome('onboarding', mcpEntry ? 'mcp' : 'entry', accountEntry)
     } else {
@@ -1157,7 +1189,12 @@ async function main(): Promise<void> {
     updateSchedule.dispose()
     updateDialog.dispose()
     mandatoryUI?.dispose()
-    void Promise.all([Promise.resolve(mandatoryPolicy?.dispose()).then(() => policyAuth?.dispose()), backend.close()])
+    void Promise.all([
+      Promise.resolve(mandatoryPolicy?.dispose()).then(() => policyAuth?.dispose()),
+      backend.close(),
+      // The engagement engine is a child of this process: it must not outlive the window it serves.
+      engagementRunner.stop(),
+    ])
       .catch((error: unknown) => { console.error(error) }).finally(() => { app.quit() })
   })
 
@@ -1207,6 +1244,11 @@ async function main(): Promise<void> {
       if (app.isPackaged && state.error === 'authentication-required' && !isQuitting()) queuePolicyAuthentication()
     }).catch((error: unknown) => { console.error(error) })
   }
+  // Before the Host exists: the MCP rows read their endpoint and token while cordis composes
+  // the profile, and a console that is not listening yet would leave the engagement tools
+  // silently absent. A console that cannot start is a startup failure this build shows,
+  // not something an operator has to infer from missing tools.
+  await engagementRunner.start()
   automaticCheck()
   await reconcileBackend().catch(() => undefined)
   // Window lifecycle callbacks run while backend startup is pending.

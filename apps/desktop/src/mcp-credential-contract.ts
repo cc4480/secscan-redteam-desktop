@@ -23,6 +23,15 @@ export const MCP_TOKEN_NAMES = ['SECSCAN_MCP_TOKEN', 'REDTEAM_UI_TOKEN'] as cons
 /** Token-carrying environment name; these are masked for display and protected at rest. */
 export type McpTokenName = typeof MCP_TOKEN_NAMES[number]
 
+/**
+ * Names that select the engagement console the runner row talks to.
+ *
+ * A value in either one - exported for a run, or stored in this installation's
+ * credential document - describes a console the application did not start, so the
+ * bundled engagement runner stays off and the value is never overwritten.
+ */
+export const REDTEAM_CONSOLE_ENVIRONMENT_NAMES = ['REDTEAM_UI_TOKEN', 'REDTEAM_MCP_URL'] as const satisfies readonly McpEnvironmentName[]
+
 /** Console MCP endpoint the bundled patch already falls back to when nothing is configured. */
 export const DEFAULT_REDTEAM_MCP_URL = 'http://127.0.0.1:8787/mcp'
 

@@ -21,6 +21,8 @@ export interface DesktopElectronBuilderConfig {
   readonly extraResources: readonly [
     { readonly from: string, readonly to: 'runtime' },
     { readonly from: string, readonly to: 'icon.png' },
+    { readonly from: string, readonly to: 'redteam-runner', readonly filter: readonly ['**/*'] },
+    { readonly from: string, readonly to: 'redteam-runner/node_modules', readonly filter: readonly ['**/*'] },
   ]
   readonly mac: {
     readonly extendInfo: { readonly NSMicrophoneUsageDescription: string }

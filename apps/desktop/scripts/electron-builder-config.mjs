@@ -1,6 +1,6 @@
 import { officePackageDirectories } from '../../../scripts/libreoffice-packages.mjs'
 import { X509Certificate } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -33,6 +33,16 @@ import {
   verifyMacOSAppUpdateConfig,
   writeMacOSAppUpdateConfig,
 } from './macos-app-update-config.mjs'
+
+/**
+ * Directory holding the engagement runner payload this build ships. It is
+ * materialized by `scripts/vendor-redteam-runner.mjs` and read by
+ * `apps/desktop/src/redteam-runner.ts` at runtime as `resources/redteam-runner`.
+ * @returns {string} Absolute payload directory.
+ */
+function redteamRunnerPayloadDirectory() {
+  return fileURLToPath(new URL('../resources/redteam-runner', import.meta.url))
+}
 
 /**
  * Create electron-builder configuration from one release environment.
@@ -150,6 +160,20 @@ export function createElectronBuilderConfig(
     extraResources: [
       { from: buildPaths.runtime, to: 'runtime' },
       { from: fileURLToPath(new URL('../resources/icon-windows.png', import.meta.url)), to: 'icon.png' },
+      // The engagement engine (@secscan/redteam-runner): the battery, safety core,
+      // proof bundles and compliance packs, plus its complete production dependency
+      // closure. A real tree rather than a bundle, because the runner reads its
+      // dashboard assets from disk beside its own module and carries native-ish
+      // dependencies; `apps/desktop/src/redteam-runner.ts` starts it with the Node
+      // runtime this application already ships. Without it a fresh machine installs
+      // and silently has no engagement engine at all.
+      //
+      // Regenerate with `node apps/desktop/scripts/vendor-redteam-runner.mjs`, which
+      // resolves the closure and refuses to write an incomplete one;
+      // `apps/desktop/tests/redteam-runner-payload.spec.ts` re-checks what ships.
+      { from: redteamRunnerPayloadDirectory(), to: 'redteam-runner', filter: ['**/*'] },
+      // electron-builder excludes a source directory's root node_modules.
+      { from: join(redteamRunnerPayloadDirectory(), 'node_modules'), to: 'redteam-runner/node_modules', filter: ['**/*'] },
     ],
     mac: {
       icon: fileURLToPath(new URL('../resources/icon-macos.png', import.meta.url)),
@@ -170,6 +194,13 @@ export function createElectronBuilderConfig(
       writeUpdateInfo: false,
     },
     beforePack: async context => {
+      // An app packaged without the engagement engine starts normally and simply has no
+      // mcp__redteam__* tools, which is indistinguishable from a broken install; refuse
+      // to build one instead of shipping the silence.
+      const runnerEntry = join(redteamRunnerPayloadDirectory(), 'dist', 'cli.js')
+      if (!existsSync(runnerEntry)) {
+        throw new Error(`desktop package: the bundled engagement runner is missing (${runnerEntry}); run node apps/desktop/scripts/vendor-redteam-runner.mjs`)
+      }
       const office = await officePackageDirectories(buildPaths.dsh, { platform: resolvedPlatform, arch: resolvedArch })
       const patterns = office.map(directory => `**/${relative(buildPaths.dsh, directory).split(sep).join('/')}/**/*`)
       const existing = context.packager.config.asarUnpack ?? []
