@@ -1,160 +1,195 @@
 /**
- * Harness2 contrasted-pair selection + aggregate metrics (H2-P2a).
+ * Harness2 package section 3+4 adapter (H2-P2).
  *
- * PAIR SELECTION RULE (mechanical, documented so the report can state it):
- *  - positive pool: the top maxPairs runs of the class with outcome
- *    success|partial and vulnsFound > 0, ranked by vulnsFound desc,
- *    claimsTotal desc, stepsCount asc, runId asc (highest yield first);
- *  - negative pool: every non-aborted run of the class with at least one step
- *    and outcome failure|partial, ranked by vulnsFound asc, failure before
- *    partial, claimsTotal asc, runId asc (lowest yield first). A low-yield
- *    partial run is a legitimate negative;
- *  - not comparable, skipped and noted in the instructions: aborted runs (the
- *    kill switch is not a harness signal), zero-step failures (blocked before
- *    acting), a positive that is not strictly higher-yield than the next
- *    lowest-yield candidate, and pools without a disjoint pair;
- *  - up to maxPairs (default 2) greedy pairs from the ranked pools, so a run is
- *    never reused on either side. Different layer sets ARE allowed, but the
- *    pair is noted as not layer-controlled.
+ * Canonical section-9 pair selection lives in ./pair-runs.ts + ./pair-select.ts
+ * (window 50, 90-day fallback, run-level S quartiles, up to 3 Q1-vs-Q4 pairs,
+ * cold-start modes) and the section-8 S formula/metrics live in ./scoring.ts;
+ * this module holds NO second implementation. It only:
+ *
+ *  1. feeds the class's section-5 rows into selectPairs()/pickWindow()/computeMetrics();
+ *  2. maps one PairSelection into the section-6 package shape, including the
+ *     tuner's selection-criteria statement (window size, quartile method,
+ *     failure-mode coverage);
+ *  3. builds section 4's window means per target class with N stated.
+ *
+ * Cold-start detail: section 9 selects contrasted quartile pairs only in REPAIR
+ * mode (HARDEN/REPAIR-FOUNDATION cite representative runs instead). Section 6
+ * requires 2-3 contrasted pairs in every package, so for those modes the adapter
+ * renders best-vs-worst-S contrasts from the same scored window and labels them
+ * as cold-start contrasts; the representative run ids are still stated verbatim.
  */
-import type { ContrastPair, RunMetrics, TrajectoryEvent, TrajectoryRecord } from "./contract.js";
-import type { Harness2Store, RunDetail, RunRow } from "./store-model.js";
+import { computeMetrics, fromRunRow, round } from "./scoring.js";
+import { MAX_PAIRS, pickWindow, selectPairs } from "./pair-select.js";
+import type { PairMode, PairRun, PairSelection } from "./pair-select.js";
+import type { Harness2Store, RunRow } from "./store-model.js";
 
-/** Pairs per package unless the caller asks for more. */
-export const DEFAULT_PAIR_COUNT = 2;
-/** Class scan cap; the package is a contrast, not an archive. */
-export const RUN_SCAN_LIMIT = 500;
+export { MAX_PAIRS, MIN_USABLE_RUNS, WINDOW_FALLBACK_DAYS, WINDOW_FALLBACK_MIN, WINDOW_SIZE } from "./pair-select.js";
 
-function rowMetrics(row: RunRow): RunMetrics {
-  const iso = row.ts > 0 ? new Date(row.ts).toISOString() : "";
+/** A package always carries at least this many contrasted pairs (spec section 6). */
+export const MIN_PAIRS = 2;
+/** Pairs per package unless the caller asks for fewer. */
+export const DEFAULT_PAIR_COUNT = MAX_PAIRS;
+/** Class scan cap for the window; the package is a contrast, not an archive. */
+export const RUN_SCAN_LIMIT = 5000;
+/** Aggregate scan cap: every class's own window is recomputed from this snapshot. */
+export const METRICS_SCAN_LIMIT = 5000;
+
+/** One section-3 contrast: a high-yield run against a low-yield run of the class. */
+export interface SelectedContrast {
+  readonly high: PairRun;
+  readonly low: PairRun;
+  /** Why this pair; empty when it is a plain quartile contrast. */
+  readonly note: string;
+}
+
+/** Everything section 3 needs, in the section-6 package shape. */
+export interface PackageSelection {
+  /** INSUFFICIENT_DATA means no package is built (cold start). */
+  readonly mode: PairMode;
+  readonly modeReason: string;
+  /** Usable runs in the window (what the cold-start threshold counted). */
+  readonly usableRuns: number;
+  readonly windowSize: number;
+  readonly windowDays: number;
+  readonly windowMethod: string;
+  readonly quartileMethod: string;
+  readonly failureModeCoverage: readonly string[];
+  readonly representativeRunIds: readonly string[];
+  readonly pairs: readonly SelectedContrast[];
+  /** The tuner's explicit selection-criteria statements, verbatim. */
+  readonly criteria: readonly string[];
+  /** Newest run's ordered layer set (the current base composition). */
+  readonly latestLayerSet: readonly string[];
+}
+
+export interface SelectPackageContrastsInput {
+  readonly store: Harness2Store;
+  readonly targetClass: string;
+  readonly nowMs?: number;
+  readonly maxPairs?: number;
+}
+
+function clampPairs(maxPairs: number | undefined): number {
+  return Math.min(MAX_PAIRS, Math.max(MIN_PAIRS, Math.trunc(maxPairs ?? DEFAULT_PAIR_COUNT)));
+}
+
+/**
+ * Cold-start modes have no section-9 quartile pair, but section 6 still wants
+ * 2-3 contrasted pairs: pair best-vs-worst S in the scored window (they are by
+ * construction still a high/low contrast of the same class) and say so.
+ */
+function coldStartContrasts(selection: PairSelection, maxPairs: number): SelectedContrast[] {
+  const scored = selection.scored;
+  const total = scored.length;
+  if (total < 2) return [];
+  const want = Math.min(maxPairs, Math.max(MIN_PAIRS, Math.floor(total / 2)));
+  const pairs: SelectedContrast[] = [];
+  for (let index = 0; index < want; index++) {
+    const high = scored[index];
+    const low = scored[total - 1 - index];
+    if (high === undefined || low === undefined || high.run.runId === low.run.runId) break;
+    if (high.score <= low.score) break;
+    pairs.push({
+      high: high.run,
+      low: low.run,
+      note: `cold-start ${selection.mode} contrast: section 9 selects no Q1/Q4 pair in this mode, so this pairs best vs worst S in the same scored window; representative run ids: ${selection.representativeRunIds.join(", ")}`,
+    });
+  }
+  return pairs;
+}
+
+/** Run the canonical section-9 selection and expose it as section-3 package data. */
+export function selectPackageContrasts(input: SelectPackageContrastsInput): PackageSelection {
+  const rows = input.store.listRuns({ targetClass: input.targetClass, limit: RUN_SCAN_LIMIT });
+  const harnessVersion = rows[0]?.harnessVersion ?? "";
+  const maxPairs = clampPairs(input.maxPairs);
+  const selection = selectPairs({
+    rows,
+    harnessVersion,
+    ...(input.nowMs !== undefined ? { nowMs: input.nowMs } : {}),
+    maxPairs,
+  });
+  const pairs = selection.mode === "REPAIR" ? selection.pairs.map((pair) => ({ high: pair.high, low: pair.low, note: pair.note ?? pair.source })) : coldStartContrasts(selection, maxPairs);
+  const failureModeCoverage =
+    selection.mode === "REPAIR" ? selection.failureModeCoverage : [...new Set(selection.window.runs.map((run) => run.failureMode))].sort();
   return {
-    runId: row.runId,
-    engagementId: row.targetId ?? row.runId,
-    targetClass: row.targetClass,
-    outcome: row.outcome,
-    vulnsFound: row.vulnsFound,
-    falsePositives: row.falsePositives,
-    // Section 5 keeps one claims total and one tokens total per run, not the
-    // confirmed-exploit count or the prompt/completion split.
-    exploitsSucceeded: 0,
-    exploitsAttempted: row.claimsTotal,
-    steps: row.stepsCount,
-    tokensIn: row.tokensTotal,
-    tokensOut: 0,
-    durationMs: 0,
-    harness: { runnerVersion: row.harnessVersion, layerIds: row.layerSet, componentHashes: {} },
-    startedAt: iso,
-    finishedAt: iso,
+    mode: selection.mode,
+    modeReason: selection.modeReason,
+    usableRuns: selection.window.size,
+    windowSize: selection.windowSize,
+    windowDays: selection.windowDays,
+    windowMethod: `${selection.window.method} (${selection.window.size} run(s), ${selection.windowDays} day(s))`,
+    quartileMethod: `quartile method: ${selection.quartileMethod}`,
+    failureModeCoverage,
+    representativeRunIds: selection.representativeRunIds,
+    pairs,
+    criteria: selection.criteria,
+    latestLayerSet: rows[0]?.layerSet ?? [],
   };
 }
 
-function toRecord(detail: RunDetail): TrajectoryRecord {
-  const events: TrajectoryEvent[] = detail.steps.map((step) => ({
-    ts: "",
-    phase: step.role,
-    actor: step.role,
-    action: step.toolName ?? step.role,
-    result: step.content,
-    isToolCall: step.role === "tool",
-  }));
-  return { metrics: rowMetrics(detail.run), events };
+/** Aggregate metrics for one target class over its section-9 window, with N stated. */
+export interface ClassMetrics {
+  readonly targetClass: string;
+  readonly n: number;
+  readonly successRate: number;
+  readonly meanVulns: number;
+  readonly fpRate: number;
+  readonly meanSteps: number;
+  readonly meanTokens: number;
+  readonly crashRate: number;
 }
 
-export interface PairSelection {
-  readonly pairs: readonly ContrastPair[];
-  readonly notes: readonly string[];
-  readonly positives: readonly RunRow[];
-  readonly negatives: readonly RunRow[];
+/** Section-4 aggregate: the window means per target class. */
+export interface PackageMetrics {
+  /** N of the package target class's window. */
+  readonly windowN: number;
+  readonly windowDays: number;
+  readonly windowMethod: string;
+  readonly window: ClassMetrics;
+  readonly byTargetClass: readonly ClassMetrics[];
 }
 
-function byText(a: RunRow, b: RunRow): number {
-  return a.runId.localeCompare(b.runId);
-}
-
-/** Rank runs by yield and greedily pair highest-yield vs lowest-yield of the class. */
-export function selectPairs(store: Harness2Store, targetClass: string, maxPairs: number): PairSelection {
-  const notes: string[] = [];
-  const rows = store.listRuns({ targetClass, limit: RUN_SCAN_LIMIT });
-  const aborted = rows.filter((row) => row.outcome === "aborted").length;
-  if (aborted > 0) notes.push(`${aborted} aborted run(s) ignored: the kill switch is not a harness signal.`);
-  const blocked = rows.filter((row) => row.outcome === "failure" && row.stepsCount === 0).length;
-  if (blocked > 0) notes.push(`${blocked} zero-step failure(s) ignored: a run blocked before acting is not comparable.`);
-  const positives = rows
-    .filter((row) => (row.outcome === "success" || row.outcome === "partial") && row.vulnsFound > 0)
-    .sort((a, b) => b.vulnsFound - a.vulnsFound || b.claimsTotal - a.claimsTotal || a.stepsCount - b.stepsCount || byText(a, b))
-    .slice(0, maxPairs);
-  const negatives = rows
-    .filter((row) => row.outcome !== "aborted" && row.stepsCount > 0 && (row.outcome === "failure" || row.outcome === "partial"))
-    .sort(
-      (a, b) =>
-        a.vulnsFound - b.vulnsFound ||
-        (a.outcome === "failure" ? 0 : 1) - (b.outcome === "failure" ? 0 : 1) ||
-        a.claimsTotal - b.claimsTotal ||
-        byText(a, b),
-    );
-  if (positives.length === 0) notes.push("no positive run with a confirmed finding: nothing to contrast yet.");
-  if (negatives.length === 0) notes.push("no comparable negative run (needs an at-least-one-step failure/partial run on this class).");
-  const pairs: ContrastPair[] = [];
-  const contrasted: RunRow[] = [];
-  const used = new Set<string>();
-  let cursor = 0;
-  for (const positive of positives) {
-    if (pairs.length >= maxPairs) break;
-    let negative: RunRow | undefined;
-    while (cursor < negatives.length) {
-      const candidate = negatives[cursor];
-      cursor += 1;
-      if (candidate === undefined || candidate.runId === positive.runId || used.has(candidate.runId)) continue;
-      if (positive.vulnsFound <= candidate.vulnsFound) {
-        notes.push(`no further contrast: the next lowest-yield run (${candidate.runId}) is not below positive run ${positive.runId}.`);
-        cursor = negatives.length;
-        break;
-      }
-      negative = candidate;
-      break;
-    }
-    if (negative === undefined) break;
-    const positiveDetail = store.getRun(positive.runId);
-    const negativeDetail = store.getRun(negative.runId);
-    if (positiveDetail === null || negativeDetail === null) continue;
-    pairs.push({ positive: toRecord(positiveDetail), negative: toRecord(negativeDetail) });
-    used.add(positive.runId);
-    used.add(negative.runId);
-    contrasted.push(negative);
-  }
-  const layerKey = (layerIds: readonly string[]): string => [...layerIds].sort().join(",");
-  pairs.forEach((pair, pairIndex) => {
-    const positiveLayers = layerKey(pair.positive.metrics.harness.layerIds);
-    const negativeLayers = layerKey(pair.negative.metrics.harness.layerIds);
-    if (positiveLayers !== negativeLayers) {
-      notes.push(
-        `pair ${pairIndex + 1}: layer sets differ (positive [${positiveLayers || "base"}] vs negative [${negativeLayers || "base"}]); allowed, but not layer-controlled.`,
-      );
-    }
-  });
-  return { pairs, notes, positives, negatives: contrasted };
-}
-
-function average(values: readonly number[]): number {
-  if (values.length === 0) return 0;
-  return Math.round((values.reduce((total, value) => total + value, 0) / values.length) * 100) / 100;
-}
-
-/** Aggregate per-class metrics: class means, the positive pool means, and the contrasted negatives. */
-export function buildMetrics(rows: readonly RunRow[], positives: readonly RunRow[], negatives: readonly RunRow[]): Record<string, number> {
+function classMetrics(targetClass: string, window: readonly RunRow[]): ClassMetrics {
+  const metrics = computeMetrics(window.map(fromRunRow));
   return {
-    runs: rows.length,
-    successRate: average(rows.map((row) => (row.outcome === "success" ? 1 : 0))),
-    positiveRuns: positives.length,
-    negativeRuns: negatives.length,
-    vulnsFoundMean: average(rows.map((row) => row.vulnsFound)),
-    falsePositivesMean: average(rows.map((row) => row.falsePositives)),
-    claimsTotalMean: average(rows.map((row) => row.claimsTotal)),
-    stepsMean: average(rows.map((row) => row.stepsCount)),
-    tokensTotalMean: average(rows.map((row) => row.tokensTotal)),
-    positiveVulnsMean: average(positives.map((row) => row.vulnsFound)),
-    positiveStepsMean: average(positives.map((row) => row.stepsCount)),
-    negativeVulnsMean: average(negatives.map((row) => row.vulnsFound)),
-    negativeStepsMean: average(negatives.map((row) => row.stepsCount)),
+    targetClass,
+    n: metrics.n,
+    successRate: round(metrics.sr),
+    meanVulns: round(metrics.vf),
+    fpRate: round(metrics.fpr),
+    meanSteps: round(metrics.steps),
+    meanTokens: round(metrics.tok),
+    crashRate: round(metrics.cr),
+  };
+}
+
+/** Section 4: window means of every target class the store knows, with N. */
+export function buildPackageMetrics(store: Harness2Store, targetClass: string, nowMs = Date.now()): PackageMetrics {
+  const all = store.listRuns({ limit: METRICS_SCAN_LIMIT });
+  const byClass = new Map<string, RunRow[]>();
+  for (const row of all) {
+    const bucket = byClass.get(row.targetClass) ?? [];
+    bucket.push(row);
+    byClass.set(row.targetClass, bucket);
+  }
+  const byTargetClass = [...byClass.entries()]
+    .map(([name, rows]) => {
+      const harnessVersion = rows[0]?.harnessVersion ?? "";
+      const window = pickWindow({ rows, harnessVersion, nowMs });
+      return { metrics: classMetrics(name, window.runs as readonly RunRow[]), days: window.days };
+    })
+    .sort((a, b) => a.metrics.targetClass.localeCompare(b.metrics.targetClass))
+    .map((entry) => entry.metrics);
+  const ownRows = byClass.get(targetClass) ?? [];
+  const ownHarness = ownRows[0]?.harnessVersion ?? "";
+  const ownWindow = ownRows.length > 0 ? pickWindow({ rows: ownRows, harnessVersion: ownHarness, nowMs }) : undefined;
+  const window = byTargetClass.find((entry) => entry.targetClass === targetClass) ?? classMetrics(targetClass, []);
+  return {
+    windowN: window.n,
+    windowDays: ownWindow?.days ?? 0,
+    windowMethod: ownWindow !== undefined ? `${ownWindow.method} (${ownWindow.size} run(s))` : "no usable runs",
+    window,
+    byTargetClass,
   };
 }

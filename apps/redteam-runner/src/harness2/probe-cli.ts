@@ -1,20 +1,21 @@
 /**
- * Harness2 probe CLI wiring + the real runner seam (H2-P2b).
+ * Harness2 probe CLI wiring + the real runner seam (H2-P2).
  *
  * `proposeCommand` / `probeCommand` are the two on-demand commands this phase
- * owns. They are exported from here (not added to harness2/cli.ts, which H2-P1b
+ * owns. They are exported from here (not added to harness2/cli.ts, which H2-P1
  * owns); the wiring needed in harness2/cli.ts is reported with this task.
  *
  * propose is ALWAYS propose-only: it validates a Proposal JSON, re-checks the
  * pinned guardrails and records it under paths.runs/<id>/proposal.json. It never
  * installs, never activates and never probes.
  *
- * probe runs the offline probe (./probe.ts) through the seam below. Without
- * `--approve` the verdict can never be adopted (propose-only); with it, a
- * measurably better candidate gets adopted: true - installation/activation is
- * still P3's adoptVerdict, never this command.
+ * probe opens the committed section-5 store, runs the offline probe (./probe.ts)
+ * through the seam below and prints the section-8 verdict. The verdict is
+ * appended to verdicts.jsonl under DSH_HARNESS2_ROOT by the probe. Without
+ * `--approve` the verdict can never be adopted (propose-only); with it, an ADOPT
+ * verdict becomes adopted: true - installation/activation is still P3's
+ * adoptVerdict, never this command.
  *
- * ---------------------------------------------------------------------------
  * THE RUNNER SEAM, HONESTLY
  * ---------------------------------------------------------------------------
  * The probe's executor is injectable: `probeProposal` takes
@@ -55,7 +56,9 @@ import {
   type RunMetrics,
 } from "./contract.js";
 import { checkLayerGuardrails, layerDir } from "./layers.js";
+import { DEFAULT_TOKEN_BUDGET } from "./probe-verdict.js";
 import { probeProposal, type ProbeRunFn, type ProbeRunInput } from "./probe.js";
+import { openHarness2Store } from "./store.js";
 
 /** The exact runner change a real layer mount needs; thrown verbatim by the seam. */
 export const LAYER_MOUNT_INTEGRATION_POINT = [
@@ -83,10 +86,7 @@ export interface RunnerProbeSeamOptions {
   readonly engagementsDir?: string;
   /** Runner options for every probe run (max actions, dry-run, ...). */
   readonly runOptions?: Omit<RunOptions, "engagementsDir" | "engagementId">;
-  /**
-   * The real mount step (see LAYER_MOUNT_INTEGRATION_POINT). Absent => non-empty
-   * layer sets are refused before any run. The probe never assumes a mount.
-   */
+  /** The real mount step (see LAYER_MOUNT_INTEGRATION_POINT). Absent => non-empty layer sets are refused. */
   readonly mountLayers?: (layerIds: readonly string[]) => void;
 }
 
@@ -221,6 +221,13 @@ function atomicWriteJson(path: string, body: string): void {
   }
 }
 
+function positiveInteger(raw: string | undefined, flag: string): number | undefined {
+  if (raw === undefined) return undefined;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1) throw new Error(`--${flag} must be a positive integer (got "${raw}")`);
+  return value;
+}
+
 /** `harness2 propose --proposal <proposal.json>`: validate + record. Never adopts. */
 export function proposeCommand(argv: readonly string[], io: ProbeCliIo = DEFAULT_IO, environment: NodeJS.ProcessEnv = process.env): number {
   try {
@@ -238,18 +245,7 @@ export function proposeCommand(argv: readonly string[], io: ProbeCliIo = DEFAULT
     mkdirSync(dir, { recursive: true });
     const stored = join(dir, "proposal.json");
     atomicWriteJson(stored, JSON.stringify(proposal, null, 2));
-    io.out(
-      JSON.stringify(
-        {
-          proposalId: proposal.id,
-          stored,
-          proposeOnly: true,
-          next: `harness2 probe --proposal "${stored}" --targets <probe-targets.json>`,
-        },
-        null,
-        2,
-      ),
-    );
+    io.out(JSON.stringify({ proposalId: proposal.id, stored, proposeOnly: true, next: `harness2 probe --proposal "${stored}" --targets <probe-targets.json>` }, null, 2));
     return 0;
   } catch (err) {
     io.err(`harness2: ${(err as Error).message}`);
@@ -257,42 +253,47 @@ export function proposeCommand(argv: readonly string[], io: ProbeCliIo = DEFAULT
   }
 }
 
-/** `harness2 probe --proposal P --targets T [--runs N] [--approve]`: measure only. */
+/** `harness2 probe --proposal P --targets T [--runs N] [--budget TOKENS] [--approve]`: measure only. */
 export async function probeCommand(
   argv: readonly string[],
   io: ProbeCliIo = DEFAULT_IO,
   environment: NodeJS.ProcessEnv = process.env,
 ): Promise<number> {
+  let store: ReturnType<typeof openHarness2Store> | undefined;
   try {
-    const parsed = parseCommand(argv, ["proposal", "targets", "runs"], ["approve"]);
+    const parsed = parseCommand(argv, ["proposal", "targets", "runs", "budget"], ["approve"]);
     const proposalPath = parsed.flags.get("proposal");
     if (proposalPath === undefined) throw new Error("probe needs --proposal <proposal.json>");
-    const runsRaw = parsed.flags.get("runs");
-    const runsPerSide = runsRaw === undefined ? undefined : Number(runsRaw);
-    if (runsPerSide !== undefined && (!Number.isInteger(runsPerSide) || runsPerSide < 1)) {
-      throw new Error(`--runs must be a positive integer (got "${runsRaw}")`);
-    }
     const proposal = readProposalFile(proposalPath);
     const paths = resolveHarness2Paths(environment);
     const seam = createRunnerProbeSeam({ paths });
+    store = openHarness2Store(paths);
     const verdict = await probeProposal({
       paths,
       proposal,
+      store,
       targetsFile: parsed.flags.get("targets"),
       runEngagement: seam.runEngagement,
       assertLayersMountable: seam.assertLayersMountable,
-      runsPerSide,
+      runsPerSide: positiveInteger(parsed.flags.get("runs"), "runs"),
+      tokenBudget: positiveInteger(parsed.flags.get("budget"), "budget"),
       approve: parsed.booleans.has("approve"),
     });
     io.out(JSON.stringify(verdict, null, 2));
     io.out(
       verdict.adopted
-        ? "probe recommends adoption; nothing is active yet - run the P3 adopt flow (adoptVerdict)"
-        : "probe-only: no layer was adopted",
+        ? "gate ADOPT + operator approval: nothing is active yet - run the P3 adopt flow (adoptVerdict)"
+        : verdict.verdict === "ADOPT"
+          ? "gate ADOPT, no approval: probe-only, nothing was adopted"
+          : `no adoption: verdict ${verdict.verdict} - see verdicts.jsonl for the full metric log`,
     );
     return 0;
   } catch (err) {
     io.err(`harness2: ${(err as Error).message}`);
     return 1;
+  } finally {
+    store?.close();
   }
 }
+
+export { DEFAULT_TOKEN_BUDGET };

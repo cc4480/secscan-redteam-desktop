@@ -1,53 +1,53 @@
 /**
- * Harness2 offline probe harness (H2-P2b).
+ * Harness2 offline probe harness (H2-P2, spec section 8).
  *
- * The probe measures a PROPOSED layer offline: it never runs per task and never
- * touches production on its own. It is on-demand (a CLI command a person types)
- * and takes its targets only from an EXPLICIT probe-targets JSON file - a JSON
- * list of engagement inputs. With no file it refuses to run at all.
+ * The probe measures a PROPOSED layer offline: on-demand only (a command a
+ * person types), never per task, never onto production on its own. Targets come
+ * only from an EXPLICIT probe-targets JSON file; with no file nothing runs.
  *
- * ADOPTION RULE (documented, mechanical; candidate = the proposed k=1 layer):
- *   - Each side (base layer set, candidate layer set) runs the SAME probe
- *     targets N times (default and minimum N = 2) on the SAME executor (the
- *     injected runEngagement seam - the CLI wires the real runner, so a probe
- *     uses whatever model/provider that environment uses, e.g. the local Qwen).
- *     Every run is a fresh engagement with a fresh engagement id.
- *   - Compare mean RunMetrics. Primary metric = vulnsFound (higher better).
- *     Only if it ties: falsePositives (lower better), then steps (lower better).
- *     The first metric that differs decides.
- *   - Consistency: the deciding metric must not move the wrong way on ANY probe
- *     target (a win on one target may not pay for a regression on another).
- *   - N < 2 runs per side is discarded before spending anything: one run cannot
- *     adopt a layer.
- *   - Better + explicit `approve: true` => adopted: true. Better without
- *     approval => adopted: false, reason exactly "approval required". Worse,
- *     inconsistent or tied => adopted: false with the measurement as the reason.
- *   - tokensSpent is always recorded (sum of tokensIn+tokensOut over every run).
+ * EVALUATION (spec section 8):
+ *  - The targets file defines the held-out set H. H needs at least
+ *    MIN_HELD_OUT_TARGETS (8) DISTINCT targets; with fewer the verdict is
+ *    INSUFFICIENT_DATA and no tokens are spent.
+ *  - H must be disjoint from every target in the proposal's trajectories, read
+ *    from the section-5 store (the class's stored runs). Any overlap is a
+ *    REJECT before any run: a leaked held-out set cannot measure a proposal.
+ *  - Each side (base, candidate) runs every target runsPerSide times on the SAME
+ *    injected executor (the CLI wires the real runner, so a probe uses whatever
+ *    model/provider that environment uses); every run is a fresh engagement.
+ *    Both sides are reduced to the six section-8 metrics and the five-condition
+ *    gate (scoring.ts). ADOPT needs explicit operator approval (`approve: true`)
+ *    before anything is installed or activated.
+ *  - tokensSpent is summed over every run and a token budget caps the probe:
+ *    on exhaustion the probe stops and reports INSUFFICIENT_DATA.
+ *  - Every verdict (including a refusal) is appended to verdicts.jsonl under
+ *    DSH_HARNESS2_ROOT (see probe-verdict.ts) with all six metrics for base and
+ *    candidate, the gate conditions, tokens spent and the budget. Each probe run
+ *    is also ingested into the section-5 store.
  *
- * The probe does NOT install the layer into the active composition and does NOT
- * append EXPERIENCE lessons: P3's adoptVerdict is the only adoption path. The
- * candidate is staged in the layer store only for the duration of the probe (so
- * a layer-mounting seam can read it by id) and is removed afterwards.
- *
- * The runner seam lives in ./probe-cli.ts (`createRunnerProbeSeam`), including
- * the exact runner integration point a real layer mount needs.
+ * The runner seam lives in ./probe-cli.ts (`createRunnerProbeSeam`). The
+ * candidate is staged in the layer store only for the duration of the probe.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 import type { EngagementInput } from "../types.js";
-import {
-  PINNED_COMPONENT,
-  type Harness2Paths,
-  type PatchLayer,
-  type ProbeVerdict,
-  type Proposal,
-  type RunMetrics,
-} from "./contract.js";
+import { PINNED_COMPONENT, type Harness2Paths, type PatchLayer, type Proposal, type RunMetrics } from "./contract.js";
 import { activeLayerIds, assertLayerGuardrails, composeActiveLayers, installLayer, removeLayer } from "./layers.js";
-import { decideProbe, discardedVerdict, meanOf, round, type RunSample } from "./probe-verdict.js";
+import type { Harness2Store } from "./store.js";
+import { computeMetrics, evaluateGate, findLeakage, fromRunMetrics, MIN_HELD_OUT_TARGETS, targetKey } from "./scoring.js";
+import {
+  appendVerdictLog,
+  assembleVerdict,
+  DEFAULT_TOKEN_BUDGET,
+  ingestProbeRun,
+  insufficientVerdict,
+  trainingTargets,
+  verdictLogRecord,
+  writeProbeReport,
+  type ProbeReport,
+  type ProbeVerdictResult,
+} from "./probe-verdict.js";
 
-export { decideProbe } from "./probe-verdict.js";
-export type { ProbeDecision, RunSample } from "./probe-verdict.js";
+export { trainingTargets };
 
 export type ProbeSide = "base" | "candidate";
 
@@ -60,16 +60,17 @@ export interface ProbeTarget extends EngagementInput {
 export interface ProbeRunInput extends ProbeTarget {
   readonly engagementId: string;
   readonly side: ProbeSide;
+  readonly targetIndex: number;
   readonly runIndex: number;
 }
 
-/** The injectable executor seam: run one fresh engagement with these layers, return its measured metrics. */
+/** The injectable executor seam: run one fresh engagement with these layers, return measured metrics. */
 export type ProbeRunFn = (input: ProbeRunInput, layerIds: readonly string[]) => Promise<RunMetrics>;
 
-/** Minimum runs per side: a single lucky run can never adopt a layer. */
-export const MIN_RUNS_PER_SIDE = 2;
 /** Cap on targets in one probe file, so a typo cannot fan out over a fleet. */
 export const MAX_PROBE_TARGETS = 20;
+/** Default runs of each target per side; one A/B pass is the minimum measurement. */
+export const DEFAULT_RUNS_PER_SIDE = 1;
 
 function refuse(message: string): never {
   throw new Error(`[harness2] probe refused: ${message}`);
@@ -86,8 +87,6 @@ function validateTarget(entry: unknown, index: number): ProbeTarget {
   const target = raw["target"];
   if (typeof target !== "string" || target.trim() === "") refuse(`${label} has no "target"`);
   if (raw["mode"] !== undefined && raw["mode"] !== "red" && raw["mode"] !== "black") refuse(`${label} mode must be red|black`);
-  const objective = raw["objective"];
-  if (objective !== undefined && (typeof objective !== "string" || objective.trim() === "")) refuse(`${label} objective is empty`);
   const roe = raw["roe"];
   const scope = roe !== null && typeof roe === "object" ? (roe as Record<string, unknown>)["scope"] : undefined;
   if (!Array.isArray(scope) || scope.length === 0 || !scope.every((host) => typeof host === "string" && host.trim() !== "")) {
@@ -134,41 +133,29 @@ export interface ProbeRunSummary {
 }
 
 export interface ProbeProposalInput {
-  readonly paths: Harness2Paths
-  readonly proposal: Proposal
+  readonly paths: Harness2Paths;
+  readonly proposal: Proposal;
+  /** The committed section-5 store: leakage reference + probe-run ingest. */
+  readonly store: Harness2Store;
   /** Explicit probe-targets file; undefined refuses the probe. */
-  readonly targetsFile: string | undefined
+  readonly targetsFile: string | undefined;
   /** The injectable executor seam: (input, layerIds) => RunMetrics. */
-  readonly runEngagement: ProbeRunFn
-  /**
-   * Capability check for the layer set the candidate run needs. The real runner
-   * seam refuses a non-empty set until a layer can actually be mounted (see
-   * createRunnerProbeSeam); tests/fakes may omit it.
-   */
-  readonly assertLayersMountable?: (layerIds: readonly string[]) => void
-  /** Runs per side per target. Default and minimum MIN_RUNS_PER_SIDE. */
-  readonly runsPerSide?: number
+  readonly runEngagement: ProbeRunFn;
+  /** Capability check for the layer set the candidate run needs (see probe-cli.ts). */
+  readonly assertLayersMountable?: (layerIds: readonly string[]) => void;
+  /** Runs of each target per side; default DEFAULT_RUNS_PER_SIDE. */
+  readonly runsPerSide?: number;
+  /** Token cap for the whole probe; default DEFAULT_TOKEN_BUDGET. */
+  readonly tokenBudget?: number;
   /** Explicit operator approval. Absent => propose-only: adopted is always false. */
-  readonly approve?: boolean
+  readonly approve?: boolean;
   /** Clock seam (tests). */
-  readonly now?: () => Date
-}
-
-export interface ProbeReport {
-  readonly verdict: ProbeVerdict
-  readonly recordedAt: string
-  readonly targetsFile: string
-  readonly baseLayerIds: readonly string[]
-  readonly candidateLayerIds: readonly string[]
-  readonly runs: readonly ProbeRunSummary[]
+  readonly now?: () => Date;
 }
 
 function assertMetrics(metrics: RunMetrics, engagementId: string): RunMetrics {
   for (const key of ["vulnsFound", "falsePositives", "steps", "tokensIn", "tokensOut"] as const) {
-    const value = metrics[key];
-    if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
-      refuse(`run ${engagementId} returned no usable "${key}"; unmeasured runs are never compared`);
-    }
+    if (!Number.isFinite(metrics[key]) || metrics[key] < 0) refuse(`run ${engagementId} returned no usable "${key}"; unmeasured runs are never compared`);
   }
   return metrics;
 }
@@ -183,53 +170,74 @@ async function runOne(
 ): Promise<ProbeRunSummary> {
   const klass = (target.targetClass ?? "target").replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 40);
   const engagementId = `h2probe-${klass}-${side}-t${targetIndex + 1}-r${runIndex}`;
-  const metrics = assertMetrics(await runEngagement({ ...target, engagementId, side, runIndex }, layerIds), engagementId);
+  const metrics = assertMetrics(await runEngagement({ ...target, engagementId, side, targetIndex, runIndex }, layerIds), engagementId);
   return { engagementId, side, targetIndex, runIndex, metrics };
 }
 
-/** Write the full probe evidence (verdict + every run) under paths.runs/<proposalId>/probe.json. */
-export function writeProbeReport(paths: Harness2Paths, report: ProbeReport): string {
-  const dir = join(paths.runs, report.verdict.proposalId);
-  mkdirSync(dir, { recursive: true });
-  const path = join(dir, "probe.json");
-  const tmp = `${path}.tmp-${process.pid}-${Date.now().toString(36)}`;
-  try {
-    writeFileSync(tmp, JSON.stringify(report, null, 2));
-    try {
-      renameSync(tmp, path);
-    } catch {
-      rmSync(path, { force: true });
-      renameSync(tmp, path);
-    }
-  } finally {
-    if (existsSync(tmp)) rmSync(tmp, { force: true });
-  }
-  return path;
-}
-
 /**
- * Run one k=1 probe of `proposal` and return the verdict. Refuses before any run
- * without an explicit targets file, without a layer-mount capability, or when N
- * is below the minimum. See the module comment for the adoption rule.
+ * Run one offline probe of `proposal` and return the section-8 verdict. Refuses
+ * before any run without an explicit targets file; reports INSUFFICIENT_DATA
+ * before any run for fewer than 8 distinct held-out targets, a store log gap or
+ * a leaked held-out set that cannot be measured honestly.
  */
-export async function probeProposal(input: ProbeProposalInput): Promise<ProbeVerdict> {
+export async function probeProposal(input: ProbeProposalInput): Promise<ProbeVerdictResult> {
   const targets = loadProbeTargets(input.targetsFile);
-  const runsPerSide = input.runsPerSide ?? MIN_RUNS_PER_SIDE;
-  if (!Number.isInteger(runsPerSide) || runsPerSide < MIN_RUNS_PER_SIDE) {
-    return discardedVerdict(
-      input.proposal.id,
-      `N runs per side must be an integer >= ${MIN_RUNS_PER_SIDE} (got ${String(input.runsPerSide)}); one run cannot adopt a layer`,
-    );
+  const runsPerSide = input.runsPerSide ?? DEFAULT_RUNS_PER_SIDE;
+  if (!Number.isInteger(runsPerSide) || runsPerSide < 1) {
+    return insufficientVerdict({ proposalId: input.proposal.id, reason: `runsPerSide must be an integer >= 1 (got ${String(input.runsPerSide)})`, tokenBudget: input.tokenBudget });
   }
-  if (input.proposal.component === PINNED_COMPONENT) {
-    refuse(`proposal "${input.proposal.id}" targets the pinned guardrails component`);
-  }
+  if (input.proposal.component === PINNED_COMPONENT) refuse(`proposal "${input.proposal.id}" targets the pinned guardrails component`);
   const now = input.now?.() ?? new Date();
+  const recordedAt = now.toISOString();
+  const tokenBudget = input.tokenBudget ?? DEFAULT_TOKEN_BUDGET;
+  const targetClass = input.proposal.targetClass;
+  const heldOutTargets = targets.map((target) => target.target);
+  const distinctHeldOut = new Set(heldOutTargets.map(targetKey).filter((key) => key !== ""));
+  const training = trainingTargets(input.store, targetClass);
+  const overlaps = findLeakage(heldOutTargets, training);
+  const heldOut = {
+    targets: heldOutTargets,
+    n: distinctHeldOut.size,
+    trainingTargets: training.length,
+    overlaps,
+    disjoint: overlaps.length === 0,
+  };
+  const record = (verdict: ProbeVerdictResult, runs: readonly ProbeRunSummary[], baseLayerIds: readonly string[], candidateLayerIds: readonly string[]): ProbeVerdictResult => {
+    appendVerdictLog(input.paths, verdictLogRecord(verdict, { targetClass, heldOut, recordedAt }));
+    writeProbeReport(input.paths, { verdict, recordedAt, targetsFile: input.targetsFile ?? "", baseLayerIds, candidateLayerIds, runs });
+    return verdict;
+  };
+  // Pre-run refusals: never spend tokens on an evaluation that cannot decide.
+  if (distinctHeldOut.size < MIN_HELD_OUT_TARGETS) {
+    const verdict = insufficientVerdict({ proposalId: input.proposal.id, reason: `${distinctHeldOut.size} distinct held-out target(s); at least ${MIN_HELD_OUT_TARGETS} are required`, tokenBudget });
+    return record(verdict, [], [], []);
+  }
+  if (training.length === 0) {
+    const verdict = insufficientVerdict({ proposalId: input.proposal.id, reason: `log gap: no stored runs for class "${targetClass}" to prove held-out disjointness`, tokenBudget });
+    return record(verdict, [], [], []);
+  }  if (overlaps.length > 0) {
+    const empty = computeMetrics([]);
+    const verdict = assembleVerdict({
+      proposalId: input.proposal.id,
+      targetClass,
+      base: empty,
+      candidate: empty,
+      gate: evaluateGate({ base: empty, candidate: empty, heldOutTargets, trainingTargets: training }),
+      heldOut,
+      approve: input.approve === true,
+      tokensSpent: 0,
+      tokenBudget,
+      baseRuns: 0,
+      candidateRuns: 0,
+      recordedAt,
+    });
+    return record(verdict, [], [], []);
+  }
   const candidate: PatchLayer = {
     id: input.proposal.id,
-    ...(input.proposal.targetClass !== "" ? { targetClass: input.proposal.targetClass } : {}),
+    ...(targetClass !== "" ? { targetClass } : {}),
     yaml: input.proposal.yaml,
-    adoptedAt: now.toISOString(),
+    adoptedAt: recordedAt,
     evidenceRunId: "probe-pending",
   };
   assertLayerGuardrails(candidate);
@@ -239,61 +247,53 @@ export async function probeProposal(input: ProbeProposalInput): Promise<ProbeVer
   input.assertLayersMountable?.(candidateLayerIds);
   const baseRuns: ProbeRunSummary[] = [];
   const candidateRuns: ProbeRunSummary[] = [];
-  // The candidate is staged in the layer store only for the candidate runs (so
-  // a mounting seam can read it by id) and never before: the base runs must see
-  // exactly the base composition. removeLayer only ever deletes what we staged.
+  let tokensSpent = 0;
+  let budgetReason = "";
   let staged = false;
   try {
-    for (let targetIndex = 0; targetIndex < targets.length; targetIndex++) {
-      for (let runIndex = 1; runIndex <= runsPerSide; runIndex++) {
-        baseRuns.push(await runOne(input.runEngagement, targets[targetIndex]!, "base", targetIndex, runIndex, baseLayerIds));
+    for (const side of ["base", "candidate"] as const) {
+      if (side === "candidate") {
+        installLayer(input.paths, candidate, { installedAt: recordedAt });
+        staged = true;
       }
-    }
-    installLayer(input.paths, candidate, { installedAt: now.toISOString() });
-    staged = true;
-    for (let targetIndex = 0; targetIndex < targets.length; targetIndex++) {
-      for (let runIndex = 1; runIndex <= runsPerSide; runIndex++) {
-        candidateRuns.push(
-          await runOne(input.runEngagement, targets[targetIndex]!, "candidate", targetIndex, runIndex, candidateLayerIds),
-        );
+      const layerIds = side === "base" ? baseLayerIds : candidateLayerIds;
+      for (let targetIndex = 0; targetIndex < targets.length; targetIndex++) {
+        for (let runIndex = 1; runIndex <= runsPerSide; runIndex++) {
+          if (tokensSpent >= tokenBudget) {
+            budgetReason = `token budget exhausted (${tokensSpent} >= ${tokenBudget}) after ${baseRuns.length} base / ${candidateRuns.length} candidate runs`;
+            break;
+          }
+          const summary = await runOne(input.runEngagement, targets[targetIndex]!, side, targetIndex, runIndex, layerIds);
+          tokensSpent += summary.metrics.tokensIn + summary.metrics.tokensOut;
+          ingestProbeRun(input.store, { runId: summary.engagementId, target: targets[targetIndex]!.target, targetClass, layerIds }, summary.metrics);
+          (side === "base" ? baseRuns : candidateRuns).push(summary);
+        }
+        if (budgetReason !== "") break;
       }
+      if (budgetReason !== "") break;
     }
   } finally {
     if (staged) removeLayer(input.paths, candidate.id);
   }
-  const baseSamples: RunSample[] = baseRuns.map((run) => ({ targetIndex: run.targetIndex, metrics: run.metrics }));
-  const candidateSamples: RunSample[] = candidateRuns.map((run) => ({ targetIndex: run.targetIndex, metrics: run.metrics }));
-  const decision = decideProbe(baseSamples, candidateSamples, targets.length);
-  const tokensSpent = [...baseRuns, ...candidateRuns].reduce((sum, run) => sum + run.metrics.tokensIn + run.metrics.tokensOut, 0);
-  const deltas: ProbeVerdict["deltas"] = {
-    vulnsFound: round(meanOf(candidateSamples, "vulnsFound") - meanOf(baseSamples, "vulnsFound")),
-    falsePositives: round(meanOf(baseSamples, "falsePositives") - meanOf(candidateSamples, "falsePositives")),
-    steps: round(meanOf(baseSamples, "steps") - meanOf(candidateSamples, "steps")),
-    tokensIn: round(meanOf(baseSamples, "tokensIn") - meanOf(candidateSamples, "tokensIn")),
-    tokensOut: round(meanOf(baseSamples, "tokensOut") - meanOf(candidateSamples, "tokensOut")),
-  };
-  const adopted = decision.better && input.approve === true;
-  const reason = decision.better
-    ? input.approve === true
-      ? `adopted: ${decision.reason}`
-      : "approval required"
-    : `discarded: ${decision.reason}`;
-  const verdict: ProbeVerdict = {
+  const base = computeMetrics(baseRuns.map((run) => fromRunMetrics(run.metrics)));
+  const candidateMetrics = computeMetrics(candidateRuns.map((run) => fromRunMetrics(run.metrics)));
+  const logGap = budgetReason;
+  const gate = evaluateGate({ base, candidate: candidateMetrics, heldOutTargets, trainingTargets: training, logGap });
+  const verdict = assembleVerdict({
     proposalId: input.proposal.id,
-    adopted,
-    deltas,
+    targetClass,
+    base,
+    candidate: candidateMetrics,
+    gate,
+    heldOut,
+    approve: input.approve === true,
+    tokensSpent,
+    tokenBudget,
     baseRuns: baseRuns.length,
     candidateRuns: candidateRuns.length,
-    reason,
-    tokensSpent,
-  };
-  writeProbeReport(input.paths, {
-    verdict,
-    recordedAt: now.toISOString(),
-    targetsFile: input.targetsFile ?? "",
-    baseLayerIds,
-    candidateLayerIds,
-    runs: [...baseRuns, ...candidateRuns],
+    recordedAt,
   });
-  return verdict;
+  return record(verdict, [...baseRuns, ...candidateRuns], baseLayerIds, candidateLayerIds);
 }
+
+export type { ProbeReport, ProbeVerdictResult };

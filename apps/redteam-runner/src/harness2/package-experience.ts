@@ -1,11 +1,15 @@
 /**
- * Harness2 EXPERIENCE.md reading (H2-P2a read side; canonical format owned by
- * H2-P3's experience.ts). The package parses the lessons itself so it builds
- * and tests independently of H2-P3; the format doc is embedded in the package
- * instructions. Absence and malformed entries are tolerated: a bad entry is
- * skipped, never guessed.
+ * Harness2 EXPERIENCE.md reading (H2-P2 section 5; canonical format owned by
+ * H2-P3's experience.ts). The package ships the class's EXPERIENCE.md FULL TEXT
+ * (section 6 says "EXPERIENCE.md full text for the class"), not a summary, so
+ * the editor reads every lesson exactly as the tuner wrote it.
  *
- * Canonical location: `<paths.experience>/<sanitized-class>.md` (H2-P3
+ * The package parses the dated entries itself (for the legacy entry list and to
+ * prove the text is a lesson library) so it builds and tests independently of
+ * H2-P3; absence, malformed entries and free prose are tolerated: a bad entry is
+ * skipped, never guessed. The canonical format doc is embedded in section 6.
+ *
+ * Canonical location: `<experienceDir>/<sanitized-class>.md` (H2-P3
  * sanitizeTargetClass: trim, lowercase, non [a-z0-9_-] -> "-", strip leading/
  * trailing "-", max 64 chars, empty -> "general").
  */
@@ -13,7 +17,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ExperienceEntry, TargetClass } from "./contract.js";
 
-/** Canonical EXPERIENCE.md entry format, embedded in the package instructions. */
+/** Canonical EXPERIENCE.md entry format, restated in the package constraints. */
 export const EXPERIENCE_FORMAT_DOC = [
   "# EXPERIENCE - <target-class>",
   "",
@@ -23,6 +27,9 @@ export const EXPERIENCE_FORMAT_DOC = [
   "- measured effect: <single line, never an estimate>",
   "- tokens spent: <integer>",
 ].join("\n");
+
+/** Exact placeholder emitted when a class has no lessons yet (never an empty section). */
+export const NO_EXPERIENCE_TEXT = "(no EXPERIENCE.md entries recorded for this class yet)";
 
 const EXPERIENCE_HEADING = /^##\s+(\d{4}-\d{2}-\d{2})\s+-\s+(.+?)\s*$/;
 const EXPERIENCE_BULLET = /^-\s+(change|reason|measured effect|tokens spent)\s*:\s*(.+?)\s*$/i;
@@ -38,6 +45,11 @@ export function sanitizeTargetClass(targetClass: TargetClass): string {
     .slice(0, 64)
     .replace(/-+$/g, "");
   return slug === "" ? "general" : slug;
+}
+
+/** Canonical EXPERIENCE.md path for a class. */
+export function experiencePath(experienceDir: string, targetClass: TargetClass): string {
+  return join(experienceDir, `${sanitizeTargetClass(targetClass)}.md`);
 }
 
 /** Parse dated EXPERIENCE.md entries; malformed/incomplete entries are dropped. */
@@ -78,12 +90,30 @@ export function parseExperience(text: string, targetClass: TargetClass): Experie
   return entries;
 }
 
-/** Read a class's lessons; absent/unreadable file means no lessons (tolerated). */
-export function readClassExperience(experienceDir: string, targetClass: TargetClass): ExperienceEntry[] {
-  const path = join(experienceDir, `${sanitizeTargetClass(targetClass)}.md`);
+/** The class's EXPERIENCE.md: full text plus parsed entries; absence is tolerated. */
+export interface ClassExperience {
+  /** Canonical path the reader looked at (documented even when absent). */
+  readonly path: string;
+  /** True when the file exists and was read. */
+  readonly hasFile: boolean;
+  /** FULL file text, or NO_EXPERIENCE_TEXT when the class has no lessons yet. */
+  readonly text: string;
+  readonly entries: readonly ExperienceEntry[];
+}
+
+/** Read a class's full EXPERIENCE.md text; absent/unreadable means the placeholder. */
+export function readClassExperienceText(experienceDir: string, targetClass: TargetClass): ClassExperience {
+  const path = experiencePath(experienceDir, targetClass);
   try {
-    return existsSync(path) ? parseExperience(readFileSync(path, "utf8"), targetClass) : [];
+    if (!existsSync(path)) return { path, hasFile: false, text: NO_EXPERIENCE_TEXT, entries: [] };
+    const text = readFileSync(path, "utf8").replace(/^\uFEFF/, "");
+    return { path, hasFile: true, text, entries: parseExperience(text, targetClass) };
   } catch {
-    return [];
+    return { path, hasFile: false, text: NO_EXPERIENCE_TEXT, entries: [] };
   }
+}
+
+/** Read a class's lessons; absent/unreadable file means no lessons (tolerated). */
+export function readClassExperience(experienceDir: string, targetClass: TargetClass): readonly ExperienceEntry[] {
+  return readClassExperienceText(experienceDir, targetClass).entries;
 }

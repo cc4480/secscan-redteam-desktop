@@ -1,60 +1,84 @@
 /**
- * Harness2 proposal-package instructions block (H2-P2a).
+ * Harness2 package section 6 - constraints restated + the required editor reply
+ * format (H2-P2 spec sections 6 and 10).
  *
- * The markdown the frontier editor reads before proposing: the eight components,
- * which are EDITABLE, the PINNED guardrails and the auto-reject/flag rule, the
- * required output format (one cordis patch-layer YAML + a rationale), the
- * constraints (no new model APIs, no destructive actions, additive layers only,
- * no new dependencies), the token budget warning, the documented component path
- * map, the EXPERIENCE.md format, and the per-package selection notes.
+ * Section 6 restates, verbatim, the four standing constraints of the tuning
+ * cycle: the guardrails are PINNED, the probe is k=1, the cycle is propose-only,
+ * and the cycle has a token budget. It also states the editor reply syntax the
+ * section-10 parser accepts (one @@PROPOSAL block, a @@RATIONALE, an
+ * @@EXPECTED-EFFECT, at least one @@SUPPORTING-EVIDENCE block and one or more
+ * @@FILE blocks carrying FULL file contents, never a diff).
  */
-import { EDITABLE_COMPONENTS, HARNESS_COMPONENTS, PINNED_COMPONENT } from "./contract.js";
-import { COMPONENT_FILE_MAP } from "./package-component-map.js";
-import { EXPERIENCE_FORMAT_DOC } from "./package-experience.js";
+import type { PackageConstraints } from "./package.js";
 
-function componentMapLines(): string[] {
-  return EDITABLE_COMPONENTS.map((component) => {
-    const sources = COMPONENT_FILE_MAP[component] ?? [];
-    const described = sources.length === 0 ? "(not present in this payload)" : sources.map((source) => `${source.path} (${source.kind})`).join(", ");
-    return `- ${component}: ${described}`;
-  });
+/** Budget assumed when the operator sets none. */
+export const DEFAULT_PROBE_TOKEN_BUDGET = 200_000;
+/** Operator override for the per-cycle probe token budget. */
+export const PROBE_TOKEN_BUDGET_ENV = "DSH_HARNESS2_PROBE_TOKEN_BUDGET";
+
+/** The reply syntax the editor must use; parsed by ./package-reply.ts. */
+export const REPLY_FORMAT_DOC = [
+  "Answer with these blocks, in this order, one @@...@@ pair each (loudness of prose outside blocks is ignored):",
+  "",
+  "@@PROPOSAL <editable-component-id>@@",
+  "<one full cordis patch-layer YAML document (the `- insert:` list shape) for exactly one editable component>",
+  "@@END-PROPOSAL@@",
+  "@@RATIONALE@@",
+  "<which contrast pair you used, what you changed and why>",
+  "@@END-RATIONALE@@",
+  "@@EXPECTED-EFFECT@@",
+  "<the metric you expect to move and its expected direction, e.g. `vulnsFound: +1 or more; steps: no increase`>",
+  "@@END-EXPECTED-EFFECT@@",
+  "@@SUPPORTING-EVIDENCE@@",
+  "<the pair index and run ids you relied on, one per block; repeat the block for several pieces of evidence>",
+  "@@END-SUPPORTING-EVIDENCE@@",
+  "@@FILE <repo-relative path>@@",
+  "<the FULL file content, verbatim: never a diff, patch or hunk>",
+  "@@END-FILE@@",
+  "",
+  "Rules enforced by the parser: exactly one @@PROPOSAL block; at least one @@SUPPORTING-EVIDENCE and one @@FILE block; @@FILE bodies are full files (a unified diff is rejected); any block naming a pinned guardrail (src/safety, src/policy, auth-gate) is AUTO-REJECTED and FLAGGED; k=1 means one proposal and one probe per cycle.",
+].join("\n");
+
+/** Read the per-cycle probe token budget (operator override wins; must be positive). */
+export function resolveProbeTokenBudget(environment: NodeJS.ProcessEnv = process.env): number {
+  const raw = environment[PROBE_TOKEN_BUDGET_ENV]?.trim();
+  if (raw === undefined || raw === "") return DEFAULT_PROBE_TOKEN_BUDGET;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : DEFAULT_PROBE_TOKEN_BUDGET;
 }
 
-/** Build the instructions block; `notes` are the pair-selection notes. */
-export function buildInstructions(notes: readonly string[], sourceBytes: number): string {
-  const kib = Math.max(1, Math.round(sourceBytes / 1024));
+/** Build the section-6 constraint block for one package. */
+export function buildConstraints(guardrailPaths: readonly string[], environment: NodeJS.ProcessEnv = process.env): PackageConstraints {
+  return {
+    guardrailsPinned: true,
+    guardrails: guardrailPaths,
+    k: 1,
+    proposeOnly: true,
+    probeTokenBudget: resolveProbeTokenBudget(environment),
+  };
+}
+
+/** Render section 6 (constraints restated + the required reply format). */
+export function renderConstraintsSection(constraints: PackageConstraints): string[] {
+  const budget = constraints.probeTokenBudget;
   return [
-    "You are editing the harness of an autonomous red-team runner. You receive contrasted runs of the SAME target class (a high-yield positive and a low/zero-yield negative), the current sources of every editable harness component, the class's lessons, and aggregate metrics.",
+    "## Constraints (restated)",
     "",
-    "## The eight harness components",
-    `All eight: ${Object.values(HARNESS_COMPONENTS).join(", ")}.`,
-    `EDITABLE (you may propose a layer for these only): ${EDITABLE_COMPONENTS.join(", ")}.`,
-    `PINNED: ${PINNED_COMPONENT}, implemented by src/safety, src/policy and auth-gate. Guardrails are NEVER editable. ANY proposal whose YAML touches src/safety, src/policy or auth-gate is AUTO-REJECTED and FLAGGED, and the rejection is recorded against your answer. Do not propose, reference or re-implement them.`,
+    `guardrails_pinned: ${String(constraints.guardrailsPinned)}`,
+    `guardrail_paths: ${constraints.guardrails.length} (listed with path + sha256 + PINNED marker in section 2; no contents are shipped)`,
+    `k: ${constraints.k}`,
+    `propose_only: ${String(constraints.proposeOnly)}`,
+    `probe_token_budget: ${budget}`,
     "",
-    "## Required output format",
-    "Return exactly two parts:",
-    "1. ONE fenced ```yaml block holding a single cordis patch-layer document (the `- insert:` list shape used by cordis.patch.yml), which must begin with a header naming the component and the target class:",
-    "   # component: <one editable component id>",
-    "   # target-class: <the package target class>",
-    "2. A short rationale in prose OUTSIDE the YAML fence: which contrast pair you used, what you changed, and the metric you expect to move (vulnsFound first; steps/tokens second).",
+    "- Guardrails are PINNED: every guardrail file is listed in section 2 by path and content hash with the marker",
+    '  "PINNED - DO NOT PROPOSE CHANGES". Any proposal touching src/safety, src/policy or auth-gate is auto-rejected and flagged.',
+    "- k = 1: one proposal per cycle and one probe per proposal; there is no internal search over variants.",
+    "- Propose-only: the tuner never adopts a layer from this package; a human operator must approve after an offline probe.",
+    `- Probe token budget for this cycle: ${budget} tokens. A proposal whose probe would exceed it is not run this cycle.`,
+    "- No new dependencies; additive layers only; no destructive actions; never rewrite or delete the base layer.",
     "",
-    "## Constraints",
-    "- Additive layers only: never rewrite or delete the base layer; insert new entries on top of it.",
-    "- No new model APIs: do not mount providers, change model routing, or add network calls.",
-    "- No destructive actions: nothing that deletes files, data, findings or engagements.",
-    "- No new dependencies.",
-    "- Never touch the pinned guardrails: such proposals are rejected and flagged automatically.",
+    "## Required editor reply format (section 10)",
     "",
-    "## Token budget",
-    `The component sources below are ${kib} KiB verbatim. Read them once, reason across the pairs, and emit a small additive layer (roughly 20-60 lines). A giant rewrite will be rejected on review.`,
-    "",
-    "## Component file map (repo-relative)",
-    ...componentMapLines(),
-    "",
-    "## EXPERIENCE.md format (lessons already learned for this class)",
-    EXPERIENCE_FORMAT_DOC,
-    "",
-    "## Selection notes",
-    ...(notes.length === 0 ? ["(all class runs were comparable and layer-matched)"] : notes.map((note) => `- ${note}`)),
-  ].join("\n");
+    REPLY_FORMAT_DOC,
+  ];
 }
