@@ -8,6 +8,11 @@ apps/desktop/*.p12
 # The manifest and the script are committed; the binaries are not.
 apps/desktop/resources/tools/
 apps/desktop/.tools-cache/
+# Bundled llama.cpp runtime: build output materialized from the pinned
+# apps/desktop/resources/llama-manifest.json by scripts/vendor-llama.mjs.
+# The manifest and the script are committed; llama-server.exe and its DLLs are not.
+apps/desktop/resources/llama/
+apps/desktop/.llama-cache/
 node_modules/
 lib/
 *.tsbuildinfo

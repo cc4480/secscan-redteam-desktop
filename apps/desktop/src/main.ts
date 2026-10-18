@@ -69,11 +69,14 @@ import { DesktopPolicyTestAuth } from './policy-test-auth.ts'
 import { DesktopUpdateDialog, type UpdateDialogOptions } from './update-dialog.ts'
 import { readDesktopRuntime } from './runtime-tree.ts'
 import { DesktopBrowserGuests } from './browser-guests.ts'
+import { installLlamaShell } from './llama-shell.ts'
 
 let focusPrimaryWindow = (): void => {}
 let stopForRecovery = async (): Promise<void> => {}
 let shuttingDown = false
 let windowsLanguage: string | undefined
+/** The bundled local-model feature installed for this launch; disposed on quit. */
+let llamaShell: ReturnType<typeof installLlamaShell> | undefined
 /**
  * Whether the backend has reached ready: false until the first ready, back to
  * false when a restart returns it to starting, frozen during shutdown so a
@@ -351,6 +354,21 @@ async function main(): Promise<void> {
       installed: installedMcpNames,
     },
   )
+  /**
+   * The bundled local-model feature: its llama-server child, the IPC service the
+   * manager window talks to, and the environment bridge that points the engagement
+   * runner at a running local model. Installed beside the runner object above so
+   * the environment it mirrors is the one the runner spawns with, and installed
+   * once: only the quit path disposes it.
+   */
+  llamaShell = installLlamaShell({
+    resources: { node: resources.node },
+    environment: process.env,
+    location: { packaged: app.isPackaged, resourcesPath: process.resourcesPath, appPath: app.getAppPath() },
+    ipcMain,
+    windows: () => BrowserWindow.getAllWindows().map(window => window.webContents),
+  })
+  llamaShell.attachRunnerEnvironment(process.env)
   /**
    * The Metasploit RPC bridge this application starts when the machine already has a
    * Framework installation.
@@ -873,6 +891,8 @@ async function main(): Promise<void> {
     updateSchedule.dispose()
     powerMonitor.off('resume', automaticCheck)
     updates.dispose()
+    // The llama-server child must not outlive the application that owns its port.
+    void llamaShell?.dispose()
   })
 
   app.setAboutPanelOptions({
@@ -908,6 +928,11 @@ async function main(): Promise<void> {
     {
       label: currentDesktopLocale().messages.mcpSettingsMenu,
       click: () => { void openMcpSettings().catch((error: unknown) => { console.error(error) }) },
+    },
+    // Local models: the bundled llama.cpp manager the shell owns (window, server, IPC).
+    {
+      label: 'Local models...',
+      click: () => { void llamaShell?.openWindow().catch((error: unknown) => { console.error(error) }) },
     },
     ...development ? [
       { type: 'separator' as const },

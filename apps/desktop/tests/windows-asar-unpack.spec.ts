@@ -41,6 +41,8 @@ const { AsarPackager } = require('app-builder-lib/out/asar/asarUtil.js') as {
 }
 const roots: string[] = []
 const cleanups: (() => Promise<void>)[] = []
+/** Stub llama.cpp payload so the win-x64 packaging gate validates on a clean checkout. */
+let llamaFixtureDirectory = ''
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0)) await cleanup()
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true })
@@ -51,6 +53,7 @@ function unsignedWindowsConfig(appId: string, source: string) {
     DSH_DESKTOP_APP_ID: appId, DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN: 'https://policy.example.com',
     DSH_DESKTOP_MANDATORY_UPDATE_CONFIG: JSON.stringify({ allowedAuthOrigins: ['https://login.example.com'] }),
     DSH_DESKTOP_UNSIGNED: '1',
+    DSH_DESKTOP_LLAMA_DIR: llamaFixtureDirectory,
   }, 'win32', 'x64', source)
 }
 
@@ -58,6 +61,12 @@ async function fixture(external: boolean) {
   const root = await mkdtemp(join(tmpdir(), 'windows-asar-'))
   roots.push(root)
   const appDir = join(root, 'app')
+  // The win-x64 config gate requires the bundled llama.cpp runtime; a fixture
+  // keeps this spec hermetic (the real payload is gitignored build output).
+  llamaFixtureDirectory = join(root, 'llama')
+  await mkdir(llamaFixtureDirectory, { recursive: true })
+  await writeFile(join(llamaFixtureDirectory, 'llama-server.exe'), 'MZ llama fixture')
+  await writeFile(join(llamaFixtureDirectory, 'ggml.dll'), 'llama dll fixture')
   const source = external ? join(root, 'private', 'dsh') : join(appDir, '.desktop-build', 'dsh')
   const resources = join(root, 'output', 'resources')
   await mkdir(resources, { recursive: true })
@@ -189,6 +198,7 @@ it.each([true, false])('validates the real builder hook for unsigned=%s', async 
     DSH_DESKTOP_APP_ID: 'com.example.unpack', DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN: 'https://policy.example.com',
     DSH_DESKTOP_MANDATORY_UPDATE_CONFIG: JSON.stringify({ allowedAuthOrigins: ['https://login.example.com'] }),
     DSH_DESKTOP_TARGET_PLATFORM: 'win32', DSH_DESKTOP_TARGET_ARCH: 'x64', DSH_DESKTOP_UNSIGNED: unsigned ? '1' : '0',
+    DSH_DESKTOP_LLAMA_DIR: llamaFixtureDirectory,
     DSH_DESKTOP_WINDOWS_CER_FILE: certificate, DOWNLOAD_TEST_ORIGIN: 'https://updates.example.com', DOWNLOAD_TEST_RELEASE_ID: '0123456789abcdef0123456789abcdef',
   }, 'win32', 'x64', input.source)
   // Qualification replaces files after creating the base configuration; builder owns a separate config object.

@@ -1,6 +1,6 @@
 import { officePackageDirectories } from '../../../scripts/libreoffice-packages.mjs'
 import { X509Certificate } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -56,6 +56,42 @@ function redteamRunnerPayloadDirectory() {
 function redteamToolsPayloadDirectory() {
   const directory = fileURLToPath(new URL('../resources/tools', import.meta.url))
   return existsSync(directory) ? directory : undefined
+}
+
+/**
+ * Directory holding the bundled llama.cpp CPU runtime (`llama-server.exe` plus
+ * the GGML/llama shared libraries). It is materialized by
+ * `scripts/vendor-llama.mjs` from the pinned `resources/llama-manifest.json` and
+ * shipped as `resources/llama`. `DSH_DESKTOP_LLAMA_DIR` (absolute, trimmed) wins
+ * when set, so tests and alternate build layouts can point at a fixture without
+ * writing into the repo's gitignored resources. Returns undefined when the
+ * resolved payload has not been vendored, so a source-only build still packages;
+ * a Windows x64 `beforePack` then refuses to produce an installer with no
+ * local-model runtime at all.
+ * @param {NodeJS.ProcessEnv} env - Packaging environment.
+ * @returns {string | undefined} Absolute payload directory, or undefined.
+ */
+function llamaPayloadDirectory(env) {
+  const override = typeof env.DSH_DESKTOP_LLAMA_DIR === 'string' ? env.DSH_DESKTOP_LLAMA_DIR.trim() : ''
+  const directory = override !== '' ? override : fileURLToPath(new URL('../resources/llama', import.meta.url))
+  return existsSync(directory) ? directory : undefined
+}
+
+/**
+ * A Windows x64 build must ship the llama.cpp runtime beside the app because the
+ * local-model manager starts `llama-server.exe` from disk. A thin launcher with
+ * no shared libraries is as broken as no launcher, so both are required.
+ * @param {NodeJS.ProcessEnv} env - Packaging environment.
+ * @returns {string | undefined} Operator-facing failure, or undefined when complete.
+ */
+function llamaPayloadFailure(env) {
+  const directory = llamaPayloadDirectory(env)
+  if (directory === undefined) return 'the bundled llama.cpp runtime is missing (resources/llama)'
+  const executable = join(directory, 'llama-server.exe')
+  if (!existsSync(executable)) return `the bundled llama.cpp runtime is missing ${executable}`
+  const libraries = readdirSync(directory).filter(name => name.toLowerCase().endsWith('.dll'))
+  if (libraries.length === 0) return `the bundled llama.cpp runtime in ${directory} holds no shared libraries`
+  return undefined
 }
 
 /**
@@ -161,11 +197,13 @@ export function createElectronBuilderConfig(
     files: [
       'lib/main.js',
       'lib/welcome/**/*',
+      'lib/llama/**/*',
       'lib/preload-app.cjs',
       'lib/preload-mandatory.cjs',
       'lib/preload-platform-account.cjs',
       'lib/preload-update-dialog.cjs',
       'lib/preload-welcome.cjs',
+      'lib/preload-llama.cjs',
       'renderer/**/*',
       'package.json',
       { from: buildPaths.dsh, to: 'dsh', filter: ['**/*'] },
@@ -198,6 +236,13 @@ export function createElectronBuilderConfig(
       ...(redteamToolsPayloadDirectory() === undefined
         ? []
         : [{ from: redteamToolsPayloadDirectory(), to: 'tools', filter: ['**/*'] }]),
+      // The bundled llama.cpp CPU runtime (`llama-server.exe` plus its GGML
+      // shared libraries) that the local-model manager starts. Build output, not
+      // source - materialized by `node apps/desktop/scripts/vendor-llama.mjs`
+      // from the pinned llama-manifest.json. Absent on a source-only build.
+      ...(llamaPayloadDirectory(env) === undefined
+        ? []
+        : [{ from: llamaPayloadDirectory(env), to: 'llama', filter: ['**/*'] }]),
     ],
     mac: {
       icon: fileURLToPath(new URL('../resources/icon-macos.png', import.meta.url)),
@@ -224,6 +269,16 @@ export function createElectronBuilderConfig(
       const runnerEntry = join(redteamRunnerPayloadDirectory(), 'dist', 'cli.js')
       if (!existsSync(runnerEntry)) {
         throw new Error(`desktop package: the bundled engagement runner is missing (${runnerEntry}); run node apps/desktop/scripts/vendor-redteam-runner.mjs`)
+      }
+      // The same reasoning applies to the local-model feature on the platform it
+      // is pinned for: an installer without llama-server.exe offers a manager
+      // window that can never start, which reads as a broken product. The payload
+      // is build output, so a source-only build MUST materialize it first.
+      if (resolvedPlatform === 'win32' && resolvedArch === 'x64') {
+        const llamaFailure = llamaPayloadFailure(env)
+        if (llamaFailure !== undefined) {
+          throw new Error(`desktop package: ${llamaFailure}; run node apps/desktop/scripts/vendor-llama.mjs`)
+        }
       }
       const office = await officePackageDirectories(buildPaths.dsh, { platform: resolvedPlatform, arch: resolvedArch })
       const patterns = office.map(directory => `**/${relative(buildPaths.dsh, directory).split(sep).join('/')}/**/*`)
