@@ -4,6 +4,7 @@ import type { FormEvent } from 'react'
 import { StateDot } from '@deepseek-ai/dsh-client-ui-primitives/src/StateDot.tsx'
 import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
 import { formatDesktopMessage } from '../locale.ts'
+import type { ReadinessResult } from '../welcome-api.ts'
 import type { WelcomeApi, WelcomeMcpState } from '../welcome-api.ts'
 
 type Page = 'entry' | 'key' | 'account' | 'mcp'
@@ -22,12 +23,18 @@ function plausibleEndpoint(value: string): boolean {
   return trimmed === '' || /^https:\/\//iu.test(trimmed) || /^http:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?:[:/]|$)/iu.test(trimmed)
 }
 
+/** Welcome API extended with the tool-readiness check shown on the MCP step. */
+export type WelcomeReadinessApi = WelcomeApi & {
+  /** Runs the bundled runner's doctor once and returns a safe, secret-free view. */
+  readiness(): Promise<ReadinessResult>
+}
+
 /**
  * Render the standalone welcome flow using shell-owned operations and localized copy.
  * @param props.api - isolated preload API; no account credentials reach the renderer.
  * @returns welcome pages with fixed bottom actions.
  */
-export function Welcome({ api }: { api: WelcomeApi }) {
+export function Welcome({ api }: { api: WelcomeReadinessApi }) {
   const { messages: m } = api
   const [page, setPage] = useState<Page>(api.initialPage)
   const pageRef = useRef<Page>(api.initialPage)
@@ -51,6 +58,8 @@ export function Welcome({ api }: { api: WelcomeApi }) {
   const [runnerDraft, setRunnerDraft] = useState('')
   const [endpointDraft, setEndpointDraft] = useState('')
   const [mcpError, setMcpError] = useState('')
+  const [readiness, setReadiness] = useState<ReadinessResult | null>(null)
+  const [readinessLoading, setReadinessLoading] = useState(false)
   const secscanInput = useRef<HTMLInputElement>(null)
 
   function navigate(next: Page) {
@@ -89,6 +98,24 @@ export function Welcome({ api }: { api: WelcomeApi }) {
     })
     return () => { live = false }
   }, [api, page, m.welcomeMcpFailed])
+
+  useEffect(() => {
+    if (page !== 'mcp') return
+    let live = true
+    setReadinessLoading(true)
+    setReadiness(null)
+    void (async () => {
+      try {
+        const result = await api.readiness()
+        if (live && mounted.current) setReadiness(result)
+      } catch {
+        if (live && mounted.current) setReadiness({ ok: false, reason: m.welcomeReadinessUnavailable })
+      } finally {
+        if (live && mounted.current) setReadinessLoading(false)
+      }
+    })()
+    return () => { live = false }
+  }, [api, page, m.welcomeReadinessUnavailable])
 
   useEffect(() => {
     if (page === 'key') input.current?.focus()
@@ -243,6 +270,19 @@ export function Welcome({ api }: { api: WelcomeApi }) {
       if (mounted.current) setBusy(false)
     }
   }
+  async function recheckReadiness() {
+    if (readinessLoading) return
+    setReadinessLoading(true)
+    try {
+      const result = await api.readiness()
+      if (!mounted.current) return
+      setReadiness(result)
+    } catch {
+      if (mounted.current) setReadiness({ ok: false, reason: m.welcomeReadinessUnavailable })
+    } finally {
+      if (mounted.current) setReadinessLoading(false)
+    }
+  }
 
   const phase = starting ? 'initializing' : attempt?.phase ?? 'failed'
   const waiting = phase === 'waiting-browser'
@@ -292,6 +332,37 @@ export function Welcome({ api }: { api: WelcomeApi }) {
         <p id="mcp-environment" className="mcp-note" hidden={mcp === null || mcp.fromEnvironment.length === 0}>
           {mcp !== null && mcp.fromEnvironment.length > 0 ? m.welcomeMcpEnvironment : ''}
         </p>
+        <section className="readiness" aria-live="polite" aria-busy={readinessLoading}>
+          <header className="readiness-heading">
+            <h2 className="readiness-title">{m.welcomeReadinessTitle}</h2>
+            <button className="readiness-recheck" type="button" disabled={readinessLoading} onClick={() => { void recheckReadiness() }}>
+              {m.welcomeReadinessRecheck}
+            </button>
+          </header>
+          {readinessLoading || readiness === null
+            ? <p className="readiness-loading">{m.welcomeReadinessLoading}</p>
+            : !readiness.ok
+              ? <p className="readiness-unavailable">{readiness.reason}</p>
+              : <>
+                <p className="readiness-summary">{readiness.readiness.summary}</p>
+                <ul className="readiness-list">
+                  {readiness.readiness.items.map(item => (
+                    <li key={item.id} className={`readiness-item readiness-item--${item.state}`}>
+                      <span className={`readiness-glyph readiness-glyph--${item.state}`} aria-hidden="true" />
+                      <span className="visually-hidden">{item.state}</span>
+                      <span className="readiness-item-label">{item.label}</span>
+                      {item.detail !== undefined ? <span className="readiness-item-detail">{item.detail}</span> : null}
+                      {item.fix !== undefined
+                        ? <details className="readiness-item-fix">
+                          <summary>How to fix</summary>
+                          <p>{item.fix}</p>
+                        </details>
+                        : null}
+                    </li>
+                  ))}
+                </ul>
+              </>}
+        </section>
         <p id="mcp-error" className="mcp-error" role="alert" hidden={mcpError === ''}>{mcpError}</p>
       </form>
       <form id="key-form" className="key-form" hidden={page !== 'key'} noValidate onSubmit={(event) => { void saveKey(event) }} aria-busy={busy}>

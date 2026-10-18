@@ -6,5 +6,6 @@ SecScan MCP token (ssk_…) [password]
 Engagement runner token [password]
 Runner console address [url]
 Saved in /profile/engagement-credentials.json
+Re-check
 Save and continue [disabled]
 Not now

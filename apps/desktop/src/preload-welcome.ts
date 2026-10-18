@@ -30,5 +30,6 @@ const api: WelcomeApi = {
   saveMcp: (input: McpCredentialDraftInput) => ipcRenderer.invoke(WELCOME_IPC.saveMcp, input) as Promise<WelcomeSaveResult>,
   clearMcp: () => ipcRenderer.invoke(WELCOME_IPC.clearMcp) as Promise<WelcomeSaveResult>,
   finishMcp: () => ipcRenderer.invoke(WELCOME_IPC.finishMcp) as Promise<void>,
+  readiness: () => ipcRenderer.invoke(WELCOME_IPC.readiness) as ReturnType<WelcomeApi['readiness']>,
 }
 contextBridge.exposeInMainWorld('dshWelcome', api)

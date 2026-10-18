@@ -6,5 +6,6 @@ SecScan MCP 令牌（ssk_…） [password]
 对抗引擎运行器令牌 [password]
 运行器控制台地址 [url]
 保存位置：/profile/engagement-credentials.json
+重新检查
 保存并继续 [disabled]
 稍后配置

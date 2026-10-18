@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveDesktopLocale } from '../src/locale.ts'
 import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
 import type { WelcomeMcpState, WelcomeSaveResult } from '../src/welcome-api.ts'
+import type { ReadinessResult } from '../src/welcome-api.ts'
 
 const html = readFileSync(join(import.meta.dirname, '../renderer/welcome.html'), 'utf8')
 afterEach(cleanup)
@@ -39,6 +40,7 @@ function mount(language = 'zh-CN', options: { page?: 'entry' | 'mcp'; mcp?: Part
     saveMcp: vi.fn().mockResolvedValue({ ok: true }),
     clearMcp: vi.fn().mockResolvedValue({ ok: true }),
     finishMcp: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    readiness: vi.fn<() => Promise<ReadinessResult>>().mockResolvedValue({ ok: true, readiness: { ok: false, summary: '3 of 15 ready', items: [] } }),
   }
   const mounted = render(<Welcome api={api} />)
   const input = document.querySelector<HTMLInputElement>('#key-input')!

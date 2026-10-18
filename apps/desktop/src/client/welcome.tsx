@@ -2,11 +2,11 @@
 import { createRoot } from 'react-dom/client'
 import { flushSync } from 'react-dom'
 import { Welcome } from './WelcomePage.tsx'
-import type { WelcomeApi } from '../welcome-api.ts'
+import type { WelcomeReadinessApi } from './WelcomePage.tsx'
 
 declare global {
   interface Window {
-    dshWelcome: WelcomeApi
+    dshWelcome: WelcomeReadinessApi
   }
 }
 

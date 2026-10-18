@@ -58,6 +58,7 @@ import {
 import { DesktopUpdateJournal } from './update-journal.ts'
 import { DesktopRedteamRunner, redteamRunnerResources } from './redteam-runner.ts'
 import { DesktopMetasploit, findMetasploitHome } from './redteam-msf.ts'
+import { runRunnerReadiness } from './readiness.ts'
 import { DesktopUpdatePreparationError } from './update-error.ts'
 import { DesktopUpdateSchedule, resolveDesktopUpdateScheduleConfig } from './update-schedule.ts'
 import { desktopUpdateErrorSummary, presentDesktopUpdate } from './update-presentation.ts'
@@ -1145,6 +1146,19 @@ async function main(): Promise<void> {
             return
           }
           await enterWorkspace()
+        },
+        readiness: async () => {
+          // Tool readiness is read from the bundled runner's own `doctor`, the same
+          // report an operator would run at a terminal, so the first-run panel cannot
+          // drift from what the runner will actually refuse or block on.
+          const runner = redteamRunnerResources({
+            packaged: app.isPackaged,
+            resourcesPath: process.resourcesPath,
+            appPath: app.getAppPath(),
+            node: resources.node,
+            environment: process.env,
+          })
+          return runRunnerReadiness({ node: resources.node, runnerDirectory: runner.directory, env: process.env })
         },
       }, startPage)
       const window = welcomeWindow

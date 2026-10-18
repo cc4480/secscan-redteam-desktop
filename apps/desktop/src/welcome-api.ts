@@ -16,6 +16,7 @@ export const WELCOME_IPC = {
   saveMcp: 'dsh-welcome:save-mcp',
   clearMcp: 'dsh-welcome:clear-mcp',
   finishMcp: 'dsh-welcome:finish-mcp',
+  readiness: 'dsh-welcome:readiness',
 } as const
 
 /** Page the native welcome window opens on. */
@@ -23,6 +24,35 @@ export type WelcomePage = 'entry' | 'mcp'
 
 /** Credential writes return a safe outcome without exposing Host diagnostics. */
 export type WelcomeSaveResult = { readonly ok: true } | { readonly ok: false }
+
+/** One tool-readiness check and its outcome, passed through from the runner unchanged. */
+export interface ReadinessItem {
+  /** Stable identifier used by the UI and tests. */
+  id: string
+  /** Human label. */
+  label: string
+  /** Whether the requirement is satisfied, absent, unreachable, or unconfigured. */
+  state: 'ready' | 'missing' | 'unreachable' | 'not-configured'
+  /** What was found, when relevant (path, version, endpoint). */
+  detail?: string
+  /** What to do when the state is not `ready`. */
+  fix?: string
+  /** Required items block an engagement; optional ones only degrade it. */
+  required: boolean
+}
+
+/** The whole tool-readiness report, reduced to what the welcome window needs. */
+export interface ReadinessView {
+  /** True when every required item is ready. */
+  ok: boolean
+  /** Short human summary of how many items are ready. */
+  summary: string
+  /** The individual checks, in report order. */
+  items: ReadinessItem[]
+}
+
+/** A successful readiness run, or a reason that is safe to show and carries no secret. */
+export type ReadinessResult = { ok: true; readiness: ReadinessView } | { ok: false; reason: string }
 
 /**
  * Masked first-run MCP state. It carries a fingerprint and never a credential
@@ -88,6 +118,11 @@ export interface WelcomeOperations {
    * @returns completion after the workspace is visible, or after the settings window closes.
    */
   finishMcp(): Promise<void>
+  /**
+   * Ask the bundled engagement runner whether its tools are ready to run an engagement.
+   * @returns the mapped doctor report, or a safe reason that never carries a secret.
+   */
+  readiness(): Promise<ReadinessResult>
 }
 
 /** The renderer receives localized copy, login operations, safe account snapshots, and the MCP step. */
