@@ -11,6 +11,7 @@ import { inBlackout } from "./gate.js";
 import { isPrivateOrLoopbackHost } from "./prober.js";
 import { reconPrompt } from "./prompts.js";
 import { redactPii } from "./safety/index.js";
+import { tokenMeterFor } from "./harness2/trajectory-normalize.js";
 import { type EngagementMode, type EngagementPhase, type RulesOfEngagement } from "./types.js";
 import { type TargetId } from "./targets.js";
 import { HaltError, type Ctx } from "./context.js";
@@ -84,6 +85,8 @@ export async function agentLoop(
       ctx.events.append({ phase, actor: "runner", action: "llm_error", result: `LLM call failed: ${(err as Error).message}` });
       throw err;
     }
+    // Harness2 P1a: the provider's usage is real; accumulate it per engagement.
+    tokenMeterFor(ctx).record(res.usage);
     if (res.text || res.reasoning) {
       if (res.text) notes.push(res.text);
       // The thinking trace is first-class observability: it lands in the

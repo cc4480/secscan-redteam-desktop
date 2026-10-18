@@ -28,6 +28,7 @@ import { registerLive, unregisterLive } from "../live.js";
 import { resolveConfig } from "./config.js";
 import { coordinatorSignOff } from "./signoff.js";
 import { resolveVariantCap } from "../variants/index.js";
+import { captureEngagementTrajectory } from "../harness2/trajectory.js";
 
 export interface RunOptions {
   mcpToken?: string;
@@ -292,9 +293,8 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
     return { engagementId, status: "halted", blockedReason: reason, reportPath, findings };
   } finally {
     unregisterLive(engagementId);
-    // v0.23.0: no blind save here. Every verdict persists atomically via
-    // transactRegistryFile at write time; a whole-file save of this
-    // engagement's in-memory copy would silently clobber verdicts transacted
-    // by a concurrent engagement. The in-memory registry mirrors the file.
+    // H2-P1a: additive trajectory/metrics capture for every outcome; guarded so it never throws into the run (tokens: see TOKEN_CAPTURE_STATUS).
+    captureEngagementTrajectory({ engagementDir: dir, engagementId, target: input.target, targetIds: input.targets, ctx, events });
+    // v0.23.0: no blind save here. Every verdict persists atomically via transactRegistryFile at write time; a whole-file save of this engagement's in-memory copy would clobber verdicts transacted by a concurrent engagement.
   }
 }

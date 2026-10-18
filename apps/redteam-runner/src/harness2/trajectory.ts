@@ -1,0 +1,235 @@
+/**
+ * Harness2 trajectory + metrics capture (H2-P1a).
+ *
+ * One finished engagement directory gains two additive artifacts, written by
+ * captureEngagementTrajectory from runEngagement's finally block:
+ *
+ *  - trajectory.json: TrajectoryRecord { metrics, events } - the normalized
+ *    trajectory plus the outcome ground truth.
+ *  - metrics.json: the same RunMetrics alone, so the H2-P1b store can ingest a
+ *    run without parsing the events array.
+ *
+ * Existing artifacts (events.jsonl, state.json, engagement.md) are only READ:
+ * events.jsonl semantics are untouched and nothing here throws into a run.
+ *
+ * TOKEN CAPTURE: see ./trajectory-normalize.ts for the full finding. Summary:
+ * the llm-router exposes ChatResult.usage, but agents.ts agentLoop discards it
+ * and Ctx has no accumulator, so no run can recover real sums retroactively.
+ * Tokens are recorded as explicit 0 with TOKEN_CAPTURE_STATUS as the reason;
+ * createTokenMeter() is the ready capture, wired through the `tokens` seam.
+ */
+import { readEvents, type EventLog } from "../events.js";
+import type { Ctx } from "../context.js";
+import type { EngagementStatus } from "../types.js";
+import type { RunMetrics, RunOutcome, TrajectoryRecord } from "./contract.js";
+import { buildHarnessStamp } from "./harness-stamp.js";
+import { toTrajectoryEvents, tokenMeterFor, type TokenTotals } from "./trajectory-normalize.js";
+import { writeTrajectory } from "./trajectory-write.js";
+
+export * from "./trajectory-normalize.js";
+export { writeTrajectory, type WriteTrajectoryResult } from "./trajectory-write.js";
+export { buildHarnessStamp } from "./harness-stamp.js";
+export type { HarnessStampOptions, HarnessStampWithPins } from "./harness-stamp.js";
+
+// ---------------------------------------------------------------------------
+// targetClass rule
+// ---------------------------------------------------------------------------
+
+/**
+ * Bucket rule, most specific first:
+ *  1. the recon fingerprint's appType ("wordpress", "scanner-saas", ...) when
+ *     it is known;
+ *  2. otherwise the selected target families (--targets / full battery),
+ *     sorted and joined with "+" ("windows", "secscan+seclayer");
+ *  3. otherwise the target host: URL scheme/userinfo/path/query/port stripped
+ *     and lowercased ("shop.example.test"), "host" for a bare IPv4, or
+ *     "unknown" when there is nothing to parse. This mirrors the H2-P1b
+ *     ingest fallback so legacy and captured runs bucket together.
+ */
+export function deriveTargetClass(input: {
+  readonly target: string;
+  readonly targetIds?: readonly string[];
+  readonly appType?: string;
+}): string {
+  const appType = input.appType?.trim().toLowerCase() ?? "";
+  if (appType !== "" && appType !== "unknown") return appType;
+  const families = [...new Set((input.targetIds ?? []).map((id) => id.trim().toLowerCase()).filter((id) => id !== ""))];
+  if (families.length > 0) return families.sort().join("+");
+  const bare = input.target.trim().replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
+  const host = (bare.split(/[/?#]/)[0] ?? "").replace(/^.*@/, "").replace(/:\d+$/, "").toLowerCase();
+  if (host === "") return "unknown";
+  return /^\d{1,3}(\.\d{1,3}){3}$/.test(host) ? "host" : host;
+}
+
+// ---------------------------------------------------------------------------
+// Outcome rule
+// ---------------------------------------------------------------------------
+
+/**
+ * Outcome rule (mechanical, from the recorded engagement status):
+ *  - aborted: the kill switch fired (aborted flag or an "aborted by operator"
+ *    halt reason);
+ *  - success: completed with confirmed evidence (findings or proven exploits);
+ *  - partial: completed clean, or halted while carrying confirmed evidence;
+ *  - failure: halted with no confirmed evidence, or blocked before the run.
+ */
+export function deriveOutcome(input: {
+  readonly status: string;
+  readonly aborted?: boolean;
+  readonly blockedReason?: string;
+  readonly vulnsFound: number;
+  readonly exploitsSucceeded: number;
+}): RunOutcome {
+  const status = input.status.trim().toLowerCase();
+  const evidence = input.vulnsFound > 0 || input.exploitsSucceeded > 0;
+  if (input.aborted === true || /abort/i.test(input.blockedReason ?? "")) return "aborted";
+  if (status === "complete") return evidence ? "success" : "partial";
+  if (status === "halted") return evidence ? "partial" : "failure";
+  if (status === "blocked") return "failure";
+  return "partial";
+}
+
+// ---------------------------------------------------------------------------
+// Metrics mapping
+// ---------------------------------------------------------------------------
+
+export interface CaptureMetricsInput {
+  readonly engagementId: string;
+  /** Run id; defaults to the engagement id. */
+  readonly runId?: string;
+  readonly target: string;
+  readonly targetIds?: readonly string[];
+  readonly appType?: string;
+  readonly status: string;
+  /** Explicit outcome override (used by tests and future callers). */
+  readonly outcome?: RunOutcome;
+  readonly blockedReason?: string;
+  readonly aborted?: boolean;
+  readonly vulnsFound: number;
+  readonly falsePositives: number;
+  readonly exploitsAttempted: number;
+  readonly exploitsSucceeded: number;
+  readonly steps: number;
+  /** Real provider totals; omitted means explicit 0 (see TOKEN_CAPTURE_STATUS). */
+  readonly tokensIn?: number;
+  readonly tokensOut?: number;
+  readonly startedAtMs?: number;
+  readonly finishedAtMs?: number;
+  readonly harness?: RunMetrics["harness"];
+}
+
+function clampCount(value: number): number {
+  return Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
+}
+
+/** Map a finished engagement to contract RunMetrics. Pure; never throws. */
+export function captureRunMetrics(input: CaptureMetricsInput): RunMetrics {
+  const finishedAtMs = input.finishedAtMs ?? Date.now();
+  const startedAtMs = input.startedAtMs ?? finishedAtMs;
+  const vulnsFound = clampCount(input.vulnsFound);
+  const exploitsSucceeded = clampCount(input.exploitsSucceeded);
+  return {
+    runId: input.runId ?? input.engagementId,
+    engagementId: input.engagementId,
+    targetClass: deriveTargetClass({ target: input.target, targetIds: input.targetIds, appType: input.appType }),
+    outcome:
+      input.outcome ??
+      deriveOutcome({
+        status: input.status,
+        aborted: input.aborted,
+        blockedReason: input.blockedReason,
+        vulnsFound,
+        exploitsSucceeded,
+      }),
+    vulnsFound,
+    falsePositives: clampCount(input.falsePositives),
+    exploitsSucceeded,
+    exploitsAttempted: Math.max(clampCount(input.exploitsAttempted), exploitsSucceeded),
+    steps: clampCount(input.steps),
+    tokensIn: clampCount(input.tokensIn ?? 0),
+    tokensOut: clampCount(input.tokensOut ?? 0),
+    durationMs: Math.max(0, finishedAtMs - startedAtMs),
+    harness: input.harness ?? buildHarnessStamp(),
+    startedAt: new Date(startedAtMs).toISOString(),
+    finishedAt: new Date(finishedAtMs).toISOString(),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Finish-path wiring
+// ---------------------------------------------------------------------------
+
+/** A finished run, as much as the finish path knows about it. */
+export interface EngagementCaptureInput {
+  readonly engagementDir: string;
+  readonly engagementId: string;
+  readonly target: string;
+  readonly targetIds?: readonly string[];
+  readonly ctx: Ctx;
+  readonly events: EventLog;
+  readonly environment?: NodeJS.ProcessEnv;
+  /** Real provider totals once a token meter is installed; omitted => explicit 0s. */
+  readonly tokens?: TokenTotals;
+}
+
+const EVENT_READ_LIMIT = 100_000;
+
+function recordedStatus(status: EngagementStatus): "complete" | "halted" | "blocked" {
+  if (status === "complete" || status === "halted") return status;
+  // runEngagement's blocked early return leaves state.json at "authorizing";
+  // any non-terminal state at the finish path means the run was blocked.
+  return "blocked";
+}
+
+/**
+ * The single additive call site: called from runEngagement's finally block for
+ * every outcome (complete, halted, blocked). Guarded so a capture problem can
+ * never throw into an engagement run; returns null when nothing was captured.
+ */
+export function captureEngagementTrajectory(input: EngagementCaptureInput): RunMetrics | null {
+  try {
+    const state = input.events.snapshot;
+    const trajectoryEvents = toTrajectoryEvents(readEvents(input.events.dir, 0, EVENT_READ_LIMIT));
+    // Derivation rules from what the finish path can prove:
+    //  - vulnsFound: confirmed findings in state.json (live findings are mirrored
+    //    there; the max keeps a halt-before-mirror from undercounting).
+    //  - falsePositives: findings killed in state.json, or killed hypotheses.
+    //  - exploitsAttempted: non-pending battery-ledger items for a full battery,
+    //    else exploit-phase tool calls; never below the confirmed successes.
+    //  - steps: dispatched tool actions (ctx.actions), the runner's planner unit.
+    const confirmed = state.findings.filter((finding) => finding.status === "confirmed").length;
+    const killed = Math.max(
+      state.findings.filter((finding) => finding.status === "killed").length,
+      input.ctx.killedLive.length,
+    );
+    const ledgerAttempts = [...input.ctx.itemLedger.values()].filter((verdict) => verdict.disposition !== "pending").length;
+    const exploitToolCalls = trajectoryEvents.filter((event) => event.phase === "exploit" && event.isToolCall).length;
+    // Real token totals from the per-engagement meter (agents.ts records every
+    // router response); the explicit seam wins so tests can pin totals.
+    const totals = input.tokens ?? tokenMeterFor(input.ctx).totals;
+    const metrics = captureRunMetrics({
+      engagementId: input.engagementId,
+      target: input.target,
+      targetIds: input.targetIds,
+      appType: input.ctx.fingerprint.appType,
+      status: recordedStatus(state.status),
+      blockedReason: state.blockedReason,
+      aborted: input.ctx.hostKill.aborted || input.ctx.safety.killSwitchAborts > 0,
+      vulnsFound: Math.max(confirmed, input.ctx.liveFindings.length),
+      falsePositives: killed,
+      exploitsAttempted: Math.max(ledgerAttempts > 0 ? ledgerAttempts : exploitToolCalls, confirmed),
+      exploitsSucceeded: confirmed,
+      steps: input.ctx.actions,
+      tokensIn: totals.tokensIn,
+      tokensOut: totals.tokensOut,
+      startedAtMs: input.ctx.startedAt,
+      harness: buildHarnessStamp({ environment: input.environment }),
+    });
+    const record: TrajectoryRecord = { metrics, events: trajectoryEvents };
+    return writeTrajectory(input.engagementDir, record).written ? metrics : null;
+  } catch {
+    // Capture is observability, not part of the engagement contract: never let
+    // it mask a halt or fail a run.
+    return null;
+  }
+}
