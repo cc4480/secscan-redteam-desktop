@@ -53,6 +53,38 @@ function resolveTokenIdentity(input) {
   return { keyContainer, tokenPin }
 }
 
+/**
+ * Resolve the optional PFX/PKCS#12 signing identity.
+ *
+ * A CA may deliver a certificate as a software PFX (or an export from a cloud
+ * HSM) rather than a hardware token. When configured, the signer uses
+ * `signtool /f <pfx> /p <password>` instead of the SafeNet `/kc` container form.
+ * @param {{ pfxFile?: string, pfxPassword?: string }} options Release signing configuration.
+ * @returns {{ pfxFile: string, pfxPassword: string } | undefined} The PFX identity, or undefined for token signing.
+ */
+function resolvePfxIdentity(options) {
+  const candidate = options.pfxFile?.trim()
+  if (!candidate) return undefined
+  let path
+  try {
+    path = realpathSync(candidate)
+    if (!statSync(path).isFile()) throw new Error('not a file')
+  }
+  catch {
+    throw new Error(`DSH_DESKTOP_WINDOWS_PFX_FILE is missing or is not a file: ${candidate}`)
+  }
+  const password = options.pfxPassword
+  if (password === undefined || password.length === 0) {
+    throw new Error('DSH_DESKTOP_WINDOWS_PFX_PASSWORD must contain the PFX password when DSH_DESKTOP_WINDOWS_PFX_FILE is set')
+  }
+  return { pfxFile: path, pfxPassword: password }
+}
+
+/**
+ * Locate and read the certificate file used for release signing.
+ * @param {string | undefined} value Configured certificate path.
+ * @returns {{ path: string, certificate: X509Certificate }} The validated leaf certificate.
+ */
 function resolveCertificateFile(value) {
   const candidate = value?.trim()
   if (!candidate) {
@@ -150,8 +182,11 @@ export function buildWindowsSigningEnvironment(environment, input) {
     ...scrubWindowsSigningEnvironment(environment),
     DSH_DESKTOP_WINDOWS_SIGNTOOL: input.signTool,
     DSH_DESKTOP_WINDOWS_CER_FILE: input.certificateFile,
-    DSH_DESKTOP_WINDOWS_TOKEN_PIN: input.tokenPin,
-    DSH_DESKTOP_WINDOWS_KEY_CONTAINER: input.keyContainer,
+    DSH_DESKTOP_WINDOWS_TOKEN_PIN: input.tokenPin ?? '',
+    DSH_DESKTOP_WINDOWS_KEY_CONTAINER: input.keyContainer ?? '',
+    // Software PFX identity; the CMD prefers it over the SafeNet container form.
+    DSH_DESKTOP_WINDOWS_PFX_FILE: input.pfxFile ?? '',
+    DSH_DESKTOP_WINDOWS_PFX_PASSWORD: input.pfxPassword ?? '',
     DSH_DESKTOP_WINDOWS_SIGN_TARGET: input.path,
     DSH_DESKTOP_WINDOWS_SIGN_APPEND: input.isNest ? '1' : '',
   }
@@ -166,7 +201,9 @@ export function buildWindowsSigningEnvironment(environment, input) {
 export function createWindowsTokenSigner(options) {
   const { path: certificateFile, certificate } = resolveCertificateFile(options.certificateFile)
   const signTool = resolveSignTool(options.signTool)
-  const { keyContainer, tokenPin } = resolveTokenIdentity(options)
+  // PFX signing is the software-deliverable alternative to the SafeNet token.
+  const pfx = resolvePfxIdentity(options)
+  const token = pfx === undefined ? resolveTokenIdentity(options) : undefined
   const commandInterpreter = options.commandInterpreter
     ?? process.env.ComSpec
     ?? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'cmd.exe')
@@ -178,7 +215,7 @@ export function createWindowsTokenSigner(options) {
       }
       if (configuration.isNest) throw new Error('Windows release signing does not support appended signatures')
       if (await options.preserveSignature?.(configuration.path)) return
-      const secrets = [tokenPin]
+      const secrets = pfx === undefined ? [token.tokenPin] : [pfx.pfxPassword]
       const runDirectory = options.runDirectory ?? process.env.DSH_DESKTOP_PACKAGING_RUN_DIR
       if (!runDirectory) throw new Error('Windows hardware signing requires a supervised packaging run')
       const { inspectWindowsRuntimeSignature: inspect } = await import('./windows-runtime-signature.mjs')
@@ -209,8 +246,8 @@ export function createWindowsTokenSigner(options) {
                   signTool,
                   path,
                   isNest: false,
-                  tokenPin,
-                  keyContainer,
+                  ...token === undefined ? {} : { tokenPin: token.tokenPin, keyContainer: token.keyContainer },
+                  ...pfx === undefined ? {} : { pfxFile: pfx.pfxFile, pfxPassword: pfx.pfxPassword },
                 }),
                 windowsHide: true,
               })

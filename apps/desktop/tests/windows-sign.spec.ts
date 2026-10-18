@@ -213,7 +213,29 @@ describe('Windows token signing', () => {
       DSH_DESKTOP_WINDOWS_CER_FILE: CERTIFICATE_FILE,
       DSH_DESKTOP_WINDOWS_TOKEN_PIN: 'token-secret!',
       DSH_DESKTOP_WINDOWS_KEY_CONTAINER: 'te-container',
+      DSH_DESKTOP_WINDOWS_PFX_FILE: '',
+      DSH_DESKTOP_WINDOWS_PFX_PASSWORD: '',
       DSH_DESKTOP_WINDOWS_SIGN_TARGET: 'C:\\release\\DeepSeek Harness.exe',
+      DSH_DESKTOP_WINDOWS_SIGN_APPEND: '',
+    })
+  })
+
+  it('builds a software PFX identity instead of a token container', () => {
+    expect(buildWindowsSigningEnvironment({}, {
+      certificateFile: CERTIFICATE_FILE,
+      signTool: 'C:\\tools\\signtool.exe',
+      path: 'C:\\release\\setup.exe',
+      isNest: false,
+      pfxFile: 'C:\\keys\\release.pfx',
+      pfxPassword: 'pfx-secret!',
+    })).toEqual({
+      DSH_DESKTOP_WINDOWS_SIGNTOOL: 'C:\\tools\\signtool.exe',
+      DSH_DESKTOP_WINDOWS_CER_FILE: CERTIFICATE_FILE,
+      DSH_DESKTOP_WINDOWS_TOKEN_PIN: '',
+      DSH_DESKTOP_WINDOWS_KEY_CONTAINER: '',
+      DSH_DESKTOP_WINDOWS_PFX_FILE: 'C:\\keys\\release.pfx',
+      DSH_DESKTOP_WINDOWS_PFX_PASSWORD: 'pfx-secret!',
+      DSH_DESKTOP_WINDOWS_SIGN_TARGET: 'C:\\release\\setup.exe',
       DSH_DESKTOP_WINDOWS_SIGN_APPEND: '',
     })
   })
@@ -239,6 +261,10 @@ describe('Windows token signing', () => {
     expect(text).toContain('set "DSH_DESKTOP_WINDOWS_CER_FILE="\r\n')
     expect(text).toContain('set "DSH_DESKTOP_WINDOWS_TOKEN_PIN="\r\n')
     expect(text).toContain('"%signTool%" sign /v /fd sha256 /f "%certificateFile%" /kc "[{{%tokenPin%}}]=%keyContainer%" /csp "eToken Base Cryptographic Provider" %appendSignature% "%targetFile%"\r\n')
+    // The software PFX branch is selected by `if defined pfxFile` and never mixes
+    // the token container syntax with a PFX password.
+    expect(text).toContain('if defined pfxFile goto sign_pfx\r\n')
+    expect(text).toContain('"%signTool%" sign /v /fd sha256 /f "%pfxFile%" /p "%pfxPassword%" %appendSignature% "%targetFile%"\r\n')
   })
 
   it('rejects incomplete signing identities and non-SHA-256 signing tasks', async () => {

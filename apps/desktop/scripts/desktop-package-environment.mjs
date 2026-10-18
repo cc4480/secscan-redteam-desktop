@@ -90,6 +90,8 @@ export function validateDesktopPackageEnvironment(environment, target, options =
       signTool: environment.DSH_DESKTOP_WINDOWS_SIGNTOOL,
       tokenPin: environment.DSH_DESKTOP_WINDOWS_TOKEN_PIN,
       keyContainer: environment.DSH_DESKTOP_WINDOWS_KEY_CONTAINER,
+      pfxFile: environment.DSH_DESKTOP_WINDOWS_PFX_FILE,
+      pfxPassword: environment.DSH_DESKTOP_WINDOWS_PFX_PASSWORD,
     })
     if (!options.prepareOnly) resolveWindowsSignatureCacheDirectory(environment)
   } else {

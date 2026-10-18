@@ -10,8 +10,10 @@ export function buildWindowsSigningEnvironment(environment: NodeJS.ProcessEnv, i
   signTool: string
   path: string
   isNest: boolean
-  tokenPin: string
-  keyContainer: string
+  tokenPin?: string
+  keyContainer?: string
+  pfxFile?: string
+  pfxPassword?: string
 }): NodeJS.ProcessEnv
 
 /**
@@ -32,6 +34,8 @@ export function createWindowsTokenSigner(options: {
   signTool?: string | undefined
   tokenPin?: string | undefined
   keyContainer?: string | undefined
+  pfxFile?: string | undefined
+  pfxPassword?: string | undefined
   commandInterpreter?: string | undefined
   runDirectory?: string | undefined
   stateDirectory?: string | undefined
