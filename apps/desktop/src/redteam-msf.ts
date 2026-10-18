@@ -386,11 +386,11 @@ export class DesktopMetasploit {
     if (this.active !== undefined) return this.active
     if (isOperatorMsfConfigured(this.environment)) {
       // The person is driving their own daemon; the bundled one must not compete for it.
-      console.info('desktop msfrpcd: the launch environment configures an msfrpcd, so the bundled daemon stays off')
+      console.debug('desktop msfrpcd: the launch environment configures an msfrpcd, so the bundled daemon stays off')
       return undefined
     }
     if (this.home === undefined) {
-      console.info('desktop msfrpcd: no Metasploit Framework installation was found, so the bundled daemon stays off')
+      console.debug('desktop msfrpcd: no Metasploit Framework installation was found, so the bundled daemon stays off')
       return undefined
     }
 

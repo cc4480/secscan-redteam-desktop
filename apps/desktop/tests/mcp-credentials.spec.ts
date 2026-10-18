@@ -4,11 +4,13 @@ import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { desktopNodeEnvironment } from '../src/node-environment.ts'
 import {
   MCP_CREDENTIAL_FILENAME,
   MCP_ENVIRONMENT_NAMES,
+  MCP_PLAINTEXT_OPT_IN_ENV,
+  McpPlaintextRefusedError,
   clearStoredMcpCredentials,
   isMcpEndpoint,
   isMcpTokenValue,
@@ -36,10 +38,30 @@ function workspace() {
   roots.push(root)
   return { root, file: mcpCredentialFile(root) }
 }
+// Every plain-protector case outside the policy suite stands for the operator who
+// accepted the fallback; a Windows test host would otherwise refuse those writes.
+beforeEach(() => {
+  if (process.platform === 'win32') vi.stubEnv(MCP_PLAINTEXT_OPT_IN_ENV, '1')
+})
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
+
+/**
+ * Run an action while this module's call-time platform check reports `platform`,
+ * so the Windows-only policy is exercised on every test host.
+ */
+async function withPlatform<T>(platform: NodeJS.Platform, action: () => Promise<T>): Promise<T> {
+  const saved = Object.getOwnPropertyDescriptor(process, 'platform')!
+  try {
+    Object.defineProperty(process, 'platform', { ...saved, value: platform })
+    return await action()
+  } finally {
+    Object.defineProperty(process, 'platform', saved)
+  }
+}
 
 /** A protector with a real round trip, so a cross-protector document can be exercised. */
 const protectedSecrets: McpSecretProtector = {
@@ -90,7 +112,9 @@ describe('mcp credential document', () => {
 
   it('reports a missing, corrupt, or unfamiliar document without failing', async () => {
     const { file } = workspace()
-    expect(await readStoredMcpCredentials(file, plainMcpSecretProtector)).toEqual({ values: {}, fingerprints: {}, exists: false, declined: false })
+    expect(await readStoredMcpCredentials(file, plainMcpSecretProtector)).toEqual(
+      { values: {}, fingerprints: {}, exists: false, declined: false },
+    )
     writeFileSync(file, 'not json at all')
     expect(await readStoredMcpCredentials(file, plainMcpSecretProtector)).toMatchObject({ values: {}, exists: true, declined: false })
     writeFileSync(file, JSON.stringify({ version: 2, protection: 'plain', credentials: { SECSCAN_MCP_TOKEN: { value: SECSCAN } } }))
@@ -137,6 +161,93 @@ describe('mcp credential document', () => {
     expect(await clearStoredMcpCredentials(file)).toBe(true)
     expect(await readStoredMcpCredentials(file, plainMcpSecretProtector)).toMatchObject({ values: {}, exists: false })
     expect(await clearStoredMcpCredentials(file)).toBe(true)
+  })
+})
+
+describe('plaintext protection policy', () => {
+  it('refuses to persist with the plain protector on win32 without the opt-in', async () => {
+    const { file } = workspace()
+    await withPlatform('win32', async () => {
+      // Only the explicit `1` opts in; an unset, empty, zero, or truthy-looking value does not.
+      for (const optIn of [undefined, '', '0', 'true']) {
+        vi.stubEnv(MCP_PLAINTEXT_OPT_IN_ENV, optIn)
+        const reason = await writeStoredMcpCredentials(file, plainMcpSecretProtector, draft({ secscan: SECSCAN }))
+          .catch((thrown: unknown) => thrown)
+        expect(reason).toBeInstanceOf(McpPlaintextRefusedError)
+        expect(reason).toMatchObject({ code: 'MCP_PLAINTEXT_REFUSED', optIn: MCP_PLAINTEXT_OPT_IN_ENV })
+      }
+      // The refusal happens before anything is written, so no document appears.
+      expect(await readStoredMcpCredentials(file, plainMcpSecretProtector)).toMatchObject({ values: {}, exists: false })
+    })
+  })
+
+  it('refuses even when a plaintext document already exists', async () => {
+    const { file } = workspace()
+    await withPlatform('win32', async () => {
+      vi.stubEnv(MCP_PLAINTEXT_OPT_IN_ENV, '1')
+      expect(await writeStoredMcpCredentials(file, plainMcpSecretProtector, draft({ secscan: SECSCAN }))).toBe(true)
+      const written = readFileSync(file, 'utf8')
+      // The document's own `plain` protection records history, not permission.
+      vi.stubEnv(MCP_PLAINTEXT_OPT_IN_ENV, undefined)
+      await expect(writeStoredMcpCredentials(file, plainMcpSecretProtector, draft({ runner: RUNNER })))
+        .rejects.toBeInstanceOf(McpPlaintextRefusedError)
+      expect(readFileSync(file, 'utf8')).toBe(written)
+      // The read path is unchanged, so the document that does exist stays usable.
+      expect((await readStoredMcpCredentials(file, plainMcpSecretProtector)).values).toEqual({ SECSCAN_MCP_TOKEN: SECSCAN })
+    })
+  })
+
+  it('persists on win32 with DSH_MCP_ALLOW_PLAINTEXT=1', async () => {
+    const { file } = workspace()
+    await withPlatform('win32', async () => {
+      vi.stubEnv(MCP_PLAINTEXT_OPT_IN_ENV, '1')
+      expect(await writeStoredMcpCredentials(file, plainMcpSecretProtector, draft({ secscan: SECSCAN }))).toBe(true)
+      expect((await readStoredMcpCredentials(file, plainMcpSecretProtector)).values.SECSCAN_MCP_TOKEN).toBe(SECSCAN)
+    })
+    expect((JSON.parse(readFileSync(file, 'utf8')) as { protection: string }).protection).toBe('plain')
+  })
+
+  it('keeps the plaintext fallback on POSIX without an opt-in', async () => {
+    const { file } = workspace()
+    vi.stubEnv(MCP_PLAINTEXT_OPT_IN_ENV, undefined)
+    const written = await withPlatform('linux', () =>
+      writeStoredMcpCredentials(file, plainMcpSecretProtector, draft({ secscan: SECSCAN })))
+    expect(written).toBe(true)
+    expect((await readStoredMcpCredentials(file, plainMcpSecretProtector)).values.SECSCAN_MCP_TOKEN).toBe(SECSCAN)
+    // A Windows host has no POSIX permission mode to read, so the call path above is the assertion there.
+    if (process.platform !== 'win32') expect(statSync(file).mode & 0o777).toBe(0o600)
+  })
+
+  it('leaves the safeStorage protector path unchanged on win32', async () => {
+    const { file } = workspace()
+    await withPlatform('win32', async () => {
+      vi.stubEnv(MCP_PLAINTEXT_OPT_IN_ENV, undefined)
+      expect(await writeStoredMcpCredentials(file, protectedSecrets, draft({ secscan: SECSCAN }))).toBe(true)
+      expect(await readStoredMcpCredentials(file, protectedSecrets)).toMatchObject({
+        values: { SECSCAN_MCP_TOKEN: SECSCAN }, exists: true, declined: false,
+      })
+    })
+    // The stored entry really went through the protector rather than the identity fallback.
+    const document = JSON.parse(readFileSync(file, 'utf8')) as { credentials: Record<string, { value: string }> }
+    expect(document.credentials.SECSCAN_MCP_TOKEN!.value).toBe(protectedSecrets.protect(SECSCAN))
+    expect(document.credentials.SECSCAN_MCP_TOKEN!.value).not.toBe(SECSCAN)
+  })
+
+  it('names the consequence and the opt-in without echoing a credential value', async () => {
+    const { file } = workspace()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const refusal = await withPlatform('win32', async () => {
+      vi.stubEnv(MCP_PLAINTEXT_OPT_IN_ENV, undefined)
+      return writeStoredMcpCredentials(file, plainMcpSecretProtector, draft({ secscan: SECSCAN, runner: RUNNER }))
+        .catch((thrown: unknown) => thrown)
+    })
+    if (!(refusal instanceof McpPlaintextRefusedError)) throw new Error('expected a plaintext protection refusal')
+    const text = `${refusal.name}: ${refusal.message}`
+    expect(text).toContain(MCP_PLAINTEXT_OPT_IN_ENV)
+    expect(text.toLowerCase()).toContain('unencrypted')
+    expect(text).not.toContain(SECSCAN)
+    expect(text).not.toContain(RUNNER)
+    expect(warn.mock.calls.flat().join(' ')).not.toContain(SECSCAN)
   })
 })
 

@@ -11,7 +11,7 @@ import { NucleiExecutor } from "../nuclei/index.js";
 import { NmapExecutor } from "../nmap/index.js";
 import { TargetAutoHalt, TargetRateLimiter, describeEnvironment, parseEnvironment, productionConfirmed, requireGraduation, resolveEffectiveRps, resolveLogRotationConfig, assertDistFresh } from "../safety/index.js";
 import { loadRegistryFile, saveRegistryFile, seedRegistry } from "../registry.js";
-import { WebProber } from "../prober.js";
+import { WebProber, allHostsPrivateOrLoopback } from "../prober.js";
 import { activeTargets } from "../targets.js";
 import { buildItemLedger } from "../coverage/items.js";
 import { fireSlack, reportPhase } from "../report.js";
@@ -95,7 +95,7 @@ export async function runEngagement(input, opts = {}) {
         deps,
         events,
         mcp: deps.mcp ?? new McpClient({ endpoint: config.mcpEndpoint, token: config.mcpToken }),
-        prober: deps.prober ?? new WebProber({ scopeHosts: hosts, minDelayMs: config.probeDelayMs, allowPrivateHosts: config.localSandbox }),
+        prober: deps.prober ?? new WebProber({ scopeHosts: hosts, minDelayMs: config.probeDelayMs, allowPrivateHosts: config.localSandbox && allHostsPrivateOrLoopback(hosts) }),
         hostExecutor: deps.hostExecutor ?? new HostExecutor(),
         msfExecutor: deps.msfExecutor ?? new MsfExecutor(),
         nucleiExecutor: deps.nucleiExecutor ?? new NucleiExecutor(),

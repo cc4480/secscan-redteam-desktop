@@ -25,7 +25,12 @@ export declare const NUCLEI_ENV_TIMEOUT = "REDTEAM_NUCLEI_TIMEOUT_S";
 export declare const NUCLEI_SETUP_INSTRUCTIONS: string;
 /** Template tags that are always excluded — DoS stays excluded in every mode. */
 export declare const NUCLEI_DENIED_TAGS: string[];
-/** Resolve the nuclei binary path — explicit env wins, else PATH lookup. */
+/**
+ * Resolve the nuclei binary through the shared toolchain resolver: explicit env
+ * wins, then the payload bundled at REDTEAM_TOOLS_DIR, then PATH. The operator's
+ * explicit value is authoritative even when it is missing (readiness reports
+ * that honestly); only when none is set does the bundled copy get a turn.
+ */
 export declare function resolveNucleiBinary(env?: NodeJS.ProcessEnv): string;
 /** Run timeout in seconds — env override, sane default. */
 export declare function resolveNucleiTimeoutS(env?: NodeJS.ProcessEnv): number;

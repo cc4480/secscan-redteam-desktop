@@ -24,13 +24,13 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFile
 import { join, basename } from "node:path";
 import { readEvents, readState } from "./events.js";
 import { runEngagement } from "./phases.js";
-import { isTargetId } from "./targets.js";
+import { ALL_TARGETS, isTargetId } from "./targets.js";
 import { parseTier } from "./accountability/index.js";
 export { runEngagement, resolveConfig } from "./phases.js";
 export { readEvents, readState };
 export { TECHNIQUES, lookupTechnique, defaultExcludedForMode, resolveExcludedTechniques, ALWAYS_EXCLUDED } from "./attack.js";
 export { BATTERY, BATTERY_CATEGORIES, CATEGORY_LABELS, batteryChecklistText, batteryItemsFor, lookupBatteryItem, } from "./battery.js";
-export { scopeHosts, urlInScope, inBlackout, inTestWindow, techniqueAllowed, checkAuthorization } from "./gate.js";
+export { scopeHosts, urlInScope, inBlackout, inTestWindow, techniqueAllowed, checkAuthorization, checkScopeAuthorization } from "./gate.js";
 export { isPrivateOrLoopbackHost, validateProbeTarget } from "./prober.js";
 export { COMPLIANCE_CONTROLS, METHODOLOGY_EXCLUSIONS, METHODOLOGY_TOOLS, TECHNIQUE_CONTROL_MAP, allBatteryAttackIds, buildCompliancePack, buildRetestEvidence, controlsForTechnique, invalidMappedControlIds, lookupControl, renderAttestationLetter, renderCompliancePackMarkdown, unmappedBatteryTechniques, } from "./compliance/index.js";
 export { TargetRateLimiter, TargetAutoHalt, buildSafetyManifest, renderSafetyManifestMarkdown, buildZeroDisruptionRecord, disruptionVerdict, redactPii, piiPatternLabels, parseEnvironment, productionConfirmed, requireGraduation, resolveEffectiveRps, isTargetDistress, PROTECTIONS_IN_FORCE, RESIDUAL_RISKS, SAFETY_MANIFEST_VERSION, } from "./safety/index.js";
@@ -83,7 +83,7 @@ export function validateQueueInput(raw) {
             throw new Error("targets must be an array");
         const bad = b.targets.filter((t) => typeof t !== "string" || !isTargetId(t));
         if (bad.length > 0)
-            throw new Error(`bad targets ${JSON.stringify(bad)}; want subset of secscan,seclayer,windows,linux`);
+            throw new Error(`bad targets ${JSON.stringify(bad)}; want subset of ${ALL_TARGETS.join(",")}`);
         targets = b.targets;
     }
     let tier;

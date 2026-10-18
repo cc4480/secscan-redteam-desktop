@@ -1,8 +1,12 @@
 {
   "schemaVersion": 1,
   "package": "@secscan/redteam-runner",
-  "version": "0.34.0",
+  "version": "0.37.1",
   "source": "C:\\Users\\looko\\Documents\\deepseek-harness\\Default workspace\\secscan-redteam\\runner",
+  "lockfile": {
+    "source": "C:\\Users\\looko\\Documents\\deepseek-harness\\Default workspace\\secscan-redteam\\package-lock.json",
+    "sha256": "9122090be2b3cfc371d62bde9ff5182712ffc364e73ba4b135e41c991dd0b098"
+  },
   "packages": [
     {
       "name": "@marsaud/smb2",

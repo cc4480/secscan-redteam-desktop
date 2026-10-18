@@ -10,7 +10,7 @@ import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { readEvents } from "../events.js";
 import { buildNegativeProof, buildPocBundle, bundleSummary } from "../proof/index.js";
-import { TARGET_PROFILES } from "../targets.js";
+import { TARGET_PROFILES, activeTargets } from "../targets.js";
 export function buildProofSection(ctx, findings, pocBundleMap) {
     let section = "";
     // v0.14.0 proof of exploitation: PoC bundles derived MECHANICALLY from the
@@ -39,8 +39,15 @@ export function buildProofSection(ctx, findings, pocBundleMap) {
             target: ctx.input.target,
             operator: ctx.input.operatorName || process.env["REDTEAM_OPERATOR"]?.trim() || "(operator name not supplied — set REDTEAM_OPERATOR)",
         };
+        // Attribute a confirmed finding's PoC to a battery item from a battery that
+        // actually RAN in this engagement. Without the selected-target filter the
+        // first-wins walk could credit a generic webapp item (WA-*) for a host
+        // finding, because TARGET_PROFILES order puts webapp before windows/linux.
+        const selected = new Set(activeTargets({ targets: ctx.input.targets }));
         const attackToItem = new Map();
         for (const [tid, profile] of Object.entries(TARGET_PROFILES)) {
+            if (!selected.has(tid))
+                continue;
             for (const item of profile.battery) {
                 if (item.attackId && !attackToItem.has(item.attackId.toUpperCase())) {
                     attackToItem.set(item.attackId.toUpperCase(), `${tid}:${item.id}`);

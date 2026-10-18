@@ -6,15 +6,26 @@
  * (id + name + one-line brief); the full `what` stays in-module as the
  * execution detail the agents expand per item.
  */
+/**
+ * The four targets a FULL-BATTERY engagement covers by default. These are the
+ * vendor's own surfaces plus the two host families. The v0.35.0 `webapp`
+ * family (WA-*, a generic client web application) is deliberately NOT in this
+ * default set: it is selected explicitly with --targets webapp (or the
+ * start_engagement `targets` argument), because against secscan.us/seclayer.app
+ * the generic webapp battery would duplicate the SS-* / SL-* work.
+ */
 export const FULL_BATTERY_TARGETS = ["secscan", "seclayer", "windows", "linux"];
+/** Every target a caller may select, including the opt-in generic webapp family. */
+export const ALL_TARGETS = [...FULL_BATTERY_TARGETS, "webapp"];
 /** Guard for user-supplied target ids (--targets, probe args). */
 export function isTargetId(s) {
-    return FULL_BATTERY_TARGETS.includes(s.toLowerCase());
+    return ALL_TARGETS.includes(s.toLowerCase());
 }
-/** Battery id prefixes per target: SS-*, SL-*, WS-*, LX-*. */
+/** Battery id prefixes per target: SS-*, SL-*, WA-*, WS-*, LX-*. */
 export const TARGET_PREFIXES = {
     secscan: "SS",
     seclayer: "SL",
+    webapp: "WA",
     windows: "WS",
     linux: "LX",
 };
@@ -28,6 +39,7 @@ export const TARGET_PREFIXES = {
 export const BATTERY_ITEM_COUNTS = {
     secscan: 120,
     seclayer: 80,
+    webapp: 144,
     windows: 108,
     linux: 110,
 };

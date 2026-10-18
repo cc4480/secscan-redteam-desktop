@@ -4,10 +4,9 @@
  * The coverage contract used to be cell-level (3 categories × selected
  * targets = 12 cells): a cell could report "done" while individual battery
  * items inside it had never been attempted. This module closes that gap
- * mechanically: every selected battery item (418 static items across the
- * four target profiles, plus dynamic per-CVE runtime instances from
- * msf_exec) carries exactly one disposition per engagement, and the battery
- * may not report complete while any item is still `pending`.
+ * mechanically: every selected battery item (418 static across the four default
+ * profiles, the 120-item WA-* family when selected, plus runtime CVE instances)
+ * carries one disposition per engagement; completion requires none pending.
  *
  * Dispositions: pending (not attempted) · confirmed (validated finding) ·
  * executed-clean (executed, no finding) · killed (ruled out — negative

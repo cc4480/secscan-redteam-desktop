@@ -41,14 +41,58 @@ export interface McpSecretProtector {
 }
 
 /**
+ * Environment variable through which an operator explicitly accepts storing token
+ * values unencrypted. `1` is the only value that opts in, and nothing in a stored
+ * document or a setup request can imply it.
+ */
+export const MCP_PLAINTEXT_OPT_IN_ENV = 'DSH_MCP_ALLOW_PLAINTEXT'
+
+/**
+ * Refusal to persist a credential document whose token values would sit on disk
+ * with nothing but file permission bits on a host where those bits are not an
+ * access-control boundary. A caller catches this to explain the opt-in; every
+ * other write failure keeps returning `false` instead of throwing.
+ */
+export class McpPlaintextRefusedError extends Error {
+  /** Stable discriminator a caller can check without relying on class identity across bundles. */
+  readonly code = 'MCP_PLAINTEXT_REFUSED'
+  /** Environment variable whose value `1` accepts the risk. */
+  readonly optIn = MCP_PLAINTEXT_OPT_IN_ENV
+
+  constructor() {
+    super(
+      'desktop mcp credentials: refusing to store token values unencrypted on Windows without an OS credential store; '
+      + 'owner-only file permissions do not restrict other processes of this account. '
+      + `Set ${MCP_PLAINTEXT_OPT_IN_ENV}=1 to accept that the credential document stays readable by this account.`,
+    )
+    this.name = 'McpPlaintextRefusedError'
+  }
+}
+
+/**
  * Identity protector for a host without an OS credential store; owner-only file
  * permission bits are then the whole protection, which is also what the
- * Harness's own `.credentials.yaml` relies on.
+ * Harness's own `.credentials.yaml` relies on. Those bits do not restrain another
+ * Windows account process, so {@link writeStoredMcpCredentials} refuses to write
+ * this protector's documents on win32 unless {@link MCP_PLAINTEXT_OPT_IN_ENV} is `1`.
  */
 export const plainMcpSecretProtector: McpSecretProtector = {
   kind: 'plain',
   protect: value => value,
   unprotect: value => value,
+}
+
+/**
+ * Refuse a write when the fallback's only protection does not apply on this host.
+ * Reads the opt-in at call time and only from the environment: neither the stored
+ * document nor a setup request may grant it.
+ * @param protector - at-rest protection this host writes with.
+ * @throws {McpPlaintextRefusedError} when the identity protector would persist on win32 without the opt-in.
+ */
+function refuseUnprotectedPlaintextPersistence(protector: McpSecretProtector): void {
+  if (protector.kind !== 'plain' || process.platform !== 'win32') return
+  if (process.env[MCP_PLAINTEXT_OPT_IN_ENV] === '1') return
+  throw new McpPlaintextRefusedError()
 }
 
 /** Accepted draft; `null` means the stored entry is left untouched. */
@@ -268,6 +312,8 @@ export async function loadStoredMcpCredentials(
  * @param draft - normalized field values; `null` keeps the stored entry.
  * @param declined - whether the operator dismissed first-run setup without a token.
  * @returns whether the document is now on disk.
+ * @throws {McpPlaintextRefusedError} when this host would persist with the identity
+ *   protector on win32 without {@link MCP_PLAINTEXT_OPT_IN_ENV} set to `1`.
  */
 export async function writeStoredMcpCredentials(
   file: string,
@@ -275,6 +321,7 @@ export async function writeStoredMcpCredentials(
   draft: McpCredentialDraft,
   declined = false,
 ): Promise<boolean> {
+  refuseUnprotectedPlaintextPersistence(protector)
   const previous = await readDocument(file)
   // Entries another protector wrote cannot be re-protected here, so only this host's own are merged.
   const mergeable = previous?.protection === protector.kind ? previous : undefined

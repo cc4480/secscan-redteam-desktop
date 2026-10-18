@@ -103,6 +103,11 @@ export const TOOLS = [
                 confirmProduction: { type: "boolean", description: "Required to run against production" },
                 confirmTier2Production: { type: "boolean", description: "Required for Tier 2 on production" },
                 fullBattery: { type: "boolean", description: "Run the full battery (default true)" },
+                targets: {
+                    type: "array",
+                    items: { type: "string", enum: ["secscan", "seclayer", "webapp", "windows", "linux"] },
+                    description: "Optional battery subset. Omit for the default vendor targets. Use [\"webapp\"] to run the WA-* battery against a client web application.",
+                },
                 maxActions: {
                     type: "integer",
                     description: "Cap on agent actions for the whole engagement (default 60). A full battery is 418 items across four "
@@ -113,7 +118,6 @@ export const TOOLS = [
                 },
                 excludedTechniques: { type: "array", items: { type: "string" } },
                 dryRun: { type: "boolean", description: "Plan only; touch nothing" },
-                localSandbox: { type: "boolean" },
             },
             required: ["target", "mode", "objective", "scope"],
             additionalProperties: false,

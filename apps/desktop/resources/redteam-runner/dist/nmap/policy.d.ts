@@ -55,7 +55,12 @@ export interface NmapProfile {
 export declare const NMAP_PROFILES: readonly NmapProfile[];
 export declare const NMAP_PROFILE_IDS: string[];
 export declare function findProfile(id: string): NmapProfile | undefined;
-/** Resolve the nmap binary — explicit env wins, else PATH lookup. */
+/**
+ * Resolve the nmap binary through the shared toolchain resolver: explicit env
+ * wins, then the payload bundled at REDTEAM_TOOLS_DIR, then PATH. The operator's
+ * explicit value is authoritative even when it is missing (readiness reports
+ * that honestly); only when none is set does the bundled copy get a turn.
+ */
 export declare function resolveNmapBinary(env?: NodeJS.ProcessEnv): string;
 /** Run timeout in seconds — env override, sane default. */
 export declare function resolveNmapTimeoutS(env?: NodeJS.ProcessEnv): number;

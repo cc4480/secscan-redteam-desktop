@@ -46,6 +46,7 @@ import {
   loadStoredMcpCredentials,
   mcpCredentialFile,
   mcpSetupRequired,
+  McpPlaintextRefusedError,
   normalizeMcpCredentialDraft,
   plainMcpSecretProtector,
   readStoredMcpCredentials,
@@ -1102,7 +1103,15 @@ async function main(): Promise<void> {
         saveMcp: async (input) => {
           const draft = normalizeMcpCredentialDraft(input)
           if (draft === undefined) return { ok: false }
-          if (!await writeStoredMcpCredentials(mcpCredentialPath, desktopMcpSecretProtector(), draft)) return { ok: false }
+          try {
+            if (!await writeStoredMcpCredentials(mcpCredentialPath, desktopMcpSecretProtector(), draft)) return { ok: false }
+          } catch (error) {
+            // On Windows without an OS credential store the store refuses to persist plaintext;
+            // keep the refusal actionable in the log instead of surfacing as an IPC failure.
+            if (!(error instanceof McpPlaintextRefusedError)) throw error
+            console.error(`[desktop] MCP credentials were not saved: ${error.message}`)
+            return { ok: false }
+          }
           storedMcpCredentials = await loadStoredMcpCredentials(
             process.env, mcpCredentialPath, desktopMcpSecretProtector(), installedMcpNames,
           )
@@ -1119,9 +1128,16 @@ async function main(): Promise<void> {
         finishMcp: async () => {
           // Record the decision so first run does not ask again; anything already stored is preserved.
           if (!MCP_TOKEN_NAMES.some(name => storedMcpCredentials.values[name] !== undefined)) {
-            const protector = desktopMcpSecretProtector()
-            if (await writeStoredMcpCredentials(mcpCredentialPath, protector, { secscan: null, runner: null, endpoint: null }, true)) {
-              storedMcpCredentials = await readStoredMcpCredentials(mcpCredentialPath, protector)
+            try {
+              const protector = desktopMcpSecretProtector()
+              if (await writeStoredMcpCredentials(mcpCredentialPath, protector, { secscan: null, runner: null, endpoint: null }, true)) {
+                storedMcpCredentials = await readStoredMcpCredentials(mcpCredentialPath, protector)
+              }
+            } catch (error) {
+              // "Continue without MCP" must always be able to advance. The record is a
+              // convenience (do not ask again), so a refusal to persist it is not fatal.
+              if (!(error instanceof McpPlaintextRefusedError)) throw error
+              console.warn(`[desktop] continuing without MCP: ${error.message}`)
             }
           }
           if (welcomePurpose === 'mcp-settings') {

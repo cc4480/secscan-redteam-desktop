@@ -5,6 +5,10 @@
  * against their REAL surfaces:
  *  - SecScan (scanner webapp, 120 items) + SecLayer (MCP/API layer, 80 items)
  *  - Windows host + AD (100+ items) + Linux host (100+ items)
+ *  - Webapp (v0.36.0, WA-*, 144 items): a GENERIC client web application,
+ *    opt-in with --targets webapp / start_engagement targets. This is the
+ *    customer-facing family: it encodes the SecScan + Seclayer scan corpus
+ *    (see docs/webapp-battery.md) rather than the two products' own surfaces.
  *
  * Target-specific beats generic because the same flaw class lands
  * differently on each surface: IDOR on a scan report is not IDOR on a
@@ -35,14 +39,16 @@
  */
 import type { BatteryCategory } from "../battery.js";
 import type { TargetBatteryItem, TargetId, TargetKind, TargetProfile } from "./types.js";
-import { BATTERY_ITEM_COUNTS, FULL_BATTERY_TARGETS, HOST_EXEC_TOOLING, NEEDS_HUMAN_OPERATOR, NEEDS_KERBEROS_TICKET, NEEDS_MSFRPCD, NEEDS_NUCLEI, NEEDS_PRIVILEGED_CLIENT, TARGET_PREFIXES, TOTAL_BATTERY_ITEMS, isTargetId } from "./types.js";
+import { ALL_TARGETS, BATTERY_ITEM_COUNTS, FULL_BATTERY_TARGETS, HOST_EXEC_TOOLING, NEEDS_HUMAN_OPERATOR, NEEDS_KERBEROS_TICKET, NEEDS_MSFRPCD, NEEDS_NUCLEI, NEEDS_PRIVILEGED_CLIENT, TARGET_PREFIXES, TOTAL_BATTERY_ITEMS, isTargetId } from "./types.js";
 export type { TargetBatteryItem, TargetId, TargetKind, TargetProfile };
-export { BATTERY_ITEM_COUNTS, FULL_BATTERY_TARGETS, HOST_EXEC_TOOLING, NEEDS_HUMAN_OPERATOR, NEEDS_KERBEROS_TICKET, NEEDS_MSFRPCD, NEEDS_NUCLEI, NEEDS_PRIVILEGED_CLIENT, TARGET_PREFIXES, TOTAL_BATTERY_ITEMS, isTargetId };
+export { ALL_TARGETS, BATTERY_ITEM_COUNTS, FULL_BATTERY_TARGETS, HOST_EXEC_TOOLING, NEEDS_HUMAN_OPERATOR, NEEDS_KERBEROS_TICKET, NEEDS_MSFRPCD, NEEDS_NUCLEI, NEEDS_PRIVILEGED_CLIENT, TARGET_PREFIXES, TOTAL_BATTERY_ITEMS, isTargetId };
 export declare const TARGET_PROFILES: Record<TargetId, TargetProfile>;
 export declare function lookupTargetProfile(id: string): TargetProfile | undefined;
 /**
- * Selected targets for a full-battery engagement. Defaults to all four;
- * --targets narrows the subset (e.g. secscan,seclayer for the web-only run).
+ * Selected targets for a full-battery engagement. Defaults to the four vendor
+ * targets; --targets narrows the subset or opt in the generic webapp family
+ * (e.g. --targets webapp for a client web application, or
+ * --targets webapp,windows for a client app plus its Windows host).
  */
 export declare function activeTargets(input: {
     targets?: TargetId[];
@@ -56,7 +62,12 @@ export declare function targetItemsFor(profile: TargetProfile, category: Battery
  * control mapping, honestly).
  */
 export declare function allBatteryAttackIds(): string[];
-/** Infer which target a probe URL belongs to: the MCP path is SecLayer, everything else is the webapp. Host targets are never inferred — they need an explicit tag. */
+/**
+ * Infer which target a probe URL belongs to: the MCP path is SecLayer, the two
+ * vendor hostnames are their own batteries, and every other web host is the
+ * generic client-webapp battery (WA-*). Host targets are never inferred - they
+ * need an explicit tag.
+ */
 export declare function inferTargetProfile(url: string): TargetId;
 /**
  * A coverage cell is BLOCKED when the runner cannot execute any of its

@@ -54,3 +54,36 @@ export declare function checkAuthorization(domain: string, cfg: ServerGateConfig
     endpoint: string;
     token: string;
 }) => Promise<boolean>, opts?: CheckAuthorizationOptions): Promise<GateVerdict>;
+export interface ScopeAuthorizationOptions {
+    /**
+     * LOCAL SANDBOX MODE ONLY. When true, the whole engagement is restricted to
+     * private/loopback hosts: every scope entry must be private too, because a
+     * sandbox bypass for the target says nothing about ownership of anything else.
+     */
+    allowLocalSandbox?: boolean;
+    /** The engagement target, already verified by {@link checkAuthorization}. */
+    verifiedTarget?: string;
+}
+/**
+ * Verify ownership for EVERY host the engagement may touch, not just its target.
+ *
+ * Members of the ROE scope list are checked for exact-hostname membership by the
+ * prober, but membership only proves the operator listed them — it does not prove
+ * the client owns them. Without this pass, an engagement against one verified
+ * domain could probe any number of other public hosts, which is precisely the
+ * authorization the product claims to enforce.
+ *
+ * Rules, all fail closed:
+ *  - empty scope: denied (there is nothing an engagement may legitimately probe);
+ *  - local sandbox: every host must be private/loopback, so a loopback target can
+ *    never be combined with a public host in scope;
+ *  - otherwise: the target needs no second call; an IP-literal scope entry is a
+ *    host-engagement target authorized by the ROE (domain verification cannot
+ *    apply to an address); every other host must be server-verified.
+ *
+ * `verify` is injectable so unit tests never touch the network.
+ */
+export declare function checkScopeAuthorization(hosts: readonly string[], cfg: ServerGateConfig, verify?: (domain: string, cfg: {
+    endpoint: string;
+    token: string;
+}) => Promise<boolean>, opts?: ScopeAuthorizationOptions): Promise<GateVerdict>;

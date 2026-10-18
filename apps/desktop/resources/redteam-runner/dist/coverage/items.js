@@ -4,10 +4,9 @@
  * The coverage contract used to be cell-level (3 categories × selected
  * targets = 12 cells): a cell could report "done" while individual battery
  * items inside it had never been attempted. This module closes that gap
- * mechanically: every selected battery item (418 static items across the
- * four target profiles, plus dynamic per-CVE runtime instances from
- * msf_exec) carries exactly one disposition per engagement, and the battery
- * may not report complete while any item is still `pending`.
+ * mechanically: every selected battery item (418 static across the four default
+ * profiles, the 120-item WA-* family when selected, plus runtime CVE instances)
+ * carries one disposition per engagement; completion requires none pending.
  *
  * Dispositions: pending (not attempted) · confirmed (validated finding) ·
  * executed-clean (executed, no finding) · killed (ruled out — negative
@@ -20,13 +19,14 @@
  * "na" requires evidence text. The ledger is append-only: dispositions move
  * toward terminal, never backwards, except the reverify reopen path.
  */
-import { FULL_BATTERY_TARGETS, TARGET_PREFIXES, TARGET_PROFILES } from "../targets/index.js";
+import { ALL_TARGETS, TARGET_PREFIXES, TARGET_PROFILES } from "../targets/index.js";
 import { nucleiBinaryPresent } from "../nuclei/prereq.js";
 /** Dispositions that are final: no overwrite except via the reverify reopen path. */
 const FINAL_DISPOSITIONS = ["confirmed", "killed", "na"];
 const PREFIX_TO_TARGET = {
     SS: "secscan",
     SL: "seclayer",
+    WA: "webapp",
     WS: "windows",
     LX: "linux",
 };
@@ -52,7 +52,7 @@ export function resolveItemKey(raw, _targetProfile) {
             const cu = item.trim().toUpperCase();
             return CVE_RE.test(cu) ? `cve:${cu}` : undefined;
         }
-        if (!FULL_BATTERY_TARGETS.includes(tl))
+        if (!ALL_TARGETS.includes(tl))
             return undefined;
         const m = item.trim().toUpperCase().match(ITEM_RE);
         if (!m)

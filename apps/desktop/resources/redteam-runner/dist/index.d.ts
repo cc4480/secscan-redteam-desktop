@@ -32,7 +32,7 @@ export { readEvents, readState };
 export { TECHNIQUES, lookupTechnique, defaultExcludedForMode, resolveExcludedTechniques, ALWAYS_EXCLUDED } from "./attack.js";
 export { BATTERY, BATTERY_CATEGORIES, CATEGORY_LABELS, batteryChecklistText, batteryItemsFor, lookupBatteryItem, } from "./battery.js";
 export type { BatteryCategory, BatteryItem } from "./battery.js";
-export { scopeHosts, urlInScope, inBlackout, inTestWindow, techniqueAllowed, checkAuthorization } from "./gate.js";
+export { scopeHosts, urlInScope, inBlackout, inTestWindow, techniqueAllowed, checkAuthorization, checkScopeAuthorization } from "./gate.js";
 export type { CheckAuthorizationOptions } from "./gate.js";
 export { isPrivateOrLoopbackHost, validateProbeTarget } from "./prober.js";
 export type { ValidateProbeTargetOptions } from "./prober.js";

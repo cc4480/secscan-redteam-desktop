@@ -8,7 +8,7 @@
  */
 import { join } from "node:path";
 import { runEngagement } from "../../phases.js";
-import { isTargetId } from "../../targets.js";
+import { ALL_TARGETS, isTargetId } from "../../targets.js";
 import { parseTier } from "../../accountability/index.js";
 import { readState } from "../../events.js";
 import { engagementDir, generateEngagementId } from "../store.js";
@@ -27,7 +27,7 @@ function toEngagementInput(b) {
     if (b.targets && b.targets.length > 0) {
         const bad = b.targets.filter((t) => !isTargetId(t));
         if (bad.length > 0)
-            throw new Error(`bad targets ${JSON.stringify(bad)}; want subset of secscan,seclayer,windows,linux`);
+            throw new Error(`bad targets ${JSON.stringify(bad)}; want subset of ${ALL_TARGETS.join(",")}`);
         targets = b.targets;
     }
     let tier;
@@ -72,7 +72,6 @@ export async function handleLaunch(store, _req, res, body) {
     }
     const launch = body;
     const dryRun = body.dryRun === true;
-    const localSandbox = body.localSandbox === true;
     const id = generateEngagementId();
     const dir = join(store.engagementsDir, id);
     store.register({ id, dir, status: "starting", startedAt: new Date().toISOString(), target: input.target, mode: input.mode });
@@ -83,7 +82,6 @@ export async function handleLaunch(store, _req, res, body) {
         const p = runEngagement(input, {
             engagementId: id,
             dryRunAgents: dryRun,
-            localSandbox,
             // The action cap is a RunnerOption, not an EngagementInput field, so it
             // crosses over here rather than riding along in `input`. Passing it in
             // the input object typechecks nowhere - which is how this was caught -

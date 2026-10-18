@@ -52,6 +52,14 @@ export interface ProbeBurstResult {
     note: string;
 }
 /** True when `host` is a literal private-range or loopback address/name. */
+/**
+ * True when every host is private/loopback (and there is at least one).
+ *
+ * Local sandbox mode skips ownership verification for a private target, so it may only
+ * widen the prober to private hosts when the WHOLE scope is private: a loopback target
+ * combined with a public scope host must not inherit the sandbox bypass.
+ */
+export declare function allHostsPrivateOrLoopback(hosts: readonly string[]): boolean;
 export declare function isPrivateOrLoopbackHost(host: string): boolean;
 export interface ValidateProbeTargetOptions {
     /**

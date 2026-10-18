@@ -17,8 +17,12 @@
  *                                              self-referencing `exports` here)
  *   resources/redteam-runner/dist/**           the built runner, unmodified
  *   resources/redteam-runner/node_modules/**   every production dependency and
- *                                              every transitive dependency
- *   resources/redteam-runner/provenance.json   what was taken from where
+ *                                              every transitive dependency, minus
+ *                                              test/docs noise (PAYLOAD_EXCLUSIONS)
+ *   resources/redteam-runner/package-lock.json the lockfile of the workspace the
+ *                                              closure's exact versions came from
+ *   resources/redteam-runner/provenance.json   what was taken from where, and the
+ *                                              lockfile's sha256
  *
  * Paths inside a package are copied dereferenced: the runner's workspace links
  * `@secscan/*` packages with junctions, and an installer must carry the bytes.
@@ -29,8 +33,9 @@
  * `secscan-redteam/runner` checkout beside this repository.
  */
 
+import { createHash } from 'node:crypto'
 import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join, relative, resolve } from 'node:path'
 
 const APP_ROOT = resolve(import.meta.dirname, '..')
 const REPOSITORY_ROOT = resolve(APP_ROOT, '..', '..')
@@ -56,6 +61,43 @@ const HOISTED_DEPENDENCIES = [
 
 /** Dependency sections that carry what a shipped payload must contain. */
 const DEPENDENCY_SECTIONS = ['dependencies']
+
+/**
+ * Path noise kept out of the node_modules copy.
+ *
+ * The payload is executed on an operator's machine, so this list may only name
+ * files that a Node process never loads at runtime. That is why executable and
+ * data extensions are absent on purpose: `.js`, `.cjs`, `.mjs`, `.node`, `.wasm`,
+ * `.json`, `.lua`, `.txt`, `.crt` and `.pem` can all be read or required by a
+ * dependency, and excluding one of them would break the runner instead of
+ * shrinking the installer. What remains is test fixtures (ssh2's `test/` carries
+ * private keys the console has no business shipping), repository/CI metadata,
+ * documentation/example directories, and the non-code artefacts `.md`, `.map`
+ * and `.d.ts`. `dist/cli.js doctor` and the payload test lock this in.
+ */
+const PAYLOAD_EXCLUSIONS = {
+  /** Directory basenames that only ever hold tests, CI configuration or docs. */
+  directoryNames: new Set(['.github', '__tests__', 'docs', 'examples', 'spec', 'specs', 'test', 'tests']),
+  /** File suffixes that are neither executable code nor runtime data. */
+  fileSuffixes: ['.d.ts', '.map', '.md'],
+}
+
+/**
+ * Decide whether one path inside a dependency is noise the payload can drop.
+ * @param relativePath - Path relative to the package directory being copied.
+ * @returns Whether the copy skips it (and, for a directory, all of its children).
+ */
+function isExcludedFromPayload(relativePath) {
+  const segments = relativePath.split(/[\\/]/u).filter(segment => segment !== '')
+  const name = segments.pop()
+  if (name === undefined) return false
+  // Every ancestor segment must be a directory, so a match there is a directory
+  // match; the final segment may be a directory or a file, and both are checked.
+  if (segments.some(segment => PAYLOAD_EXCLUSIONS.directoryNames.has(segment.toLowerCase()))) return true
+  const lower = name.toLowerCase()
+  if (PAYLOAD_EXCLUSIONS.directoryNames.has(lower)) return true
+  return PAYLOAD_EXCLUSIONS.fileSuffixes.some(suffix => lower.endsWith(suffix))
+}
 
 /** Read a JSON file. */
 function readJson(path) {
@@ -129,12 +171,60 @@ function dependencyClosure(runnerDirectory, manifest, problems) {
 
 /**
  * Copy one directory with links resolved, so an installer carries the bytes.
+ *
+ * Only test/docs noise is filtered (see {@link PAYLOAD_EXCLUSIONS}); everything
+ * that could be loaded at runtime is copied byte for byte.
  * @param {string} from - Source directory.
  * @param {string} to - Destination directory.
  */
 function copyDereferenced(from, to) {
   mkdirSync(to, { recursive: true })
-  cpSync(realpathSync(from), realpathSync(to), { recursive: true, dereference: true, force: true })
+  const source = realpathSync(from)
+  const target = realpathSync(to)
+  cpSync(source, target, {
+    recursive: true,
+    dereference: true,
+    force: true,
+    filter: (path) => {
+      const relativePath = relative(source, path)
+      return relativePath === '' || !isExcludedFromPayload(relativePath)
+    },
+  })
+}
+
+/**
+ * Locate and read the npm lockfile of the workspace that installs the closure.
+ *
+ * The runner checkout is a workspace member: its production dependencies are
+ * hoisted to the workspace root, so the lockfile pinning the exact versions in
+ * `node_modules` lives at that root rather than in the runner directory. Shipping
+ * the runner's manifest ranges alone would let two vendoring runs of the same
+ * version produce different payloads.
+ * @param {string} source - The runner checkout.
+ * @returns {{ path: string, bytes: Buffer, sha256: string }} The workspace lockfile and its digest.
+ */
+function readWorkspaceLockfile(source) {
+  let directory = source
+  for (;;) {
+    const candidate = join(directory, 'package-lock.json')
+    if (existsSync(candidate)) {
+      const bytes = readFileSync(candidate)
+      let lockfile
+      try {
+        lockfile = JSON.parse(bytes.toString('utf8'))
+      } catch (error) {
+        throw new Error(`vendor-redteam-runner: ${candidate} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`)
+      }
+      if (typeof lockfile?.lockfileVersion !== 'number') {
+        throw new Error(`vendor-redteam-runner: ${candidate} has no lockfileVersion; it is not an npm lockfile`)
+      }
+      return { path: candidate, bytes, sha256: createHash('sha256').update(bytes).digest('hex') }
+    }
+    const parent = resolve(directory, '..')
+    if (parent === directory) break
+    directory = parent
+  }
+  throw new Error(`vendor-redteam-runner: ${source} is not inside an npm workspace: no package-lock.json in it or any parent. Vendor from the workspace checkout so the payload can pin exact versions instead of shipping ranges.`)
 }
 
 /**
@@ -173,10 +263,16 @@ export function vendorRedteamRunner(options) {
     throw new Error(`vendor-redteam-runner: incomplete dependency closure:\n  ${problems.join('\n  ')}`)
   }
 
+  // Read the lockfile before touching the destination: a missing or corrupt
+  // workspace lockfile must fail loudly, not leave a half-vendored payload that
+  // silently ships ranges.
+  const lockfile = readWorkspaceLockfile(source)
+
   rmSync(destination, { recursive: true, force: true })
   mkdirSync(destination, { recursive: true })
   cpSync(join(source, 'package.json'), join(destination, 'package.json'))
   cpSync(join(source, 'dist'), join(destination, 'dist'), { recursive: true, dereference: true })
+  writeFileSync(join(destination, 'package-lock.json'), lockfile.bytes)
   for (const entry of closure) {
     copyDereferenced(entry.directory, join(destination, 'node_modules', ...entry.name.split('/')))
   }
@@ -186,6 +282,9 @@ export function vendorRedteamRunner(options) {
     package: REDTEAM_RUNNER_PACKAGE,
     version: manifest.version,
     source,
+    // The lockfile the closure's exact versions were resolved from. The digest
+    // lets a packaged install be matched against the source workspace without it.
+    lockfile: { source: lockfile.path, sha256: lockfile.sha256 },
     // The list a reviewer (and the payload test) checks the shipped tree against.
     packages: closure.map(entry => ({ name: entry.name, version: entry.version })),
     hoistedDependencies: HOISTED_DEPENDENCIES,

@@ -22,6 +22,14 @@ export interface XSpawnResult {
 }
 export type XSpawnFn = (opts: XSpawnOpts) => Promise<XSpawnResult>;
 export declare const realXSpawn: XSpawnFn;
+/**
+ * Resolve the binary (or, for the script tools, the directory they run from).
+ *
+ * The precedence lives in toolchain.ts and is shared with nmap and nuclei, so
+ * "explicit env wins, then the bundled tools directory, then PATH" has exactly
+ * one implementation. This wrapper exists so the executor's callers keep their
+ * signature: resolveBinPath(spec, env) -> string.
+ */
 export declare function resolveBinPath(spec: XToolSpec, env?: NodeJS.ProcessEnv): string;
 export declare function binPresent(spec: XToolSpec, env?: NodeJS.ProcessEnv): boolean;
 export interface XExecResult {
