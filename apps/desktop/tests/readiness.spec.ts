@@ -25,9 +25,7 @@ class FakeChild implements SpawnedChildLike {
   readonly signals: string[] = []
   private readonly emitter = new EventEmitter()
 
-  on(event: 'exit', listener: (code: number | null) => void): void
-  on(event: 'error', listener: (error: Error) => void): void
-  on(event: 'exit' | 'error', listener: (arg: number | null | Error) => void): void {
+  on(event: 'exit' | 'error', listener: (...args: unknown[]) => void): void {
     this.emitter.on(event, listener)
   }
 
@@ -138,7 +136,7 @@ describe('runRunnerReadiness', () => {
 
     const result = await pending
     expect(result.ok).toBe(true)
-    if (result.ok) expect(result.readiness.items[0].detail).toBe(detail)
+    if (result.ok) expect(result.readiness.items[0]?.detail).toBe(detail)
   })
 
   it('never leaks an environment token into a failure reason', async () => {

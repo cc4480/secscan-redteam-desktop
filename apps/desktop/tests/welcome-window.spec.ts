@@ -57,6 +57,7 @@ const operations = {
   saveMcp: () => Promise.resolve({ ok: true as const }),
   clearMcp: () => Promise.resolve({ ok: true as const }),
   finishMcp: () => Promise.resolve(),
+  readiness: () => Promise.resolve({ ok: true as const, readiness: { ok: false, summary: '', items: [] } }),
 }
 
 describe('desktop welcome window', () => {

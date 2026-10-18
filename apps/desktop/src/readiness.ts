@@ -19,8 +19,7 @@ export type { ReadinessItem, ReadinessView, ReadinessResult } from './welcome-ap
 export interface SpawnedChildLike {
   stdout: NodeJS.ReadableStream
   stderr: NodeJS.ReadableStream
-  on(event: 'exit', listener: (code: number | null) => void): void
-  on(event: 'error', listener: (error: Error) => void): void
+  on(event: 'exit' | 'error', listener: (...args: unknown[]) => void): void
   /** Terminates the child; a simple test fake may omit it. */
   kill?(): void
 }
