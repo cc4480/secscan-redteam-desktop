@@ -1,33 +1,40 @@
 /**
- * Harness2 trajectory + metrics capture (H2-P1a).
+ * Harness2 trajectory + metrics capture (H2-P1).
  *
- * One finished engagement directory gains two additive artifacts, written by
+ * A finished engagement directory gains three additive artifacts, written by
  * captureEngagementTrajectory from runEngagement's finally block:
  *
  *  - trajectory.json: TrajectoryRecord { metrics, events } - the normalized
  *    trajectory plus the outcome ground truth.
  *  - metrics.json: the same RunMetrics alone, so the H2-P1b store can ingest a
  *    run without parsing the events array.
+ *  - run.json: the section-5 runs + metrics rows (target class/subclass/id,
+ *    harness version, layer set, failure_mode) - see ./spec5.ts.
+ *
+ * The section-5 `steps` rows are not rewritten here: agents.ts appends them
+ * live to <engagementDir>/steps.jsonl (./steps.ts) as the model path executes,
+ * and the finish path only reads them back to count steps and tool errors.
  *
  * Existing artifacts (events.jsonl, state.json, engagement.md) are only READ:
  * events.jsonl semantics are untouched and nothing here throws into a run.
  *
- * TOKEN CAPTURE: see ./trajectory-normalize.ts for the full finding. Summary:
- * the llm-router exposes ChatResult.usage, but agents.ts agentLoop discards it
- * and Ctx has no accumulator, so no run can recover real sums retroactively.
- * Tokens are recorded as explicit 0 with TOKEN_CAPTURE_STATUS as the reason;
- * createTokenMeter() is the ready capture, wired through the `tokens` seam.
+ * TOKEN CAPTURE: real per-response usage. agents.ts agentLoop records every
+ * ChatResult.usage into the per-engagement meter (./trajectory-normalize.ts),
+ * so tokensIn/tokensOut are the metered sums; 0 means no model call happened.
  */
 import { readEvents, type EventLog } from "../events.js";
 import type { Ctx } from "../context.js";
 import type { EngagementStatus } from "../types.js";
 import type { RunMetrics, RunOutcome, TrajectoryRecord } from "./contract.js";
 import { buildHarnessStamp } from "./harness-stamp.js";
+import { buildSpec5Rows } from "./spec5.js";
+import { countStepErrors, readSteps } from "./steps.js";
 import { toTrajectoryEvents, tokenMeterFor, type TokenTotals } from "./trajectory-normalize.js";
 import { writeTrajectory } from "./trajectory-write.js";
 
 export * from "./trajectory-normalize.js";
-export { writeTrajectory, type WriteTrajectoryResult } from "./trajectory-write.js";
+export * from "./spec5.js";
+export { writeTrajectory, type WriteTrajectoryResult, type WriteTrajectoryOptions } from "./trajectory-write.js";
 export { buildHarnessStamp } from "./harness-stamp.js";
 export type { HarnessStampOptions, HarnessStampWithPins } from "./harness-stamp.js";
 
@@ -207,6 +214,7 @@ export function captureEngagementTrajectory(input: EngagementCaptureInput): RunM
     // Real token totals from the per-engagement meter (agents.ts records every
     // router response); the explicit seam wins so tests can pin totals.
     const totals = input.tokens ?? tokenMeterFor(input.ctx).totals;
+    const aborted = input.ctx.hostKill.aborted || input.ctx.safety.killSwitchAborts > 0;
     const metrics = captureRunMetrics({
       engagementId: input.engagementId,
       target: input.target,
@@ -214,7 +222,7 @@ export function captureEngagementTrajectory(input: EngagementCaptureInput): RunM
       appType: input.ctx.fingerprint.appType,
       status: recordedStatus(state.status),
       blockedReason: state.blockedReason,
-      aborted: input.ctx.hostKill.aborted || input.ctx.safety.killSwitchAborts > 0,
+      aborted,
       vulnsFound: Math.max(confirmed, input.ctx.liveFindings.length),
       falsePositives: killed,
       exploitsAttempted: Math.max(ledgerAttempts > 0 ? ledgerAttempts : exploitToolCalls, confirmed),
@@ -225,8 +233,26 @@ export function captureEngagementTrajectory(input: EngagementCaptureInput): RunM
       startedAtMs: input.ctx.startedAt,
       harness: buildHarnessStamp({ environment: input.environment }),
     });
+    // Section-5 runs + metrics rows. The steps rows were journaled live by
+    // agents.ts; read them back here for the step/error counts only.
+    const stepRecords = readSteps(input.engagementDir);
+    const spec5 = buildSpec5Rows({
+      metrics,
+      steps: stepRecords,
+      actions: input.ctx.actions,
+      maxActions: input.ctx.config?.maxActions ?? 0,
+      maxDurationMs: input.ctx.config?.maxDurationMs ?? 0,
+      blockedReason: state.blockedReason,
+      aborted,
+      toolErrors: countStepErrors(stepRecords),
+      llmErrors: trajectoryEvents.filter((event) => event.action === "llm_error").length,
+      target: input.target,
+      targetIds: input.targetIds,
+      appType: input.ctx.fingerprint.appType,
+      stack: input.ctx.fingerprint.stack,
+    });
     const record: TrajectoryRecord = { metrics, events: trajectoryEvents };
-    return writeTrajectory(input.engagementDir, record).written ? metrics : null;
+    return writeTrajectory(input.engagementDir, record, { spec5 }).written ? metrics : null;
   } catch {
     // Capture is observability, not part of the engagement contract: never let
     // it mask a halt or fail a run.

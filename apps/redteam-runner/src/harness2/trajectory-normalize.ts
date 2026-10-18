@@ -3,20 +3,16 @@
  *
  * Event normalization: EngagementEvent[] -> contract TrajectoryEvent[].
  *
- * TOKEN CAPTURE - the honest finding (H2-P1a):
- *   The llm-router DOES expose usage: ChatResult.usage = { promptTokens,
+ * TOKEN CAPTURE (H2-P1):
+ *   The llm-router exposes usage: ChatResult.usage = { promptTokens,
  *   completionTokens, totalTokens } (packages/redteam/llm-router/src/types.ts).
- *   But the runner drops it: agents.ts agentLoop does `res = await complete(...)`
- *   and consumes only text/reasoning/toolCalls; no call site anywhere in
- *   apps/redteam-runner/src accumulates usage (grep for promptTokens /
- *   tokenUsage finds nothing), and Ctx has no token counter, so the finish path
- *   cannot retroactively recover real sums.
- *   Tokens are therefore recorded as explicit 0 via ZERO_TOKEN_TOTALS with
- *   TOKEN_CAPTURE_STATUS as the documented reason - never estimated. The
- *   createTokenMeter() meter below is the ready-made capture: installing it in
- *   agentLoop (one `meter.record(res.usage)` after the complete() call) and
- *   passing `meter.totals` through captureEngagementTrajectory's `tokens` seam
- *   turns tokensIn/tokensOut real for every future run.
+ *   agents.ts agentLoop now records EVERY response into the per-engagement
+ *   meter below (`tokenMeterFor(ctx).record(res.usage)` right after the
+ *   complete() call), and captureEngagementTrajectory reads `meter.totals`, so
+ *   tokensIn/tokensOut are real for every run that made a model call. The same
+ *   usage is attached per response to the section-5 step journal (steps.ts).
+ *   A recorded 0 therefore means "no model response happened (or the run
+ *   predates the meter)", never an estimate: nothing here guesses token counts.
  */
 import type { EngagementEvent } from "../types.js";
 import type { TrajectoryEvent } from "./contract.js";
@@ -41,11 +37,11 @@ export interface TokenMeter {
   readonly totals: TokenTotals;
 }
 
-/** Why tokens are 0 for H2-P1a runs: the usage exists but the runner drops it. */
+/** Why a run can still show 0 tokens: it made no model call (never estimated). */
 export const TOKEN_CAPTURE_STATUS =
-  "unavailable: ChatResult.usage is exposed by llm-router but agents.ts agentLoop discards it and Ctx has no token accumulator; no meter was installed for this run";
+  "captured: agents.ts agentLoop records every ChatResult.usage into the per-engagement meter and captureEngagementTrajectory sums it; 0 means no model response happened (or the run predates the P1 meter) - never an estimate";
 
-/** Explicit zeroes-with-reason; the default when no meter is installed. */
+/** Explicit zeroes-with-reason; the default when no response was recorded. */
 export const ZERO_TOKEN_TOTALS: TokenTotals = { tokensIn: 0, tokensOut: 0, responses: 0 };
 
 function nonNegativeInt(value: number | undefined): number {

@@ -31,7 +31,11 @@ const DEFAULT_IO: CliIo = {
 };
 
 const OUTCOMES: readonly RunOutcome[] = ["success", "partial", "failure", "aborted"];
-const TABLE_HEADERS = ["RUN ID", "CLASS", "OUTCOME", "VULNS", "STEPS", "TOKENS IN", "TOKENS OUT", "FINISHED"] as const;
+const TABLE_HEADERS = ["RUN ID", "CLASS", "OUTCOME", "VULNS", "STEPS", "TOKENS", "TS"] as const;
+
+function formatTs(ts: number): string {
+  return Number.isFinite(ts) && ts > 0 ? new Date(ts).toISOString() : "";
+}
 
 const USAGE = [
   "usage: harness2 <command> [options]",
@@ -86,10 +90,9 @@ function formatRunTable(runs: readonly RunRow[]): string {
     run.targetClass,
     run.outcome,
     String(run.vulnsFound),
-    String(run.steps),
-    String(run.tokensIn),
-    String(run.tokensOut),
-    run.finishedAt,
+    String(run.stepsCount),
+    String(run.tokensTotal),
+    formatTs(run.ts),
   ]);
   const widths = TABLE_HEADERS.map((header, column) => {
     const cellWidths = rows.map((row) => (row[column] ?? "").length);

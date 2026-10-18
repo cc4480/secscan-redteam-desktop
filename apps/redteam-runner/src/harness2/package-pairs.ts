@@ -4,11 +4,11 @@
  * PAIR SELECTION RULE (mechanical, documented so the report can state it):
  *  - positive pool: the top maxPairs runs of the class with outcome
  *    success|partial and vulnsFound > 0, ranked by vulnsFound desc,
- *    exploitsSucceeded desc, steps asc, runId asc (highest yield first);
+ *    claimsTotal desc, stepsCount asc, runId asc (highest yield first);
  *  - negative pool: every non-aborted run of the class with at least one step
  *    and outcome failure|partial, ranked by vulnsFound asc, failure before
- *    partial, exploitsSucceeded asc, runId asc (lowest yield first). A
- *    low-yield partial run is a legitimate negative;
+ *    partial, claimsTotal asc, runId asc (lowest yield first). A low-yield
+ *    partial run is a legitimate negative;
  *  - not comparable, skipped and noted in the instructions: aborted runs (the
  *    kill switch is not a harness signal), zero-step failures (blocked before
  *    acting), a positive that is not strictly higher-yield than the next
@@ -26,40 +26,36 @@ export const DEFAULT_PAIR_COUNT = 2;
 export const RUN_SCAN_LIMIT = 500;
 
 function rowMetrics(row: RunRow): RunMetrics {
+  const iso = row.ts > 0 ? new Date(row.ts).toISOString() : "";
   return {
     runId: row.runId,
-    engagementId: row.engagementId,
+    engagementId: row.targetId ?? row.runId,
     targetClass: row.targetClass,
     outcome: row.outcome,
     vulnsFound: row.vulnsFound,
     falsePositives: row.falsePositives,
-    exploitsSucceeded: row.exploitsSucceeded,
-    exploitsAttempted: row.exploitsAttempted,
-    steps: row.steps,
-    tokensIn: row.tokensIn,
-    tokensOut: row.tokensOut,
-    durationMs: row.durationMs,
-    harness: {
-      runnerVersion: row.runnerVersion,
-      ...(row.commit !== undefined ? { commit: row.commit } : {}),
-      layerIds: row.layerIds,
-      componentHashes: row.componentHashes,
-    },
-    startedAt: row.startedAt,
-    finishedAt: row.finishedAt,
+    // Section 5 keeps one claims total and one tokens total per run, not the
+    // confirmed-exploit count or the prompt/completion split.
+    exploitsSucceeded: 0,
+    exploitsAttempted: row.claimsTotal,
+    steps: row.stepsCount,
+    tokensIn: row.tokensTotal,
+    tokensOut: 0,
+    durationMs: 0,
+    harness: { runnerVersion: row.harnessVersion, layerIds: row.layerSet, componentHashes: {} },
+    startedAt: iso,
+    finishedAt: iso,
   };
 }
 
 function toRecord(detail: RunDetail): TrajectoryRecord {
-  const events: TrajectoryEvent[] = detail.events.map((event) => ({
-    ts: event.ts,
-    phase: event.phase,
-    actor: event.actor,
-    action: event.action,
-    ...(event.attackId !== undefined ? { attackId: event.attackId } : {}),
-    ...(event.target !== undefined ? { target: event.target } : {}),
-    result: event.result,
-    isToolCall: event.isToolCall,
+  const events: TrajectoryEvent[] = detail.steps.map((step) => ({
+    ts: "",
+    phase: step.role,
+    actor: step.role,
+    action: step.toolName ?? step.role,
+    result: step.content,
+    isToolCall: step.role === "tool",
   }));
   return { metrics: rowMetrics(detail.run), events };
 }
@@ -81,19 +77,19 @@ export function selectPairs(store: Harness2Store, targetClass: string, maxPairs:
   const rows = store.listRuns({ targetClass, limit: RUN_SCAN_LIMIT });
   const aborted = rows.filter((row) => row.outcome === "aborted").length;
   if (aborted > 0) notes.push(`${aborted} aborted run(s) ignored: the kill switch is not a harness signal.`);
-  const blocked = rows.filter((row) => row.outcome === "failure" && row.steps === 0).length;
+  const blocked = rows.filter((row) => row.outcome === "failure" && row.stepsCount === 0).length;
   if (blocked > 0) notes.push(`${blocked} zero-step failure(s) ignored: a run blocked before acting is not comparable.`);
   const positives = rows
     .filter((row) => (row.outcome === "success" || row.outcome === "partial") && row.vulnsFound > 0)
-    .sort((a, b) => b.vulnsFound - a.vulnsFound || b.exploitsSucceeded - a.exploitsSucceeded || a.steps - b.steps || byText(a, b))
+    .sort((a, b) => b.vulnsFound - a.vulnsFound || b.claimsTotal - a.claimsTotal || a.stepsCount - b.stepsCount || byText(a, b))
     .slice(0, maxPairs);
   const negatives = rows
-    .filter((row) => row.outcome !== "aborted" && row.steps > 0 && (row.outcome === "failure" || row.outcome === "partial"))
+    .filter((row) => row.outcome !== "aborted" && row.stepsCount > 0 && (row.outcome === "failure" || row.outcome === "partial"))
     .sort(
       (a, b) =>
         a.vulnsFound - b.vulnsFound ||
         (a.outcome === "failure" ? 0 : 1) - (b.outcome === "failure" ? 0 : 1) ||
-        a.exploitsSucceeded - b.exploitsSucceeded ||
+        a.claimsTotal - b.claimsTotal ||
         byText(a, b),
     );
   if (positives.length === 0) notes.push("no positive run with a confirmed finding: nothing to contrast yet.");
@@ -153,12 +149,12 @@ export function buildMetrics(rows: readonly RunRow[], positives: readonly RunRow
     negativeRuns: negatives.length,
     vulnsFoundMean: average(rows.map((row) => row.vulnsFound)),
     falsePositivesMean: average(rows.map((row) => row.falsePositives)),
-    stepsMean: average(rows.map((row) => row.steps)),
-    tokensInMean: average(rows.map((row) => row.tokensIn)),
-    tokensOutMean: average(rows.map((row) => row.tokensOut)),
+    claimsTotalMean: average(rows.map((row) => row.claimsTotal)),
+    stepsMean: average(rows.map((row) => row.stepsCount)),
+    tokensTotalMean: average(rows.map((row) => row.tokensTotal)),
     positiveVulnsMean: average(positives.map((row) => row.vulnsFound)),
-    positiveStepsMean: average(positives.map((row) => row.steps)),
+    positiveStepsMean: average(positives.map((row) => row.stepsCount)),
     negativeVulnsMean: average(negatives.map((row) => row.vulnsFound)),
-    negativeStepsMean: average(negatives.map((row) => row.steps)),
+    negativeStepsMean: average(negatives.map((row) => row.stepsCount)),
   };
 }

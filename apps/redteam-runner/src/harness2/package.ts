@@ -62,7 +62,7 @@ export function buildProposalPackage(input: BuildProposalPackageInput): Proposal
   const sourceBytes = componentFiles.reduce((total, entry) => total + entry.body.length, 0);
   const latest = rows[0];
   const envLayers = resolveLayerIds(environment);
-  const baseLayerSet = latest !== undefined && latest.layerIds.length > 0 ? latest.layerIds : envLayers.length > 0 ? envLayers : (latest?.layerIds ?? []);
+  const baseLayerSet = latest !== undefined && latest.layerSet.length > 0 ? latest.layerSet : envLayers.length > 0 ? envLayers : (latest?.layerSet ?? []);
   return {
     targetClass: input.targetClass,
     baseLayerSet,
