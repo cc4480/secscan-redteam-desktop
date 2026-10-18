@@ -45,6 +45,20 @@ function redteamRunnerPayloadDirectory() {
 }
 
 /**
+ * Directory holding the external-tool payload (nmap, ffuf, gobuster, wordlist).
+ * It is materialized by `scripts/vendor-tools.mjs` from the pinned
+ * `resources/tools-manifest.json`, shipped as `resources/tools`, and handed to
+ * the engagement runner as `REDTEAM_TOOLS_DIR`. Returns undefined when the
+ * payload has not been vendored, so a source-only build still packages and the
+ * runner falls back to PATH (reporting the missing tools honestly in `doctor`).
+ * @returns {string | undefined} Absolute payload directory, or undefined.
+ */
+function redteamToolsPayloadDirectory() {
+  const directory = fileURLToPath(new URL('../resources/tools', import.meta.url))
+  return existsSync(directory) ? directory : undefined
+}
+
+/**
  * Create electron-builder configuration from one release environment.
  * @param {NodeJS.ProcessEnv} env - Packaging environment.
  * @param {NodeJS.Platform} hostPlatform - Build-host platform used when no explicit target is present.
@@ -174,6 +188,14 @@ export function createElectronBuilderConfig(
       { from: redteamRunnerPayloadDirectory(), to: 'redteam-runner', filter: ['**/*'] },
       // electron-builder excludes a source directory's root node_modules.
       { from: join(redteamRunnerPayloadDirectory(), 'node_modules'), to: 'redteam-runner/node_modules', filter: ['**/*'] },
+      // The external tools the engagement runner resolves from REDTEAM_TOOLS_DIR:
+      // nmap, ffuf, gobuster and the content-discovery wordlist. Build output, not
+      // source - materialized by `node apps/desktop/scripts/vendor-tools.mjs` from
+      // the pinned tools-manifest.json - and `apps/desktop/src/redteam-runner.ts`
+      // points the runner child at this directory. Absent on a source-only build.
+      ...(redteamToolsPayloadDirectory() === undefined
+        ? []
+        : [{ from: redteamToolsPayloadDirectory(), to: 'tools', filter: ['**/*'] }]),
     ],
     mac: {
       icon: fileURLToPath(new URL('../resources/icon-macos.png', import.meta.url)),

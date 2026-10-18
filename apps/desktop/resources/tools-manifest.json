@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "comment": "Pinned external-tool payloads shipped under resources/tools by scripts/vendor-tools.mjs. Binaries are build output and are NOT committed; this manifest and its SHA-256 pins are. Add a tool by adding an entry here, then run the script. Tier order: tier 1 proves the pipeline with the two required/most-used tools; tier 2 adds content-discovery and template scanning; tier 3 needs a Python/Perl runtime and is opt-in.",
+  "tools": [
+    {
+      "id": "nmap",
+      "tier": 1,
+      "version": "7.92",
+      "url": "https://nmap.org/dist/nmap-7.92-win32.zip",
+      "sha256": "b54c54d4b478cad19567a504c7c6b7230dfd80acd881dc2e9015a628a3efa71e",
+      "archive": "zip",
+      "stripDirectory": "nmap-7.92",
+      "destination": "nmap",
+      "license": "Nmap Public Source License (GPLv2-based)",
+      "note": "nmap.org publishes a win32 ZIP only up to 7.92; newer releases are installer-only, so this is the newest redistributable tree. Npcap is NOT bundled: SYN scans and OS detection need an elevated install, while the runner's connect-scan fallback (nmap/privilege.ts) maps ports unprivileged. The VC++ app-local DLLs are included in the tree, which removes the VC++ redistributable requirement."
+    },
+    {
+      "id": "ffuf",
+      "tier": 1,
+      "version": "2.3.0",
+      "url": "https://github.com/ffuf/ffuf/releases/download/v2.3.0/ffuf_2.3.0_windows_amd64.zip",
+      "sha256": "091c8a22d0c7fbe07d343b3ae2c213dbd37b38a8a2ed40631fcd3128ea1764fb",
+      "archive": "zip",
+      "stripDirectory": "",
+      "destination": "ffuf",
+      "license": "MIT",
+      "note": "Content and directory discovery. Needs the bundled wordlist (resources/tools/wordlists/common.txt), which vendor-tools.mjs copies out of the vendored runner payload."
+    },
+    {
+      "id": "gobuster",
+      "tier": 2,
+      "version": "3.8.2",
+      "url": "https://github.com/OJ/gobuster/releases/download/v3.8.2/gobuster_Windows_x86_64.zip",
+      "sha256": "677abe8e56c5455804225ad2264dc6e9981e99673ef3ccd6a2fa2af8a2e92aba",
+      "archive": "zip",
+      "stripDirectory": "",
+      "destination": "gobuster",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "nuclei",
+      "tier": 2,
+      "version": "",
+      "url": "",
+      "sha256": "",
+      "archive": "zip",
+      "stripDirectory": "",
+      "destination": "nuclei",
+      "license": "MIT",
+      "note": "Left unpinned deliberately: the nuclei release archive is a large self-updating binary and the template checkout is a separate, operator-updated tree. Until a version is pinned here, the runner keeps reporting nuclei as a missing optional prerequisite."
+    }
+  ],
+  "wordlist": {
+    "source": "redteam-runner/dist/assets/wordlists/common.txt",
+    "destination": "wordlists/common.txt"
+  }
+}

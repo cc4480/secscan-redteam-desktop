@@ -13,12 +13,14 @@ import {
   DesktopRedteamRunnerStartupError,
   REDTEAM_RUNNER_ENTRY,
   REDTEAM_RUNNER_READY_TIMEOUT_MS,
+  REDTEAM_TOOLS_RESOURCE_DIRECTORY,
   allocateLoopbackPort,
   generatedRedteamToken,
   isRedteamConsoleToken,
   probeRedteamConsole,
   redteamConsoleEndpoint,
   redteamRunnerResources,
+  redteamToolsDirectory,
   type RedteamRunnerResources,
 } from '../src/redteam-runner.ts'
 import { DEFAULT_REDTEAM_MCP_URL } from '../src/mcp-credential-contract.ts'
@@ -404,5 +406,87 @@ describe('payload location', () => {
       packaged: false, resourcesPath: join('C:', 'Other'), appPath: join('C:', 'repo', 'apps', 'desktop'), node: 'electron',
       environment: { DSH_DESKTOP_REDTEAM_RUNNER_DIR: join('C:', 'checkout', 'redteam-runner') },
     })).toEqual({ node: 'electron', directory: join('C:', 'checkout', 'redteam-runner') })
+  })
+
+  it('reads the bundled tools from the application resources when packaged', () => {
+    expect(REDTEAM_TOOLS_RESOURCE_DIRECTORY).toBe('tools')
+    expect(redteamToolsDirectory({
+      packaged: true, resourcesPath: join('C:', 'App', 'resources'), appPath: join('C:', 'App', 'resources', 'app.asar'),
+      node: join('C:', 'App', 'SecScan RedTeam.exe'),
+    })).toBe(join('C:', 'App', 'resources', 'tools'))
+  })
+
+  it('reads the bundled tools from the checked-in resources for an unpackaged launch', () => {
+    expect(redteamToolsDirectory({
+      packaged: false, resourcesPath: join('C:', 'Other'), appPath: join('C:', 'repo', 'apps', 'desktop'), node: 'electron',
+    })).toBe(join('C:', 'repo', 'apps', 'desktop', 'resources', 'tools'))
+  })
+
+  it('leaves the tools directory to an operator who names one', () => {
+    // A provisioned tree replaces the bundled location; an empty value names no directory,
+    // so the launch keeps resolving the payload this installation ships.
+    const packaged = {
+      packaged: true, resourcesPath: join('C:', 'App', 'resources'), appPath: join('C:', 'App', 'resources', 'app.asar'),
+      node: join('C:', 'App', 'SecScan RedTeam.exe'),
+    }
+    expect(redteamToolsDirectory({ ...packaged, environment: { REDTEAM_TOOLS_DIR: join('C:', 'provisioned', 'tools') } }))
+      .toBe(join('C:', 'provisioned', 'tools'))
+    expect(redteamToolsDirectory({ ...packaged, environment: { REDTEAM_TOOLS_DIR: '' } }))
+      .toBe(join('C:', 'App', 'resources', 'tools'))
+  })
+})
+
+describe('bundled tools payload', () => {
+  it('exports the tools directory it ships to the console it starts', async () => {
+    const { root, resources, engagements } = payload()
+    const tools = join(root, 'tools')
+    mkdirSync(tools, { recursive: true })
+    const environment: NodeJS.ProcessEnv = {}
+    const runner = new DesktopRedteamRunner(resources, environment, {
+      engagementsDir: engagements,
+      installed: new Set(),
+      allocatePort: async () => 18_788,
+      probe: async () => true,
+    })
+
+    await runner.start()
+    // The runner resolves its bundled binaries from here ahead of PATH, so the console
+    // never depends on which tools the machine happens to have installed.
+    expect(lastSpawn().options.env.REDTEAM_TOOLS_DIR).toBe(tools)
+    // Only the console's environment names it; the environment the Host is spawned with
+    // describes the console, not the tools directory.
+    expect(environment.REDTEAM_TOOLS_DIR).toBeUndefined()
+  })
+
+  it('leaves the tools PATH-resolved when this installation ships no tools payload', async () => {
+    const { resources, engagements } = payload()
+    // Nothing under the sibling `tools` directory: the payload was never provisioned.
+    const runner = new DesktopRedteamRunner(resources, {}, {
+      engagementsDir: engagements,
+      installed: new Set(),
+      allocatePort: async () => 18_789,
+      probe: async () => true,
+    })
+
+    await runner.start()
+    // Absent payload: the tools stay PATH-resolved, and readiness reports them missing.
+    expect(lastSpawn().options.env.REDTEAM_TOOLS_DIR).toBeUndefined()
+  })
+
+  it('never overwrites a tools directory exported for this run', async () => {
+    const { root, resources, engagements } = payload()
+    // A payload this installation ships, and a provisioned tree the operator named.
+    mkdirSync(join(root, 'tools'), { recursive: true })
+    const provisioned = join(root, 'provisioned', 'tools')
+    const environment: NodeJS.ProcessEnv = { REDTEAM_TOOLS_DIR: provisioned }
+    const runner = new DesktopRedteamRunner(resources, environment, {
+      engagementsDir: engagements,
+      installed: new Set(),
+      allocatePort: async () => 18_790,
+      probe: async () => true,
+    })
+
+    await runner.start()
+    expect(lastSpawn().options.env.REDTEAM_TOOLS_DIR).toBe(provisioned)
   })
 })

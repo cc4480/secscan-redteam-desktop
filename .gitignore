@@ -3,6 +3,11 @@ CLAUDE.local.md
 apps/desktop/.env.windows
 apps/desktop/.env.macos
 apps/desktop/*.p12
+# External-tool payload: build output materialized from the pinned
+# apps/desktop/resources/tools-manifest.json by scripts/vendor-tools.mjs.
+# The manifest and the script are committed; the binaries are not.
+apps/desktop/resources/tools/
+apps/desktop/.tools-cache/
 node_modules/
 lib/
 *.tsbuildinfo

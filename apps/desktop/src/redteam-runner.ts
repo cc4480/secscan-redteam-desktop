@@ -4,7 +4,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync } from 'node:fs'
 import { createServer } from 'node:net'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import {
   REDTEAM_CONSOLE_ENVIRONMENT_NAMES,
   type McpEnvironmentName,
@@ -16,6 +16,9 @@ export const REDTEAM_RUNNER_RESOURCE_DIRECTORY = 'redteam-runner'
 
 /** Entry point inside that directory, which is the runner's own `bin` field. */
 export const REDTEAM_RUNNER_ENTRY = 'dist/cli.js'
+
+/** Directory the packaged tool payload occupies beside the bundled runner. */
+export const REDTEAM_TOOLS_RESOURCE_DIRECTORY = 'tools'
 
 /** Port the console prefers, and the one an operator's own console normally holds. */
 export const DEFAULT_REDTEAM_RUNNER_PORT = 8787
@@ -118,6 +121,20 @@ export function redteamRunnerResources(location: RedteamRunnerLocation): Redteam
       ? join(location.resourcesPath, REDTEAM_RUNNER_RESOURCE_DIRECTORY)
       : join(location.appPath, 'resources', REDTEAM_RUNNER_RESOURCE_DIRECTORY),
   }
+}
+
+/**
+ * Resolve the directory the bundled tools payload is read from.
+ * The payload sits beside the runner payload this launch executes, and the console
+ * resolves nmap, ffuf, nuclei and the wordlists from it ahead of PATH. An operator who
+ * exported a directory has provisioned it themselves, so their value wins.
+ * @param location - Where this application's resources are and how it was launched.
+ * @returns Directory holding the bundled tool payloads.
+ */
+export function redteamToolsDirectory(location: RedteamRunnerLocation): string {
+  const configured = location.environment?.REDTEAM_TOOLS_DIR
+  if (configured !== undefined && configured !== '') return configured
+  return join(dirname(redteamRunnerResources(location).directory), REDTEAM_TOOLS_RESOURCE_DIRECTORY)
 }
 
 /**
@@ -237,6 +254,13 @@ async function pause(milliseconds: number): Promise<void> {
  * or stored in this installation's credential document - describes a console this
  * process did not start, and it wins: the bundled runner then stays off and nothing is
  * overwritten.
+ *
+ * The console itself is spawned with `REDTEAM_TOOLS_DIR` pointing at the tools payload
+ * beside the runner, because the runner resolves its bundled binaries - nmap, ffuf,
+ * nuclei, the wordlists - from that directory ahead of PATH. A directory the operator
+ * exported is passed through unchanged and never overwritten. When this installation
+ * carries no tools payload the variable is left unset, so the tools stay PATH-resolved
+ * and readiness reports them missing rather than claiming they are present.
  */
 export class DesktopRedteamRunner {
   private child: ChildProcess | undefined
@@ -304,6 +328,9 @@ export class DesktopRedteamRunner {
     // identical across the upgrade that starts bundling the runner.
     const token = isRedteamConsoleToken(stored) ? stored : generatedRedteamToken()
     mkdirSync(this.options.engagementsDir, { recursive: true })
+    // Resolved before spawning so the console inherits one directory for the whole run,
+    // and so an absent payload costs nothing: the variable is then simply not installed.
+    const toolsDirectory = this.bundledToolsDirectory()
 
     const child = spawn(this.resources.node, [
       entry,
@@ -314,7 +341,11 @@ export class DesktopRedteamRunner {
     ], {
       cwd: this.resources.directory,
       // The same bundled runtime the Host runs on: no Node installation is assumed.
-      env: desktopNodeEnvironment(this.resources.node, undefined, { ...this.environment, REDTEAM_UI_TOKEN: token }),
+      env: desktopNodeEnvironment(this.resources.node, undefined, {
+        ...this.environment,
+        REDTEAM_UI_TOKEN: token,
+        ...(toolsDirectory === undefined ? {} : { REDTEAM_TOOLS_DIR: toolsDirectory }),
+      }),
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     })
@@ -399,6 +430,17 @@ export class DesktopRedteamRunner {
     if (this.exitHook === undefined) return
     process.removeListener('exit', this.exitHook)
     this.exitHook = undefined
+  }
+
+  /**
+   * @returns the tools payload this launch exports to the console, or `undefined` when the
+   * operator named their own directory or this installation carries no tools payload.
+   */
+  private bundledToolsDirectory(): string | undefined {
+    const configured = this.environment.REDTEAM_TOOLS_DIR
+    if (configured !== undefined && configured !== '') return undefined
+    const directory = join(dirname(this.resources.directory), REDTEAM_TOOLS_RESOURCE_DIRECTORY)
+    return existsSync(directory) ? directory : undefined
   }
 
   /** Poll the console's MCP endpoint until it identifies itself, its deadline passes, or it exits. */
