@@ -26,8 +26,11 @@ import { fileURLToPath } from "node:url";
 const HASH_VERSION = 1;
 const STAMP_NAME = ".src-hash";
 const SKIP_ENV = "REDTEAM_SKIP_DIST_CHECK";
-/** Workspace packages whose compiled dist the runner imports. */
-const CHECKED_DEPS = ["@secscan/redteam-llm-router", "@secscan/redteam-auth-gate"];
+/** Workspace packages whose compiled dist the runner imports, and the directory each builds to. */
+const CHECKED_DEPS = [
+    { name: "@secscan/redteam-llm-router", outputDir: "lib" },
+    { name: "@secscan/redteam-auth-gate", outputDir: "lib" },
+];
 function relPosix(full, base) {
     return relative(base, full).split(sep).join("/");
 }
@@ -57,10 +60,10 @@ export function hashSrcDir(srcDir) {
     }
     return { sha256: h.digest("hex"), files: files.length };
 }
-/** Check one workspace dir (must contain src/ and dist/.src-hash). Never throws for stale state. */
-export function distIsFresh(workspaceDir, label) {
+/** Check one workspace dir (must contain src/ and <outputDir>/.src-hash). Never throws for stale state. */
+export function distIsFresh(workspaceDir, label, outputDir = "dist") {
     const srcDir = join(workspaceDir, "src");
-    const stampPath = join(workspaceDir, "dist", STAMP_NAME);
+    const stampPath = join(workspaceDir, outputDir, STAMP_NAME);
     if (!existsSync(srcDir)) {
         // Installed package (no src/ shipped): the dist IS the artifact — nothing
         // to be stale against. The guard only applies to source checkouts.
@@ -148,13 +151,13 @@ export function assertDistFresh() {
     for (const dep of CHECKED_DEPS) {
         let depDir;
         try {
-            depDir = dirname(require.resolve(`${dep}/package.json`));
+            depDir = dirname(require.resolve(`${dep.name}/package.json`));
         }
         catch {
-            problems.push(`[runner] STALE BUILD: cannot resolve ${dep} — is it installed? Run \`npm run build\` from the repo root and retry.`);
+            problems.push(`[runner] STALE BUILD: cannot resolve ${dep.name} — is it installed? Run \`npm run build\` from the repo root and retry.`);
             continue;
         }
-        const r = distIsFresh(depDir, dep);
+        const r = distIsFresh(depDir, dep.name, dep.outputDir);
         if (!r.fresh && r.reason)
             problems.push(r.reason);
     }

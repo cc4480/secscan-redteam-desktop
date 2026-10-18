@@ -31,8 +31,8 @@ export interface FreshnessResult {
     /** Human-readable reason when not fresh. */
     reason?: string;
 }
-/** Check one workspace dir (must contain src/ and dist/.src-hash). Never throws for stale state. */
-export declare function distIsFresh(workspaceDir: string, label: string): FreshnessResult;
+/** Check one workspace dir (must contain src/ and <outputDir>/.src-hash). Never throws for stale state. */
+export declare function distIsFresh(workspaceDir: string, label: string, outputDir?: string): FreshnessResult;
 /**
  * Walk up from startDir to the workspace root: the nearest ancestor whose
  * package.json carries the given name. Works from dist/safety AND from

@@ -1,14 +1,11 @@
 /**
  * Vendor the engagement runner into the Desktop application payload.
  *
- * The runner (@secscan/redteam-runner) is not a package of this repository, and
- * its built `dist/` cannot be resolved here the way a workspace dependency is:
- * its seven runtime dependencies are hoisted to the runner's own workspace root,
- * and one module it imports at startup (`@msgpack/msgpack`) is declared there
- * rather than in the runner's manifest. Installing from the runner's own
- * `node_modules` (0 MB) therefore is not an option — the closure is materialized
- * here, next to the application that executes it, so a packaged install needs
- * nothing else on the machine.
+ * The runner (@secscan/redteam-runner) is a package of THIS repository at
+ * `apps/redteam-runner`. Its built `dist/` and dependency closure are
+ * materialized here, next to the application that executes it, so a packaged
+ * install needs nothing else on the machine. Vendoring rebuilds the runner from
+ * source first, so the payload can never carry a stale dist.
  *
  * The output is exactly what `extraResources` ships:
  *
@@ -19,20 +16,19 @@
  *   resources/redteam-runner/node_modules/**   every production dependency and
  *                                              every transitive dependency, minus
  *                                              test/docs noise (PAYLOAD_EXCLUSIONS)
- *   resources/redteam-runner/package-lock.json the lockfile of the workspace the
- *                                              closure's exact versions came from
  *   resources/redteam-runner/provenance.json   what was taken from where, and the
- *                                              lockfile's sha256
+ *                                              pnpm lockfile's sha256
  *
- * Paths inside a package are copied dereferenced: the runner's workspace links
- * `@secscan/*` packages with junctions, and an installer must carry the bytes.
+ * Paths inside a package are copied dereferenced: pnpm links `@secscan/*`
+ * workspace packages with junctions, and an installer must carry the bytes.
  *
  * Usage (from apps/desktop, or through the repository's package manager):
  *   node scripts/vendor-redteam-runner.mjs [--from <runner directory>]
- * The source directory defaults to `DSH_DESKTOP_REDTEAM_RUNNER_DIR`, then to a
- * `secscan-redteam/runner` checkout beside this repository.
+ * The source directory defaults to `DSH_DESKTOP_REDTEAM_RUNNER_DIR`, then to the
+ * in-repo `apps/redteam-runner` package.
  */
 
+import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
@@ -45,19 +41,6 @@ export const REDTEAM_RUNNER_PAYLOAD = join('resources', 'redteam-runner')
 
 /** Package name the vendored payload must declare; anything else is the wrong directory. */
 const REDTEAM_RUNNER_PACKAGE = '@secscan/redteam-runner'
-
-/**
- * Packages the built runner imports that its own manifest does not declare.
- *
- * `@msgpack/msgpack` is a dependency of the runner's workspace ROOT and is
- * imported at startup by `dist/msf/protocol.js`, so the closure built from the
- * runner manifest alone does not reach it. The list is explicit rather than a
- * scan so a runner upgrade that adds another hoisted import fails the closure
- * check instead of shipping a payload that throws on load.
- */
-const HOISTED_DEPENDENCIES = [
-  { name: '@msgpack/msgpack', reason: "imported by dist/msf/protocol.js; declared at the runner's workspace root" },
-]
 
 /** Dependency sections that carry what a shipped payload must contain. */
 const DEPENDENCY_SECTIONS = ['dependencies']
@@ -112,9 +95,14 @@ function readJson(path) {
  */
 function packageDirectory(name, from) {
   let directory = from
+  const segments = name.split('/')
   for (;;) {
-    const candidate = join(directory, 'node_modules', ...name.split('/'))
+    const candidate = join(directory, 'node_modules', ...segments)
     if (existsSync(join(candidate, 'package.json'))) return candidate
+    // pnpm hoists transitive dependencies into the hidden store
+    // `node_modules/.pnpm/node_modules/<name>`, which a plain walk-up never sees.
+    const hidden = join(directory, 'node_modules', '.pnpm', 'node_modules', ...segments)
+    if (existsSync(join(hidden, 'package.json'))) return hidden
     const parent = resolve(directory, '..')
     if (parent === directory) return undefined
     directory = parent
@@ -135,7 +123,9 @@ function parseArguments(argv) {
   }
   const configured = process.env.DSH_DESKTOP_REDTEAM_RUNNER_DIR
   if (configured !== undefined && configured !== '') return { from: resolve(configured) }
-  return { from: join(REPOSITORY_ROOT, '..', 'secscan-redteam', 'runner') }
+  // The runner is a first-class package of this repository (apps/redteam-runner);
+  // there is no external checkout to vendor from.
+  return { from: join(REPOSITORY_ROOT, 'apps', 'redteam-runner') }
 }
 
 /**
@@ -148,23 +138,27 @@ function parseArguments(argv) {
 function dependencyClosure(runnerDirectory, manifest, problems) {
   const roots = [
     ...Object.keys(manifest.dependencies ?? {}),
-    ...HOISTED_DEPENDENCIES.map(entry => entry.name),
   ]
   const resolved = new Map()
-  const queue = [...roots]
+  // Each queued entry remembers the directory of the package that declares it, so
+  // pnpm's nested `node_modules/<parent>/node_modules/<dep>` layout resolves even
+  // though the transitive dep is not hoisted to the repository root.
+  const queue = roots.map(name => ({ name, from: runnerDirectory }))
   while (queue.length > 0) {
-    const name = queue.shift()
-    if (name === undefined || resolved.has(name)) continue
-    const directory = packageDirectory(name, runnerDirectory)
+    const entry = queue.shift()
+    if (entry === undefined || resolved.has(entry.name)) continue
+    const directory = packageDirectory(entry.name, entry.from)
     if (directory === undefined) {
-      problems.push(`${name} is not installed in the source tree`)
+      problems.push(`${entry.name} is not installed in the source tree`)
       continue
     }
     const packageManifest = readJson(join(directory, 'package.json'))
-    resolved.set(name, { name, version: packageManifest.version, directory })
+    resolved.set(entry.name, { name: entry.name, version: packageManifest.version, directory })
     // Optional dependencies are contractually absent-safe, and the only one the
     // source tree installs is ssh2's `nan` build header; it is not shipped.
-    queue.push(...Object.keys(packageManifest.dependencies ?? {}))
+    for (const depName of Object.keys(packageManifest.dependencies ?? {})) {
+      queue.push({ name: depName, from: directory })
+    }
   }
   return [...resolved.values()].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
 }
@@ -193,38 +187,47 @@ function copyDereferenced(from, to) {
 }
 
 /**
- * Locate and read the npm lockfile of the workspace that installs the closure.
+ * Locate and read the pnpm lockfile of the workspace that installs the closure.
  *
- * The runner checkout is a workspace member: its production dependencies are
- * hoisted to the workspace root, so the lockfile pinning the exact versions in
- * `node_modules` lives at that root rather than in the runner directory. Shipping
- * the runner's manifest ranges alone would let two vendoring runs of the same
- * version produce different payloads.
- * @param {string} source - The runner checkout.
- * @returns {{ path: string, bytes: Buffer, sha256: string }} The workspace lockfile and its digest.
+ * The runner is a workspace member: its production dependencies are hoisted to
+ * the repository root, so the lockfile pinning the exact versions in
+ * `node_modules` is the repository's `pnpm-lock.yaml`. Recording its digest lets
+ * a packaged install be matched against the source tree without shipping it.
+ * @param {string} source - The runner package directory.
+ * @returns {{ path: string, bytes: Buffer, sha256: string }} The lockfile and its digest.
  */
 function readWorkspaceLockfile(source) {
   let directory = source
   for (;;) {
-    const candidate = join(directory, 'package-lock.json')
+    const candidate = join(directory, 'pnpm-lock.yaml')
     if (existsSync(candidate)) {
       const bytes = readFileSync(candidate)
-      let lockfile
-      try {
-        lockfile = JSON.parse(bytes.toString('utf8'))
-      } catch (error) {
-        throw new Error(`vendor-redteam-runner: ${candidate} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`)
-      }
-      if (typeof lockfile?.lockfileVersion !== 'number') {
-        throw new Error(`vendor-redteam-runner: ${candidate} has no lockfileVersion; it is not an npm lockfile`)
-      }
       return { path: candidate, bytes, sha256: createHash('sha256').update(bytes).digest('hex') }
     }
     const parent = resolve(directory, '..')
     if (parent === directory) break
     directory = parent
   }
-  throw new Error(`vendor-redteam-runner: ${source} is not inside an npm workspace: no package-lock.json in it or any parent. Vendor from the workspace checkout so the payload can pin exact versions instead of shipping ranges.`)
+  throw new Error(`vendor-redteam-runner: ${source} is not inside a pnpm workspace: no pnpm-lock.yaml in it or any parent.`)
+}
+
+/**
+ * Build the in-repo runner package from source, exactly as `pnpm --filter
+ * @secscan/redteam-runner run build` would: compile to dist/, copy the console
+ * dashboard assets and the wordlist, then stamp dist/ and the two @secscan/*
+ * workspace deps' lib/ so the runner's freshness guard passes. Vendoring always
+ * rebuilds, so the payload can never ship a stale dist.
+ * @param {string} source - The runner package directory.
+ */
+function buildRunnerFromSource(source) {
+  const node = process.execPath
+  const tsc = join(REPOSITORY_ROOT, 'node_modules', 'typescript', 'bin', 'tsc')
+  const script = (file, ...args) => execFileSync(node, [file, ...args], { cwd: source, stdio: 'inherit' })
+  script(tsc, '-p', 'tsconfig.json')
+  script(join(source, 'scripts', 'copy-dir.mjs'), 'src/ui/public', 'dist/ui/public')
+  script(join(source, 'scripts', 'copy-dir.mjs'), 'assets', 'dist/assets')
+  script(join(source, 'scripts', 'dist-hash.mjs'), 'write', '.')
+  script(join(source, 'scripts', 'stamp-deps.mjs'))
 }
 
 /**
@@ -239,6 +242,7 @@ export function vendorRedteamRunner(options) {
   if (manifest.name !== REDTEAM_RUNNER_PACKAGE) {
     throw new Error(`vendor-redteam-runner: ${source} declares ${String(manifest.name)}, expected ${REDTEAM_RUNNER_PACKAGE}`)
   }
+  buildRunnerFromSource(source)
   for (const path of ['dist', 'dist/cli.js']) {
     if (!existsSync(join(source, ...path.split('/')))) {
       throw new Error(`vendor-redteam-runner: ${source} has no ${path}; build the runner before vendoring it`)
@@ -272,7 +276,6 @@ export function vendorRedteamRunner(options) {
   mkdirSync(destination, { recursive: true })
   cpSync(join(source, 'package.json'), join(destination, 'package.json'))
   cpSync(join(source, 'dist'), join(destination, 'dist'), { recursive: true, dereference: true })
-  writeFileSync(join(destination, 'package-lock.json'), lockfile.bytes)
   for (const entry of closure) {
     copyDereferenced(entry.directory, join(destination, 'node_modules', ...entry.name.split('/')))
   }
@@ -287,7 +290,6 @@ export function vendorRedteamRunner(options) {
     lockfile: { source: lockfile.path, sha256: lockfile.sha256 },
     // The list a reviewer (and the payload test) checks the shipped tree against.
     packages: closure.map(entry => ({ name: entry.name, version: entry.version })),
-    hoistedDependencies: HOISTED_DEPENDENCIES,
     // Written so the exclusion is visible rather than looking like an omission.
     excludedOptionalDependencies: [{ name: 'nan', reason: "ssh2's build-time C++ header; an optional dependency by contract" }],
   }
