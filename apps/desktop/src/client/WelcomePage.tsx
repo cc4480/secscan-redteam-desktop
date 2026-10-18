@@ -354,7 +354,7 @@ export function Welcome({ api }: { api: WelcomeReadinessApi }) {
                       {item.detail !== undefined ? <span className="readiness-item-detail">{item.detail}</span> : null}
                       {item.fix !== undefined
                         ? <details className="readiness-item-fix">
-                          <summary>How to fix</summary>
+                          <summary>{m.welcomeReadinessFix}</summary>
                           <p>{item.fix}</p>
                         </details>
                         : null}
