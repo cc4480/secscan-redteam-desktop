@@ -5,7 +5,7 @@
   "source": "C:\\dsh-src\\apps\\redteam-runner",
   "lockfile": {
     "source": "C:\\dsh-src\\pnpm-lock.yaml",
-    "sha256": "38352ef8d5b4dff2d25e8800c6fa84b80bd8f4fcaa345f03401a20f77b8a4c59"
+    "sha256": "9efb7948207259163eac7c41526e506299c16045e28753555ddc3ae46964ccc7"
   },
   "packages": [
     {

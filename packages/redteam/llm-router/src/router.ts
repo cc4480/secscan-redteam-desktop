@@ -21,9 +21,10 @@ import type {
   JsonSchemaTool,
   LlmProvider,
 } from './types.js'
-import { ROLE_MODEL_POLICY } from './policy.js'
+import { roleModelPolicy } from './policy.js'
 import { DeepSeekProvider } from './providers/deepseek.js'
 import { QwenProvider } from './providers/qwen.js'
+import { LocalOpenAiProvider } from './providers/local.js'
 
 const providers = new Map<string, LlmProvider>()
 
@@ -85,7 +86,7 @@ export async function completeForRole(
     temperature?: number
   } = {},
 ): Promise<ChatResult> {
-  const route = ROLE_MODEL_POLICY[role]
+  const route = roleModelPolicy()[role]
   return complete(route.provider, {
     model: route.model,
     messages,
@@ -102,3 +103,5 @@ export async function completeForRole(
 // register it here — no changes to the router core or the harness.
 registerProvider(new DeepSeekProvider())
 registerProvider(new QwenProvider())
+// Offline/self-hosted route: selected by REDTEAM_LLM_PROVIDER=local (see policy.ts).
+registerProvider(new LocalOpenAiProvider())

@@ -18,13 +18,11 @@
  */
 
 import type {
-  ChatMessage,
   ChatResult,
   CompleteOptions,
-  JsonSchemaTool,
   LlmProvider,
-  ToolCallRequest,
 } from '../types.js'
+import { fromWireToolCalls, toWireMessages, toWireTools } from './openai-wire.js'
 
 export const QWEN_API_KEY_ENV = 'QWEN_API_KEY'
 /** Ecosystem-standard fallback (Qwen Code, OpenTryOn, MCP tooling all use this). */
@@ -44,58 +42,6 @@ function toReasoningEffort(hint: CompleteOptions['reasoningEffort']): string | u
   if (hint === 'medium') return 'medium'
   if (hint === 'low') return 'low'
   return undefined // API default (xhigh) applies
-}
-
-function toWireMessages(messages: ChatMessage[]): Array<Record<string, unknown>> {
-  return messages.map((m) => {
-    if (m.role === 'tool') {
-      return { role: 'tool', tool_call_id: m.toolCallId ?? '', content: m.content }
-    }
-    // Assistant tool-call turns must round-trip their tool_calls, or the
-    // following tool messages are rejected by the OpenAI-compatible API.
-    if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
-      return {
-        role: 'assistant',
-        content: m.content ?? '',
-        tool_calls: m.toolCalls.map(tc => ({
-          id: tc.id,
-          type: 'function',
-          function: { name: tc.name, arguments: JSON.stringify(tc.arguments ?? {}) },
-        })),
-      }
-    }
-    return { role: m.role, content: m.content }
-  })
-}
-
-function toWireTools(tools?: JsonSchemaTool[]): Array<Record<string, unknown>> | undefined {
-  if (!tools || tools.length === 0) return undefined
-  return tools.map(t => ({
-    type: 'function',
-    function: {
-      name: t.name,
-      description: t.description,
-      parameters: t.parameters,
-    },
-  }))
-}
-
-function fromWireToolCalls(choice: Record<string, unknown>): ToolCallRequest[] {
-  const calls = (choice['tool_calls'] as Array<Record<string, unknown>> | undefined) ?? []
-  return calls.map((c, i) => {
-    const fn = (c['function'] as Record<string, unknown>) ?? {}
-    let args: Record<string, unknown> = {}
-    try {
-      args = JSON.parse((fn['arguments'] as string) ?? '{}') as Record<string, unknown>
-    } catch {
-      args = { _raw: fn['arguments'] }
-    }
-    return {
-      id: (c['id'] as string) ?? `call_${i}`,
-      name: (fn['name'] as string) ?? 'unknown',
-      arguments: args,
-    }
-  })
 }
 
 export class QwenProvider implements LlmProvider {
