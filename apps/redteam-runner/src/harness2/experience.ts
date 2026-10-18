@@ -1,51 +1,56 @@
 /**
- * Harness2 EXPERIENCE.md library + approval-gated adopt/rollback (H2-P3).
+ * Harness2 EXPERIENCE.md writers + approval-gated adopt/rollback (H2-P3, spec 7).
  *
- * EXPERIENCE.md is the continual-improvement ledger: one ASCII markdown file
- * per target class under paths.experience, recording what changed in the
- * harness, why, the MEASURED effect on outcome metrics and the tokens spent.
- * Canonical format (EXPERIENCE_FORMAT_DOC, shared with the H2-P2a package):
- *   # EXPERIENCE - <target-class>
- *   ## <YYYY-MM-DD> - <layerId|general>
- *   - change: ... / - reason: ... / - measured effect: ... / - tokens spent: N
+ * The format and the read side live in ./experience-record.ts, re-exported here
+ * so callers import one module.
  *
- * Safety properties:
- *  - adoptVerdict is the ONLY adoption path: it refuses unless the probe verdict
- *    says adopted AND explicit approval is true, then re-checks both YAML bodies
- *    for pinned guardrails (src/safety, src/policy, src/gate.ts, src/accountability,
- *    auth-gate, the guardrails component) as defense in depth before installing
- *    and activating the layer and appending the measured lesson.
- *  - rollbackLayer removes the layer and appends a dated "rolled back" lesson,
- *    so history is never silently rewritten.
+ * APPEND-ONLY RULE (exact):
+ *  - a new record is APPENDED after the existing bytes; the file is never
+ *    re-rendered, so prose between records, malformed blocks and history survive;
+ *  - the ONLY in-place edit allowed is replacing the `- Status:` line of ONE
+ *    existing record. That record's heading, its other four bullets, its
+ *    position and every other byte of the file stay byte-identical;
+ *  - a record is never deleted, reordered or merged. `append-only` therefore
+ *    means: append new records, plus single-line, status-only transitions.
+ *
+ * STATUS TRANSITIONS: adopt -> append a record with Status `active`; supersede ->
+ * flip ONE active record's Status to `superseded (-> <layer>)`; revert/rollback ->
+ * flip the layer's active record to `reverted (<reason>, <date>)` AND append one
+ * new record carrying that same reverted Status (the rollback is a new fact).
+ *
+ * SAFETY: adoptVerdict is the ONLY adoption path. It refuses unless the probe
+ * verdict says adopted AND explicit approval is true, then re-checks both YAML
+ * bodies for pinned guardrails (src/safety, src/policy, src/gate.ts,
+ * src/accountability, auth-gate, the guardrails component) before installing the
+ * layer, activating it and appending the measured lesson.
  */
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { PINNED_COMPONENT, type ExperienceEntry, type Harness2Paths, type PatchLayer, type ProbeVerdict, type Proposal, type TargetClass } from "./contract.js";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
+import { PINNED_COMPONENT, type Harness2Paths, type PatchLayer, type ProbeVerdict, type Proposal, type TargetClass } from "./contract.js";
 import { COMPONENT_PATHS } from "./harness-stamp.js";
-import { activeLayerIds, installLayer, removeLayer, setActiveLayers } from "./layers.js";
+import { activeLayerIds, installLayer, readLayer, removeLayer, setActiveLayers } from "./layers.js";
+import {
+  experienceKey,
+  isExperienceToken,
+  isIsoDate,
+  isoDateOf,
+  listExperience,
+  oneLine,
+  parseExperience,
+  readExperience,
+  readExperienceReport,
+  renderEntry,
+  renderStatus,
+  resolveExperiencePath,
+  sanitizeTargetClass,
+  scanExperience,
+  type ExperienceRecord,
+  type ExperienceStatus,
+} from "./experience-record.js";
 
-/** Canonical markdown format, shared verbatim with the H2-P2a package. */
-export const EXPERIENCE_FORMAT_DOC = [
-  "EXPERIENCE.md canonical format (ASCII, LF, one file per target class):",
-  "# EXPERIENCE - <target-class>",
-  "## <YYYY-MM-DD> - <layerId|general>",
-  "- change: <what changed in the harness>",
-  "- reason: <why it was proposed>",
-  "- measured effect: <measured metric deltas, never an estimate>",
-  "- tokens spent: <non-negative integer>",
-  "Entries are appended, never edited; the four bullet fields are required in that order;",
-  "`general` means the lesson is not tied to a layer; the dedupe key is (date, layerId, change);",
-  "prose outside entries is tolerated on read but dropped by the next canonical rewrite.",
-].join("\n");
+export * from "./experience-record.js";
 
-const HEADING = /^##\s+(\d{4}-\d{2}-\d{2})\s+-\s+(.+?)\s*$/;
-const FIELD = /^-\s+(change|reason|measured effect|tokens spent)\s*:\s*(.*?)\s*$/i;
-const LAYER_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
-const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
-const INT = /^\d+$/;
-const DELTA_KEYS = ["vulnsFound", "falsePositives", "steps", "tokensIn", "tokensOut"] as const;
-const PINNED_NEEDLES: readonly string[] = [...COMPONENT_PATHS[PINNED_COMPONENT], PINNED_COMPONENT, "auth-gate"];
-/** Thrown whenever adoption or rollback is refused; nothing is written before it. */
+/** Thrown whenever adoption, a status transition or a rollback is refused; nothing is written before it. */
 export class AdoptRefusedError extends Error {
   constructor(message: string) {
     super(message);
@@ -53,13 +58,11 @@ export class AdoptRefusedError extends Error {
   }
 }
 
-export interface ExperienceParseResult { readonly entries: readonly ExperienceEntry[]; readonly skipped: number }
-export interface ExperienceReport extends ExperienceParseResult { readonly targetClass: TargetClass; readonly path: string; readonly exists: boolean }
-export interface ExperienceFileInfo { readonly targetClass: TargetClass; readonly path: string; readonly entries: number; readonly skipped: number }
 export interface AppendExperienceResult { readonly path: string; readonly appended: boolean; readonly total: number }
+export interface MarkExperienceResult { readonly path: string; readonly marked: boolean; readonly record?: ExperienceRecord }
+export interface AppendRevertedResult { readonly path: string; readonly entry: ExperienceRecord; readonly marked: number }
 export interface AdoptVerdictResult { readonly layerId: string; readonly experiencePath: string }
-export interface RollbackLayerInput { readonly paths: Harness2Paths; readonly layerId: string }
-export interface RollbackLayerResult { readonly layerId: string; readonly experiencePath: string; readonly lesson: ExperienceEntry }
+export interface RollbackLayerResult { readonly layerId: string; readonly experiencePath: string; readonly lesson: ExperienceRecord }
 export interface AdoptVerdictInput {
   readonly paths: Harness2Paths;
   readonly proposal: Proposal;
@@ -67,116 +70,34 @@ export interface AdoptVerdictInput {
   readonly verdict: ProbeVerdict;
   /** Explicit operator approval; anything but true refuses adoption. */
   readonly approve: boolean;
+  /** Tuning cycle id recorded in the heading; defaults to `cycle-<date>`. */
+  readonly cycleId?: string;
 }
-/** True for a real calendar date in YYYY-MM-DD form. */
-function isIsoDate(value: string): boolean {
-  if (!ISO_DATE.test(value)) return false;
-  const parsed = new Date(`${value}T00:00:00.000Z`);
-  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+export interface RollbackLayerInput { readonly paths: Harness2Paths; readonly layerId: string; readonly reason?: string }
+export interface ExperienceSelector {
+  readonly date?: string;
+  readonly layerId?: string;
+  readonly cycleId?: string;
+  readonly status?: ExperienceStatus["kind"];
 }
-function isoDateOf(value: string | undefined): string | undefined {
-  const candidate = value?.slice(0, 10);
-  return candidate !== undefined && isIsoDate(candidate) ? candidate : undefined;
+export interface AppendRevertedInput {
+  readonly targetClass: TargetClass;
+  readonly layerId?: string;
+  readonly cycleId?: string;
+  readonly date?: string;
+  readonly reason: string;
+  readonly changed: string;
+  readonly why: string;
+  readonly measuredEffect: string;
 }
-function oneLine(value: string): string {
-  return value.replace(/\s*\r?\n\s*/g, " ").trim();
-}
-function dedupeKey(entry: ExperienceEntry): string {
-  return [entry.date, entry.layerId ?? "", oneLine(entry.change)].join("\u0000");
-}
+export interface SupersedeInput { readonly targetClass: TargetClass; readonly layerId: string; readonly by: string }
 
-/** Sanitize a target class into a safe EXPERIENCE.md filename stem. */
-export function sanitizeTargetClass(targetClass: TargetClass): string {
-  return targetClass.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64).replace(/-+$/g, "") || "general";
-}
+const DELTA_KEYS = ["vulnsFound", "falsePositives", "steps", "tokensIn", "tokensOut"] as const;
+const PINNED_NEEDLES: readonly string[] = [...COMPONENT_PATHS[PINNED_COMPONENT], PINNED_COMPONENT, "auth-gate"];
 
-/** `<paths.experience>/<sanitized-target-class>.md`. */
-export function resolveExperiencePath(paths: Harness2Paths, targetClass: TargetClass): string {
-  return join(paths.experience, `${sanitizeTargetClass(targetClass)}.md`);
-}
+/** Today in UTC, the default record date. */
+function today(): string { return new Date().toISOString().slice(0, 10); }
 
-/** The pinned-guardrail token a layer/proposal YAML references, if any (slash and whitespace normalized). */
-export function findPinnedGuardrailReference(yaml: string): string | null {
-  const normalized = yaml.toLowerCase().split("\\").join("/").replace(/\s+/g, "");
-  for (const needle of PINNED_NEEDLES) {
-    if (normalized.includes(needle.toLowerCase().split("\\").join("/"))) return needle;
-  }
-  return null;
-}
-
-/** Validate and finish one raw entry block; null means the block is skipped. */
-function finishEntry(raw: { date: string; layerToken: string; fields: ReadonlyMap<string, string> }, targetClass: TargetClass): ExperienceEntry | null {
-  const change = raw.fields.get("change") ?? "";
-  const reason = raw.fields.get("reason") ?? "";
-  const measuredEffect = raw.fields.get("measured effect") ?? "";
-  const tokensSpent = raw.fields.get("tokens spent") ?? "";
-  if (change === "" || reason === "" || measuredEffect === "" || !INT.test(tokensSpent) || !isIsoDate(raw.date)) return null;
-  const token = raw.layerToken.trim();
-  const layerId = LAYER_ID.test(token) && token.toLowerCase() !== "general" ? token : undefined;
-  return { date: raw.date, targetClass, change, reason, measuredEffect, tokensSpent: Number(tokensSpent), ...(layerId !== undefined ? { layerId } : {}) };
-}
-
-/**
- * Parse a markdown body into entries; malformed blocks are skipped (counted),
- * never thrown on, and extra prose is tolerated and ignored.
- */
-export function parseExperience(markdown: string, targetClass: TargetClass): ExperienceParseResult {
-  const entries: ExperienceEntry[] = [];
-  let skipped = 0;
-  let raw: { date: string; layerToken: string; fields: Map<string, string> } | null = null;
-  const flush = (): void => {
-    if (raw === null) return;
-    const entry = finishEntry(raw, targetClass);
-    if (entry === null) skipped += 1;
-    else entries.push(entry);
-    raw = null;
-  };
-  for (const line of markdown.split(/\r?\n/)) {
-    const heading = HEADING.exec(line);
-    if (heading !== null) {
-      flush();
-      raw = { date: heading[1]!, layerToken: heading[2]!, fields: new Map() };
-      continue;
-    }
-    if (line.startsWith("## ") || line === "##") { flush(); skipped += 1; raw = null; continue; }
-    const field = raw === null ? null : FIELD.exec(line);
-    if (raw === null || field === null) continue;
-    const name = field[1]!.toLowerCase();
-    if (!raw.fields.has(name)) raw.fields.set(name, field[2] ?? "");
-  }
-  flush();
-  return { entries, skipped };
-}
-
-/** Canonical markdown for a set of entries; the inverse of parseExperience. */
-export function renderExperience(entries: readonly ExperienceEntry[], targetClass?: TargetClass): string {
-  const name = sanitizeTargetClass(targetClass ?? entries[0]?.targetClass ?? "general");
-  const blocks = entries.map((entry) =>
-    [
-      `## ${entry.date} - ${entry.layerId ?? "general"}`,
-      `- change: ${oneLine(entry.change)}`,
-      `- reason: ${oneLine(entry.reason)}`,
-      `- measured effect: ${oneLine(entry.measuredEffect)}`,
-      `- tokens spent: ${entry.tokensSpent}`,
-    ].join("\n"),
-  );
-  return blocks.length === 0 ? `# EXPERIENCE - ${name}\n` : `# EXPERIENCE - ${name}\n\n${blocks.join("\n\n")}\n`;
-}
-
-/** Read one class's EXPERIENCE.md; a missing or unreadable file reads as empty. */
-export function readExperienceReport(paths: Harness2Paths, targetClass: TargetClass): ExperienceReport {
-  const path = resolveExperiencePath(paths, targetClass);
-  if (!existsSync(path)) return { targetClass, path, exists: false, entries: [], skipped: 0 };
-  try {
-    const parsed = parseExperience(readFileSync(path, "utf8"), targetClass);
-    return { targetClass, path, exists: true, entries: parsed.entries, skipped: parsed.skipped };
-  } catch {
-    return { targetClass, path, exists: false, entries: [], skipped: 0 };
-  }
-}
-export function readExperience(paths: Harness2Paths, targetClass: TargetClass): ExperienceEntry[] {
-  return [...readExperienceReport(paths, targetClass).entries];
-}
 /** Tmp-write then rename, so an EXPERIENCE.md is never seen half written. */
 function atomicWrite(path: string, body: string): void {
   mkdirSync(dirname(path), { recursive: true });
@@ -189,65 +110,138 @@ function atomicWrite(path: string, body: string): void {
   }
 }
 
-/** Refuse to persist an entry the parser would later discard. */
-function assertAppendable(entry: ExperienceEntry): void {
-  const problem = !isIsoDate(entry.date) ? "date must be YYYY-MM-DD"
-    : oneLine(entry.change) === "" ? "change must not be empty"
-    : oneLine(entry.reason) === "" ? "reason must not be empty"
-    : oneLine(entry.measuredEffect) === "" ? "measured effect must not be empty"
-    : !Number.isInteger(entry.tokensSpent) || entry.tokensSpent < 0 ? "tokens spent must be a non-negative integer"
-    : null;
-  if (problem !== null) throw new Error(`invalid EXPERIENCE entry (${entry.targetClass}): ${problem}`);
-}
-
-/** Append one dated lesson atomically: parse, dedupe on (date, layerId, change), rewrite canonically. */
-export function appendExperience(paths: Harness2Paths, entry: ExperienceEntry): AppendExperienceResult {
-  assertAppendable(entry);
-  const report = readExperienceReport(paths, entry.targetClass);
-  if (report.entries.some((seen) => dedupeKey(seen) === dedupeKey(entry))) return { path: report.path, appended: false, total: report.entries.length };
-  atomicWrite(report.path, renderExperience([...report.entries, entry], entry.targetClass));
-  return { path: report.path, appended: true, total: report.entries.length + 1 };
-}
-
-/** Every per-class EXPERIENCE.md on disk, with entry/skip counts (never throws). */
-export function listExperience(paths: Harness2Paths): ExperienceFileInfo[] {
-  let names: string[];
-  try {
-    names = readdirSync(paths.experience).filter((name) => name.toLowerCase().endsWith(".md")).sort();
-  } catch {
-    return [];
+/** The pinned-guardrail token a layer/proposal YAML references, if any (slash and whitespace normalized). */
+export function findPinnedGuardrailReference(yaml: string): string | null {
+  const normalized = yaml.toLowerCase().split("\\").join("/").replace(/\s+/g, "");
+  for (const needle of PINNED_NEEDLES) {
+    if (normalized.includes(needle.toLowerCase().split("\\").join("/"))) return needle;
   }
-  return names.map((name) => {
-    const targetClass = name.slice(0, -3);
-    const report = readExperienceReport(paths, targetClass);
-    return { targetClass, path: report.path, entries: report.entries.length, skipped: report.skipped };
-  });
+  return null;
 }
 
-/** One class's entries plus the canonical markdown to print (CLI `experience show`). */
-export function showExperience(paths: Harness2Paths, targetClass: TargetClass): ExperienceReport & { readonly markdown: string } {
-  const report = readExperienceReport(paths, targetClass);
-  return { ...report, markdown: renderExperience(report.entries, targetClass) };
+/** Refuse to persist a record the parser would later discard. */
+function assertAppendable(record: ExperienceRecord): void {
+  const bad = (problem: string): never => { throw new Error(`invalid EXPERIENCE record (${record.targetClass}): ${problem}`); };
+  if (!isIsoDate(record.date)) bad("date must be YYYY-MM-DD");
+  if (!isExperienceToken(record.cycleId)) bad("cycle id must be a token ([A-Za-z0-9][A-Za-z0-9._-]*, max 128)");
+  if (record.layerId !== undefined && !isExperienceToken(record.layerId)) bad("layer id must be a token ([A-Za-z0-9][A-Za-z0-9._-]*, max 128)");
+  if (oneLine(record.targetClass) === "") bad("target class must not be empty");
+  if (oneLine(record.changed) === "") bad("changed must not be empty");
+  if (oneLine(record.why) === "") bad("why must not be empty");
+  if (oneLine(record.measuredEffect) === "") bad("measured effect must not be empty");
+  if (record.status.kind === "superseded" && !isExperienceToken(record.status.by)) bad("superseded needs a valid layer id");
+  if (record.status.kind === "reverted" && (!isIsoDate(record.status.date) || oneLine(record.status.reason) === "")) bad("reverted needs a reason and a YYYY-MM-DD date");
 }
 
-/** Compare the five metric deltas plus the compared run counts, deterministically. */
+/**
+ * Append one section-7 record: dedupe on (date, layerId, cycleId, changed) and
+ * leave every existing byte untouched (true append, never a canonical rewrite).
+ */
+export function appendExperience(paths: Harness2Paths, record: ExperienceRecord): AppendExperienceResult {
+  assertAppendable(record);
+  const path = resolveExperiencePath(paths, record.targetClass);
+  const existing = existsSync(path) ? readFileSync(path, "utf8").replace(/^\uFEFF/, "") : "";
+  const parsed = parseExperience(existing, record.targetClass);
+  const total = parsed.entries.length;
+  if (parsed.entries.some((seen) => experienceKey(seen) === experienceKey(record))) return { path, appended: false, total };
+  const header = `# EXPERIENCE - ${sanitizeTargetClass(record.targetClass)}`;
+  const base = existing.trim() === "" ? header : existing.replace(/\s+$/, "");
+  atomicWrite(path, `${base}\n\n${renderEntry(record)}\n`);
+  return { path, appended: true, total: total + 1 };
+}
+
+/** True when a record satisfies a selector (unset selector fields match everything). */
+function matchesSelector(record: ExperienceRecord, selector: ExperienceSelector): boolean {
+  if (selector.date !== undefined && record.date !== selector.date) return false;
+  if (selector.layerId !== undefined && record.layerId !== selector.layerId) return false;
+  if (selector.cycleId !== undefined && record.cycleId !== selector.cycleId) return false;
+  if (selector.status !== undefined && record.status.kind !== selector.status) return false;
+  return true;
+}
+
+/**
+ * The ONLY in-place write: replace the `- Status:` line of exactly one record.
+ * Refuses (typed error, nothing written) unless exactly one record matches and
+ * the status actually changes; every other line stays byte-identical.
+ */
+export function markExperienceStatus(
+  paths: Harness2Paths,
+  targetClass: TargetClass,
+  selector: ExperienceSelector,
+  status: ExperienceStatus,
+): MarkExperienceResult {
+  const path = resolveExperiencePath(paths, targetClass);
+  if (!existsSync(path)) throw new AdoptRefusedError(`status change refused: no EXPERIENCE.md for class "${targetClass}"`);
+  const raw = readFileSync(path, "utf8").replace(/^\uFEFF/, "");
+  const scan = scanExperience(raw, targetClass);
+  const matches = scan.blocks.filter((block) => block.record !== null && matchesSelector(block.record, selector));
+  if (matches.length !== 1) throw new AdoptRefusedError(`status change refused: ${matches.length} records match the selector; exactly one is required`);
+  const block = matches[0]!; const record = block.record!;
+  if (renderStatus(record.status) === renderStatus(status)) return { path, marked: false, record };
+  if (block.statusLine < 0) throw new AdoptRefusedError(`status change refused: record ${record.date}/${record.cycleId} has no Status line to flip`);
+  const lines = [...scan.lines];
+  lines[block.statusLine] = `- Status: ${renderStatus(status)}`;
+  atomicWrite(path, lines.join("\n"));
+  return { path, marked: true, record: { ...record, status } };
+}
+
+/** Mark an active record superseded by a newer layer (consolidation/replacement). */
+export function supersedeExperience(paths: Harness2Paths, input: SupersedeInput): MarkExperienceResult {
+  if (!isExperienceToken(input.by)) throw new AdoptRefusedError(`supersede refused: "${input.by}" is not a valid layer id`);
+  return markExperienceStatus(paths, input.targetClass, { layerId: input.layerId, status: "active" }, { kind: "superseded", by: input.by });
+}
+
+/**
+ * Record a rollback: flip the layer's currently active record to `reverted`
+ * (status line only) and APPEND one new record carrying that same reverted
+ * status, the reason and the measured deltas before the rollback.
+ */
+export function appendRevertedExperience(paths: Harness2Paths, input: AppendRevertedInput): AppendRevertedResult {
+  const date = input.date ?? today();
+  if (!isIsoDate(date)) throw new AdoptRefusedError(`revert refused: "${date}" is not a YYYY-MM-DD date`);
+  const report = readExperienceReport(paths, input.targetClass);
+  const adoption = input.layerId === undefined ? undefined
+    : report.entries.filter((entry) => entry.layerId === input.layerId && entry.status.kind === "active").pop();
+  const cycleId = input.cycleId ?? adoption?.cycleId ?? `cycle-${date}`;
+  const status: ExperienceStatus = { kind: "reverted", reason: oneLine(input.reason), date };
+  let marked = 0;
+  if (adoption !== undefined) {
+    const flipped = markExperienceStatus(paths, input.targetClass, { date: adoption.date, layerId: adoption.layerId, cycleId: adoption.cycleId }, status);
+    marked = flipped.marked ? 1 : 0;
+  }
+  const entry: ExperienceRecord = {
+    date,
+    targetClass: input.targetClass,
+    ...(input.layerId !== undefined ? { layerId: input.layerId } : {}),
+    cycleId,
+    changed: input.changed,
+    why: input.why,
+    measuredEffect: input.measuredEffect,
+    status,
+  };
+  return { path: appendExperience(paths, entry).path, entry, marked };
+}
+
+/** The five metric deltas plus the compared run counts: the measured effect. */
 function formatMeasuredEffect(verdict: ProbeVerdict): string {
   const deltas = DELTA_KEYS.map((key) => `${key} ${verdict.deltas[key] >= 0 ? "+" : ""}${verdict.deltas[key]}`).join(", ");
-  return `${deltas} over ${verdict.baseRuns} base / ${verdict.candidateRuns} candidate runs`;
+  return `${deltas} (n=${verdict.baseRuns} base / ${verdict.candidateRuns} candidate runs)`;
 }
 
 /** The target class whose EXPERIENCE.md mentions a layer, if any. */
 function classForLayer(paths: Harness2Paths, layerId: string): TargetClass | undefined {
-  for (const info of listExperience(paths)) {
-    if (readExperience(paths, info.targetClass).some((entry) => entry.layerId === layerId)) return info.targetClass;
-  }
+  for (const info of listExperience(paths)) if (readExperience(paths, info.targetClass).some((entry) => entry.layerId === layerId)) return info.targetClass;
   return undefined;
 }
+
+/** The `- Why (...)` value: the motivating run id plus the rationale when known. */
+function whyFor(evidenceRunId: string, rationale: string): string { return [oneLine(evidenceRunId), oneLine(rationale)].filter((part) => part !== "").join("; ") || "no motivating run id recorded"; }
 
 /**
  * The ONLY adoption path: refuses unless verdict.adopted AND approve === true,
  * re-checks pinned guardrails (defense in depth), installs + activates the
- * layer and appends the measured lesson. Nothing is written when refused.
+ * layer and appends the section-7 lesson with Status active. Nothing is written
+ * when refused.
  */
 export function adoptVerdict(input: AdoptVerdictInput): AdoptVerdictResult {
   const { paths, proposal, layer, verdict, approve } = input;
@@ -259,39 +253,47 @@ export function adoptVerdict(input: AdoptVerdictInput): AdoptVerdictResult {
   if (layer.yaml.trim() === "") throw new AdoptRefusedError(`adopt refused: layer "${layer.id}" has an empty YAML body`);
   const pinned = findPinnedGuardrailReference(layer.yaml) ?? findPinnedGuardrailReference(proposal.yaml);
   if (pinned !== null) throw new AdoptRefusedError(`adopt refused: layer "${layer.id}" touches pinned guardrail "${pinned}"`);
+  const date = isoDateOf(layer.adoptedAt) ?? today();
+  const rationale = oneLine(proposal.rationale) === "" ? verdict.reason : proposal.rationale;
+  const record: ExperienceRecord = {
+    date,
+    targetClass: proposal.targetClass,
+    layerId: layer.id,
+    cycleId: input.cycleId ?? `cycle-${date}`,
+    changed: `adopted layer "${layer.id}" for the ${proposal.component} component`,
+    why: whyFor(layer.evidenceRunId, rationale),
+    measuredEffect: formatMeasuredEffect(verdict),
+    status: { kind: "active" },
+  };
+  assertAppendable(record);
   const installed = installLayer(paths, layer);
   try { setActiveLayers(paths, [...activeLayerIds(paths), installed.layer.id]); } catch (error) {
     removeLayer(paths, layer.id);
     throw error;
   }
-  const lesson: ExperienceEntry = {
-    date: isoDateOf(layer.adoptedAt) ?? new Date().toISOString().slice(0, 10),
-    targetClass: proposal.targetClass,
-    layerId: layer.id,
-    change: `adopted layer "${layer.id}" for the ${proposal.component} component`,
-    reason: oneLine(proposal.rationale) === "" ? verdict.reason : oneLine(proposal.rationale),
-    measuredEffect: formatMeasuredEffect(verdict),
-    tokensSpent: verdict.tokensSpent,
-  };
-  return { layerId: layer.id, experiencePath: appendExperience(paths, lesson).path };
+  return { layerId: layer.id, experiencePath: appendExperience(paths, record).path };
 }
 
 /**
- * Remove an adopted layer and append a dated "rolled back" lesson, so a rollback
- * adds a record instead of rewriting the past.
+ * Remove an adopted layer and record the rollback: the layer's active record is
+ * flipped to `reverted` (status line only) and a new reverted record is
+ * appended, so the history is never silently rewritten or deleted.
  */
 export function rollbackLayer(input: RollbackLayerInput): RollbackLayerResult {
   const { paths, layerId } = input;
-  const targetClass = classForLayer(paths, layerId) ?? "general";
-  if (!removeLayer(paths, layerId)) throw new AdoptRefusedError(`rollback refused: no adopted layer "${layerId}" is installed`);
-  const lesson: ExperienceEntry = {
-    date: new Date().toISOString().slice(0, 10),
+  const installed = readLayer(paths, layerId);
+  if (installed === null || !removeLayer(paths, layerId)) throw new AdoptRefusedError(`rollback refused: no adopted layer "${layerId}" is installed`);
+  const targetClass = installed.targetClass ?? classForLayer(paths, layerId) ?? "general";
+  const reason = oneLine(input.reason ?? "") === "" ? "operator rollback: the layer is no longer installed" : oneLine(input.reason ?? "");
+  const date = today();
+  const result = appendRevertedExperience(paths, {
     targetClass,
     layerId,
-    change: `rolled back layer "${layerId}"`,
-    reason: "operator rollback: the layer is no longer installed",
-    measuredEffect: "layer removed; earlier measured effects are retained unchanged above",
-    tokensSpent: 0,
-  };
-  return { layerId, experiencePath: appendExperience(paths, lesson).path, lesson };
+    date,
+    reason,
+    changed: `rolled back layer "${layerId}"`,
+    why: whyFor(installed.evidenceRunId, `removal reason: ${reason}`),
+    measuredEffect: "layer removed from the active set; earlier measured deltas are retained unchanged above (n=0 new runs)",
+  });
+  return { layerId, experiencePath: result.path, lesson: result.entry };
 }

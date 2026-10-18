@@ -23,6 +23,8 @@
  *
  * rollback = `removeLayer`: deleting the directory is the rollback, and the id
  * is dropped from the manifest so a removed layer can never be composed.
+ * Section 11 (H2-P3): at most MAX_ACTIVE_LAYERS layers may be active per
+ * profile; ./lifecycle.ts owns consolidation and the archive-aware rollback.
  */
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
@@ -37,6 +39,9 @@ const PINNED_COMPONENT_KEY = /^[ \t-]*(?:component|target|targets)[ \t]*:[ \t]*[
 
 /** Layer ids become directory names: same conservative charset the runner uses for engagement ids. */
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+/** Section 11: the hard cap on ACTIVE tuning layers per profile. */
+export const MAX_ACTIVE_LAYERS = 5;
 
 /** The composition manifest file name inside `paths.layers`. */
 export const ACTIVE_MANIFEST = "active.json";
@@ -246,9 +251,13 @@ function writeActiveManifest(paths: Harness2Paths, ids: readonly string[]): void
 /**
  * Replace the ordered composition manifest. Every id must already be installed;
  * mount order is the array order (later layers win). Returns the stored order.
+ * Section 11 cap: a 6th active layer is refused (consolidation first).
  */
 export function setActiveLayers(paths: Harness2Paths, ids: readonly string[]): string[] {
   const ordered = [...new Set(ids)];
+  if (ordered.length > MAX_ACTIVE_LAYERS) {
+    throw new Error(`[harness2] cannot activate ${ordered.length} layers: at most ${MAX_ACTIVE_LAYERS} may be active per profile; consolidate the stack first (spec section 11).`);
+  }
   for (const id of ordered) {
     if (readLayer(paths, id) === null) {
       throw new Error(`[harness2] cannot activate "${id}": it is not installed under ${paths.layers}`);
