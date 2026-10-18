@@ -26,6 +26,7 @@ import { registerLive, unregisterLive } from "../live.js";
 import { resolveConfig } from "./config.js";
 import { coordinatorSignOff } from "./signoff.js";
 import { resolveVariantCap } from "../variants/index.js";
+import { captureEngagementTrajectory } from "../harness2/trajectory.js";
 export async function runEngagement(input, opts = {}) {
     // Stale compiled dist/ is a silent-safety bug (an old model policy running after a src-only change). Fail fast — before any target touch.
     assertDistFresh();
@@ -228,10 +229,9 @@ export async function runEngagement(input, opts = {}) {
     }
     finally {
         unregisterLive(engagementId);
-        // v0.23.0: no blind save here. Every verdict persists atomically via
-        // transactRegistryFile at write time; a whole-file save of this
-        // engagement's in-memory copy would silently clobber verdicts transacted
-        // by a concurrent engagement. The in-memory registry mirrors the file.
+        // H2-P1a: additive trajectory/metrics capture for every outcome; guarded so it never throws into the run (tokens: see TOKEN_CAPTURE_STATUS).
+        captureEngagementTrajectory({ engagementDir: dir, engagementId, target: input.target, targetIds: input.targets, ctx, events });
+        // v0.23.0: no blind save here. Every verdict persists atomically via transactRegistryFile at write time; a whole-file save of this engagement's in-memory copy would clobber verdicts transacted by a concurrent engagement.
     }
 }
 //# sourceMappingURL=run.js.map

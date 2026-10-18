@@ -11,6 +11,8 @@ import { inBlackout } from "./gate.js";
 import { isPrivateOrLoopbackHost } from "./prober.js";
 import { reconPrompt } from "./prompts.js";
 import { redactPii } from "./safety/index.js";
+import { tokenMeterFor } from "./harness2/trajectory-normalize.js";
+import { stepJournalFor, responseTokens, TOOL_ERROR_PREFIX } from "./harness2/steps.js";
 import { HaltError } from "./context.js";
 import { sleep } from "./util.js";
 import { dispatchTool } from "./dispatch.js";
@@ -50,6 +52,9 @@ function haltedByCaps(ctx) {
 // ---------------------------------------------------------------------------
 export async function agentLoop(ctx, role, phase, system, user, tools, maxTurns, opts = {}) {
     const complete = ctx.deps.completeForRole ?? routerCompleteForRole;
+    // H2-P1 section-5 full-text capture: one steps.jsonl record per prompt, tool
+    // call and observation for this engagement (no-op when there is no run dir).
+    const steps = stepJournalFor(ctx);
     const messages = [
         { role: "system", content: system },
         { role: "user", content: user },
@@ -67,9 +72,16 @@ export async function agentLoop(ctx, role, phase, system, user, tools, maxTurns,
             res = await complete(role, messages, { tools });
         }
         catch (err) {
+            // The outgoing prompt did exist; only the response's tokens are unknown.
+            steps.prompt(JSON.stringify(messages), null);
             ctx.events.append({ phase, actor: "runner", action: "llm_error", result: `LLM call failed: ${err.message}` });
             throw err;
         }
+        // Harness2 P1a: the provider's usage is real; accumulate it per engagement.
+        tokenMeterFor(ctx).record(res.usage);
+        // H2-P1 section-5: the FULL outgoing messages verbatim, plus the token
+        // total of the response they produced (per-response tokens).
+        steps.prompt(JSON.stringify(messages), responseTokens(res.usage));
         if (res.text || res.reasoning) {
             if (res.text)
                 notes.push(res.text);
@@ -97,7 +109,18 @@ export async function agentLoop(ctx, role, phase, system, user, tools, maxTurns,
         // an assistant message containing these calls (ids must match).
         messages.push({ role: "assistant", content: res.text || "(tool calls)", toolCalls: res.toolCalls });
         for (const call of res.toolCalls) {
-            const d = await dispatchTool(ctx, role, phase, call);
+            // H2-P1 section-5: the full tool-call arguments, then the full result as
+            // the observation (redaction happens inside the journal writer).
+            steps.tool(call.name, JSON.stringify(call.arguments ?? {}));
+            let d;
+            try {
+                d = await dispatchTool(ctx, role, phase, call);
+            }
+            catch (err) {
+                steps.observation(call.name, `${TOOL_ERROR_PREFIX}${err.message}`);
+                throw err;
+            }
+            steps.observation(call.name, d.result);
             // v0.13.0 safety case: PII is redacted from tool outputs BEFORE they
             // reach the audit log or the agent context. The agents reason about
             // vulnerability shapes, not other people's personal data.
