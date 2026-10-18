@@ -354,6 +354,17 @@ function isReleaseMemberDirectory(dir: string): boolean {
 }
 
 /**
+ * Whether a package belongs to a private product family carried in-tree but
+ * published by neither the dsh nor the vendor release sequence. The SecScan
+ * red-team packages (@secscan/*) are assembled into the desktop installer, not
+ * published to npm, so they are exempt from the release-member metadata rules.
+ * @param manifest - the workspace manifest under inspection.
+ */
+function isPrivateProductPackage(manifest: PackageManifest): boolean {
+  return manifest.name?.startsWith('@secscan/') === true
+}
+
+/**
  * Require a dsh-family manifest to carry the workspace version.
  *
  * The dsh release sequence publishes packages/ and apps/ members and every
@@ -403,7 +414,7 @@ export function checkWorkspaceManifest({ dir, manifest }: WorkspaceManifest): st
       || manifest.repository.directory !== expectedDirectory) {
       errors.push(`${label}: published Landlock package repository must use ${publishedRepositoryUrl} with directory ${expectedDirectory}`)
     }
-  } else if (isReleaseMemberDirectory(dir)) {
+  } else if (isReleaseMemberDirectory(dir) && !isPrivateProductPackage(manifest)) {
     // Release members state that they are publishable: npm refuses a private
     // package, and the repository field is how a consumer finds the source of
     // the package it installed.

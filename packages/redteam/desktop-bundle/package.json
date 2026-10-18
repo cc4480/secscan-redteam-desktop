@@ -15,7 +15,7 @@
     "@secscan/redteam-harness-plugin": "workspace:*"
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-mcp-client": "*"
+    "@deepseek-ai/dsh-mcp-client": "workspace:*"
   },
   "types": "lib/types/index.d.ts",
   "exports": {

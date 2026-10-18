@@ -5,15 +5,15 @@
   },
   "description": "DeepSeek Harness plugin for the SecScan red team: auth gate (tools/pre-execute hook) + red-team system-prompt section. The SecScan MCP connection itself is the harness-native @deepseek-ai/dsh-mcp-client (see cordis.patch.yml).",
   "devDependencies": {
-    "@deepseek-ai/cordis": "workspace:*",
+    "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-tools": "workspace:*"
   },
   "license": "UNLICENSED",
   "main": "lib/index.js",
   "name": "@secscan/redteam-harness-plugin",
   "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.0",
-    "@deepseek-ai/dsh-tools": "0.2.0-rc.2"
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-tools": "workspace:*"
   },
   "private": true,
   "scripts": {

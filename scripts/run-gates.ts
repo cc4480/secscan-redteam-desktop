@@ -387,6 +387,10 @@ function ciPrimaryGates(): Gate[] {
     // repeats the Host contract pass. Wait for all three consumers so build
     // neither races tsbuildinfo nor replaces declarations while they are read.
     ciBuildGate('build', { needs: ['typecheck', 'lint', 'doc-typecheck'] }),
+    // The engagement engine's own 753-test suite. It builds itself from source and
+    // stamps the @secscan/* workspace deps, so it runs after the workspace build
+    // has produced their lib/ output.
+    pnpmScript('redteam-runner', 'test:redteam-runner', { needs: ['build'] }),
     pnpmScript('publint', 'publint', { needs: ['build'] }),
     pnpmScript('node-next-types', 'verify-node-next-types', {
       label: 'node-next types',
