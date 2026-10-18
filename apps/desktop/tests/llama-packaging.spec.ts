@@ -122,7 +122,7 @@ function beforePackContext(): { packager: { config: Record<string, unknown> } } 
 
 /** @returns the failure a `beforePack` run reported, for one assertion to read its message. */
 async function beforePackFailure(config: ReturnType<typeof createElectronBuilderConfig>): Promise<Error> {
-  const failure = await config.beforePack(beforePackContext()).then(() => undefined, (error: unknown) => error)
+  const failure = await config.beforePack(beforePackContext() as unknown as Parameters<typeof config.beforePack>[0]).then(() => undefined, (error: unknown) => error)
   if (!(failure instanceof Error)) throw new Error('the packaging gate accepted an incomplete llama payload')
   return failure
 }
@@ -130,7 +130,7 @@ async function beforePackFailure(config: ReturnType<typeof createElectronBuilder
 /** @returns the llama extraResources mapping the factory produced, if any. */
 function llamaResourceEntries(config: ReturnType<typeof createElectronBuilderConfig>) {
   const entries = Array.isArray(config.extraResources) ? config.extraResources : []
-  return entries.filter(entry => typeof entry === 'object' && entry !== null && entry.to === 'llama')
+  return entries.filter(entry => typeof entry === 'object' && entry !== null && (entry as { to?: string }).to === 'llama')
 }
 
 // The payload is build output and is gitignored, so a source-only checkout must still

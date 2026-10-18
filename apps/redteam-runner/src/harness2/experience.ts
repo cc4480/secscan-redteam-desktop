@@ -45,7 +45,6 @@ const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const INT = /^\d+$/;
 const DELTA_KEYS = ["vulnsFound", "falsePositives", "steps", "tokensIn", "tokensOut"] as const;
 const PINNED_NEEDLES: readonly string[] = [...COMPONENT_PATHS[PINNED_COMPONENT], PINNED_COMPONENT, "auth-gate"];
-
 /** Thrown whenever adoption or rollback is refused; nothing is written before it. */
 export class AdoptRefusedError extends Error {
   constructor(message: string) {
@@ -69,7 +68,6 @@ export interface AdoptVerdictInput {
   /** Explicit operator approval; anything but true refuses adoption. */
   readonly approve: boolean;
 }
-
 /** True for a real calendar date in YYYY-MM-DD form. */
 function isIsoDate(value: string): boolean {
   if (!ISO_DATE.test(value)) return false;
@@ -176,8 +174,6 @@ export function readExperienceReport(paths: Harness2Paths, targetClass: TargetCl
     return { targetClass, path, exists: false, entries: [], skipped: 0 };
   }
 }
-
-/** The entries of one class's EXPERIENCE.md (never throws). */
 export function readExperience(paths: Harness2Paths, targetClass: TargetClass): ExperienceEntry[] {
   return [...readExperienceReport(paths, targetClass).entries];
 }
