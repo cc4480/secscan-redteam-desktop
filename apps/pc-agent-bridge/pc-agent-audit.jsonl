@@ -1,0 +1,2 @@
+{"ts":"2026-10-19T16:55:12.591Z","session":"58002432-134f-4b8e-b038-975ccea15aae","tool":"ui_tree","args":{"maxNodes":5},"ok":true,"receipt":{"tool":"ui_tree","ok":true,"durationMs":573}}
+{"ts":"2026-10-19T16:55:14.164Z","session":"58002432-134f-4b8e-b038-975ccea15aae","tool":"input_click","args":{"x":400,"y":300},"ok":true,"receipt":{"tool":"input_click","ok":true,"before":{"shotHash":"fc5bb52a914863e9ec628e5af3fa35601730c86d2feb223e2c32636df0dcc618"},"after":{"shotHash":"fc5bb52a914863e9ec628e5af3fa35601730c86d2feb223e2c32636df0dcc618"},"changed":false,"durationMs":1562}}

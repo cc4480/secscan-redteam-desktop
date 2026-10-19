@@ -1,0 +1,18 @@
+{
+  "name": "@secscan/pc-agent-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local-PC agent bridge: MCP Streamable HTTP server exposing eyes, hands and the robot path on Windows, with action receipts and tier gating.",
+  "bin": {
+    "pc-agent-bridge": "server.mjs"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "smoke": "node ../../apps/redteam-runner/scripts/smoke-pc-agent.mjs"
+  },
+  "files": [
+    "server.mjs",
+    "win.ps1"
+  ]
+}
