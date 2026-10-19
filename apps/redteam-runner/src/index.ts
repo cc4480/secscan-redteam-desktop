@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Public API of the live engagement runner.
  *
  * ```ts
@@ -12,7 +12,7 @@
  * ```
  *
  * Credentials come from the environment (Secure Vault), never from code:
- *   SECSCAN_MCP_TOKEN, DEEPSEEK_API_KEY, QWEN_API_KEY (optional since v0.6 —
+ *   SECSCAN_MCP_TOKEN, DEEPSEEK_API_KEY, QWEN_API_KEY (optional since v0.6 â€”
  *   DeepSeek-only policy), SECSCAN_MCP_URL (optional).
  *
  * Console bridge: the console's "start engagement" action writes an
@@ -30,6 +30,8 @@ import { parseTier } from "./accountability/index.js";
 import type { EngagementInput } from "./types.js";
 
 export { runEngagement, resolveConfig } from "./phases.js";
+export * from "./workflows/commands.js";
+export * from "./workflows/protocol.js";
 export type { RunOptions } from "./phases.js";
 export type { RunnerDeps } from "./context.js";
 export type {
@@ -186,7 +188,7 @@ function listJobs(queueDir: string): string[] {
 /**
  * Validate a queue-dropped job file at intake (v0.28.0). Mirrors the checks
  * cli/args.ts buildInput() and the UI launch route enforce, so a malformed
- * job fails fast at the queue — naming the file and the reason — instead
+ * job fails fast at the queue â€” naming the file and the reason â€” instead
  * of dying deep inside runEngagement. Throws on the first problem found.
  */
 export function validateQueueInput(raw: unknown): EngagementInput {
@@ -242,7 +244,7 @@ export async function watchQueue(
       try {
         raw = JSON.parse(readFileSync(jobFile, "utf8"));
       } catch {
-        console.error(`[runner] queue: ${basename(jobFile)} is not valid JSON — moved to done/`);
+        console.error(`[runner] queue: ${basename(jobFile)} is not valid JSON â€” moved to done/`);
         renameSync(jobFile, join(queueDir, "done", `bad-${Date.now()}.json`));
         continue;
       }
@@ -250,7 +252,7 @@ export async function watchQueue(
       try {
         input = validateQueueInput(raw);
       } catch (err) {
-        console.error(`[runner] queue: ${basename(jobFile)} rejected: ${(err as Error).message} — moved to done/`);
+        console.error(`[runner] queue: ${basename(jobFile)} rejected: ${(err as Error).message} â€” moved to done/`);
         renameSync(jobFile, join(queueDir, "done", `bad-${Date.now()}.json`));
         continue;
       }
@@ -264,3 +266,5 @@ export async function watchQueue(
     await new Promise((r) => setTimeout(r, pollMs));
   }
 }
+
+
