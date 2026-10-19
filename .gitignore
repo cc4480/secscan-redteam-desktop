@@ -63,3 +63,6 @@ native/system/test/bin/
 # dist/ here. Regenerated with `node apps/desktop/scripts/vendor-redteam-runner.mjs`.
 !apps/desktop/resources/redteam-runner/
 !apps/desktop/resources/redteam-runner/**
+
+# pc-agent bridge runtime audit log
+apps/pc-agent-bridge/pc-agent-audit.jsonl
