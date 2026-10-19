@@ -23,15 +23,98 @@
  */
 export const PC_AGENT_ENV_URL = "REDTEAM_PC_AGENT_URL";
 export const PC_AGENT_ENV_TOKEN = "REDTEAM_PC_AGENT_TOKEN";
-/** The only tools this backend may call. Closed set, by design. */
-export const PC_AGENT_ALLOWED_TOOLS = [
+/**
+ * Observation ("eyes"): read-only perception of the host and its UI. Tier 0.
+ * A bridge that implements only the robot tools can run commands but cannot see
+ * a UI, which is why `screen_snapshot`/`ui_tree`/`state_hash` are first-class.
+ */
+export const PC_AGENT_OBSERVE_TOOLS = [
     "system_info",
     "list_processes",
     "list_dir",
     "read_file",
+    "screen_snapshot",
+    "ui_windows",
+    "ui_tree",
+    "ui_describe",
+    "ui_focused",
+    "state_hash",
+    "clipboard_get",
+    "wait_idle",
+    "wait_window",
+];
+/** UI action ("hands"): safe interactions with the visible desktop. Tier 1. */
+export const PC_AGENT_ACTION_TOOLS = [
+    "ui_invoke",
+    "ui_set_value",
+    "ui_toggle",
+    "input_click",
+    "input_type",
+    "input_key",
+    "input_scroll",
+    "input_drag",
+    "window_focus",
+    "window_arrange",
+    "window_close",
+    "clipboard_set",
+    "assert_element",
+];
+/** Robot path: destructive or host-wide actions. Tier 2 - requires approval. */
+export const PC_AGENT_ROBOT_TOOLS = [
     "shell_exec",
     "shell_pwsh",
+    "proc_kill",
+    "fs_write",
+    "fs_delete",
 ];
+/** Every tool this backend may call. Closed set, by design. */
+export const PC_AGENT_ALLOWED_TOOLS = [
+    ...PC_AGENT_OBSERVE_TOOLS,
+    ...PC_AGENT_ACTION_TOOLS,
+    ...PC_AGENT_ROBOT_TOOLS,
+];
+/** The tier of one allow-listed tool; unknown names are treated as destructive. */
+export function pcAgentToolTier(tool) {
+    if (PC_AGENT_OBSERVE_TOOLS.includes(tool))
+        return 0;
+    if (PC_AGENT_ACTION_TOOLS.includes(tool))
+        return 1;
+    if (PC_AGENT_ROBOT_TOOLS.includes(tool))
+        return 2;
+    return 2;
+}
+function asRecord(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value)
+        ? value
+        : undefined;
+}
+/**
+ * Parse a receipt out of a tool result.
+ *
+ * A bridge may wrap it (`{ receipt: { ... } }`) or return it directly; a result
+ * that is neither is simply text, so older bridges keep working unchanged.
+ * @param text - the tool result text.
+ * @returns the receipt, or undefined when the result is not a receipt.
+ */
+export function parsePcAgentReceipt(text) {
+    let parsed;
+    try {
+        parsed = JSON.parse(text);
+    }
+    catch {
+        return undefined;
+    }
+    const record = asRecord(parsed);
+    if (record === undefined)
+        return undefined;
+    const wrapped = asRecord(record.receipt);
+    if (wrapped !== undefined)
+        return wrapped;
+    // An unwrapped receipt is recognisable by the envelope fields, not by `ok` alone.
+    return "changed" in record || "before" in record || "after" in record
+        ? record
+        : undefined;
+}
 /** Read and validate configuration. Returns undefined when unconfigured or malformed. */
 export function pcAgentConfig(env = process.env) {
     const url = (env[PC_AGENT_ENV_URL] ?? "").trim();
@@ -108,26 +191,32 @@ async function rpc(fetchImpl, cfg, body, sessionId) {
  * so a future caller cannot widen the surface by passing an arbitrary name.
  */
 export function createPcAgentClient(cfg, fetchImpl) {
+    const invoke = async (tool, args) => {
+        if (!PC_AGENT_ALLOWED_TOOLS.includes(tool)) {
+            throw new Error(`pc-agent: tool ${JSON.stringify(tool)} is not on the allow-list`);
+        }
+        const initialized = await rpc(fetchImpl, cfg, {
+            jsonrpc: "2.0",
+            id: 1,
+            method: "initialize",
+            params: {
+                protocolVersion: "2025-03-26",
+                capabilities: {},
+                clientInfo: { name: "secscan-redteam", version: "0.34.0" },
+            },
+        });
+        const sessionId = initialized.sessionId;
+        // Notifications are accepted without a body; a server may answer 202 here.
+        await rpc(fetchImpl, cfg, { jsonrpc: "2.0", method: "notifications/initialized", params: {} }, sessionId);
+        const reply = await rpc(fetchImpl, cfg, { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: tool, arguments: args } }, sessionId);
+        return toolText(reply.parsed) ?? JSON.stringify(reply.parsed ?? null);
+    };
     return {
-        async call(tool, args) {
-            if (!PC_AGENT_ALLOWED_TOOLS.includes(tool)) {
-                throw new Error(`pc-agent: tool ${JSON.stringify(tool)} is not on the allow-list`);
-            }
-            const initialized = await rpc(fetchImpl, cfg, {
-                jsonrpc: "2.0",
-                id: 1,
-                method: "initialize",
-                params: {
-                    protocolVersion: "2025-03-26",
-                    capabilities: {},
-                    clientInfo: { name: "secscan-redteam", version: "0.34.0" },
-                },
-            });
-            const sessionId = initialized.sessionId;
-            // Notifications are accepted without a body; a server may answer 202 here.
-            await rpc(fetchImpl, cfg, { jsonrpc: "2.0", method: "notifications/initialized", params: {} }, sessionId);
-            const reply = await rpc(fetchImpl, cfg, { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: tool, arguments: args } }, sessionId);
-            return toolText(reply.parsed) ?? JSON.stringify(reply.parsed ?? null);
+        call: invoke,
+        async callWithReceipt(tool, args) {
+            const text = await invoke(tool, args);
+            const receipt = parsePcAgentReceipt(text);
+            return receipt === undefined ? { text } : { text, receipt };
         },
     };
 }

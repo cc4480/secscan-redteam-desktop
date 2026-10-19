@@ -9,5 +9,6 @@ export * from "./tools/web.js";
 export * from "./tools/host.js";
 export * from "./tools/msf.js";
 export * from "./tools/bookkeeping.js";
+export * from "./tools/pc-agent.js";
 export * from "./tools/compose.js";
 export { VARIANT_LIST_TOOL } from "./variants/tool.js";

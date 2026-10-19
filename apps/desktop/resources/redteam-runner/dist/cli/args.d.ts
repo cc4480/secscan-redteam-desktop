@@ -7,7 +7,7 @@ export declare function arg(flag: string): string | undefined;
 export declare function argAll(flag: string): string[];
 export declare function flag(name: string): boolean;
 /**
- * v0.26.0: --log-max-bytes <n> / --log-max-archives <n> — log-rotation
+ * v0.26.0: --log-max-bytes <n> / --log-max-archives <n> â€” log-rotation
  * overrides for `start` and `watch`. Env REDTEAM_LOG_MAX_BYTES /
  * REDTEAM_LOG_MAX_ARCHIVES. Fail fast with a clear message on bad values.
  */

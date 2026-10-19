@@ -12,7 +12,7 @@
  * ```
  *
  * Credentials come from the environment (Secure Vault), never from code:
- *   SECSCAN_MCP_TOKEN, DEEPSEEK_API_KEY, QWEN_API_KEY (optional since v0.6 —
+ *   SECSCAN_MCP_TOKEN, DEEPSEEK_API_KEY, QWEN_API_KEY (optional since v0.6 â€”
  *   DeepSeek-only policy), SECSCAN_MCP_URL (optional).
  *
  * Console bridge: the console's "start engagement" action writes an
@@ -27,6 +27,8 @@ import { runEngagement } from "./phases.js";
 import { ALL_TARGETS, isTargetId } from "./targets.js";
 import { parseTier } from "./accountability/index.js";
 export { runEngagement, resolveConfig } from "./phases.js";
+export * from "./workflows/commands.js";
+export * from "./workflows/protocol.js";
 export { readEvents, readState };
 export { TECHNIQUES, lookupTechnique, defaultExcludedForMode, resolveExcludedTechniques, ALWAYS_EXCLUDED } from "./attack.js";
 export { BATTERY, BATTERY_CATEGORIES, CATEGORY_LABELS, batteryChecklistText, batteryItemsFor, lookupBatteryItem, } from "./battery.js";
@@ -59,7 +61,7 @@ function listJobs(queueDir) {
 /**
  * Validate a queue-dropped job file at intake (v0.28.0). Mirrors the checks
  * cli/args.ts buildInput() and the UI launch route enforce, so a malformed
- * job fails fast at the queue — naming the file and the reason — instead
+ * job fails fast at the queue â€” naming the file and the reason â€” instead
  * of dying deep inside runEngagement. Throws on the first problem found.
  */
 export function validateQueueInput(raw) {
@@ -119,7 +121,7 @@ export async function watchQueue(queueDir = defaultQueueDir(), opts = {}, pollMs
                 raw = JSON.parse(readFileSync(jobFile, "utf8"));
             }
             catch {
-                console.error(`[runner] queue: ${basename(jobFile)} is not valid JSON — moved to done/`);
+                console.error(`[runner] queue: ${basename(jobFile)} is not valid JSON â€” moved to done/`);
                 renameSync(jobFile, join(queueDir, "done", `bad-${Date.now()}.json`));
                 continue;
             }
@@ -128,7 +130,7 @@ export async function watchQueue(queueDir = defaultQueueDir(), opts = {}, pollMs
                 input = validateQueueInput(raw);
             }
             catch (err) {
-                console.error(`[runner] queue: ${basename(jobFile)} rejected: ${err.message} — moved to done/`);
+                console.error(`[runner] queue: ${basename(jobFile)} rejected: ${err.message} â€” moved to done/`);
                 renameSync(jobFile, join(queueDir, "done", `bad-${Date.now()}.json`));
                 continue;
             }

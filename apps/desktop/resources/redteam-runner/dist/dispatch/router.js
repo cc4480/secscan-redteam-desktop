@@ -13,10 +13,11 @@ import { handleXTool } from "./xtool.js";
 import { XTOOLS } from "../xtool/registry.js";
 import { handleMcpTools } from "./mcp.js";
 import { handleBookkeepingTools } from "./bookkeeping.js";
+import { handlePcAgentTools } from "./pc-agent.js";
 async function dispatchToolInner(ctx, role, phase, call) {
     const args = call.arguments ?? {};
     ctx.actions++;
-    const handlers = [handleWebTools, handleHostTools, handleMsfTools, handleNucleiTools, handleNmapTools, handleXTool, handleMcpTools, handleBookkeepingTools];
+    const handlers = [handleWebTools, handleHostTools, handleMsfTools, handleNucleiTools, handleNmapTools, handleXTool, handlePcAgentTools, handleMcpTools, handleBookkeepingTools];
     for (const h of handlers) {
         const r = await h(ctx, role, phase, call, args);
         if (r)

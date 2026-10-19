@@ -205,7 +205,6 @@ export function createElectronBuilderConfig(
       'lib/preload-welcome.cjs',
       'lib/preload-llama.cjs',
       'renderer/**/*',
-      '../resources/THIRD-PARTY-NOTICES.txt',
       'package.json',
       { from: buildPaths.dsh, to: 'dsh', filter: ['**/*'] },
       // electron-builder excludes a source directory's root node_modules.
@@ -362,4 +361,5 @@ export function createElectronBuilderConfig(
     publish: update === undefined ? null : [{ provider: 'generic', url: update.publicUrl, channel: 'nightly' }],
   }
 }
+
 

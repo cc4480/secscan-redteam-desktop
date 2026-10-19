@@ -12,7 +12,7 @@
  * ```
  *
  * Credentials come from the environment (Secure Vault), never from code:
- *   SECSCAN_MCP_TOKEN, DEEPSEEK_API_KEY, QWEN_API_KEY (optional since v0.6 —
+ *   SECSCAN_MCP_TOKEN, DEEPSEEK_API_KEY, QWEN_API_KEY (optional since v0.6 â€”
  *   DeepSeek-only policy), SECSCAN_MCP_URL (optional).
  *
  * Console bridge: the console's "start engagement" action writes an
@@ -24,6 +24,8 @@ import { readEvents, readState, type LiveState } from "./events.js";
 import { type RunOptions } from "./phases.js";
 import type { EngagementInput } from "./types.js";
 export { runEngagement, resolveConfig } from "./phases.js";
+export * from "./workflows/commands.js";
+export * from "./workflows/protocol.js";
 export type { RunOptions } from "./phases.js";
 export type { RunnerDeps } from "./context.js";
 export type { EngagementEvent, EngagementInput, EngagementMode, EngagementPhase, EngagementResult, EngagementStatus, Finding, OperationPlan, PlanStep, BlackoutWindow, RulesOfEngagement, RunnerOptions, } from "./types.js";
@@ -52,7 +54,7 @@ export declare function enqueueEngagement(input: EngagementInput, queueDir?: str
 /**
  * Validate a queue-dropped job file at intake (v0.28.0). Mirrors the checks
  * cli/args.ts buildInput() and the UI launch route enforce, so a malformed
- * job fails fast at the queue — naming the file and the reason — instead
+ * job fails fast at the queue â€” naming the file and the reason â€” instead
  * of dying deep inside runEngagement. Throws on the first problem found.
  */
 export declare function validateQueueInput(raw: unknown): EngagementInput;

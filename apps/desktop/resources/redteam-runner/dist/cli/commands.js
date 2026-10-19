@@ -11,6 +11,7 @@ import { startUiServer } from "../ui/index.js";
 import { describeEscalation, escalateEngagement } from "../accountability/index.js";
 import { tier2ProductionConfirmed } from "../accountability/index.js";
 import { arg, argAll, buildInput, flag, parseLogRotationArgs, usage } from "./args.js";
+import { printCommandHelp, runCommandCli } from "./command.js";
 async function runReverify() {
     const bundlePath = arg("--bundle");
     if (!bundlePath || !existsSync(bundlePath)) {
@@ -30,7 +31,7 @@ async function runReverify() {
         process.exit(3);
     }
     const execute = flag("--execute");
-    console.log(`[runner] PoC ${bundle.bundleId} — ${bundle.findingId}: ${bundle.title}`);
+    console.log(`[runner] PoC ${bundle.bundleId} â€” ${bundle.findingId}: ${bundle.title}`);
     console.log(`[runner] validation tier: ${bundle.validationTier}; proves: ${bundle.proves}`);
     console.log(`[runner] steps:`);
     for (const s of bundle.steps) {
@@ -49,7 +50,7 @@ async function runReverify() {
     const killSwitch = { aborted: false };
     process.on("SIGINT", () => {
         killSwitch.aborted = true;
-        console.error(`\n[runner] SIGINT — kill switch set; in-flight step will abort`);
+        console.error(`\n[runner] SIGINT â€” kill switch set; in-flight step will abort`);
     });
     const report = await reverifyBundle(bundle, createReplayer({ scope: scopes, killSwitch }));
     const outDir = arg("--out") ?? dirname(resolve(bundlePath));
@@ -59,23 +60,23 @@ async function runReverify() {
     console.log(`[runner] verdict: ${report.verdict}`);
     console.log(`[runner] ${report.summary}`);
     for (const s of report.steps) {
-        console.log(`  seq ${s.seq} ${s.tool}: ${s.replayed ? (s.ok ? "ok" : "FAILED") : "skipped"} — ${s.note.slice(0, 160)}`);
+        console.log(`  seq ${s.seq} ${s.tool}: ${s.replayed ? (s.ok ? "ok" : "FAILED") : "skipped"} â€” ${s.note.slice(0, 160)}`);
     }
     console.log(`[runner] ${report.registryNote}`);
     console.log(`[runner] report written: ${outPath}`);
     // v0.15.0 retest loop: update the tickets linked in integrations.json
     // (written by reportPhase next to the bundle) with the reverify verdict.
-    // Never throws — a missing mapping or unconfigured sink just logs.
+    // Never throws â€” a missing mapping or unconfigured sink just logs.
     try {
         const mapping = loadTicketMapping(dirname(resolve(bundlePath)));
         if (mapping) {
             const { attempts } = await updateTicketsForReverify(mapping, bundle, report);
             for (const a of attempts) {
-                console.log(`[runner] ticket ${a.sink}: ${a.status} — ${a.detail}`);
+                console.log(`[runner] ticket ${a.sink}: ${a.status} â€” ${a.detail}`);
             }
         }
         else {
-            console.log(`[runner] no integrations.json next to the bundle — ticket update skipped (no linked tickets)`);
+            console.log(`[runner] no integrations.json next to the bundle â€” ticket update skipped (no linked tickets)`);
         }
     }
     catch (err) {
@@ -93,7 +94,7 @@ async function runWatchCli(profilePath) {
         console.error(`[runner] bad --max-rps ${JSON.stringify(rpsRaw)}; want a positive number (requests/sec per host)`);
         process.exit(2);
     }
-    // A triggered run is always a single cycle, tagged with the change ref —
+    // A triggered run is always a single cycle, tagged with the change ref â€”
     // this is the CI/CD hook: wire the pipeline webhook to this command.
     if (once || trigger) {
         const result = await runWatchCycle({ profilePath, once: true, trigger, maxRpsPerHost, ...parseLogRotationArgs() });
@@ -115,7 +116,7 @@ async function runWatchCli(profilePath) {
         }, null, 2));
         process.exit(result.status === "complete" ? 0 : result.status === "refused" ? 2 : 1);
     }
-    console.log(`[runner] continuous watch: ${profilePath} — Ctrl+C to stop`);
+    console.log(`[runner] continuous watch: ${profilePath} â€” Ctrl+C to stop`);
     const ctrl = new AbortController();
     process.on("SIGINT", () => ctrl.abort());
     await watchLoop({ profilePath, maxRpsPerHost, ...parseLogRotationArgs() }, ctrl.signal);
@@ -152,6 +153,14 @@ async function runEscalate() {
 }
 export async function main() {
     const cmd = process.argv[2];
+    if (cmd === "commands") {
+        printCommandHelp();
+        return;
+    }
+    if (cmd === "command") {
+        process.exitCode = await runCommandCli();
+        return;
+    }
     if (cmd === "doctor") {
         const { readinessReport, formatReadiness } = await import("../tools/readiness.js");
         const report = await readinessReport(process.env);
@@ -217,7 +226,7 @@ export async function main() {
             return;
         }
         const queueDir = arg("--queue");
-        console.log(`[runner] watching ${queueDir ?? "(default queue dir)"} — Ctrl+C to stop`);
+        console.log(`[runner] watching ${queueDir ?? "(default queue dir)"} â€” Ctrl+C to stop`);
         const ctrl = new AbortController();
         process.on("SIGINT", () => ctrl.abort());
         await watchQueue(queueDir, {}, 10_000, ctrl.signal);

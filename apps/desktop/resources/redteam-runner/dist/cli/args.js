@@ -20,7 +20,7 @@ export function flag(name) {
     return process.argv.includes(name);
 }
 /**
- * v0.26.0: --log-max-bytes <n> / --log-max-archives <n> — log-rotation
+ * v0.26.0: --log-max-bytes <n> / --log-max-archives <n> â€” log-rotation
  * overrides for `start` and `watch`. Env REDTEAM_LOG_MAX_BYTES /
  * REDTEAM_LOG_MAX_ARCHIVES. Fail fast with a clear message on bad values.
  */
@@ -60,7 +60,7 @@ export function usage() {
     # tagged with the change reference (CI/CD hook: wire your pipeline's
     # webhook to this command). Without --once/--trigger, loops on the
     # profile's cadence.intervalHours until Ctrl+C. Every cycle re-checks
-    # scopeValidUntil — expired authorization refuses to run, fail closed.
+    # scopeValidUntil â€” expired authorization refuses to run, fail closed.
   redteam-runner escalate --engagement <id> --tier <0|1|2> --operator "<name>" [--reason "<text>"] [--confirm-tier2-production] [--engagements-dir <dir>]
     # v0.24.0 mid-run tier change: records the operator approval in
     # approvals.jsonl and rewrites tier.json; a running engagement picks
@@ -70,7 +70,7 @@ export function usage() {
     # (or REDTEAM_TIER2_PROD_CONFIRM=1). Agents can never call this.
 
 --full-battery (or --target secscan+seclayer): ONE unified engagement running the
-target-specific batteries (3 categories × selected targets). The coordinator
+target-specific batteries (3 categories Ã— selected targets). The coordinator
 prompt carries the selected batteries as the plan skeleton; coverage counts
 complete only when every cell is probed or honestly BLOCKED.
 --targets <csv>: subset of secscan,seclayer,webapp,windows,linux for a full-battery run
@@ -78,24 +78,24 @@ complete only when every cell is probed or honestly BLOCKED.
 Only applies with --full-battery. Several battery items
 carry honest prerequisites (each tagged [needs: ...] in the plan skeleton,
 e.g. the Metasploit items need msfrpcd and the Nuclei items need the nuclei
-binary); three need more than operator tooling — WS-064: kerberos ticket
+binary); three need more than operator tooling â€” WS-064: kerberos ticket
 material, WS-065: human operator for the shadowing act, LX-041: privileged
-test client for the mount proof — see docs/ROADMAP.md; --scope must cover
+test client for the mount proof â€” see docs/ROADMAP.md; --scope must cover
 secscan.us for the web targets.
 
 --local-sandbox: LOCAL SANDBOX MODE ONLY. Skips ownership verification and the
 private-host rejection, but only for a target that already resolves to a
 private/loopback address (e.g. localhost, 127.0.0.1). No effect on a real
 domain. Use only against infrastructure you own, e.g. a local Juice
-Shop/DVWA container — never against a live/internet target.
+Shop/DVWA container â€” never against a live/internet target.
 
 --dry-run: skip the live agent loops (no DEEPSEEK_API_KEY needed; QWEN_API_KEY
-is optional since v0.6) — runs gating/authorize/scope/report plumbing only, useful for
+is optional since v0.6) â€” runs gating/authorize/scope/report plumbing only, useful for
 smoke-testing the runner itself.
 
 --env staging|production (v0.13.0 safety case): staging (default) runs the
 full battery with configured rate limits. production REQUIRES explicit
-operator confirmation (--confirm-production or REDTEAM_PROD_CONFIRM=1) —
+operator confirmation (--confirm-production or REDTEAM_PROD_CONFIRM=1) â€”
 without it the runner refuses to start, mechanically, before any packet.
 Production also caps the per-host rate limit at 2 rps even if configured
 higher. Env alternative: REDTEAM_ENV=staging|production.
@@ -103,7 +103,7 @@ higher. Env alternative: REDTEAM_ENV=staging|production.
 REDTEAM_MAX_RPS. Defaults: 5 staging, 2 production.
 --max-variants <n>: per-item payload-variant cap (v0.20.0). Env
 REDTEAM_MAX_VARIANTS. Defaults: 25 staging, 10 production. Caps how many
-curated variant executions one battery item may run — enforced mechanically.
+curated variant executions one battery item may run â€” enforced mechanically.
 --log-max-bytes <n> / --log-max-archives <n> (v0.26.0): log-rotation
 overrides. Env REDTEAM_LOG_MAX_BYTES / REDTEAM_LOG_MAX_ARCHIVES. Defaults:
 50 MiB per log file, 5 archives kept. When events.jsonl exceeds the cap it
@@ -114,13 +114,13 @@ logRetention.maxBytes / logRetention.maxArchives (CLI/env override it).
 
 --tier 0|1|2 (v0.17.0 accountability): graduated agent autonomy, enforced
 mechanically in the tool dispatcher. 0 = observe (read-only recon only);
-1 = validate (single-step validated exploitation, one step per target —
+1 = validate (single-step validated exploitation, one step per target â€”
 chaining refused); 2 = chain (multi-step attack chains, still
 non-destructive, no-DoS). Default: 2 on staging, 1 on production. Env
 alternative: REDTEAM_TIER=0|1|2. Tier 2 on production additionally requires
---confirm-tier2-production (or REDTEAM_TIER2_PROD_CONFIRM=1) — without it the
+--confirm-tier2-production (or REDTEAM_TIER2_PROD_CONFIRM=1) â€” without it the
 runner refuses to start. Production engagements also require a named human
-operator (--operator "<name>" or REDTEAM_OPERATOR) — someone must own the
+operator (--operator "<name>" or REDTEAM_OPERATOR) â€” someone must own the
 findings, the tier, and the scope.
 
   redteam-runner reverify --bundle <poc/F-1.json> [--scope <host>...] [--execute] [--out <dir>]
@@ -128,17 +128,19 @@ findings, the tier, and the scope.
     # target. Without --execute: prints the replay plan only (no traffic).
     # With --execute: requires --scope (exact hosts; enforced mechanically),
     # verdict reproduced/not-reproduced/target-changed is written to the
-    # report and — v0.15.0 — pushed to linked Jira/ServiceNow tickets via
+    # report and â€” v0.15.0 â€” pushed to linked Jira/ServiceNow tickets via
     # integrations.json when those sinks are configured.
     # replays ssh_exec/winrm_exec/msf_exec steps with a FRESH canary marker
     # (credentials resolve from env, never from the bundle), and reports
     # reproduced | not-reproduced | target-changed. Exit: 0 reproduced,
     # 1 not-reproduced, 2 target-changed.
 
-  redteam-runner ui [--port 8787] [--listen <addr>] [--engagements-dir <dir>]
+  redteam-runner commands                          # list slash commands (scan/deepscan/nmap/nuclei/metasploit/pcscan/report)
+redteam-runner command "<line>" [--execute] [--approve] [--json]  # parse, plan and optionally run a command
+redteam-runner ui [--port 8787] [--listen <addr>] [--engagements-dir <dir>]
   redteam-runner doctor [--json]                    # check external tools, wordlist, MSF RPC and required credentials
     # v0.22.0 web console: loopback-only (127.0.0.1) token-authenticated
-    # dashboard wired directly to these same CLI code paths — launch
+    # dashboard wired directly to these same CLI code paths â€” launch
     # engagements, stream the operation feed, browse findings with proof
     # bundles, inspect coverage and compliance packs, trigger watch cycles,
     # and hit the kill switch. The startup token is printed to the terminal
@@ -151,11 +153,11 @@ Host-exec (v0.9.0, Windows/Linux batteries): REDTEAM_SSH_USER + one of
 REDTEAM_SSH_PASSWORD / REDTEAM_SSH_KEY / REDTEAM_SSH_KEY_PATH;
 REDTEAM_SMB_USER + REDTEAM_SMB_PASSWORD (+ optional REDTEAM_SMB_DOMAIN);
 REDTEAM_WINRM_USER + REDTEAM_WINRM_PASSWORD. Test accounts only, via
-environment or Secure Vault — never in code, never logged.
+environment or Secure Vault â€” never in code, never logged.
 Metasploit bridge (v0.11.0, CVE exploit validation): REDTEAM_MSFRPC_USER +
 REDTEAM_MSFRPC_PASS (+ optional REDTEAM_MSFRPC_HOST / REDTEAM_MSFRPC_PORT /
 REDTEAM_MSFRPC_TLS=0). Requires the operator's msfrpcd running
-(msfrpcd -P <pass> -U <user> -a 127.0.0.1 -p 55553 -S) — fail closed otherwise.`);
+(msfrpcd -P <pass> -U <user> -a 127.0.0.1 -p 55553 -S) â€” fail closed otherwise.`);
     process.exit(2);
 }
 export function parseBlackout(s) {
@@ -197,7 +199,7 @@ export function buildInput() {
         deconflictionContact: arg("--contact"),
         notes: arg("--notes"),
     };
-    // v0.13.0 safety case: staging→production graduation. --env production
+    // v0.13.0 safety case: stagingâ†’production graduation. --env production
     // requires --confirm-production (or REDTEAM_PROD_CONFIRM=1), enforced
     // mechanically at engagement start.
     const envArg = arg("--env");
