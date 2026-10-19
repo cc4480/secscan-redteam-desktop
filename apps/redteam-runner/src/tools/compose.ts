@@ -10,6 +10,7 @@ import { NMAP_EXEC_TOOL } from "./nmap.js";
 import { XTOOL_DEFS } from "./xtool.js";
 import { ABORT_TOOL, QUERY_REGISTRY_TOOL, RECORD_FINDING_TOOL, RECORD_ITEM_VERDICT_TOOL, RECORD_KILLED_TOOL, UPDATE_TARGET_MAP_TOOL } from "./bookkeeping.js";
 import { VARIANT_LIST_TOOL } from "../variants/tool.js";
+import { PC_AGENT_TOOLS } from "./pc-agent.js";
 
 const BATTERY_ITEM_HINT =
   ' Always include batteryItem: the battery item ID under test (e.g. "SS-042"). ' +
@@ -42,7 +43,7 @@ function withBatteryItem(t: JsonSchemaTool): JsonSchemaTool {
   };
 }
 
-export const RECON_TOOLS = [...MCP_TOOLS, ...HOST_TOOLS.map(withBatteryItem), withBatteryItem(MSF_EXEC_TOOL), withBatteryItem(NUCLEI_EXEC_TOOL), withBatteryItem(NMAP_EXEC_TOOL), ...XTOOL_DEFS.map(withBatteryItem), QUERY_REGISTRY_TOOL, UPDATE_TARGET_MAP_TOOL, withBatteryItem(RECORD_ITEM_VERDICT_TOOL), VARIANT_LIST_TOOL];
-export const EXPLOIT_TOOLS = [...READ_TOOLS, withBatteryItem(PROBE_TOOL), withBatteryItem(BURST_PROBE_TOOL), ...HOST_TOOLS.map(withBatteryItem), withBatteryItem(MSF_EXEC_TOOL), withBatteryItem(NUCLEI_EXEC_TOOL), withBatteryItem(NMAP_EXEC_TOOL), QUERY_REGISTRY_TOOL, withBatteryItem(RECORD_FINDING_TOOL), withBatteryItem(RECORD_KILLED_TOOL), withBatteryItem(RECORD_ITEM_VERDICT_TOOL), VARIANT_LIST_TOOL];
+export const RECON_TOOLS = [...MCP_TOOLS, ...HOST_TOOLS.map(withBatteryItem), withBatteryItem(MSF_EXEC_TOOL), withBatteryItem(NUCLEI_EXEC_TOOL), withBatteryItem(NMAP_EXEC_TOOL), ...XTOOL_DEFS.map(withBatteryItem), ...PC_AGENT_TOOLS, QUERY_REGISTRY_TOOL, UPDATE_TARGET_MAP_TOOL, withBatteryItem(RECORD_ITEM_VERDICT_TOOL), VARIANT_LIST_TOOL];
+export const EXPLOIT_TOOLS = [...READ_TOOLS, withBatteryItem(PROBE_TOOL), withBatteryItem(BURST_PROBE_TOOL), ...HOST_TOOLS.map(withBatteryItem), withBatteryItem(MSF_EXEC_TOOL), withBatteryItem(NUCLEI_EXEC_TOOL), withBatteryItem(NMAP_EXEC_TOOL), ...PC_AGENT_TOOLS, QUERY_REGISTRY_TOOL, withBatteryItem(RECORD_FINDING_TOOL), withBatteryItem(RECORD_KILLED_TOOL), withBatteryItem(RECORD_ITEM_VERDICT_TOOL), VARIANT_LIST_TOOL];
 /** The coordinator's command tools: no probes, only command authority. */
 export const COMMAND_TOOLS = [ABORT_TOOL];
