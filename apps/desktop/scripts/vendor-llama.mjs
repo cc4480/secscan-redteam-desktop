@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Materialize the bundled llama.cpp runtime shipped as `resources/llama`.
  *
  * `llama-server.exe` is build output, not source: it is gitignored and every copy
@@ -217,11 +217,36 @@ async function vendorRelease(release) {
   }
 
   await rm(destination, { recursive: true, force: true })
+/** MSVC runtime the Windows llama.cpp build imports; a clean Windows VM lacks it. */
+const CRT_FILES = ['vcruntime140.dll', 'vcruntime140_1.dll', 'msvcp140.dll']
+
+/**
+ * Copy the MSVC runtime app-local so a fresh cloud Windows image can start
+ * llama-server without installing the VC++ redistributable first.
+ * @param destination - the payload directory.
+ * @returns the files that were copied.
+ */
+async function copyCrt(destination) {
+  if (process.platform !== 'win32') return []
+  const systemRoot = process.env.SystemRoot ?? 'C:\\Windows'
+  const copied = []
+  for (const name of CRT_FILES) {
+    const source = join(systemRoot, 'System32', name)
+    const available = await stat(source).then(() => true, () => false)
+    if (!available) {
+      throw new Error(`[llama] ${name} not found in ${join(systemRoot, 'System32')}; install the Microsoft Visual C++ 2015-2022 Redistributable on the build machine so the payload can ship it app-local`)
+    }
+    await copyFile(source, join(destination, name))
+    copied.push(name)
+  }
+  return copied
+}
   for (const relativePath of selected) {
     const target = join(destination, ...relativePath.split('/'))
     await mkdir(dirname(target), { recursive: true })
     await copyFile(join(stripped, ...relativePath.split('/')), target)
   }
+  const crt = await copyCrt(destination)
   await writeFile(join(destination, provenanceName), `${JSON.stringify({
     id: release.id,
     version: release.version,
@@ -230,6 +255,7 @@ async function vendorRelease(release) {
     license: release.license,
     note: release.note,
     keep: release.keep,
+    crt,
     vendoredAt: new Date().toISOString(),
   }, null, 2)}\n`)
   const bytes = await treeSize(destination)
@@ -256,3 +282,4 @@ async function main() {
 }
 
 await main()
+

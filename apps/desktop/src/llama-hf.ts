@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Hugging Face Hub client for the bundled local-model feature.
  *
  * Three operations, all transport-injectable so a test never reaches the network:
@@ -164,7 +164,7 @@ async function requestListingJson(fetchImpl: typeof fetch, url: string, token: s
   }
   if (response.status === 401 || response.status === 403) {
     throw new Error(
-      `Hugging Face denied access (HTTP ${String(response.status)}): set HF_TOKEN to a token with read access to the repository`,
+      `Hugging Face could not read this repository (HTTP ${String(response.status)}): check the owner/name spelling (a repo is "owner/name", never a file name); set HF_TOKEN only if the repo is gated`,
     )
   }
   if (response.status === 404) throw new Error('Hugging Face repo not found')
@@ -383,7 +383,7 @@ export async function downloadFile(options: DownloadFileOptions): Promise<Downlo
     await discardPart(partPath)
     if (status === 401 || status === 403) {
       throw new Error(
-        `Hugging Face denied access to the download (HTTP ${String(status)}): set HF_TOKEN to a token with access to this file`,
+        `Hugging Face could not download this file (HTTP ${String(status)}): check the repository spelling and public access; set HF_TOKEN only if the repo is gated`,
       )
     }
     if (status === 404) throw new Error('Hugging Face file not found')
@@ -450,3 +450,4 @@ export async function downloadFile(options: DownloadFileOptions): Promise<Downlo
     throw error instanceof Error ? error : new Error('the Hugging Face download failed')
   }
 }
+
