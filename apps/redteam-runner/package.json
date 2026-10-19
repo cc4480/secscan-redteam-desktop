@@ -20,6 +20,7 @@
     "test": "tsc -p tsconfig.test.json && node --test dist-test/test/*.test.js",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "harness2": "node dist/harness2/cli.js",
+    "coverage": "node scripts/coverage-matrix.mjs --write",
     "smoke:cdp": "node scripts/smoke-cdp.mjs",
     "smoke:pc-agent": "node scripts/smoke-pc-agent.mjs"
   },
