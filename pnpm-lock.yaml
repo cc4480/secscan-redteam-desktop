@@ -703,6 +703,8 @@ importers:
         specifier: ^0.1.0
         version: 0.1.0
 
+  apps/pc-agent-bridge: {}
+
   apps/redteam-runner:
     dependencies:
       '@marsaud/smb2':
