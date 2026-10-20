@@ -55,7 +55,7 @@ jobs:
       # prepends the paths when they resolve.
       - name: Put Git and its bash on PATH (self-hosted)
         if: runner.environment == 'self-hosted'
-        shell: pwsh
+        shell: powershell
         run: |
           if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
             "C:\tools\git\cmd" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
@@ -71,7 +71,7 @@ jobs:
       # independent of where the workspace lives. Hosted images already allow it.
       - name: Enable long paths (self-hosted)
         if: runner.environment == 'self-hosted'
-        shell: pwsh
+        shell: powershell
         run: reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f
 
       # Node first: pnpm/action-setup needs a node to run, and a self-hosted Windows
@@ -115,7 +115,7 @@ jobs:
       # Windows runner does not necessarily have the GitHub CLI installed.
       - name: Publish to the release
         if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.release_tag != ''
-        shell: pwsh
+        shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.inputs.release_tag || github.ref_name }}
