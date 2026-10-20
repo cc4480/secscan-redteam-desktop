@@ -100,22 +100,26 @@ jobs:
       # A lockfile that disagrees with a workspace manifest must not fail the installer
       # lane: the packaging run only needs an installed tree, and the lockfile is
       # verified by the repository's own gates.
+      #
+      # cmd rather than bash: on a self-hosted Windows runner `bash` resolves to the
+      # WSL launcher in System32, which fails when no distribution is installed. cmd
+      # supports the same `||` fallback.
       - name: Install dependencies
-        shell: bash
-        run: |
-          pnpm install --frozen-lockfile || pnpm install --no-frozen-lockfile
+        shell: cmd
+        run: pnpm install --frozen-lockfile || pnpm install --no-frozen-lockfile
 
       - name: Build and package the installer
-        shell: bash
+        shell: cmd
         run: pnpm run package:desktop:win:x64:unsigned
 
       - name: Collect artifacts
-        shell: bash
+        shell: powershell
         run: |
-          mkdir -p dist-installer
-          cp apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/*.exe dist-installer/
-          cp apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/*.blockmap dist-installer/ 2>/dev/null || true
-          ls -l dist-installer
+          $artifacts = 'apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts'
+          New-Item -ItemType Directory -Force -Path 'dist-installer' | Out-Null
+          Copy-Item -Path "$artifacts/*.exe" -Destination 'dist-installer/'
+          Copy-Item -Path "$artifacts/*.blockmap" -Destination 'dist-installer/' -ErrorAction SilentlyContinue
+          Get-ChildItem 'dist-installer'
 
       - uses: actions/upload-artifact@v4
         with:
