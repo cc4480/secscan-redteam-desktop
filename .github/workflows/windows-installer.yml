@@ -15,6 +15,11 @@
 # Unsigned by design. `package:desktop:win:x64:unsigned` is the packaging entry point
 # that skips the EV signing stages, so this runs without any signing secret. A signed
 # build must use `package:desktop:win:x64` on an operator's machine with the token.
+#
+# Runner selection: set the repository variable WINDOWS_RUNNER_LABELS to a JSON array
+# (e.g. '["self-hosted","windows","x64"]') to build on a self-hosted machine; without it
+# the job asks for windows-2022. The self-hosted branches below add the tool paths that
+# a hosted image already provides: Git (checkout runs before any other step) and bash.
 name: Windows installer
 
 on:
@@ -37,40 +42,47 @@ concurrency:
 
 env:
   PRIMARY_NODE_VERSION: '24'
-  # The build downloads Electron, the pinned Node/Python runtimes and NSIS. Keep the
-  # output deterministic across reruns of the same ref.
   DSH_TELEMETRY_DISABLED: '1'
 
 jobs:
   package:
     name: Package (unsigned)
-    # GitHub-hosted Windows includes the MSVC toolchain the native addon and NSIS need.
-    # Set the repository variable WINDOWS_RUNNER_LABELS (JSON array) to run this on a
-    # self-hosted machine instead — useful when hosted minutes are unavailable, e.g.
-    # '["self-hosted","windows","x64"]'.
     runs-on: ${{ fromJSON(vars.WINDOWS_RUNNER_LABELS || '["windows-2022"]') }}
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
+      # Checkout needs `git` before any other step runs, and a self-hosted Windows
+      # runner has none on PATH. A hosted image already provides it, so this only
+      # prepends the paths when they resolve.
+      - name: Put Git and its bash on PATH (self-hosted)
+        if: runner.environment == 'self-hosted'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+            "C:\tools\git\cmd" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+            "C:\tools\git\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          }
+
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
 
       # The packaged Python runtime resolves an extension whose path crosses the
-      # 260-character limit when the checkout sits deep; the runner checkout is short,
-      # but enabling long paths makes that independent of checkout location.
-      - name: Enable long paths
+      # 260-character limit in deep checkouts; enabling long paths makes the smoke
+      # independent of where the workspace lives. Hosted images already allow it.
+      - name: Enable long paths (self-hosted)
+        if: runner.environment == 'self-hosted'
         shell: pwsh
-        run: |
-          reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f
+        run: reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f
+
+      # Node first: pnpm/action-setup needs a node to run, and a self-hosted Windows
+      # runner ships none. A hosted image has both, so the order is harmless there.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
 
       - uses: pnpm/action-setup@v4
         with:
           version: 11.7.0
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.PRIMARY_NODE_VERSION }}
-          cache: pnpm
 
       # A lockfile that disagrees with a workspace manifest must not fail the installer
       # lane: the packaging run only needs an installed tree, and the lockfile is
@@ -99,17 +111,36 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      # The release is driven through the REST API rather than `gh`: a self-hosted
+      # Windows runner does not necessarily have the GitHub CLI installed.
       - name: Publish to the release
         if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.release_tag != ''
-        shell: bash
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.inputs.release_tag || github.ref_name }}
         run: |
-          gh release view "$TAG" >/dev/null 2>&1 \
-            || gh release create "$TAG" \
-                 --title "SecScan RedTeam $TAG" \
-                 --prerelease \
-                 --notes "Unsigned Windows build produced by the Windows installer workflow."
-          gh release upload "$TAG" dist-installer/* --clobber
-          gh release view "$TAG" --json assets --jq '.assets[] | "\(.name) \(.size) bytes"'
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; 'User-Agent' = 'windows-installer'; Accept = 'application/vnd.github+json' }
+          $api = "https://api.github.com/repos/$env:GITHUB_REPOSITORY"
+          $release = $null
+          try { $release = Invoke-RestMethod -Headers $headers -Uri "$api/releases/tags/$env:TAG" } catch { }
+          if (-not $release) {
+            $body = @{
+              tag_name = $env:TAG
+              name = "SecScan RedTeam $env:TAG"
+              prerelease = $true
+              body = 'Unsigned Windows build produced by the Windows installer workflow.'
+            } | ConvertTo-Json
+            $release = Invoke-RestMethod -Method Post -Headers $headers -ContentType 'application/json' -Body $body -Uri "$api/releases"
+            Write-Host "created release $env:TAG"
+          } else {
+            foreach ($asset in $release.assets) {
+              Invoke-RestMethod -Method Delete -Headers $headers -Uri "$api/releases/assets/$($asset.id)" | Out-Null
+            }
+          }
+          Get-ChildItem dist-installer -File | ForEach-Object {
+            $name = [Uri]::EscapeDataString($_.Name)
+            $uploadUri = "https://uploads.github.com/repos/$env:GITHUB_REPOSITORY/releases/$($release.id)/assets?name=$name"
+            Invoke-RestMethod -Method Post -Headers $headers -ContentType 'application/octet-stream' -InFile $_.FullName -Uri $uploadUri | Out-Null
+            Write-Host "uploaded $($_.Name)"
+          }
