@@ -135,6 +135,13 @@ jobs:
             'DSH_DESKTOP_WINDOWS_KEY_CONTAINER=',
             'DSH_DESKTOP_WINDOWS_TOKEN_PIN='
           ) | Set-Content -Path $path -Encoding utf8
+
+      # llama-server.exe is build output, not source: it is gitignored and the
+      # electron-builder config refuses to package without it. The vendor script
+      # re-materializes the pinned archive (the manifest carries URL + SHA-256).
+      - name: Vendor the bundled llama.cpp runtime
+        shell: cmd
+        run: node apps/desktop/scripts/vendor-llama.mjs
           Write-Host "wrote $path"
 
       - name: Build and package the installer
