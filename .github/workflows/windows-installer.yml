@@ -69,10 +69,23 @@ jobs:
       # The packaged Python runtime resolves an extension whose path crosses the
       # 260-character limit in deep checkouts; enabling long paths makes the smoke
       # independent of where the workspace lives. Hosted images already allow it.
+      # Best effort: enabling long paths needs HKLM write, which a service-account
+      # runner usually does not have. The machine may already allow long paths, and a
+      # missing permission must not fail the build.
       - name: Enable long paths (self-hosted)
         if: runner.environment == 'self-hosted'
         shell: powershell
-        run: reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f
+        run: |
+          $key = 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem'
+          $current = (Get-ItemProperty -Path $key -Name LongPathsEnabled -ErrorAction SilentlyContinue).LongPathsEnabled
+          if ($current -eq 1) { Write-Host 'long paths already enabled'; exit 0 }
+          try {
+            New-ItemProperty -Path $key -Name LongPathsEnabled -Value 1 -PropertyType DWord -Force -ErrorAction Stop | Out-Null
+            Write-Host 'long paths enabled'
+          } catch {
+            Write-Warning "could not enable long paths ($($_.Exception.Message)); continuing"
+          }
+          exit 0
 
       # Node first: pnpm/action-setup needs a node to run, and a self-hosted Windows
       # runner ships none. A hosted image has both, so the order is harmless there.
