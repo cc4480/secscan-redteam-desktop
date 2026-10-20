@@ -1,0 +1,112 @@
+# Build and publish the unsigned Windows installer from this repository.
+#
+# Why a separate workflow: release.yml packs npm tarballs for the harness packages
+# (and targets the upstream `master` branch), and release-publish.yml publishes those
+# tarballs. Neither produces a desktop installer. Until this workflow existed the only
+# way to test a build on another machine was to package it locally and upload the
+# binary by hand.
+#
+# Triggers:
+#   - a `v*` tag: build, upload the installer as a run artifact, and attach it to the
+#     GitHub release for that tag (creating a prerelease when none exists yet)
+#   - manual dispatch: build and upload the run artifact; pass `release_tag` to also
+#     attach the bytes to a release
+#
+# Unsigned by design. `package:desktop:win:x64:unsigned` is the packaging entry point
+# that skips the EV signing stages, so this runs without any signing secret. A signed
+# build must use `package:desktop:win:x64` on an operator's machine with the token.
+name: Windows installer
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to attach the installer to (optional, e.g. v0.1.7-rc.4)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-installer-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PRIMARY_NODE_VERSION: '24'
+  # The build downloads Electron, the pinned Node/Python runtimes and NSIS. Keep the
+  # output deterministic across reruns of the same ref.
+  DSH_TELEMETRY_DISABLED: '1'
+
+jobs:
+  package:
+    name: Package (unsigned)
+    # GitHub-hosted Windows includes the MSVC toolchain the native addon and NSIS need.
+    runs-on: windows-2022
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # The packaged Python runtime resolves an extension whose path crosses the
+      # 260-character limit when the checkout sits deep; the runner checkout is short,
+      # but enabling long paths makes that independent of checkout location.
+      - name: Enable long paths
+        shell: pwsh
+        run: |
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+          cache: pnpm
+
+      # A lockfile that disagrees with a workspace manifest must not fail the installer
+      # lane: the packaging run only needs an installed tree, and the lockfile is
+      # verified by the repository's own gates.
+      - name: Install dependencies
+        shell: bash
+        run: |
+          pnpm install --frozen-lockfile || pnpm install --no-frozen-lockfile
+
+      - name: Build and package the installer
+        shell: bash
+        run: pnpm run package:desktop:win:x64:unsigned
+
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          mkdir -p dist-installer
+          cp apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/*.exe dist-installer/
+          cp apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/*.blockmap dist-installer/ 2>/dev/null || true
+          ls -l dist-installer
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist-installer/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish to the release
+        if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.release_tag != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.release_tag || github.ref_name }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 \
+            || gh release create "$TAG" \
+                 --title "SecScan RedTeam $TAG" \
+                 --prerelease \
+                 --notes "Unsigned Windows build produced by the Windows installer workflow."
+          gh release upload "$TAG" dist-installer/* --clobber
+          gh release view "$TAG" --json assets --jq '.assets[] | "\(.name) \(.size) bytes"'
