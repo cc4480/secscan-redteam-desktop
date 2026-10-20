@@ -5,6 +5,17 @@
  */
 import { redactSecrets } from "../../host-exec/common.js";
 import { CVE_RE, PROOF_TOOL_ACTIONS, extractCommand, extractReplay, isFailure, stepValidation, } from "./steps.js";
+import { stampBundleIntegrity } from "./integrity.js";
+/**
+ * The on-disk file name for a finding's bundle. Finding ids are reporter-influenced
+ * (parsed model JSON, never runner-validated), so anything outside [A-Za-z0-9._-]
+ * becomes "_" and leading dot segments are stripped: an id like "../../registry"
+ * can never name a path outside the caller's poc/ directory.
+ */
+export function bundleFileName(findingId) {
+    const stem = findingId.replace(/[^A-Za-z0-9._-]/g, "_").replace(/^\.+/, "");
+    return `${stem || "bundle"}.json`;
+}
 export function buildPocBundle(input) {
     const { finding, events, engagement, secrets } = input;
     const redact = (s) => redactSecrets(s, secrets);
@@ -91,7 +102,7 @@ export function buildPocBundle(input) {
             "observation; any deviation means the target changed.",
         reverifyCommand: `redteam-runner reverify --bundle poc/${finding.id}.json --scope ${engagement.target} --execute`,
     };
-    return { bundle };
+    return { bundle: stampBundleIntegrity(bundle) };
 }
 /** A killed hypothesis with its decisive audit evidence attached (negative proof). */
 //# sourceMappingURL=bundle.js.map

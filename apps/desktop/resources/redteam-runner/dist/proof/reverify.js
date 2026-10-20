@@ -22,6 +22,7 @@
  * A FRESH canary marker is generated per reverify run; the old marker is
  * never replayed (its echo would prove nothing about the present).
  */
+import { verifyBundleIntegrity } from "./bundle.js";
 import { HostExecutor } from "../host-exec/executor.js";
 import { MsfExecutor } from "../msf/executor.js";
 import { validateHostTarget } from "../host-exec/common.js";
@@ -49,6 +50,19 @@ async function withTimeout(p, ms, label) {
  * StepRunner — the verdict logic is fully testable without a network.
  */
 export async function reverifyBundle(bundle, runner, opts = {}) {
+    const integrityError = verifyBundleIntegrity(bundle);
+    if (integrityError) {
+        return {
+            bundleId: bundle.bundleId,
+            findingId: bundle.findingId,
+            engagementId: bundle.engagementId,
+            reverifiedAt: new Date().toISOString(),
+            verdict: "not-reproduced",
+            steps: bundle.steps.map((step) => ({ seq: step.seq, tool: step.tool, replayed: false, ok: false, validationObserved: false, note: "refused: bundle provenance check failed" })),
+            summary: `refused before firing: bundle provenance check failed: ${integrityError}`,
+            registryNote: "REFUSED (bundle provenance check failed) — do NOT close the finding; provenance could not be established",
+        };
+    }
     const marker = freshMarker();
     const perStep = opts.perStepTimeoutMs ?? 60_000;
     const steps = [];

@@ -43,6 +43,10 @@ export interface ChatResult {
   usage?: { promptTokens: number; completionTokens: number; totalTokens: number }
   provider: string
   model: string
+  /** Exact provider request body (credentials travel in headers, never here). */
+  requestBody?: Record<string, unknown>
+  /** Provider response payload as received. */
+  rawResponse?: unknown
 }
 
 export interface JsonSchemaTool {
@@ -50,6 +54,15 @@ export interface JsonSchemaTool {
   description: string
   parameters: Record<string, unknown> // JSON Schema
 }
+
+/**
+ * Structured-output constraint for one call. Selection order when several constraints
+ * coexist: tool calls > json_schema > regex > json_object.
+ */
+export type ResponseFormat =
+  | { type: 'json_schema'; name: string; schema: Record<string, unknown>; strict?: boolean }
+  | { type: 'regex'; pattern: string }
+  | { type: 'json_object' }
 
 export interface CompleteOptions {
   model: string
@@ -60,6 +73,10 @@ export interface CompleteOptions {
   signal?: AbortSignal
   maxTokens?: number
   temperature?: number
+  topP?: number
+  responseFormat?: ResponseFormat
+  role?: AgentRole
+  runId?: string
 }
 
 export interface LlmProvider {
