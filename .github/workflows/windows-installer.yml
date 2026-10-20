@@ -45,7 +45,10 @@ jobs:
   package:
     name: Package (unsigned)
     # GitHub-hosted Windows includes the MSVC toolchain the native addon and NSIS need.
-    runs-on: windows-2022
+    # Set the repository variable WINDOWS_RUNNER_LABELS (JSON array) to run this on a
+    # self-hosted machine instead — useful when hosted minutes are unavailable, e.g.
+    # '["self-hosted","windows","x64"]'.
+    runs-on: ${{ fromJSON(vars.WINDOWS_RUNNER_LABELS || '["windows-2022"]') }}
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
