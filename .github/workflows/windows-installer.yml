@@ -112,6 +112,31 @@ jobs:
         shell: cmd
         run: pnpm run build
 
+      # .env.windows is gitignored because it holds the signing PIN and certificate
+      # paths. An unsigned build still needs the product identity and a mandatory-update
+      # origin, so the workflow composes a minimal file from repository variables.
+      - name: Compose .env.windows for an unsigned build
+        shell: powershell
+        env:
+          APP_ID: ${{ vars.DSH_DESKTOP_APP_ID }}
+          UPDATE_ENV: ${{ vars.DSH_DESKTOP_AUTO_UPDATE_ENV }}
+          UPDATE_ORIGIN: ${{ vars.DSH_DESKTOP_MANDATORY_UPDATE_PROD_ORIGIN }}
+        run: |
+          $path = 'apps/desktop/.env.windows'
+          if (Test-Path $path) { Write-Host '.env.windows already present'; exit 0 }
+          if (-not $env:APP_ID) { throw 'repository variable DSH_DESKTOP_APP_ID is required' }
+          if (-not $env:UPDATE_ORIGIN) { throw 'repository variable DSH_DESKTOP_MANDATORY_UPDATE_PROD_ORIGIN is required' }
+          @(
+            "DSH_DESKTOP_APP_ID=$env:APP_ID",
+            "DSH_DESKTOP_AUTO_UPDATE_ENV=$env:UPDATE_ENV",
+            "DSH_DESKTOP_MANDATORY_UPDATE_PROD_ORIGIN=$env:UPDATE_ORIGIN",
+            'DSH_DESKTOP_WINDOWS_CER_FILE=',
+            'DSH_DESKTOP_WINDOWS_SIGNTOOL=',
+            'DSH_DESKTOP_WINDOWS_KEY_CONTAINER=',
+            'DSH_DESKTOP_WINDOWS_TOKEN_PIN='
+          ) | Set-Content -Path $path -Encoding utf8
+          Write-Host "wrote $path"
+
       - name: Build and package the installer
         shell: cmd
         run: pnpm run package:desktop:win:x64:unsigned
