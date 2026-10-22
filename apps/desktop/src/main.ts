@@ -99,7 +99,7 @@ app.setAppLogsPath()
 // an engagement machine's evidence never leaves it. A host without a working crash reporter must
 // still start, so this is best effort.
 try {
-  crashReporter.start({ uploadToServer: false, compress: true, includeSystemInfo: true })
+  crashReporter.start({ uploadToServer: false, compress: true })
 } catch (error) {
   console.error('desktop crash reporter unavailable:', error)
 }
