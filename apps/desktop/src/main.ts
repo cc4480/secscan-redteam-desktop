@@ -1,14 +1,15 @@
 import { WINDOWS_TITLEBAR_HEIGHT } from './windows-layout.ts'
 /** Electron shell: desktop project ownership, custom protocol, windows, and lifecycle. */
 
-import { readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   app,
   BrowserWindow,
   clipboard,
+  crashReporter,
   dialog,
   ipcMain,
   Menu,
@@ -90,8 +91,18 @@ type WelcomePurpose = 'onboarding' | 'mcp-settings'
 const rendererConsole = new RendererConsoleTail()
 
 // Platform-conventional logs directory (macOS ~/Library/Logs/<name>, otherwise under userData);
-// set before ready so the first fatal report already resolves under it.
+// set before ready so the first fatal report already resolves under it. Re-pointed at the product
+// profile below, once that profile is known.
 app.setAppLogsPath()
+
+// Native dumps for renderer/GPU/utility crashes, stored beside the crash reports. Upload is off:
+// an engagement machine's evidence never leaves it. A host without a working crash reporter must
+// still start, so this is best effort.
+try {
+  crashReporter.start({ uploadToServer: false, compress: true, includeSystemInfo: true })
+} catch (error) {
+  console.error('desktop crash reporter unavailable:', error)
+}
 
 function currentDesktopLocale(): ReturnType<typeof resolveDesktopLocale> {
   return resolveDesktopLocale(windowsLanguage ?? app.getLocale())
@@ -105,8 +116,8 @@ const recovery = new DesktopFatalRecovery({
     const backupPath = await manager.disableAllPlugins()
     console.info('Desktop profile recovery completed:', { profilePatchBackup: backupPath ?? null, homePatch: 'unchanged' })
   },
-  exit: () => { app.quit() },
-  restart: () => { app.relaunch(); app.quit() },
+  exit: () => { recordQuitReason('fatal-recovery-exit'); app.quit() },
+  restart: () => { recordQuitReason('fatal-recovery-restart'); app.relaunch(); app.quit() },
   writeReport: (error, source) => persistCrashReport(error, source),
 })
 
@@ -133,6 +144,62 @@ function reportFatal(error: unknown, source: CrashReportSource): void {
     return
   }
   void recovery.report(error, source).catch((failure: unknown) => { console.error(failure); app.exit(1) })
+}
+
+/** Why this process is leaving. Every quit path records it before calling app.quit(). */
+let quitReason = 'unknown'
+
+/**
+ * Persist the exit reason and a small state snapshot in the logs directory.
+ *
+ * A silent app.quit() is indistinguishable from a crash on launch — the field reports that
+ * pattern, and no crash report exists because nothing crashed. Recording the reason (and what
+ * the app was doing) makes the next occurrence explainable from a file instead of guesswork.
+ * Best effort: a failed write must never block quitting.
+ * @param reason - Stable label naming the code path that initiated the exit.
+ */
+function recordQuitReason(reason: string): void {
+  quitReason = reason
+  try {
+    const file = join(app.getPath('logs'), 'quit.json')
+    mkdirSync(dirname(file), { recursive: true })
+    writeFileSync(file, JSON.stringify({
+      reason,
+      pid: process.pid,
+      at: new Date().toISOString(),
+      uptimeSeconds: Math.round(process.uptime()),
+      version: app.getVersion(),
+      argv: process.argv,
+      backend: backendReady ? 'ready' : 'starting',
+      localModelShell: llamaShell !== undefined,
+    }, null, 2))
+  } catch (error) {
+    console.error('desktop quit journal: write failed', error)
+  }
+}
+
+/**
+ * Route process-level failures through fatal recovery.
+ *
+ * Electron installs no uncaughtException handler of its own: an unhandled throw in the main
+ * process ends the app with a native error dialog and no crash report, which is exactly the
+ * "it exits by itself and errors" pattern. Before `ready` there is no dialog to show, so the
+ * report is written and the process exits non-zero instead of hanging.
+ * @param error - The uncaught exception or unhandled rejection reason.
+ */
+function handleProcessFailure(error: unknown): void {
+  console.error('desktop process failure:', error)
+  if (typeof app.isReady === 'function' && !app.isReady()) {
+    void persistCrashReport(error, 'main').catch(() => undefined).finally(() => { app.exit(1) })
+    return
+  }
+  reportFatal(error, 'main')
+}
+
+// The unit tests replace `process` with a narrow stub, so install only where the event API exists.
+if (typeof process.on === 'function') {
+  process.on('uncaughtException', handleProcessFailure)
+  process.on('unhandledRejection', handleProcessFailure)
 }
 
 protocol.registerSchemesAsPrivileged([{
@@ -1246,10 +1313,13 @@ async function main(): Promise<void> {
     if (BrowserWindow.getAllWindows().length === 0) focusPrimaryWindow()
   })
   app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit()
+    if (process.platform === 'darwin') return
+    recordQuitReason('window-all-closed')
+    app.quit()
   })
   app.on('before-quit', (event) => {
     shuttingDown = true
+    if (quitReason === 'unknown') recordQuitReason('before-quit')
     updateJournal?.action('quit-requested')
     if (shellInstallerOwnsQuit) {
       updateDialog.dispose()
@@ -1369,6 +1439,11 @@ const productProfile = ((): string | undefined => {
 })()
 if (productProfile !== undefined) app.setPath('userData', join(app.getPath('appData'), productProfile))
 
+// setAppLogsPath() above resolved before this profile was known, so point logs at the profile
+// now: crash reports and quit.json must live beside the data they describe, not in another app's
+// directory.
+app.setAppLogsPath(join(app.getPath('userData'), 'logs'))
+
 // First-run MCP credentials live in this profile's own document, so a machine that
 // received the installer does not need hand-set environment variables.
 //
@@ -1420,7 +1495,12 @@ function desktopMcpSecretProtector(): McpSecretProtector {
   return plainMcpSecretProtector
 }
 
-const ownsDesktopInstance = claimDesktopSingleInstance(app, () => { focusPrimaryWindow() })
+const ownsDesktopInstance = claimDesktopSingleInstance(app, () => { focusPrimaryWindow() }, () => {
+  recordQuitReason('second-instance-lock-unavailable')
+  console.error('desktop single instance: another process owns the lock; this launch exits', {
+    pid: process.pid, userData: app.getPath('userData'), argv: process.argv,
+  })
+})
 
 if (ownsDesktopInstance) void app.whenReady().then(async () => {
   storedMcpCredentials = await loadStoredMcpCredentials(

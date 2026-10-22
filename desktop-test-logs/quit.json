@@ -1,0 +1,13 @@
+{
+  "reason": "before-quit",
+  "pid": 17108,
+  "at": "2026-10-22T17:06:32.737Z",
+  "uptimeSeconds": 3,
+  "version": "1.0.0",
+  "argv": [
+    "C:\\Program Files\\nodejs\\node.exe",
+    "C:\\dsh-src\\node_modules\\.pnpm\\vitest@4.1.8_@opentelemetry_c353b8f649d25fdfb1de02f01ebaca2b\\node_modules\\vitest\\dist\\workers\\forks.js"
+  ],
+  "backend": "ready",
+  "localModelShell": true
+}
