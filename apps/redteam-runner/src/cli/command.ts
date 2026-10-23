@@ -90,7 +90,11 @@ export async function runCommandCli(): Promise<number> {
     console.error(`[runner] --mode must be red|black (got ${mode})`)
     return 3
   }
-  const roe: RulesOfEngagement = { scope: scopes.length > 0 ? scopes : [target] }
+  const outOfScope = argAll("--out-of-scope")
+  const roe: RulesOfEngagement = {
+    scope: scopes.length > 0 ? scopes : [target],
+    ...(outOfScope.length > 0 ? { outOfScope } : {}),
+  }
   const input: EngagementInput = {
     target,
     mode,

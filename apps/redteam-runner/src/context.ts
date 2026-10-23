@@ -22,6 +22,7 @@ import { NucleiExecutor } from "./nuclei/index.js";
 import { NmapExecutor } from "./nmap/index.js";
 import { type ItemVerdict } from "./coverage/items.js";
 import { type PolicyRules } from "./policy/rules.js";
+import { type ScopeGuard } from "./safety/scope-guard.js";
 import { type HookRegistry } from "./hooks/index.js";
 
 export interface RunnerDeps {
@@ -78,6 +79,13 @@ export interface Ctx {
   events: EventLog;
   /** Optional operator policy (allow/deny rules), enforced before every dispatch. */
   policy?: PolicyRules;
+  /**
+   * Scope guard (ROE allow set + out-of-scope deny set), enforced at
+   * dispatch before any handler runs. Built from the ROE at engagement
+   * start; the dispatch scope gate builds and caches it lazily when a
+   * context was assembled without one (tests, partial contexts).
+   */
+  scopeGuard?: ScopeGuard;
   /** Optional tool lifecycle hooks (pre/post), evaluated around every dispatch. */
   hooks?: HookRegistry;
   mcp: McpClient;

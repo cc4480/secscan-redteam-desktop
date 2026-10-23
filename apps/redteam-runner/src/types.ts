@@ -48,8 +48,18 @@ export interface BlackoutWindow {
  * Mirrors engagements/engagement-template.md §1–§3.
  */
 export interface RulesOfEngagement {
-  /** Exact in-scope hosts or URLs. Nothing else is ever touched. */
+  /**
+   * In-scope hosts, URLs, IPs or CIDRs. Nothing else is ever touched.
+   * Membership is decided by the scope guard (safety/scope-guard.ts):
+   * exact host, subdomain of a listed domain, listed IP, or CIDR member.
+   */
   scope: string[];
+  /**
+   * Out-of-scope hosts/IPs/CIDRs that must never be touched, even when
+   * they fall inside `scope` (e.g. a third-party subdomain of an in-scope
+   * domain). Enforced by the scope guard at dispatch; deny beats allow.
+   */
+  outOfScope?: string[];
   /** ATT&CK technique IDs the engagement must not use, e.g. ["T1110"]. null/omitted = none beyond the mode defaults. */
   excludedTechniques?: string[] | null;
   /** Daily windows during which the runner pauses (no traffic). */

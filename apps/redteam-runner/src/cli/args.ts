@@ -56,7 +56,7 @@ export function parseLogRotationArgs(): { maxLogBytes?: number; maxLogArchives?:
 
 export function usage(): never {
   console.error(`Usage:
-  redteam-runner start --target <domain|url> --mode <red|black> --objective "<text>" --scope <host> [--scope <host>...] [--exclude <Txxxx>...] [--blackout "02:00-04:00 America/Chicago"...] [--client "<name>"] [--full-battery] [--targets secscan,seclayer,webapp,windows,linux] [--env staging|production] [--confirm-production] [--max-rps <n>] [--tier 0|1|2] [--confirm-tier2-production] [--operator "<name>"] [--local-sandbox] [--dry-run]
+  redteam-runner start --target <domain|url> --mode <red|black> --objective "<text>" --scope <host> [--scope <host>...] [--out-of-scope <host>...] [--exclude <Txxxx>...] [--blackout "02:00-04:00 America/Chicago"...] [--client "<name>"] [--full-battery] [--targets secscan,seclayer,webapp,windows,linux] [--env staging|production] [--confirm-production] [--max-rps <n>] [--tier 0|1|2] [--confirm-tier2-production] [--operator "<name>"] [--local-sandbox] [--dry-run]
   redteam-runner start --target secscan+seclayer --mode red --objective "<text>" --scope secscan.us   # full-battery unified engagement (web targets only)
   redteam-runner queue  --target ... (same flags)   # enqueue for the watcher / console
   redteam-runner watch [--queue <dir>]              # run queued jobs until aborted
@@ -90,6 +90,14 @@ binary); three need more than operator tooling â€” WS-064: kerberos ticket
 material, WS-065: human operator for the shadowing act, LX-041: privileged
 test client for the mount proof â€” see docs/ROADMAP.md; --scope must cover
 secscan.us for the web targets.
+
+--out-of-scope <host> [--out-of-scope <host>...]: hosts, IPs or CIDRs that must
+never be touched, even when they fall inside --scope (e.g. a third-party
+subdomain of an in-scope domain). Enforced mechanically at dispatch by the
+scope guard — deny beats allow — including targets named inside host-exec
+command text. Scope entries may also be CIDRs or parent domains: a listed
+domain covers its subdomains for the dispatch scope check (the per-tool
+checks still apply their own exact-match rules downstream).
 
 --local-sandbox: LOCAL SANDBOX MODE ONLY. Skips ownership verification and the
 private-host rejection, but only for a target that already resolves to a
@@ -199,8 +207,10 @@ export function buildInput(): EngagementInput {
     }
     targets = parsed as TargetId[];
   }
+  const outOfScope = argAll("--out-of-scope");
   const roe: RulesOfEngagement = {
     scope: scopes,
+    ...(outOfScope.length > 0 ? { outOfScope } : {}),
     excludedTechniques: excludeArgs.length > 0 ? excludeArgs : null,
     blackoutWindows: argAll("--blackout").map(parseBlackout),
     stopConditions: argAll("--stop"),
