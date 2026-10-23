@@ -64,6 +64,13 @@ native/system/test/bin/
 !apps/desktop/resources/redteam-runner/
 !apps/desktop/resources/redteam-runner/**
 
+# Oct-23 incident: the bare `coverage/` rule above also swallowed a real source
+# module — apps/redteam-runner/src/coverage/ (items.ts, cells.ts) — so it was
+# never committed and the branch was unbuildable from a clean checkout. Keep
+# the SOURCE coverage dir tracked, same as the payload above.
+!apps/redteam-runner/src/coverage/
+!apps/redteam-runner/src/coverage/**
+
 # pc-agent bridge runtime audit log
 apps/pc-agent-bridge/pc-agent-audit.jsonl
 
