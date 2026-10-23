@@ -66,3 +66,6 @@ native/system/test/bin/
 
 # pc-agent bridge runtime audit log
 apps/pc-agent-bridge/pc-agent-audit.jsonl
+
+# desktop test-run logs (written by the lifecycle specs)
+desktop-test-logs/
