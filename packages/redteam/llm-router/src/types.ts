@@ -67,6 +67,13 @@ export type ResponseFormat =
 export interface CompleteOptions {
   model: string
   messages: ChatMessage[]
+  /**
+   * Credential override supplied by the resilience layer's credential pool
+   * (see resilience.ts). Providers prefer it over their key env var when
+   * set. It travels only into the Authorization header — never into request
+   * bodies, trajectory logs, or error messages.
+   */
+  apiKey?: string
   tools?: JsonSchemaTool[]
   /** Hint only; providers may ignore it. */
   reasoningEffort?: 'low' | 'medium' | 'high'

@@ -11,6 +11,14 @@
  * completeForRole() applies ROLE_MODEL_POLICY automatically. complete() lets
  * callers pick provider+model explicitly. Unknown provider ids and
  * unconfigured providers (missing API key) throw with actionable messages.
+ *
+ * The built-in providers are registered pre-wrapped in ResilientProvider
+ * (resilience.ts): failures are classified by reason, pooled credentials
+ * bench/rotate, and a call that exhausts its provider cascades ONCE to the
+ * configured fallback provider (REDTEAM_LLM_FALLBACK_PROVIDERS) when the
+ * classification's hints allow it. REDTEAM_LLM_RESILIENCE=off restores the
+ * raw registrations. Resilience configuration and pools are built once at
+ * module load — pool bench state must persist across calls to mean anything.
  */
 
 import type {
@@ -22,9 +30,16 @@ import type {
   LlmProvider,
 } from './types.js'
 import { roleModelPolicy } from './policy.js'
-import { DeepSeekProvider } from './providers/deepseek.js'
-import { QwenProvider } from './providers/qwen.js'
+import { DeepSeekProvider, DEEPSEEK_API_KEY_ENV } from './providers/deepseek.js'
+import { QwenProvider, QWEN_API_KEY_ENV } from './providers/qwen.js'
 import { LocalOpenAiProvider } from './providers/local.js'
+import { ResilienceError } from './executor.js'
+import { CredentialPool } from './pool.js'
+import {
+  ResilientProvider,
+  resilienceConfigFromEnv,
+  type ResilienceConfig,
+} from './resilience.js'
 
 const providers = new Map<string, LlmProvider>()
 
@@ -73,7 +88,22 @@ export async function complete(
   providerId: string,
   options: CompleteOptions,
 ): Promise<ChatResult> {
-  return getProvider(providerId).complete(options)
+  try {
+    return await getProvider(providerId).complete(options)
+  } catch (err) {
+    // Provider cascade: exactly one hop, only when the resilience layer
+    // gave up with a classification whose hints allow a provider fallback
+    // and a fallback target is configured for this provider.
+    if (err instanceof ResilienceError && err.classified.hints.fallbackProvider) {
+      const target = resilienceConfig.fallbackProviders[providerId]
+      if (target && target.provider !== providerId) {
+        const fallbackOptions: CompleteOptions =
+          target.model !== undefined ? { ...options, model: target.model } : options
+        return getProvider(target.provider).complete(fallbackOptions)
+      }
+    }
+    throw err
+  }
 }
 
 export async function completeForRole(
@@ -101,7 +131,20 @@ export async function completeForRole(
 // Providers. To add the next one (Kimi was the runner-up): implement
 // LlmProvider in src/providers/<id>.ts (see providers/README.md) and
 // register it here — no changes to the router core or the harness.
-registerProvider(new DeepSeekProvider())
-registerProvider(new QwenProvider())
+const resilienceConfig: ResilienceConfig = resilienceConfigFromEnv()
+
+/**
+ * Wrap a built-in provider in the resilience layer, with a credential pool
+ * built from its key env var (+ numbered siblings) when it has one.
+ * Resilience off (REDTEAM_LLM_RESILIENCE=off) returns the provider raw.
+ */
+function resilient(provider: LlmProvider, keyEnv?: string): LlmProvider {
+  if (!resilienceConfig.enabled) return provider
+  const pool = keyEnv ? CredentialPool.fromEnv(provider.id, keyEnv) : undefined
+  return new ResilientProvider(provider, { pool, config: resilienceConfig })
+}
+
+registerProvider(resilient(new DeepSeekProvider(), DEEPSEEK_API_KEY_ENV))
+registerProvider(resilient(new QwenProvider(), QWEN_API_KEY_ENV))
 // Offline/self-hosted route: selected by REDTEAM_LLM_PROVIDER=local (see policy.ts).
-registerProvider(new LocalOpenAiProvider())
+registerProvider(resilient(new LocalOpenAiProvider()))

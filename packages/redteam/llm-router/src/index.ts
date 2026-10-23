@@ -11,6 +11,50 @@ export type {
 export { complete, completeForRole, listProviders, registerProvider } from './router.js'
 export { LLM_PROVIDER_ENV, ROLE_MODEL_POLICY, ROLE_ORDER, roleModelPolicy } from './policy.js'
 export {
+  ProviderError,
+  parseRateLimitResetHeader,
+  parseRetryAfterHeader,
+  providerErrorFromResponse,
+  providerTransportError,
+  type FailedResponse,
+  type ProviderErrorInit,
+} from './errors.js'
+export {
+  classifyError,
+  type ClassifiedFailure,
+  type FailoverReason,
+  type RecoveryHints,
+} from './classifier.js'
+export {
+  CredentialPool,
+  collectCredentialEnv,
+  cooldownMsForFailure,
+  COOLDOWN_BASE_MS,
+  COOLDOWN_MAX_MS,
+  type AcquiredCredential,
+  type PoolEntrySnapshot,
+} from './pool.js'
+export {
+  ResilienceError,
+  abortableSleep,
+  defaultBackoffMs,
+  executeStep,
+  type AttemptContext,
+  type ExecuteStepOptions,
+  type RetryDecision,
+  type RetryEvent,
+  type RetryEventKind,
+  type RetryEventSink,
+} from './executor.js'
+export {
+  ResilientProvider,
+  resilienceConfigFromEnv,
+  RESILIENCE_ENV,
+  type FallbackProviderTarget,
+  type ResilienceConfig,
+  type ResilientProviderOptions,
+} from './resilience.js'
+export {
   DeepSeekProvider,
   DEEPSEEK_API_KEY_ENV,
   DEEPSEEK_BASE_URL,

@@ -23,6 +23,7 @@ import type {
   LlmProvider,
 } from '../types.js'
 import { fromWireToolCalls, toWireMessages, toWireTools } from './openai-wire.js'
+import { providerErrorFromResponse, providerTransportError } from '../errors.js'
 
 export const QWEN_API_KEY_ENV = 'QWEN_API_KEY'
 /** Ecosystem-standard fallback (Qwen Code, OpenTryOn, MCP tooling all use this). */
@@ -66,8 +67,10 @@ export class QwenProvider implements LlmProvider {
     return process.env[QWEN_API_KEY_ENV] ?? process.env[QWEN_API_KEY_FALLBACK_ENV] ?? null
   }
 
-  private apiKey(): string {
-    const key = this.apiKeyOrNull()
+  private apiKey(options?: CompleteOptions): string {
+    // The resilience pool's per-attempt credential wins over the env vars;
+    // the env vars alone remain the path for unwrapped direct use.
+    const key = options?.apiKey ?? this.apiKeyOrNull()
     if (!key) {
       throw new Error(
         `[llm-router] neither ${QWEN_API_KEY_ENV} nor ${QWEN_API_KEY_FALLBACK_ENV} is set. ` +
@@ -99,19 +102,19 @@ export class QwenProvider implements LlmProvider {
         headers: {
           'Content-Type': 'application/json',
           // The raw key lives only in this header — never in logs or errors.
-          Authorization: `Bearer ${this.apiKey()}`,
+          Authorization: `Bearer ${this.apiKey(options)}`,
         },
         body: JSON.stringify(body),
         signal: options.signal,
       })
     } catch (err) {
-      throw new Error(`[llm-router] Qwen request failed: ${(err as Error).message}`)
+      throw providerTransportError(this.id, '[llm-router] Qwen request failed', err)
     }
 
     if (!res.ok) {
-      // Never echo the key; surface status + provider message only.
-      const text = await res.text().catch(() => '')
-      throw new Error(`[llm-router] Qwen HTTP ${res.status}: ${text.slice(0, 500)}`)
+      // Never echo the key; the ProviderError carries status + provider
+      // code + reset hints for the classifier, message in the legacy shape.
+      throw await providerErrorFromResponse(this.id, 'Qwen', res)
     }
 
     const data = (await res.json()) as {

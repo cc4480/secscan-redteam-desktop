@@ -25,6 +25,7 @@ import type {
   LlmProvider,
   ToolCallRequest,
 } from '../types.js'
+import { providerErrorFromResponse, providerTransportError } from '../errors.js'
 
 export const DEEPSEEK_API_KEY_ENV = 'DEEPSEEK_API_KEY'
 export const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1'
@@ -100,8 +101,10 @@ export class DeepSeekProvider implements LlmProvider {
     return !!process.env[DEEPSEEK_API_KEY_ENV]
   }
 
-  private apiKey(): string {
-    const key = process.env[DEEPSEEK_API_KEY_ENV]
+  private apiKey(options?: CompleteOptions): string {
+    // The resilience pool's per-attempt credential wins over the env var;
+    // the env var alone remains the path for unwrapped direct use.
+    const key = options?.apiKey ?? process.env[DEEPSEEK_API_KEY_ENV]
     if (!key) {
       throw new Error(
         `[llm-router] ${DEEPSEEK_API_KEY_ENV} is not set. ` +
@@ -128,19 +131,19 @@ export class DeepSeekProvider implements LlmProvider {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey()}`,
+          Authorization: `Bearer ${this.apiKey(options)}`,
         },
         body: JSON.stringify(body),
         signal: options.signal,
       })
     } catch (err) {
-      throw new Error(`[llm-router] DeepSeek request failed: ${(err as Error).message}`)
+      throw providerTransportError(this.id, '[llm-router] DeepSeek request failed', err)
     }
 
     if (!res.ok) {
-      // Never echo the key; surface status + provider message only.
-      const text = await res.text().catch(() => '')
-      throw new Error(`[llm-router] DeepSeek HTTP ${res.status}: ${text.slice(0, 500)}`)
+      // Never echo the key; the ProviderError carries status + provider
+      // code + reset hints for the classifier, message in the legacy shape.
+      throw await providerErrorFromResponse(this.id, 'DeepSeek', res)
     }
 
     const data = (await res.json()) as {

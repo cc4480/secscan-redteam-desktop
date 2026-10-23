@@ -22,6 +22,7 @@
 
 import type { ChatResult, CompleteOptions, LlmProvider } from '../types.js'
 import { fromWireToolCalls, toWireMessages, toWireTools } from './openai-wire.js'
+import { providerErrorFromResponse, providerTransportError } from '../errors.js'
 
 /** Stable routing key for this provider. */
 export const LOCAL_PROVIDER_ID = 'local'
@@ -57,7 +58,9 @@ export class LocalOpenAiProvider implements LlmProvider {
     return true
   }
 
-  private apiKeyOrNull(): string | null {
+  private apiKeyOrNull(options?: CompleteOptions): string | null {
+    // The resilience pool's per-attempt credential wins over the env var.
+    if (options?.apiKey !== undefined) return options.apiKey
     const value = process.env[LOCAL_API_KEY_ENV]?.trim()
     return value !== undefined && value.length > 0 ? value : null
   }
@@ -80,7 +83,7 @@ export class LocalOpenAiProvider implements LlmProvider {
     if (wireTools !== undefined) body['tools'] = wireTools
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-    const key = this.apiKeyOrNull()
+    const key = this.apiKeyOrNull(options)
     if (key !== null) headers['Authorization'] = `Bearer ${key}`
 
     let res: Response
@@ -93,12 +96,15 @@ export class LocalOpenAiProvider implements LlmProvider {
       })
     }
     catch (err) {
-      throw new Error(`[llm-router] local model request to ${this.baseUrl} failed: ${(err as Error).message}`)
+      throw providerTransportError(
+        this.id,
+        `[llm-router] local model request to ${this.baseUrl} failed`,
+        err,
+      )
     }
 
     if (!res.ok) {
-      const text = await res.text().catch(() => '')
-      throw new Error(`[llm-router] local model HTTP ${res.status}: ${text.slice(0, 500)}`)
+      throw await providerErrorFromResponse(this.id, 'local model', res)
     }
 
     const data = (await res.json()) as {
