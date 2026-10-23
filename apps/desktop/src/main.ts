@@ -1,4 +1,4 @@
-﻿import { WINDOWS_TITLEBAR_HEIGHT } from './windows-layout.ts'
+import { WINDOWS_TITLEBAR_HEIGHT } from './windows-layout.ts'
 /** Electron shell: desktop project ownership, custom protocol, windows, and lifecycle. */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -152,7 +152,7 @@ let quitReason = 'unknown'
 /**
  * Persist the exit reason and a small state snapshot in the logs directory.
  *
- * A silent app.quit() is indistinguishable from a crash on launch â€” the field reports that
+ * A silent app.quit() is indistinguishable from a crash on launch — the field reports that
  * pattern, and no crash report exists because nothing crashed. Recording the reason (and what
  * the app was doing) makes the next occurrence explainable from a file instead of guesswork.
  * Best effort: a failed write must never block quitting.
