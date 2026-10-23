@@ -71,3 +71,21 @@ export type { LogRotationConfig, RotationOutcome, SeqRange } from "./rotation.js
 
 export { assertDistFresh, distIsFresh, findWorkspaceRoot, hashSrcDir } from "./distfresh.js";
 export type { FreshnessResult } from "./distfresh.js";
+
+export {
+  ScopeGuard,
+  scopeGuardFor,
+  HostSet,
+  classifyScopeEntry,
+  extractTargets,
+  commandUsesNetworkTool,
+  stripSubstitutions,
+  parseIp,
+  parseIPv4,
+  parseIPv6,
+  parseNetwork,
+  LOCAL_HOSTS,
+  NETWORK_TOOLS,
+  NEVER_FILE_EXT_TLDS,
+} from "./scope-guard.js";
+export type { HostMembership, ScopeVerdict, ScopeViolation, ScopeGuardSets } from "./scope-guard.js";

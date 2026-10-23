@@ -93,6 +93,11 @@ export type {
 export {
   TargetRateLimiter,
   TargetAutoHalt,
+  ScopeGuard,
+  HostSet,
+  classifyScopeEntry,
+  extractTargets,
+  commandUsesNetworkTool,
   buildSafetyManifest,
   renderSafetyManifestMarkdown,
   buildZeroDisruptionRecord,
@@ -115,6 +120,9 @@ export type {
   RateLimitConfig,
   AutoHaltConfig,
   TestEnvironment,
+  HostMembership,
+  ScopeVerdict,
+  ScopeViolation,
 } from "./safety/index.js";
 export {
   loadWatchProfile,
