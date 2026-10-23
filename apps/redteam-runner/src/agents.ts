@@ -7,6 +7,7 @@
  * loop bounded and safe. HaltError is the loop's stop signal.
  */
 import { completeForRole as routerCompleteForRole, type AgentRole, type ChatMessage, type ChatResult, type JsonSchemaTool } from "@secscan/redteam-llm-router";
+import { TurnIntegrity, type DeliverableSpec, type RoundCaps } from "./turn-integrity.js";
 import { inBlackout } from "./gate.js";
 import { isPrivateOrLoopbackHost } from "./prober.js";
 import { reconPrompt } from "./prompts.js";
@@ -52,6 +53,8 @@ function haltedByCaps(ctx: Ctx): string | null {
 // The agent loop: REASON → ACT → OBSERVE, bounded
 // ---------------------------------------------------------------------------
 
+export type { DeliverableSpec, RoundCaps } from "./turn-integrity.js";
+
 export async function agentLoop(
   ctx: Ctx,
   role: AgentRole,
@@ -64,6 +67,13 @@ export async function agentLoop(
     /** Called when the model stops calling tools. Return a follow-up prompt to
      *  keep the phase going, or null to finish the phase. */
     onIdle?: () => string | null;
+    /**
+     * Progress-aware round caps (ZimZilla port, 2026-10-23). Per-call
+     * override of config.softRoundCap / config.hardRoundCap.
+     */
+    roundCaps?: RoundCaps;
+    /** When declared, the turn is not finished until this file exists. */
+    deliverable?: DeliverableSpec;
   } = {},
 ): Promise<string> {
   const complete = ctx.deps.completeForRole ?? routerCompleteForRole;
@@ -75,13 +85,19 @@ export async function agentLoop(
     { role: "user", content: user },
   ];
   const notes: string[] = [];
-  for (let turn = 0; turn < maxTurns; turn++) {
+  // Progress-aware round caps + deliverable contracts (turn-integrity.ts):
+  // the soft cap continues a progressing turn and stops only a stuck one,
+  // the hard cap is the runaway backstop, and both announce themselves —
+  // a capped turn is never indistinguishable from a completed one.
+  const integrity = new TurnIntegrity(ctx, phase, maxTurns, opts.roundCaps, opts.deliverable);
+  for (let turn = 0; turn < integrity.effectiveMaxTurns; turn++) {
     await respectBlackout(ctx, phase);
     const cap = haltedByCaps(ctx);
     if (cap) {
       ctx.events.append({ phase, actor: "runner", action: "halt", result: `Halted: ${cap}.` });
       throw new HaltError(cap);
     }
+    if (integrity.checkpoint(turn)) break;
     let res: ChatResult;
     try {
       res = await complete(role, messages, { tools });
@@ -109,7 +125,17 @@ export async function agentLoop(
     if (!res.toolCalls || res.toolCalls.length === 0) {
       const followUp = opts.onIdle?.();
       if (!followUp) {
+        // Deliverable gate: a turn with a declared deliverable is not
+        // finished until the file exists. Nudge while nudges remain; the
+        // final `deliverable` event after the loop states the outcome.
+        const nudge = integrity.deliverableNudge();
+        if (nudge) {
+          messages.push({ role: "assistant", content: res.text || "(stopped)" });
+          messages.push({ role: "user", content: nudge });
+          continue;
+        }
         messages.push({ role: "assistant", content: res.text });
+        integrity.markFinished();
         break;
       }
       messages.push({ role: "assistant", content: res.text || "(pausing)" });
@@ -156,6 +182,9 @@ export async function agentLoop(
       // Wall detection: consecutive blocked/cooled-down/OPSEC-signaled probes
       // with no successful observation. The coordinator redirects to re-recon.
       const blocked = /^(DENIED|probe failed)/i.test(d.result) || /OPSEC SIGNAL|cooling down/i.test(d.result);
+      // Soft-cap progress verdict: one non-blocked, successful result means
+      // the round advanced the work; a round of nothing but those is stuck.
+      integrity.noteToolResult(!blocked && d.ok !== false);
       ctx.deniedStreak = blocked ? ctx.deniedStreak + 1 : 0;
       const capAfter = haltedByCaps(ctx);
       if (capAfter) {
@@ -173,6 +202,9 @@ export async function agentLoop(
       messages.push({ role: "user", content: intel });
     }
   }
+  // Announce a hard-cap stop and state the deliverable's fate, if any —
+  // a turn never ends at a limit, or without its deliverable, silently.
+  integrity.finalize();
   return notes.join("\n\n");
 }
 

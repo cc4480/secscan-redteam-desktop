@@ -209,6 +209,19 @@ export interface ResolvedRunnerConfig {
   qwenApiKey: string;
   maxReconTurns: number;
   maxExploitProbes: number;
+  /**
+   * Progress-aware round caps for agentLoop (ported from ZimZilla's agent
+   * loop, 2026-10-23). softRoundCap = rounds between soft-cap checkpoints:
+   * at a checkpoint the turn CONTINUES when the previous round produced a
+   * successful tool result and stops only when every tool in it failed.
+   * hardRoundCap = the absolute round backstop. Both are announced in the
+   * event stream (`continuing` / `iteration_cap`) — a capped turn is never
+   * indistinguishable from a completed one. Undefined = agentLoop defaults
+   * (soft 8, hard = the caller's maxTurns). Env REDTEAM_SOFT_ROUND_CAP /
+   * REDTEAM_HARD_ROUND_CAP.
+   */
+  softRoundCap?: number;
+  hardRoundCap?: number;
   maxActions: number;
   maxDurationMs: number;
   probeDelayMs: number;
