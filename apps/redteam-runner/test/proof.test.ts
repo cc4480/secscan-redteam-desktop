@@ -19,6 +19,7 @@ import {
   buildNegativeProof,
   buildPocBundle,
   bundleSummary,
+  stampBundleIntegrity,
   type PocBundle,
 } from "../src/proof/bundle.js";
 import { reverifyBundle, type StepRunner } from "../src/proof/reverify.js";
@@ -219,7 +220,10 @@ describe("buildNegativeProof", () => {
 
 describe("reverifyBundle", () => {
   function bundleWithSteps(): PocBundle {
-    return {
+    // Stamped like every runner-built bundle (buildPocBundle stamps at
+    // build time): reverifyBundle refuses — fail closed — any bundle
+    // without the runner-recorded integrity digest.
+    return stampBundleIntegrity({
       version: 1,
       bundleId: "POC-eng-1-F-1",
       engagementId: "eng-1",
@@ -247,7 +251,7 @@ describe("reverifyBundle", () => {
       proves: "marker echoed",
       doesNotProve: "no impact overclaim",
       reverifyCommand: "redteam-runner reverify --bundle poc/F-1.json",
-    };
+    });
   }
 
   it("reproduced: fresh marker echoes on every replayable step", async () => {
@@ -281,6 +285,10 @@ describe("reverifyBundle", () => {
   it("inconclusive when no steps are replayable", async () => {
     const b = bundleWithSteps();
     b.steps = b.steps.map((s) => ({ ...s, replay: null }));
+    // Re-stamp after reshaping: the digest covers the steps, so the
+    // no-replayable-steps bundle must be stamped in its final form,
+    // exactly as the builder would have produced it.
+    stampBundleIntegrity(b);
     const runner: StepRunner = async () => ({ ok: true, output: "x" });
     const report = await reverifyBundle(b, runner);
     assert.equal(report.verdict, "not-reproduced");

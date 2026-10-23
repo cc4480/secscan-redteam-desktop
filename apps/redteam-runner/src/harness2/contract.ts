@@ -6,6 +6,8 @@
  * the red-team guardrail component is pinned and can never appear in a proposal.
  */
 
+import { join } from "node:path";
+
 /** The eight harness components from Harness2, with dsh's implementation names. */
 export const HARNESS_COMPONENTS = {
   systemPrompt: 'system-prompt',
@@ -199,9 +201,9 @@ export function resolveHarness2Paths(environment: NodeJS.ProcessEnv = process.en
     : 'E:\\secscan-harness2'
   return {
     root,
-    database: `${root}\\harness2.db`,
-    layers: `${root}\\layers`,
-    experience: `${root}\\experience`,
-    runs: `${root}\\runs`,
+    database: join(root, "harness2.db"),
+    layers: join(root, "layers"),
+    experience: join(root, "experience"),
+    runs: join(root, "runs"),
   }
 }
