@@ -451,6 +451,12 @@ async function router() {
   const h = location.hash || "#/";
   const m = h.match(/^#\/e\/([^/]+)$/);
   if (h === "#/" || h === "") await viewList();
+  else if (h === "#/console") {
+    // console.js loads after app.js; on a cold load straight at #/console the
+    // shell is not registered yet, so defer until the document is parsed.
+    if (window.renderConsole) window.renderConsole(app);
+    else window.addEventListener("DOMContentLoaded", () => { if (window.renderConsole) window.renderConsole(app); }, { once: true });
+  }
   else if (h === "#/launch") await viewLaunch();
   else if (h === "#/watch") await viewWatch();
   else if (h === "#/reverify") await viewReverify();

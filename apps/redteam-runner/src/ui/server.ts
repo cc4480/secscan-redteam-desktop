@@ -18,6 +18,10 @@ import { handleLaunch, handleList, handleDetail } from "./routes/engagements.js"
 import { handleFeed } from "./routes/feed.js";
 import { handleFindings, handleProof } from "./routes/findings.js";
 import { handleCoverage, handleCompliance } from "./routes/coverage.js";
+import { handleConsoleEngagements } from "./routes/console-engagements.js";
+import { handleConsoleLayers } from "./routes/console-layers.js";
+import { handleConsoleBenchmark } from "./routes/console-benchmark.js";
+import { handleConsoleScope } from "./routes/console-scope.js";
 import { handleAbort, handleEscalate, handleReverify, handleJob, handleWatchProfiles, handleWatchTrigger } from "./routes/actions.js";
 import { json, notFound, readJsonBody } from "./routes/http.js";
 import { handleMcp } from "./mcp-endpoint.js";
@@ -169,6 +173,11 @@ async function route(store: UiStore, token: string, req: IncomingMessage, res: S
     if (seg[1] === "engagements" && seg[2] && seg[3] === "compliance" && method === "GET") {
       return handleCompliance(store, res, decodeURIComponent(seg[2]!));
     }
+    // Operator console (Phase 5) — read-only views over on-disk artifacts.
+    if (seg[1] === "console" && seg[2] === "engagements" && method === "GET") return handleConsoleEngagements(store, res);
+    if (seg[1] === "console" && seg[2] === "layers" && method === "GET") return handleConsoleLayers(store, res);
+    if (seg[1] === "console" && seg[2] === "benchmark" && method === "GET") return handleConsoleBenchmark(store, res);
+    if (seg[1] === "console" && seg[2] === "scope" && method === "GET") return handleConsoleScope(store, res);
     if (seg[1] === "reverify" && method === "POST") {
       const body = await readJsonBody(req);
       return handleReverify(store, res, body);
