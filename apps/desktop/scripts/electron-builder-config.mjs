@@ -214,6 +214,7 @@ export function createElectronBuilderConfig(
     extraResources: [
       { from: buildPaths.runtime, to: 'runtime' },
       { from: fileURLToPath(new URL('../resources/icon-windows.png', import.meta.url)), to: 'icon.png' },
+            { from: fileURLToPath(new URL('../resources/THIRD-PARTY-NOTICES.txt', import.meta.url)), to: 'THIRD-PARTY-NOTICES.txt' },
       // The engagement engine (@secscan/redteam-runner): the battery, safety core,
       // proof bundles and compliance packs, plus its complete production dependency
       // closure. A real tree rather than a bundle, because the runner reads its
@@ -361,5 +362,6 @@ export function createElectronBuilderConfig(
     publish: update === undefined ? null : [{ provider: 'generic', url: update.publicUrl, channel: 'nightly' }],
   }
 }
+
 
 

@@ -1,4 +1,4 @@
-import { WINDOWS_TITLEBAR_HEIGHT } from './windows-layout.ts'
+﻿import { WINDOWS_TITLEBAR_HEIGHT } from './windows-layout.ts'
 /** Electron shell: desktop project ownership, custom protocol, windows, and lifecycle. */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -152,7 +152,7 @@ let quitReason = 'unknown'
 /**
  * Persist the exit reason and a small state snapshot in the logs directory.
  *
- * A silent app.quit() is indistinguishable from a crash on launch — the field reports that
+ * A silent app.quit() is indistinguishable from a crash on launch â€” the field reports that
  * pattern, and no crash report exists because nothing crashed. Recording the reason (and what
  * the app was doing) makes the next occurrence explainable from a file instead of guesswork.
  * Best effort: a failed write must never block quitting.
@@ -1314,6 +1314,15 @@ async function main(): Promise<void> {
   })
   app.on('window-all-closed', () => {
     if (process.platform === 'darwin') return
+    // A closed window must not end the process: running engagements, the local
+    // model server and the backend all outlive the UI, and an RDP session drop
+    // closes the window on a headless VM. Reopening the app (or activating it)
+    // recreates the window through focusPrimaryWindow. Operators who want the
+    // old quit-on-close behavior set DSH_DESKTOP_QUIT_ON_WINDOW_CLOSE=1.
+    if (process.env.DSH_DESKTOP_QUIT_ON_WINDOW_CLOSE !== '1') {
+      recordQuitReason('window-all-closed-kept-alive')
+      return
+    }
     recordQuitReason('window-all-closed')
     app.quit()
   })
@@ -1519,3 +1528,4 @@ if (ownsDesktopInstance) void app.whenReady().then(async () => {
   console.error(error)
   app.exit(1)
 })
+
