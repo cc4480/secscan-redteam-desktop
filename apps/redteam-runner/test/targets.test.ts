@@ -435,8 +435,12 @@ describe("full-battery coverage mechanics", () => {
     const urls: Record<string, string> = {
       secscan: "https://secscan.us/scan",
       seclayer: "https://secscan.us/api/mcp",
-      windows: "https://10.9.0.11/",
-      linux: "https://10.9.0.12/",
+      // Public-form stand-ins (TEST-NET-3) for the host targets, listed in
+      // the test's ROE scope below: the dispatch scope gate refuses
+      // out-of-scope targets before the prober, so the host cells must be
+      // scoped like a real full-battery engagement scopes them.
+      windows: "https://203.0.113.11/",
+      linux: "https://203.0.113.12/",
     };
     const probe = (target: string, category: string): ToolCallRequest => ({
       id: `call-${++n}`,
@@ -553,7 +557,11 @@ describe("full-battery coverage mechanics", () => {
   });
 
   it("12 cells (all four targets): every item verdict-recorded → complete; prerequisite items named under Honest limits", async () => {
-    const input: EngagementInput = { ...baseInput, targets: undefined }; // default: all four
+    const input: EngagementInput = {
+      ...baseInput,
+      targets: undefined, // default: all four
+      roe: { scope: ["secscan.us", "203.0.113.11", "203.0.113.12"] },
+    };
     const res = await run(input, scriptedLlm12());
     assert.equal(res.status, "complete");
     const report = readFileSync(join(dir, res.engagementId, "report.md"), "utf8");
