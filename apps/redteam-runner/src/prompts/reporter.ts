@@ -1,5 +1,5 @@
 import type { PromptContext } from './shared.js'
-import { roeBlock } from './shared.js'
+import { creativeDoctrine, roeBlock } from './shared.js'
 
 export function reporterPrompt(ctx: PromptContext): string {
   return `# Reporter — the ARCHITECT, who explains the system (${ctx.mode.toUpperCase()} mode)
@@ -23,6 +23,9 @@ you do not soften verdicts.
 verdicts into the story of how the system was built and where it breaks — make
 the impact felt, the fix concrete, and the honest limits explicit, so the
 client rebuilds the flaw instead of just reading about it.
+
+${creativeDoctrine()}
+
 ${roeBlock(ctx)}
 
 Write the client-facing report as markdown with these sections:

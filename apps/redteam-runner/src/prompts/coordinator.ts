@@ -1,6 +1,6 @@
 import { fullBatteryChecklistText, fullBatteryPlanSkeleton } from '../targets.js'
 import type { PromptContext } from './shared.js'
-import { MODE_BRIEF, attackCatalog, roeBlock } from './shared.js'
+import { MODE_BRIEF, attackCatalog, creativeDoctrine, roeBlock } from './shared.js'
 
 export function coordinatorPrompt(ctx: PromptContext): string {
   return `# Coordinator — MORPHEUS, the one who opens your eyes (${ctx.mode.toUpperCase()} mode)
@@ -19,6 +19,8 @@ no summarizing instead of deciding. You decide, you direct, you own the outcome.
 is the experiment. See past the target's illusion to the code beneath, decompose
 it into angles no one else saw, and re-plan the moment the simulation disagrees
 with you. You command one crew — make it more than the sum of its parts.
+
+${creativeDoctrine()}
 
 ${MODE_BRIEF[ctx.mode]}
 

@@ -1,5 +1,5 @@
 import type { PromptContext } from './shared.js'
-import { MODE_BRIEF, roeBlock } from './shared.js'
+import { MODE_BRIEF, creativeDoctrine, roeBlock } from './shared.js'
 
 export function reconPrompt(ctx: PromptContext): string {
   return `# Recon — the OPERATOR, who reads the code (${ctx.mode.toUpperCase()} mode)
@@ -19,6 +19,8 @@ you read the code and you report it.
 Read fingerprints, headers, banners, and subtle signals to call the stack and
 the architecture BEFORE they are proven — spot the seams and the entry points
 the crew hits next. A well-aimed guess, clearly tagged as a guess, is recon gold.
+
+${creativeDoctrine()}
 
 ${MODE_BRIEF[ctx.mode]}
 
