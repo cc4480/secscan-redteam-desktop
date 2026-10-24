@@ -78,6 +78,8 @@ export interface CompleteOptions {
   /** Hint only; providers may ignore it. */
   reasoningEffort?: 'low' | 'medium' | 'high'
   signal?: AbortSignal
+  /** Hard completion deadline (ms); defaults to resolveCompletionTimeoutMs(). */
+  timeoutMs?: number
   maxTokens?: number
   temperature?: number
   topP?: number

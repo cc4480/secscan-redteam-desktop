@@ -24,6 +24,7 @@ import type {
 } from '../types.js'
 import { fromWireToolCalls, toWireMessages, toWireTools } from './openai-wire.js'
 import { providerErrorFromResponse, providerTransportError } from '../errors.js'
+import { completionSignal, resolveCompletionTimeoutMs } from '../timeout.js'
 
 export const QWEN_API_KEY_ENV = 'QWEN_API_KEY'
 /** Ecosystem-standard fallback (Qwen Code, OpenTryOn, MCP tooling all use this). */
@@ -105,7 +106,7 @@ export class QwenProvider implements LlmProvider {
           Authorization: `Bearer ${this.apiKey(options)}`,
         },
         body: JSON.stringify(body),
-        signal: options.signal,
+        signal: completionSignal(options.signal, options.timeoutMs ?? resolveCompletionTimeoutMs()),
       })
     } catch (err) {
       throw providerTransportError(this.id, '[llm-router] Qwen request failed', err)

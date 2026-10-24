@@ -26,6 +26,7 @@ import type {
   ToolCallRequest,
 } from '../types.js'
 import { providerErrorFromResponse, providerTransportError } from '../errors.js'
+import { completionSignal, resolveCompletionTimeoutMs } from '../timeout.js'
 
 export const DEEPSEEK_API_KEY_ENV = 'DEEPSEEK_API_KEY'
 export const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1'
@@ -134,7 +135,7 @@ export class DeepSeekProvider implements LlmProvider {
           Authorization: `Bearer ${this.apiKey(options)}`,
         },
         body: JSON.stringify(body),
-        signal: options.signal,
+        signal: completionSignal(options.signal, options.timeoutMs ?? resolveCompletionTimeoutMs()),
       })
     } catch (err) {
       throw providerTransportError(this.id, '[llm-router] DeepSeek request failed', err)

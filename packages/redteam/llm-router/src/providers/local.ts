@@ -23,6 +23,7 @@
 import type { ChatResult, CompleteOptions, LlmProvider } from '../types.js'
 import { fromWireToolCalls, toWireMessages, toWireTools } from './openai-wire.js'
 import { providerErrorFromResponse, providerTransportError } from '../errors.js'
+import { completionSignal, resolveCompletionTimeoutMs } from '../timeout.js'
 
 /** Stable routing key for this provider. */
 export const LOCAL_PROVIDER_ID = 'local'
@@ -92,7 +93,7 @@ export class LocalOpenAiProvider implements LlmProvider {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
-        signal: options.signal,
+        signal: completionSignal(options.signal, options.timeoutMs ?? resolveCompletionTimeoutMs()),
       })
     }
     catch (err) {
