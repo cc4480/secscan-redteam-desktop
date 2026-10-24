@@ -476,6 +476,7 @@ export async function packageTarget(
     'packages/redteam/llm-router',
     'packages/redteam/harness-plugin',
     'packages/redteam/desktop-bundle',
+    'packages/redteam/foundry-gate',
   ]) {
     await execute(['--dir', directory, 'pack', '--pack-destination', buildPaths.packedDsh], buildEnv, REPOSITORY_ROOT)
   }
