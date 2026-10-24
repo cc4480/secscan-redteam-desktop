@@ -12,6 +12,7 @@
     "**/.doc-typecheck-*/**",
     "**/.node-next-types-*/**",
     "website/.generated/**",
+    "apps/desktop/resources/**",
     "vendor/**",
     "native/**",
     "**/*.js",
