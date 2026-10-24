@@ -168,6 +168,17 @@ export async function preparePrimaryRuntime(options: PreparePrimaryRuntimeOption
 }
 
 /**
+ * Smoke-check deadline. A cold first import of numpy/pandas on a freshly
+ * extracted standalone Python — with Defender scanning the new binaries — can
+ * exceed the old 120s hardcode, so the deadline is tunable and defaults to 5
+ * minutes. A slow-but-healthy runtime must not false-fail.
+ */
+function resolveSmokeTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = Number(env['PRIMARY_RUNTIME_SMOKE_TIMEOUT_MS'])
+  return Number.isFinite(raw) && raw > 0 ? raw : 300_000
+}
+
+/**
  * Execute the native payload's interpreters, package manager and Python libraries.
  * @param root - Final payload directory, including any platform signatures.
  * @param environment - Scrubbed subprocess environment; defaults to excluding credential-shaped names.
@@ -179,7 +190,7 @@ export function smokePrimaryRuntime(root: string, environment: NodeJS.ProcessEnv
   if (manifest.platform !== process.platform || manifest.arch !== process.arch) return
   if (Object.keys(manifest.pythonPackages).length === 0) throw new Error('primary runtime: missing Python distribution versions; prepare the payload before running its smoke checks.')
   const entries = workspaceDependencyPaths(root, manifest)
-  const options = { stdio: 'inherit', timeout: 120_000, env: environment } as const
+  const options = { stdio: 'inherit', timeout: resolveSmokeTimeoutMs(), env: environment } as const
   execFileSync(entries.python, ['-I', '-B', '-c', 'import decimal, xml.parsers.expat, lzma, uuid, numpy, pandas; assert numpy.arange(4).sum() == 6; assert pandas.DataFrame({"n": [1, 2]}).n.sum() == 3'], options)
   execFileSync(entries.python, ['-I', '-B', join(import.meta.dirname, 'smoke.py'), JSON.stringify(manifest.pythonPackages),
     manifest.python, join(dirname(root), 'office-skills', 'scripts', 'check_office.py')], options)
