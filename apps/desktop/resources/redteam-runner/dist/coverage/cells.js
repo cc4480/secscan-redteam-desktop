@@ -1,5 +1,5 @@
-import { BATTERY_CATEGORIES } from "../battery.js";
-import { TARGET_PROFILES, activeTargets, targetCellStatus } from "../targets.js";
+import { BATTERY_CATEGORIES } from '../battery.js';
+import { TARGET_PROFILES, activeTargets, targetCellStatus } from '../targets.js';
 /**
  * Runner-computed battery coverage line. Generic engagements: 3 global
  * categories. Full-battery engagements: 3 categories × selected targets
@@ -8,13 +8,13 @@ import { TARGET_PROFILES, activeTargets, targetCellStatus } from "../targets.js"
 export function batteryStatusLine(ctx) {
     if (ctx.input.fullBattery) {
         return activeTargets(ctx.input)
-            .map((t) => `${t}: ${BATTERY_CATEGORIES.map((c) => {
+            .map(t => `${t}: ${BATTERY_CATEGORIES.map((c) => {
             const s = targetCellStatus(TARGET_PROFILES[t], c, ctx.targetCoverage.get(t));
-            return `${c}${s === "done" ? "✓" : s === "blocked" ? "⊘" : "…"}`;
-        }).join(" ")}`)
-            .join(" | ");
+            return `${c}${s === 'done' ? '✓' : s === 'blocked' ? '⊘' : '…'}`;
+        }).join(' ')}`)
+            .join(' | ');
     }
-    return BATTERY_CATEGORIES.map((c) => `${c}${ctx.coverage.has(c) ? "✓" : "…"}`).join(" ");
+    return BATTERY_CATEGORIES.map(c => `${c}${ctx.coverage.has(c) ? '✓' : '…'}`).join(' ');
 }
 /** Compact shared-state digest appended to every tool result — the team's common picture, never stale. */
 export function sharedStateDigest(ctx, phase) {
@@ -24,14 +24,14 @@ export function sharedStateDigest(ctx, phase) {
     if (ctx.targetMap.length) {
         const entries = ctx.targetMap
             .slice(0, 10)
-            .map((t) => `${t.method} ${t.area}${t.authState ? ` [${t.authState}]` : ""}${t.attackId ? ` ${t.attackId}` : ""}`);
-        parts.push(`target-map(${ctx.targetMap.length}): ${entries.join(" | ")}${ctx.targetMap.length > 10 ? ` +${ctx.targetMap.length - 10} more` : ""}`);
+            .map(t => `${t.method} ${t.area}${t.authState ? ` [${t.authState}]` : ''}${t.attackId ? ` ${t.attackId}` : ''}`);
+        parts.push(`target-map(${ctx.targetMap.length}): ${entries.join(' | ')}${ctx.targetMap.length > 10 ? ` +${ctx.targetMap.length - 10} more` : ''}`);
     }
     if (ctx.liveFindings.length) {
-        parts.push(`findings(${ctx.liveFindings.length}): ${ctx.liveFindings.slice(0, 5).map((f) => `[${f.severity}] ${f.title}`).join(" | ")}`);
+        parts.push(`findings(${ctx.liveFindings.length}): ${ctx.liveFindings.slice(0, 5).map(f => `[${f.severity}] ${f.title}`).join(' | ')}`);
     }
     if (ctx.killedLive.length) {
-        parts.push(`killed(${ctx.killedLive.length}): ${ctx.killedLive.slice(0, 5).map((k) => k.hypothesis).join(" | ")}`);
+        parts.push(`killed(${ctx.killedLive.length}): ${ctx.killedLive.slice(0, 5).map(k => k.hypothesis).join(' | ')}`);
     }
     if (ctx.registryHits.length)
         parts.push(`registry: ${ctx.registryHits.length} relevant hits surfaced this engagement`);
@@ -40,7 +40,7 @@ export function sharedStateDigest(ctx, phase) {
         parts.push(`OPSEC cooldowns: ${ctx.opsecCooldown.size}`);
     if (ctx.redirects)
         parts.push(`redirects used: ${ctx.redirects}/2`);
-    const s = parts.join("\n");
-    return s.length > 1600 ? s.slice(0, 1600) + "…" : s;
+    const s = parts.join('\n');
+    return s.length > 1600 ? s.slice(0, 1600) + '…' : s;
 }
 //# sourceMappingURL=cells.js.map

@@ -43,6 +43,8 @@ export function resolveConfig(env, opts = {}) {
         qwenApiKey: qwenApiKey ?? "",
         maxReconTurns: opts.maxReconTurns ?? 10,
         maxExploitProbes: opts.maxExploitProbes ?? 12,
+        softRoundCap: opts.softRoundCap ?? parseEnvPositiveNumber(env["REDTEAM_SOFT_ROUND_CAP"], "REDTEAM_SOFT_ROUND_CAP"),
+        hardRoundCap: opts.hardRoundCap ?? parseEnvPositiveNumber(env["REDTEAM_HARD_ROUND_CAP"], "REDTEAM_HARD_ROUND_CAP"),
         maxActions: opts.maxActions ?? 60,
         maxDurationMs: opts.maxDurationMs ?? 45 * 60_000,
         probeDelayMs: opts.probeDelayMs ?? 800,

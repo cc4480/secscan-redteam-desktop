@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "package": "@secscan/redteam-runner",
   "version": "0.37.1",
-  "source": "C:\\dsh-src\\apps\\redteam-runner",
+  "source": "/home/hatch/workspace/secscan-redteam-desktop/apps/redteam-runner",
   "lockfile": {
-    "source": "C:\\dsh-src\\pnpm-lock.yaml",
+    "source": "/home/hatch/workspace/secscan-redteam-desktop/pnpm-lock.yaml",
     "sha256": "eb5320a0541c67760ff73372083b7a1260ec12e29245a6d39fd6af115fcdf8c6"
   },
   "packages": [

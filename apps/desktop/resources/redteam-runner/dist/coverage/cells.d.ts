@@ -6,13 +6,13 @@
  * result so no agent works from a stale picture. (Per-item verdicts live
  * in ./items.ts.)
  */
-import { type EngagementPhase } from "../types.js";
-import { type Ctx } from "../context.js";
+import { type EngagementPhase } from '../types.js'
+import { type Ctx } from '../context.js'
 /**
  * Runner-computed battery coverage line. Generic engagements: 3 global
  * categories. Full-battery engagements: 3 categories × selected targets
  * (12 cells by default). ✓ probed · ⊘ blocked (prerequisite) · … missing.
  */
-export declare function batteryStatusLine(ctx: Ctx): string;
+export declare function batteryStatusLine(ctx: Ctx): string
 /** Compact shared-state digest appended to every tool result — the team's common picture, never stale. */
-export declare function sharedStateDigest(ctx: Ctx, phase: EngagementPhase): string;
+export declare function sharedStateDigest(ctx: Ctx, phase: EngagementPhase): string

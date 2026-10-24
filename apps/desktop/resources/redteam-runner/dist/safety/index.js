@@ -15,4 +15,5 @@ export { buildSafetyManifest, renderSafetyManifestMarkdown, PROTECTIONS_IN_FORCE
 export { ABORT_FILE_NAME, readAbortFile, writeAbortFile, consumeAbortFile, } from "./abortfile.js";
 export { LOG_ROTATION_VERSION, DEFAULT_LOG_MAX_BYTES, DEFAULT_LOG_MAX_ARCHIVES, LOG_MAX_BYTES_ENV, LOG_MAX_ARCHIVES_ENV, resolveLogRotationConfig, maybeRotateLog, } from "./rotation.js";
 export { assertDistFresh, distIsFresh, findWorkspaceRoot, hashSrcDir } from "./distfresh.js";
+export { ScopeGuard, scopeGuardFor, HostSet, classifyScopeEntry, extractTargets, commandUsesNetworkTool, stripSubstitutions, parseIp, parseIPv4, parseIPv6, parseNetwork, LOCAL_HOSTS, NETWORK_TOOLS, NEVER_FILE_EXT_TLDS, } from "./scope-guard.js";
 //# sourceMappingURL=index.js.map

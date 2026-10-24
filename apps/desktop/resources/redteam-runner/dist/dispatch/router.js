@@ -4,6 +4,7 @@ import { isTargetDistress, readAbortFile, consumeAbortFile } from "../safety/ind
 import { recordItemAttempt } from "./verdicts.js";
 import { checkVariantCap, recordVariantExecution } from "../variants/index.js";
 import { postDispatchHooks, preDispatchGate } from "./policy-gate.js";
+import { checkScopeGate } from "./scope-gate.js";
 import { handleWebTools } from "./web.js";
 import { handleHostTools } from "./host.js";
 import { handleMsfTools } from "./msf.js";
@@ -25,11 +26,6 @@ async function dispatchToolInner(ctx, role, phase, call) {
     }
     return { result: `DENIED: unknown tool ${call.name}` };
 }
-// the outcome is recorded against the auto-halt tracker. Tools without a
-// resolvable target host (shared-state tools, MCP read-only tools) skip
-// the limiter — they generate no target traffic.
-// ---------------------------------------------------------------------------
-/** Tools whose calls generate traffic against a target host. */
 /**
  * Tool names owned by the external-tool bridge. Kept as an explicit set because
  * an `_exec` suffix is NOT a safe discriminator — it also matches the host-exec
@@ -213,6 +209,15 @@ export async function dispatchTool(ctx, role, phase, call) {
     if (tierDenial) {
         return { result: tierDenial, target: host };
     }
+    // Scope gate: the central target-scope choke point (deny-beats-allow,
+    // plus the deny-list scan of command text). Runs before the limiter for
+    // the same reason as the tier check — a refused call consumes no rate
+    // token and sends nothing. The per-handler/per-executor checks remain
+    // as the second layer; this gate is the uniform backstop behind them.
+    const scopeDenial = checkScopeGate(ctx, phase, call, host);
+    if (scopeDenial) {
+        return scopeDenial;
+    }
     if (host) {
         // Auto-halt first: a halted target is refused before any packet AND
         // before waiting on the rate limiter — never hammer, never queue.
@@ -283,9 +288,4 @@ export async function dispatchTool(ctx, role, phase, call) {
     }
     return d;
 }
-/**
- * v0.18.0: resolve a tagged batteryItem (and any CVE) from tool args
- * against the item ledger. Unresolvable tags are surfaced as events —
- * never silently dropped.
- */
 //# sourceMappingURL=router.js.map
