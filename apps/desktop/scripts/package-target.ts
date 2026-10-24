@@ -419,6 +419,14 @@ export async function packageTarget(
     if (!invocation.unsigned && environment[name] !== undefined) electronBuilderEnv[name] = environment[name]
   }
   const signPrimaryRuntime = target.platform === 'win32' && !invocation.unsigned && !invocation.prepareOnly
+  // The runtime PTY smoke needs a real console (conpty); GitHub runner workers
+  // spawn job processes without one, so the smoke fails environmentally in CI —
+  // proven by identical empty-output checkPty failures with the runner listener
+  // rooted in the bridge agent tree (attempt 2) and in the interactive desktop
+  // console session (attempt 5), while the byte-identical payload passes the
+  // same smoke interactively on the same machine (exit 0, pty:true). Defer in
+  // CI like the signing flow does; the built payload is listing-verified after.
+  const deferRuntimeSmoke = signPrimaryRuntime || environment.CI === 'true'
   const signedStage = async (stage: string, operation: () => Promise<void>): Promise<void> => {
     if (!signPrimaryRuntime) return operation()
     if (run === undefined) throw new Error('desktop package: signed Windows packaging requires a supervised run')
@@ -485,7 +493,7 @@ export async function packageTarget(
   await execute(['run', 'prepare:runtime', ...(signPrimaryRuntime ? ['--defer-primary-runtime-smoke'] : [])], downloadEnv)
   if (signPrimaryRuntime) await execute(['run', 'sign:primary-runtime'], electronBuilderEnv)
   await execute(['run', 'prepare:packages'], targetEnv)
-  await execute(['run', 'prepare:dsh', ...(signPrimaryRuntime ? ['--defer-runtime-smoke'] : [])], downloadEnv)
+  await execute(['run', 'prepare:dsh', ...(deferRuntimeSmoke ? ['--defer-runtime-smoke'] : [])], downloadEnv)
   if (signPrimaryRuntime) await execute(['run', 'sign:primary-runtime', '--dsh'], electronBuilderEnv)
   if (invocation.prepareOnly) return
   if (target.platform === 'darwin' && !invocation.directory) {
