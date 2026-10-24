@@ -31,6 +31,15 @@ const DSH_PACKAGE = '@deepseek-ai/dsh'
 const CORE_BUILD_PACKAGE = '@deepseek-ai/dsh-subprocess-local'
 const WEB_PROFILE = PROFILE_TEMPLATES.web as ProfileTemplate
 const WORKSPACE_SETTINGS = 'nodeLinker: hoisted\nautoInstallPeers: false\n'
+/** External transitive pins for the staged runtime. The staged install does a fresh
+ *  resolution (--lockfile-only), so without these it drifts to the registry's latest at
+ *  build time — e.g. koffi ^3.1.0 -> 3.3.3 and @deepseek-ai/libreoffice-kit ^0.1.0 -> 0.1.5,
+ *  which caused the attempt-6 koffi 3.3.3 native-compile failure (uv.cc:88 under GCC 13.2.0).
+ *  Pin to exactly what the monorepo lockfile qualifies. */
+const STAGED_EXTERNAL_OVERRIDES: Readonly<Record<string, string>> = {
+  koffi: '3.1.1',
+  '@deepseek-ai/libreoffice-kit': '0.1.0',
+}
 function writeJson(path: string, value: unknown): void {
   writeFileSync(path, `${JSON.stringify(value, undefined, 2)}\n`, { mode: 0o600 })
 }
@@ -134,6 +143,10 @@ export class DesktopProjectManager {
 export function createRuntimeProjectMetadata(projectDir: string, release: DesktopRelease): void {
   mkdirSync(projectDir, { recursive: true, mode: 0o700 })
   const packageSet = verifyDesktopCorePackageSet(projectDir, release.version)
+  const overrides: Record<string, string> = {
+    ...desktopCorePackageOverrides(packageSet),
+    ...STAGED_EXTERNAL_OVERRIDES,
+  }
   const manifest = {
     name: PROJECT_NAME,
     private: true,
@@ -144,7 +157,7 @@ export function createRuntimeProjectMetadata(projectDir: string, release: Deskto
   writeJson(join(projectDir, 'package.json'), manifest)
   writeFileSync(
     join(projectDir, 'pnpm-workspace.yaml'),
-    workspaceFile(desktopCorePackageOverrides(packageSet)),
+    workspaceFile(overrides),
     { mode: 0o600 },
   )
 }

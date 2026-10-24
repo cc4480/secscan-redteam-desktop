@@ -166,6 +166,18 @@ async function main(): Promise<void> {
       await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:verify-after-smoke', () => verifyDesktopRuntime(DSH_OUTPUT_ROOT, release.version, target))
     }
   } catch (error) {
+    // Preserve the staged lockfile (and any future artifacts) on failure: the fresh
+    // --lockfile-only resolution is the one piece of evidence that shows WHAT drifted,
+    // and it was previously destroyed by cleanup before anyone could read it.
+    try {
+      const failureRoot = join(BUILD_PATHS.root, 'staged-runtime-failure')
+      mkdirSync(failureRoot, { recursive: true })
+      if (existsSync(join(BUILD_ROOT, 'pnpm-lock.yaml'))) {
+        copyFileSync(join(BUILD_ROOT, 'pnpm-lock.yaml'), join(failureRoot, 'pnpm-lock.yaml'))
+      }
+    } catch {
+      // diagnostics are best-effort; the original failure is what matters
+    }
     rmSync(DSH_OUTPUT_ROOT, { recursive: true, force: true })
     throw error
   } finally {
