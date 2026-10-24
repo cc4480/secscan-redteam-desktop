@@ -109,6 +109,36 @@ function runPnpm(args: readonly string[]): Promise<void> {
   })
 }
 
+/** Fail fast when a native ABI dependency's prebuilt binary does not actually load under the
+ *  packaging runtime. koffi's own install-time check discards the child's stderr and silently
+ *  falls back to a source build — the failure that surfaced only as a GCC error in someone
+ *  else's uv.cc (attempt 6). This runs the same load under the real runtime and surfaces the
+ *  real error. */
+function preflightNativeModules(): Promise<void> {
+  const script = [
+    'const k = require(\'koffi\')',
+    'const k32 = k.load(\'kernel32.dll\')',
+    'const pid = k32.func(\'uint32 __stdcall GetCurrentProcessId()\')()',
+    'if (typeof pid !== \'number\' || pid <= 0) throw new Error(\'koffi native call returned \' + pid)',
+    'process.stdout.write(\'koffi native preflight ok, pid=\' + pid)',
+  ].join(';')
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn(NODE, ['-e', script], {
+      cwd: BUILD_ROOT,
+      env: { ...process.env, ...desktopNodeEnvironment(NODE, join(RUNTIME_ROOT, 'bin'), {}) },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let output = ''
+    child.stdout.on('data', (chunk) => { output += String(chunk) })
+    child.stderr.on('data', (chunk) => { output += String(chunk) })
+    child.once('error', reject)
+    child.once('close', (code) => {
+      if (code === 0) resolvePromise()
+      else reject(new Error(`desktop runtime: koffi native preflight failed: ${output.trim().slice(0, 800)}`))
+    })
+  })
+}
+
 async function main(): Promise<void> {
   try {
     await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:reset', async () => {
@@ -128,6 +158,7 @@ async function main(): Promise<void> {
       readDesktopCorePackageSet(BUILD_ROOT, release.version),
     )
     await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:install', () => runPnpm(['install', '--prod', '--frozen-lockfile', '--trust-lockfile']))
+    await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:native-preflight', () => preflightNativeModules())
     const packageSet = readDesktopCorePackageSet(BUILD_ROOT, release.version)
     const targetName = resolveDesktopBuildTarget()
     const target = { platform: process.platform, arch: targetName.endsWith('arm64') ? 'arm64' : 'x64' }
