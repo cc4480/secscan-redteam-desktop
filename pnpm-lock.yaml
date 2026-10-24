@@ -9829,6 +9829,8 @@ importers:
         specifier: workspace:*
         version: link:../harness-plugin
 
+  packages/redteam/foundry-gate: {}
+
   packages/redteam/harness-plugin:
     dependencies:
       '@secscan/redteam-auth-gate':

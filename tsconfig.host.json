@@ -454,6 +454,7 @@
     { "path": "./packages/redteam/llm-router" },
     { "path": "./packages/redteam/harness-plugin" },
     { "path": "./packages/redteam/desktop-bundle" },
+    { "path": "./packages/redteam/foundry-gate" },
     { "path": "./apps/cli" },
     { "path": "./apps/desktop-host" },
     { "path": "./apps/desktop/tsconfig.host.json" }
