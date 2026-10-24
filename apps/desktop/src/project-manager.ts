@@ -40,21 +40,38 @@ const STAGED_EXTERNAL_OVERRIDES: Readonly<Record<string, string>> = {
   koffi: '3.1.1',
   '@deepseek-ai/libreoffice-kit': '0.1.0',
 }
+/** Patched-dependency entries the staged runtime must apply, mirroring the root workspace's
+ *  patchedDependencies. The generated workspace file otherwise omits them, so the staged tree
+ *  silently ships unpatched dependencies (e.g. node-pty 1.2.0-beta.15's macOS exec-bit patch).
+ *  Kept in lock-step with pnpm-workspace.yaml; the patch files are copied by prepare-dsh. */
+const STAGED_PATCHED_DEPENDENCIES: Readonly<Record<string, string>> = {
+  '@earendil-works/pi-ai@0.85.1': 'patches/@earendil-works__pi-ai@0.85.1.patch',
+  '@electron/osx-sign@1.3.3': 'patches/@electron__osx-sign@1.3.3.patch',
+  '@fortune-sheet/core@1.0.4': 'patches/@fortune-sheet__core@1.0.4.patch',
+  '@fortune-sheet/react@1.0.4': 'patches/@fortune-sheet__react@1.0.4.patch',
+  '@yao-pkg/pkg@6.21.0': 'patches/@yao-pkg__pkg@6.21.0.patch',
+  'exceljs@4.4.0': 'patches/exceljs@4.4.0.patch',
+  'node-pty@1.2.0-beta.15': 'patches/node-pty@1.2.0-beta.15.patch',
+}
 function writeJson(path: string, value: unknown): void {
   writeFileSync(path, `${JSON.stringify(value, undefined, 2)}\n`, { mode: 0o600 })
 }
 
-function workspaceFile(overrides: Readonly<Record<string, string>> = {}): string {
+function workspaceFile(overrides: Readonly<Record<string, string>> = {}, patchedDeps: Readonly<Record<string, string>> = {}): string {
   const entries = Object.entries(overrides).sort(([left], [right]) => left.localeCompare(right))
   const overrideSection = entries.length === 0
     ? ''
     : `overrides:\n${entries.map(([name, spec]) => `  ${JSON.stringify(name)}: ${JSON.stringify(spec)}`).join('\n')}\n`
-  if (entries.length === 0) return `packages:\n  - .\n\n${WORKSPACE_SETTINGS}`
+  const patchEntries = Object.entries(patchedDeps).sort(([left], [right]) => left.localeCompare(right))
+  const patchSection = patchEntries.length === 0
+    ? ''
+    : `patchedDependencies:\n${patchEntries.map(([name, path]) => `  ${JSON.stringify(name)}: ${JSON.stringify(path)}`).join('\n')}\n`
+  if (entries.length === 0) return `packages:\n  - .\n\n${patchSection}${WORKSPACE_SETTINGS}`
   const coreBuildSpec = overrides[CORE_BUILD_PACKAGE]
   const coreBuildKey = coreBuildSpec === undefined
     ? CORE_BUILD_PACKAGE
     : `${CORE_BUILD_PACKAGE}@${coreBuildSpec.replace('file:./', 'file:')}`
-  return `packages:\n  - .\n\n${overrideSection}${WORKSPACE_SETTINGS}allowBuilds:\n  node-pty: true\n  koffi: true\n  fs-ext: true\n  ${JSON.stringify(coreBuildKey)}: true\n  '@google/genai': false\n  protobufjs: false\n  node-addon-require-builtin: false\n`
+  return `packages:\n  - .\n\n${overrideSection}${patchSection}${WORKSPACE_SETTINGS}allowBuilds:\n  node-pty: true\n  koffi: true\n  fs-ext: true\n  ${JSON.stringify(coreBuildKey)}: true\n  '@google/genai': false\n  protobufjs: false\n  node-addon-require-builtin: false\n`
 }
 
 function migrateProfileSettings(projectDir: string): void {
@@ -157,7 +174,7 @@ export function createRuntimeProjectMetadata(projectDir: string, release: Deskto
   writeJson(join(projectDir, 'package.json'), manifest)
   writeFileSync(
     join(projectDir, 'pnpm-workspace.yaml'),
-    workspaceFile(overrides),
+    workspaceFile(overrides, STAGED_PATCHED_DEPENDENCIES),
     { mode: 0o600 },
   )
 }
