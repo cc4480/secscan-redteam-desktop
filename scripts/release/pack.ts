@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Pack one release family's whole publish set into a single directory, in
  * publish order, and record that order for the publish step.
  *
@@ -88,3 +88,4 @@ async function main(): Promise<void> {
 }
 
 if (isEntry(import.meta.url)) await main()
+

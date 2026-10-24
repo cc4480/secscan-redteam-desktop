@@ -11,18 +11,18 @@
  * empty answers refuse. TLS is not downgraded: SNI and cert validation still
  * use the original hostname, not the pinned IP.
  */
-import { lookup as dnsLookup } from "node:dns";
-import { Agent as HttpAgent, request as httpRequest } from "node:http";
-import { Agent as HttpsAgent, request as httpsRequest } from "node:https";
-import { isIP } from "node:net";
-import { brotliDecompressSync, gunzipSync, inflateSync } from "node:zlib";
+import { lookup as dnsLookup } from 'node:dns';
+import { Agent as HttpAgent, request as httpRequest } from 'node:http';
+import { Agent as HttpsAgent, request as httpsRequest } from 'node:https';
+import { isIP } from 'node:net';
+import { brotliDecompressSync, gunzipSync, inflateSync } from 'node:zlib';
 /** System resolver (handles names, IP literals, /etc/hosts entries). */
-export const defaultDnsResolver = (hostname) => new Promise((resolve, reject) => {
+export const defaultDnsResolver = hostname => new Promise((resolve, reject) => {
     dnsLookup(hostname, { all: true, verbatim: true }, (err, addresses) => {
         if (err)
             reject(err);
         else
-            resolve(addresses.map((a) => ({
+            resolve(addresses.map(a => ({
                 address: a.address,
                 family: a.family === 6 ? 6 : 4,
             })));
@@ -31,35 +31,35 @@ export const defaultDnsResolver = (hostname) => new Promise((resolve, reject) =>
 function classifyV4(octets) {
     const [a, b] = octets;
     if (a === 127)
-        return "loopback";
+        return 'loopback';
     if (a === 169 && b === 254)
-        return "link-local";
+        return 'link-local';
     if (a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168))
-        return "private";
+        return 'private';
     if (a === 0)
-        return "private"; // 0.0.0.0/8 "this host" — never a public target
+        return 'private'; // 0.0.0.0/8 "this host" — never a public target
     if (a === 100 && b >= 64 && b <= 127)
-        return "private"; // RFC 6598 CGNAT shared space
-    return "public";
+        return 'private'; // RFC 6598 CGNAT shared space
+    return 'public';
 }
 function parseV4(text) {
-    const parts = text.split(".");
+    const parts = text.split('.');
     if (parts.length !== 4)
         return null;
-    const octets = parts.map((p) => (/^\d{1,3}$/.test(p) ? Number(p) : NaN));
-    return octets.every((n) => Number.isInteger(n) && n >= 0 && n <= 255) ? octets : null;
+    const octets = parts.map(p => (/^\d{1,3}$/.test(p) ? Number(p) : NaN));
+    return octets.every(n => Number.isInteger(n) && n >= 0 && n <= 255) ? octets : null;
 }
 /** Expand an IPv6 address to 8 hextets, or null if unparseable. */
 function expandV6(ip) {
-    const halves = ip.split("::");
+    const halves = ip.split('::');
     if (halves.length > 2)
         return null;
     const parseSide = (side) => {
-        if (side === "")
+        if (side === '')
             return [];
         const out = [];
-        for (const group of side.split(":")) {
-            if (group.includes(".")) {
+        for (const group of side.split(':')) {
+            if (group.includes('.')) {
                 const v4 = parseV4(group);
                 if (!v4)
                     return null;
@@ -86,14 +86,14 @@ function expandV6(ip) {
 }
 export function classifyIpAddress(rawIp) {
     let ip = rawIp.trim().toLowerCase();
-    if (ip.startsWith("[") && ip.endsWith("]"))
+    if (ip.startsWith('[') && ip.endsWith(']'))
         ip = ip.slice(1, -1);
     const v4 = parseV4(ip);
     if (v4)
         return classifyV4(v4);
     const h = expandV6(ip);
     if (!h)
-        return "private"; // unparseable — fail closed, never treat as public
+        return 'private'; // unparseable — fail closed, never treat as public
     // Embedded IPv4: ::ffff:a.b.c.d (v4-mapped) and 64:ff9b::/96 (NAT64) carry a
     // real v4 address in the last 32 bits — classify by the embedded address.
     const embedded = h[0] === 0 && h[1] === 0 && h[2] === 0 && h[3] === 0 && h[4] === 0 && h[5] === 0xffff
@@ -104,14 +104,14 @@ export function classifyIpAddress(rawIp) {
     if (embedded)
         return classifyV4(embedded);
     if (h.every((x, i) => (i === 7 ? x === 1 : x === 0)))
-        return "loopback"; // ::1
-    if (h.every((x) => x === 0))
-        return "private"; // :: unspecified
+        return 'loopback'; // ::1
+    if (h.every(x => x === 0))
+        return 'private'; // :: unspecified
     if ((h[0] & 0xffc0) === 0xfe80)
-        return "link-local"; // fe80::/10
+        return 'link-local'; // fe80::/10
     if ((h[0] & 0xfe00) === 0xfc00)
-        return "private"; // fc00::/7 unique-local
-    return "public";
+        return 'private'; // fc00::/7 unique-local
+    return 'public';
 }
 /**
  * Resolve `hostname` and validate EVERY resulting address against policy.
@@ -119,7 +119,7 @@ export function classifyIpAddress(rawIp) {
  * address set for pinned connections.
  */
 export async function resolveCheckedAddresses(hostname, opts = {}) {
-    const host = hostname.trim().toLowerCase().replace(/^\[|\]$/g, "");
+    const host = hostname.trim().toLowerCase().replace(/^\[|\]$/g, '');
     let addresses;
     const literal = isIP(host);
     if (literal !== 0) {
@@ -138,18 +138,18 @@ export async function resolveCheckedAddresses(hostname, opts = {}) {
     }
     for (const { address } of addresses) {
         const cls = classifyIpAddress(address);
-        if (cls === "link-local") {
+        if (cls === 'link-local') {
             return {
                 ok: false,
                 reason: `${host} resolves to link-local address ${address} — always refused ` +
-                    `(cloud metadata/link-local is never a legitimate target, even in sandbox mode)`,
+                    '(cloud metadata/link-local is never a legitimate target, even in sandbox mode)',
             };
         }
-        if (cls !== "public" && !opts.allowPrivateHosts) {
+        if (cls !== 'public' && !opts.allowPrivateHosts) {
             return {
                 ok: false,
                 reason: `${host} resolves to ${cls} address ${address} — refused (SSRF pivot guard; ` +
-                    `private targets require local-sandbox mode)`,
+                    'private targets require local-sandbox mode)',
             };
         }
     }
@@ -161,11 +161,11 @@ export async function resolveCheckedAddresses(hostname, opts = {}) {
  * checked addresses: no second resolution, no check/fetch TOCTOU window.
  */
 export function makePinnedLookup(addresses) {
-    const pinned = addresses.map((a) => ({ address: a.address, family: a.family }));
+    const pinned = addresses.map(a => ({ address: a.address, family: a.family }));
     return ((_hostname, options, callback) => {
         const cb = callback;
         if (options && options.all)
-            cb(null, pinned.map((p) => ({ ...p })));
+            cb(null, pinned.map(p => ({ ...p })));
         else
             cb(null, pinned[0].address, pinned[0].family);
     });
@@ -179,19 +179,19 @@ const httpsAgent = new HttpsAgent({ keepAlive: false });
 /** Decompressed text is capped too: a 64 KiB gzip can expand ~1000x. */
 const MAX_DECODED_BYTES = 64 * 1024;
 function decodeBody(buf, contentEncoding) {
-    const enc = (contentEncoding ?? "").toLowerCase();
+    const enc = (contentEncoding ?? '').toLowerCase();
     try {
         if (/\bgzip\b/.test(enc))
-            return gunzipSync(buf, { maxOutputLength: MAX_DECODED_BYTES }).toString("utf8");
+            return gunzipSync(buf, { maxOutputLength: MAX_DECODED_BYTES }).toString('utf8');
         if (/\bdeflate\b/.test(enc))
-            return inflateSync(buf, { maxOutputLength: MAX_DECODED_BYTES }).toString("utf8");
+            return inflateSync(buf, { maxOutputLength: MAX_DECODED_BYTES }).toString('utf8');
         if (/\bbr\b/.test(enc))
-            return brotliDecompressSync(buf, { maxOutputLength: MAX_DECODED_BYTES }).toString("utf8");
+            return brotliDecompressSync(buf, { maxOutputLength: MAX_DECODED_BYTES }).toString('utf8');
     }
     catch {
         // Undecodable or over-cap body — fall through to the raw bytes, never throw.
     }
-    return buf.toString("utf8");
+    return buf.toString('utf8');
 }
 /**
  * One HTTP(S) request to `url`, connected to the pre-validated `addresses`
@@ -202,11 +202,11 @@ function decodeBody(buf, contentEncoding) {
 export function pinnedHttpRequest(url, init) {
     return new Promise((resolve, reject) => {
         const u = new URL(url);
-        const isHttps = u.protocol === "https:";
-        const bareHost = u.hostname.replace(/^\[|\]$/g, "");
+        const isHttps = u.protocol === 'https:';
+        const bareHost = u.hostname.replace(/^\[|\]$/g, '');
         const headers = { ...(init.headers ?? {}), host: u.host };
         if (init.body !== undefined)
-            headers["content-length"] = String(Buffer.byteLength(init.body, "utf8"));
+            headers['content-length'] = String(Buffer.byteLength(init.body, 'utf8'));
         const req = (isHttps ? httpsRequest : httpRequest)({
             protocol: u.protocol,
             hostname: bareHost,
@@ -224,12 +224,12 @@ export function pinnedHttpRequest(url, init) {
             for (const [key, val] of Object.entries(res.headers)) {
                 if (val === undefined)
                     continue;
-                flat[key.toLowerCase()] = Array.isArray(val) ? val.join(", ") : val;
+                flat[key.toLowerCase()] = Array.isArray(val) ? val.join(', ') : val;
             }
             const status = res.statusCode ?? 0;
             if (init.readBody === false) {
                 res.destroy();
-                resolve({ status, headers: flat, text: "" });
+                resolve({ status, headers: flat, text: '' });
                 return;
             }
             // Cap buffered wire bytes (a hostile target must not make the runner
@@ -243,9 +243,9 @@ export function pinnedHttpRequest(url, init) {
                 if (settled)
                     return;
                 settled = true;
-                resolve({ status, headers: flat, text: decodeBody(Buffer.concat(chunks), flat["content-encoding"]) });
+                resolve({ status, headers: flat, text: decodeBody(Buffer.concat(chunks), flat['content-encoding']) });
             };
-            res.on("data", (chunk) => {
+            res.on('data', (chunk) => {
                 if (settled)
                     return;
                 if (kept + chunk.length > cap) {
@@ -260,11 +260,11 @@ export function pinnedHttpRequest(url, init) {
                 chunks.push(chunk);
                 kept += chunk.length;
             });
-            res.on("end", finish);
-            res.on("error", (err) => { if (!settled)
+            res.on('end', finish);
+            res.on('error', (err) => { if (!settled)
                 reject(err); });
         });
-        req.on("error", (err) => reject(err));
+        req.on('error', err => reject(err));
         if (init.body !== undefined)
             req.write(init.body);
         req.end();

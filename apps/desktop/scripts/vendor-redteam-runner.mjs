@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Vendor the engagement runner into the Desktop application payload.
  *
  * The runner (@secscan/redteam-runner) is a package of THIS repository at
@@ -30,7 +30,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 
 const APP_ROOT = resolve(import.meta.dirname, '..')
@@ -235,7 +235,28 @@ function buildRunnerFromSource(source) {
  * @param {{ from: string, to?: string }} options - Runner checkout and payload destination.
  * @returns {{ version: string, packages: { name: string, version: string }[] }} What was written.
  */
-export function vendorRedteamRunner(options) {
+export /**
+ * Remove the `src/` trees of vendored `@secscan/*` packages.
+ *
+ * Those packages ship a dist-freshness guard (`@secscan/redteam-llm-router`)
+ * that hashes `src/` against `lib/.src-hash` and refuses to run when they
+ * differ. The vendor copy filters some source files out (README.md), so the
+ * copied tree never matches the stamp and every engagement would throw
+ * "STALE BUILD" inside a user's install. With `src/` absent the guard skips
+ * (it only applies to a source checkout), which is exactly what a shipped
+ * payload is.
+ * @param destination - the vendored payload root.
+ */
+function stripVendoredSources(destination) {
+  const scope = join(destination, 'node_modules', '@secscan')
+  if (!existsSync(scope)) return
+  for (const entry of readdirSync(scope, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    rmSync(join(scope, entry.name, 'src'), { recursive: true, force: true })
+  }
+}
+
+function vendorRedteamRunner(options) {
   const source = options.from
   const destination = options.to ?? join(APP_ROOT, REDTEAM_RUNNER_PAYLOAD)
   const manifest = readJson(join(source, 'package.json'))
@@ -279,6 +300,7 @@ export function vendorRedteamRunner(options) {
   for (const entry of closure) {
     copyDereferenced(entry.directory, join(destination, 'node_modules', ...entry.name.split('/')))
   }
+  stripVendoredSources(destination)
 
   const provenance = {
     schemaVersion: 1,
@@ -300,5 +322,7 @@ export function vendorRedteamRunner(options) {
 if (process.argv[1] !== undefined && import.meta.filename === resolve(process.argv[1])) {
   const { from } = parseArguments(process.argv.slice(2))
   const result = vendorRedteamRunner({ from })
-  process.stdout.write(`vendor-redteam-runner: ${REDTEAM_RUNNER_PACKAGE}@${result.version} and ${String(result.packages.length)} dependencies → ${join(APP_ROOT, REDTEAM_RUNNER_PAYLOAD)}\n`)
+  process.stdout.write(`vendor-redteam-runner: ${REDTEAM_RUNNER_PACKAGE}@${result.version} and ${String(result.packages.length)} dependencies â†’ ${join(APP_ROOT, REDTEAM_RUNNER_PAYLOAD)}\n`)
 }
+
+

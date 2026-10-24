@@ -17,18 +17,18 @@
  * rewriting the bundle. That residual is accepted deliberately (audit
  * T10): the bar is tamper detection, not HMAC ceremony.
  */
-import type { PocBundle } from './bundle.js'
+import type { PocBundle } from './bundle.js';
 export interface BundleIntegrity {
-  algorithm: 'sha256'
-  /** sha256 (hex) over the canonical bundle JSON, this field excluded. */
-  digest: string
+    algorithm: 'sha256';
+    /** sha256 (hex) over the canonical bundle JSON, this field excluded. */
+    digest: string;
 }
 /** sha256 (hex) of the bundle's canonical form, integrity field excluded. */
-export declare function computeBundleDigest(bundle: PocBundle): string
+export declare function computeBundleDigest(bundle: PocBundle): string;
 /** Record the digest on a bundle the runner just built. Mutates; returns the bundle. */
-export declare function stampBundleIntegrity(bundle: PocBundle): PocBundle
+export declare function stampBundleIntegrity(bundle: PocBundle): PocBundle;
 /**
  * null when the bundle is bit-for-bit what the runner recorded; otherwise
  * the refusal reason. FAIL CLOSED: no digest = no provenance = no replay.
  */
-export declare function verifyBundleIntegrity(bundle: PocBundle): string | null
+export declare function verifyBundleIntegrity(bundle: PocBundle): string | null;

@@ -16,11 +16,11 @@
  * context — BLACK mode briefs, ROE, target batteries, the sandbox posture —
  * through the same functions.
  */
-import { coordinatorPrompt } from "./coordinator.js";
-import { exploiterPrompt } from "./exploiter.js";
-import { reconPrompt } from "./recon.js";
-import { reporterPrompt } from "./reporter.js";
-export const AGENT_DOC_ROLES = ["coordinator", "recon", "exploiter", "reporter"];
+import { coordinatorPrompt } from './coordinator.js';
+import { exploiterPrompt } from './exploiter.js';
+import { reconPrompt } from './recon.js';
+import { reporterPrompt } from './reporter.js';
+export const AGENT_DOC_ROLES = ['coordinator', 'recon', 'exploiter', 'reporter'];
 const PROMPT_BY_ROLE = {
     coordinator: coordinatorPrompt,
     recon: reconPrompt,
@@ -34,11 +34,11 @@ const PROMPT_BY_ROLE = {
  */
 export function canonicalAgentDocContext() {
     return {
-        mode: "red",
-        objective: "<engagement objective>",
-        target: "<TARGET>",
-        scopeHosts: ["<in-scope hosts>"],
-        roe: { scope: ["<in-scope hosts>"] },
+        mode: 'red',
+        objective: '<engagement objective>',
+        target: '<TARGET>',
+        scopeHosts: ['<in-scope hosts>'],
+        roe: { scope: ['<in-scope hosts>'] },
     };
 }
 /** Banner stamped at the top of every generated agents/*.md file. */

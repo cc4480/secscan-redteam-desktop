@@ -14,8 +14,8 @@
  * Non-destructive by construction: single requests, never floods; payload
  * discipline lives in the exploiter prompt (no writes/deletes, no exhaustion).
  */
-import { allHostsPrivateOrLoopback, isPrivateOrLoopbackHost } from "./prober-address.js";
-import { pinnedHttpRequest, resolveCheckedAddresses, } from "./prober-net.js";
+import { allHostsPrivateOrLoopback, isPrivateOrLoopbackHost } from './prober-address.js';
+import { pinnedHttpRequest, resolveCheckedAddresses, } from './prober-net.js';
 // Re-exported for callers (gate, sandbox) that import the address policy from this
 // module: moving the implementation must not change their import path.
 export { allHostsPrivateOrLoopback, isPrivateOrLoopbackHost };
@@ -29,7 +29,7 @@ export function validateProbeTarget(url, scopeHosts, opts = {}) {
     catch {
         return { ok: false, reason: `unparseable URL: ${url}` };
     }
-    if (u.protocol !== "http:" && u.protocol !== "https:") {
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') {
         return { ok: false, reason: `scheme not allowed: ${u.protocol}` };
     }
     const host = u.hostname.toLowerCase();
@@ -42,20 +42,20 @@ export function validateProbeTarget(url, scopeHosts, opts = {}) {
         return { ok: false, reason: `private/loopback host rejected: ${host}` };
     }
     if (!scopeHosts.includes(host)) {
-        return { ok: false, reason: `out of scope: ${host} (scope: ${scopeHosts.join(", ")})` };
+        return { ok: false, reason: `out of scope: ${host} (scope: ${scopeHosts.join(', ')})` };
     }
     return { ok: true };
 }
 function detectOpsecSignal(status, headers, body) {
     if (status === 429)
-        return "rate-limited (429)";
-    const server = (headers["server"] ?? "").toLowerCase();
+        return 'rate-limited (429)';
+    const server = (headers['server'] ?? '').toLowerCase();
     const bodyLow = body.toLowerCase();
     if (status === 403 && /cloudflare|akamai|incapsula|imperva|f5|awselb|distil|perimeterx/i.test(server + bodyLow)) {
-        return "probable WAF/bot-wall block (403)";
+        return 'probable WAF/bot-wall block (403)';
     }
     if (/captcha|cf-chl|attention required|request blocked|access denied.*bot/i.test(bodyLow) && body.length < 20000) {
-        return "challenge/block page served";
+        return 'challenge/block page served';
     }
     return undefined;
 }
@@ -67,7 +67,7 @@ export class WebProber {
     resolver;
     lastProbeAt = 0;
     constructor(opts) {
-        this.scopeHosts = opts.scopeHosts.map((h) => h.toLowerCase());
+        this.scopeHosts = opts.scopeHosts.map(h => h.toLowerCase());
         this.timeoutMs = opts.timeoutMs ?? 20_000;
         this.minDelayMs = opts.minDelayMs ?? 800;
         this.allowPrivateHosts = opts.allowPrivateHosts ?? false;
@@ -103,7 +103,7 @@ export class WebProber {
         catch {
             return; // Unparseable Location — never followed by anyone; nothing to vet.
         }
-        if (target.protocol !== "http:" && target.protocol !== "https:") {
+        if (target.protocol !== 'http:' && target.protocol !== 'https:') {
             throw new Error(`[prober] refused: redirect to non-http(s) scheme ${target.protocol}`);
         }
         const checked = await resolveCheckedAddresses(target.hostname, {
@@ -117,17 +117,17 @@ export class WebProber {
         const v = validateProbeTarget(req.url, this.scopeHosts, { allowPrivateHosts: this.allowPrivateHosts });
         if (!v.ok)
             throw new Error(`[prober] refused: ${v.reason}`);
-        if (req.body && Buffer.byteLength(req.body, "utf8") > MAX_BODY_BYTES) {
+        if (req.body && Buffer.byteLength(req.body, 'utf8') > MAX_BODY_BYTES) {
             throw new Error(`[prober] refused: body exceeds ${MAX_BODY_BYTES} bytes`);
         }
-        const method = (req.method || "GET").toUpperCase();
+        const method = (req.method || 'GET').toUpperCase();
         if (!/^[A-Z]+$/.test(method) || method.length > 10) {
             throw new Error(`[prober] refused: bad method ${req.method}`);
         }
         // Global rate limit.
         const wait = this.minDelayMs - (Date.now() - this.lastProbeAt);
         if (wait > 0)
-            await new Promise((r) => setTimeout(r, wait));
+            await new Promise(r => setTimeout(r, wait));
         // Resolve + validate + pin (audit 2026-10-09 security #5): the socket
         // only ever connects to addresses that passed classification.
         const addresses = await this.resolveFor(req.url);
@@ -137,7 +137,7 @@ export class WebProber {
         try {
             const res = await pinnedHttpRequest(req.url, {
                 method,
-                headers: { "user-agent": "secscan-redteam-runner/0.4.0", "accept-encoding": "gzip, deflate, br", ...(req.headers ?? {}) },
+                headers: { 'user-agent': 'secscan-redteam-runner/0.4.0', 'accept-encoding': 'gzip, deflate, br', ...(req.headers ?? {}) },
                 body: req.body === undefined ? undefined : req.body,
                 addresses,
                 signal: ctrl.signal,
@@ -145,8 +145,8 @@ export class WebProber {
             });
             const ms = Date.now() - started;
             this.lastProbeAt = Date.now();
-            if (res.status >= 300 && res.status < 400 && res.headers["location"]) {
-                await this.assertRedirectTargetAllowed(res.headers["location"], req.url);
+            if (res.status >= 300 && res.status < 400 && res.headers['location']) {
+                await this.assertRedirectTargetAllowed(res.headers['location'], req.url);
             }
             const bodySnippet = res.text.slice(0, 4096);
             return { status: res.status, headers: res.headers, bodySnippet, ms, opsecSignal: detectOpsecSignal(res.status, res.headers, bodySnippet) };
@@ -161,8 +161,8 @@ export class WebProber {
      * primitive — BURST_SIZE is constant, and the global cooldown applies after.
      */
     async probeBurst(req) {
-        const method = (req.method || "GET").toUpperCase();
-        if (method !== "GET" && method !== "HEAD") {
+        const method = (req.method || 'GET').toUpperCase();
+        if (method !== 'GET' && method !== 'HEAD') {
             throw new Error(`[prober] refused: burst probe only allows GET/HEAD (idempotent), got ${method}`);
         }
         const v = validateProbeTarget(req.url, this.scopeHosts, { allowPrivateHosts: this.allowPrivateHosts });
@@ -170,7 +170,7 @@ export class WebProber {
             throw new Error(`[prober] refused: ${v.reason}`);
         const wait = this.minDelayMs - (Date.now() - this.lastProbeAt);
         if (wait > 0)
-            await new Promise((r) => setTimeout(r, wait));
+            await new Promise(r => setTimeout(r, wait));
         // Same resolve/validate/pin discipline as probe() — one validation for
         // the whole batch; a refusal here happens before any packet is sent.
         const addresses = await this.resolveFor(req.url);
@@ -181,12 +181,12 @@ export class WebProber {
             try {
                 const res = await pinnedHttpRequest(req.url, {
                     method,
-                    headers: { "user-agent": "secscan-redteam-runner/0.5.0" },
+                    headers: { 'user-agent': 'secscan-redteam-runner/0.5.0' },
                     addresses,
                     signal: ctrl.signal,
                     readBody: false,
                 });
-                return { status: res.status, ms: Date.now() - started, location: res.headers["location"] };
+                return { status: res.status, ms: Date.now() - started, location: res.headers['location'] };
             }
             catch {
                 return { status: 0, ms: Date.now() - started, location: undefined };
@@ -196,16 +196,16 @@ export class WebProber {
             }
         }));
         this.lastProbeAt = Date.now();
-        const redirect = results.find((r) => r.status >= 300 && r.status < 400 && r.location);
+        const redirect = results.find(r => r.status >= 300 && r.status < 400 && r.location);
         if (redirect?.location)
             await this.assertRedirectTargetAllowed(redirect.location, req.url);
-        const statuses = results.map((r) => r.status);
+        const statuses = results.map(r => r.status);
         const rateLimited = statuses.includes(429);
-        const distinct = [...new Set(statuses)].join(", ");
+        const distinct = [...new Set(statuses)].join(', ');
         const note = rateLimited
             ? `${BURST_SIZE} concurrent requests: rate limiting IS present (429 observed in the batch).`
             : `${BURST_SIZE} concurrent requests: no rate limiting observed — status(es): ${distinct}.`;
-        return { count: BURST_SIZE, statuses, rateLimited, minMs: Math.min(...results.map((r) => r.ms)), maxMs: Math.max(...results.map((r) => r.ms)), note };
+        return { count: BURST_SIZE, statuses, rateLimited, minMs: Math.min(...results.map(r => r.ms)), maxMs: Math.max(...results.map(r => r.ms)), note };
     }
 }
 //# sourceMappingURL=prober.js.map

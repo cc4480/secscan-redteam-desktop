@@ -22,10 +22,10 @@
  * A FRESH canary marker is generated per reverify run; the old marker is
  * never replayed (its echo would prove nothing about the present).
  */
-import { verifyBundleIntegrity } from "./bundle.js";
-import { HostExecutor } from "../host-exec/executor.js";
-import { MsfExecutor } from "../msf/executor.js";
-import { validateHostTarget } from "../host-exec/common.js";
+import { verifyBundleIntegrity } from './bundle.js';
+import { HostExecutor } from '../host-exec/executor.js';
+import { MsfExecutor } from '../msf/executor.js';
+import { validateHostTarget } from '../host-exec/common.js';
 const TARGET_CHANGED_RE = /unreachable|econnrefused|connection refused|enotfound|etimedout|timed out|no route to host|nxdomain|getaddrinfo|network is unreachable|dial tcp/i;
 function freshMarker() {
     return `REVERIFY-${Date.now().toString(36)}${Math.floor(Math.random() * 0xffffff).toString(16)}`;
@@ -57,10 +57,10 @@ export async function reverifyBundle(bundle, runner, opts = {}) {
             findingId: bundle.findingId,
             engagementId: bundle.engagementId,
             reverifiedAt: new Date().toISOString(),
-            verdict: "not-reproduced",
-            steps: bundle.steps.map((step) => ({ seq: step.seq, tool: step.tool, replayed: false, ok: false, validationObserved: false, note: "refused: bundle provenance check failed" })),
+            verdict: 'not-reproduced',
+            steps: bundle.steps.map(step => ({ seq: step.seq, tool: step.tool, replayed: false, ok: false, validationObserved: false, note: 'refused: bundle provenance check failed' })),
             summary: `refused before firing: bundle provenance check failed: ${integrityError}`,
-            registryNote: "REFUSED (bundle provenance check failed) — do NOT close the finding; provenance could not be established",
+            registryNote: 'REFUSED (bundle provenance check failed) — do NOT close the finding; provenance could not be established',
         };
     }
     const marker = freshMarker();
@@ -74,7 +74,7 @@ export async function reverifyBundle(bundle, runner, opts = {}) {
                 replayed: false,
                 ok: false,
                 validationObserved: false,
-                note: "not mechanically replayable — manual retest required",
+                note: 'not mechanically replayable — manual retest required',
             });
             continue;
         }
@@ -83,14 +83,14 @@ export async function reverifyBundle(bundle, runner, opts = {}) {
             res = await withTimeout(runner(step, marker), perStep, `reverify seq ${step.seq}`);
         }
         catch (err) {
-            res = { ok: false, output: "", note: err.message };
+            res = { ok: false, output: '', note: err.message };
         }
-        const changed = !res.ok && TARGET_CHANGED_RE.test(`${res.output} ${res.note ?? ""}`);
+        const changed = !res.ok && TARGET_CHANGED_RE.test(`${res.output} ${res.note ?? ''}`);
         // Validation: the FRESH marker must echo (execution steps), or the tool
         // must succeed with evidence output (observation steps).
         const validationObserved = changed
             ? false
-            : step.validation === "marker-echo"
+            : step.validation === 'marker-echo'
                 ? res.ok && res.output.includes(marker)
                 : res.ok && res.output.trim().length > 0;
         steps.push({
@@ -99,36 +99,36 @@ export async function reverifyBundle(bundle, runner, opts = {}) {
             replayed: true,
             ok: res.ok,
             validationObserved,
-            note: changed ? `target-changed: ${res.note ?? res.output.slice(0, 200)}` : (res.note ?? (res.ok ? "ok" : "failed")),
+            note: changed ? `target-changed: ${res.note ?? res.output.slice(0, 200)}` : (res.note ?? (res.ok ? 'ok' : 'failed')),
         });
     }
-    const replayed = steps.filter((s) => s.replayed);
+    const replayed = steps.filter(s => s.replayed);
     let verdict;
     let summary;
-    if (steps.some((s) => s.replayed && !s.ok && /target-changed:/.test(s.note))) {
-        verdict = "target-changed";
+    if (steps.some(s => s.replayed && !s.ok && /target-changed:/.test(s.note))) {
+        verdict = 'target-changed';
         summary =
-            `target-changed: a reverify step failed on connectivity — the environment moved, not the vulnerability. ` +
-                `Retest when the target is reachable; do not mark the finding fixed.`;
+            'target-changed: a reverify step failed on connectivity — the environment moved, not the vulnerability. ' +
+                'Retest when the target is reachable; do not mark the finding fixed.';
     }
     else if (replayed.length === 0) {
-        verdict = "not-reproduced";
+        verdict = 'not-reproduced';
         summary =
-            `not-reproduced (inconclusive): this bundle has no mechanically replayable steps — ` +
-                `manual retest required. Nothing was re-executed.`;
+            'not-reproduced (inconclusive): this bundle has no mechanically replayable steps — ' +
+                'manual retest required. Nothing was re-executed.';
     }
-    else if (replayed.every((s) => s.ok && s.validationObserved)) {
-        verdict = "reproduced";
+    else if (replayed.every(s => s.ok && s.validationObserved)) {
+        verdict = 'reproduced';
         summary =
             `reproduced: ${replayed.length}/${bundle.steps.length} replayable step(s) re-ran and every validation ` +
                 `signal re-observed (fresh marker ${marker} echoed where applicable). The finding still holds.`;
     }
     else {
-        verdict = "not-reproduced";
-        const bad = replayed.filter((s) => !s.ok || !s.validationObserved).length;
+        verdict = 'not-reproduced';
+        const bad = replayed.filter(s => !s.ok || !s.validationObserved).length;
         summary =
             `not-reproduced: ${bad}/${replayed.length} replayable step(s) failed or lost their validation signal. ` +
-                `Treat as fixed-or-changed: confirm with a fresh engagement before closing the finding.`;
+                'Treat as fixed-or-changed: confirm with a fresh engagement before closing the finding.';
     }
     return {
         bundleId: bundle.bundleId,
@@ -138,9 +138,9 @@ export async function reverifyBundle(bundle, runner, opts = {}) {
         verdict,
         steps,
         summary,
-        registryNote: verdict === "reproduced"
+        registryNote: verdict === 'reproduced'
             ? `${bundle.findingId} re-verified ${new Date().toISOString().slice(0, 10)}: REPRODUCED — extends the before/after chain; re-record via record_finding to log the fresh observation.`
-            : verdict === "target-changed"
+            : verdict === 'target-changed'
                 ? `${bundle.findingId} re-verify inconclusive (target-changed): do NOT close the finding; retest when reachable.`
                 : `${bundle.findingId} re-verify ${new Date().toISOString().slice(0, 10)}: NOT REPRODUCED — candidate for closure after one fresh-engagement confirmation.`,
     };
@@ -162,29 +162,29 @@ export function createReplayer(opts) {
     return async (step, marker) => {
         const replay = step.replay;
         if (!replay)
-            return { ok: false, output: "", note: "not replayable" };
-        const host = replay.host ?? step.target ?? "";
+            return { ok: false, output: '', note: 'not replayable' };
+        const host = replay.host ?? step.target ?? '';
         const scopeCheck = validateHostTarget(host, scope);
         if (!scopeCheck.ok) {
-            return { ok: false, output: "", note: `REFUSED: ${scopeCheck.reason} — reverify never leaves declared scope` };
+            return { ok: false, output: '', note: `REFUSED: ${scopeCheck.reason} — reverify never leaves declared scope` };
         }
         try {
-            if (replay.tool === "ssh_exec" || replay.tool === "winrm_exec") {
-                let command = String(replay.args["command"] ?? "");
+            if (replay.tool === 'ssh_exec' || replay.tool === 'winrm_exec') {
+                let command = String(replay.args['command'] ?? '');
                 // Fresh marker in, old marker out: replaying the stale marker would prove nothing.
                 command = command.replace(/REDTEAM-MARKER-[A-Za-z0-9_-]{1,64}/g, marker);
-                const res = replay.tool === "ssh_exec"
+                const res = replay.tool === 'ssh_exec'
                     ? await hostExec.sshExec({ host, command, scopeHosts: scope, timeoutMs: opts.perStepTimeoutMs })
                     : await hostExec.winrmExec({ host, command, scopeHosts: scope, timeoutMs: opts.perStepTimeoutMs });
                 if (res.refused)
                     return { ok: false, output: res.output, note: res.refused };
                 return { ok: res.ok, output: `${res.summary}\n${res.output}`.slice(0, 4000) };
             }
-            if (replay.tool === "msf_exec") {
+            if (replay.tool === 'msf_exec') {
                 const res = await msfExec.run({
                     host,
-                    moduleType: replay.args["moduleType"] === "auxiliary" ? "auxiliary" : "exploit",
-                    module: String(replay.args["module"] ?? ""),
+                    moduleType: replay.args['moduleType'] === 'auxiliary' ? 'auxiliary' : 'exploit',
+                    module: String(replay.args['module'] ?? ''),
                     marker,
                     scopeHosts: scope,
                     timeoutMs: opts.perStepTimeoutMs,
@@ -193,10 +193,10 @@ export function createReplayer(opts) {
                     return { ok: false, output: res.output, note: res.refused };
                 return { ok: res.ok, output: `${res.summary}\n${res.output}`.slice(0, 4000) };
             }
-            return { ok: false, output: "", note: `no replayer for tool ${replay.tool} — manual retest` };
+            return { ok: false, output: '', note: `no replayer for tool ${replay.tool} — manual retest` };
         }
         catch (err) {
-            return { ok: false, output: "", note: err.message.slice(0, 300) };
+            return { ok: false, output: '', note: err.message.slice(0, 300) };
         }
     };
 }

@@ -3,9 +3,9 @@
  * from the audit log for one confirmed finding. Returns null (with
  * reason) when the validation bar is not met — never fabricated.
  */
-import { redactSecrets } from "../../host-exec/common.js";
-import { CVE_RE, PROOF_TOOL_ACTIONS, extractCommand, extractReplay, isFailure, stepValidation, } from "./steps.js";
-import { stampBundleIntegrity } from "./integrity.js";
+import { redactSecrets } from '../../host-exec/common.js';
+import { CVE_RE, PROOF_TOOL_ACTIONS, extractCommand, extractReplay, isFailure, stepValidation, } from './steps.js';
+import { stampBundleIntegrity } from './integrity.js';
 /**
  * The on-disk file name for a finding's bundle. Finding ids are reporter-influenced
  * (parsed model JSON, never runner-validated), so anything outside [A-Za-z0-9._-]
@@ -13,23 +13,23 @@ import { stampBundleIntegrity } from "./integrity.js";
  * can never name a path outside the caller's poc/ directory.
  */
 export function bundleFileName(findingId) {
-    const stem = findingId.replace(/[^A-Za-z0-9._-]/g, "_").replace(/^\.+/, "");
-    return `${stem || "bundle"}.json`;
+    const stem = findingId.replace(/[^A-Za-z0-9._-]/g, '_').replace(/^\.+/, '');
+    return `${stem || 'bundle'}.json`;
 }
 export function buildPocBundle(input) {
     const { finding, events, engagement, secrets } = input;
     const redact = (s) => redactSecrets(s, secrets);
-    if (finding.status !== "confirmed") {
+    if (finding.status !== 'confirmed') {
         return { bundle: null, reason: `finding ${finding.id} is not confirmed (status=${finding.status}) — no bundle` };
     }
-    const attackIds = finding.attackIds.map((a) => a.toUpperCase());
+    const attackIds = finding.attackIds.map(a => a.toUpperCase());
     const correlated = events.filter((ev) => {
-        if (ev.phase !== "exploit" && ev.phase !== "recon")
+        if (ev.phase !== 'exploit' && ev.phase !== 'recon')
             return false;
         if (!PROOF_TOOL_ACTIONS.has(ev.action))
             return false;
         if (attackIds.length > 0) {
-            const evAttack = (ev.attackId ?? "").toUpperCase();
+            const evAttack = (ev.attackId ?? '').toUpperCase();
             if (!attackIds.includes(evAttack))
                 return false;
         }
@@ -53,31 +53,31 @@ export function buildPocBundle(input) {
             attackId: ev.attackId,
             command,
             result: redact(ev.result.slice(0, 500)),
-            validation: isFailure(ev.result) ? "none" : validation,
+            validation: isFailure(ev.result) ? 'none' : validation,
             marker,
             cve: cveM ? cveM[1].toUpperCase() : undefined,
             replay: extractReplay(ev.action, ev, command),
         };
     });
-    const validating = steps.filter((s) => s.validation !== "none");
+    const validating = steps.filter(s => s.validation !== 'none');
     if (validating.length === 0) {
         return {
             bundle: null,
             reason: `finding ${finding.id}: ${steps.length} correlated step(s) but no validation signal ` +
-                `(no marker echo observed, no read-only evidence output) — no bundle`,
+                '(no marker echo observed, no read-only evidence output) — no bundle',
         };
     }
-    const markerStep = steps.find((s) => s.validation === "marker-echo");
-    const tier = markerStep ? "execution" : "observation";
-    const stepCves = steps.map((s) => s.cve).filter(Boolean);
+    const markerStep = steps.find(s => s.validation === 'marker-echo');
+    const tier = markerStep ? 'execution' : 'observation';
+    const stepCves = steps.map(s => s.cve).filter(Boolean);
     const cve = input.cve ?? stepCves[0];
-    const proves = tier === "execution"
+    const proves = tier === 'execution'
         ? `${markerStep.tool} executed the runner-built canary on ${markerStep.target ?? engagement.target} ` +
-            `(${markerStep.attackId ?? attackIds[0] ?? "technique"}); marker REDTEAM-MARKER-${markerStep.marker ?? "?"} ` +
+            `(${markerStep.attackId ?? attackIds[0] ?? 'technique'}); marker REDTEAM-MARKER-${markerStep.marker ?? '?'} ` +
             `echoed back at ${markerStep.ts}. This proves the specific executed action and nothing more.`
         : `Read-only ${validating[0].tool} output on ${validating[0].target ?? engagement.target} ` +
-            `(${validating[0].attackId ?? attackIds[0] ?? "technique"}) directly demonstrates "${finding.title}". ` +
-            `This proves the observed misconfiguration/exposure and nothing more.`;
+            `(${validating[0].attackId ?? attackIds[0] ?? 'technique'}) directly demonstrates "${finding.title}". ` +
+            'This proves the observed misconfiguration/exposure and nothing more.';
     const bundle = {
         version: 1,
         bundleId: `POC-${engagement.engagementId}-${finding.id}`,
@@ -96,10 +96,10 @@ export function buildPocBundle(input) {
         markerObserved: markerStep?.marker ? `REDTEAM-MARKER-${markerStep.marker}` : undefined,
         validationTier: tier,
         proves: redact(proves),
-        doesNotProve: "Full impact beyond the executed/observed action — lateral movement, persistence, " +
-            "privilege beyond what the steps show, data access or exfiltration — was not attempted " +
-            "and is NOT proven by this bundle. Re-running the steps should reproduce the same " +
-            "observation; any deviation means the target changed.",
+        doesNotProve: 'Full impact beyond the executed/observed action — lateral movement, persistence, ' +
+            'privilege beyond what the steps show, data access or exfiltration — was not attempted ' +
+            'and is NOT proven by this bundle. Re-running the steps should reproduce the same ' +
+            'observation; any deviation means the target changed.',
         reverifyCommand: `redteam-runner reverify --bundle poc/${finding.id}.json --scope ${engagement.target} --execute`,
     };
     return { bundle: stampBundleIntegrity(bundle) };

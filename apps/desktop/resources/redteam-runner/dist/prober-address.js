@@ -19,6 +19,6 @@ export function isPrivateOrLoopbackHost(host) {
  * combined with a public scope host must not inherit the sandbox bypass.
  */
 export function allHostsPrivateOrLoopback(hosts) {
-    return hosts.length > 0 && hosts.every((h) => isPrivateOrLoopbackHost(h));
+    return hosts.length > 0 && hosts.every(h => isPrivateOrLoopbackHost(h));
 }
 //# sourceMappingURL=prober-address.js.map

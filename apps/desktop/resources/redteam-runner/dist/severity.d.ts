@@ -7,6 +7,6 @@
  * anything outside the five known values collapses to "low". Never
  * propagated verbatim, never fatal.
  */
-import type { Finding } from './types.js'
+import type { Finding } from './types.js';
 /** Coerce an untrusted severity string into a Finding severity. */
-export declare function coerceSeverity(s: string): Finding['severity']
+export declare function coerceSeverity(s: string): Finding['severity'];

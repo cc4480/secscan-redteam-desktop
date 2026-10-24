@@ -1,10 +1,14 @@
-/** Resolve the required policy service from the same deployment as updater publication. */
+﻿/** Resolve the required policy service from the same deployment as updater publication. */
 import { resolveDesktopAutoUpdateEnvironment } from './desktop-auto-update-environment.mjs'
 
 function origin(value, name) {
   let url
   try { url = new URL(value) } catch { throw new Error(`desktop package: ${name} requires an HTTPS origin`) }
-  if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
+  const reserved = ['.invalid', '.test', '.example', '.localhost']
+  if (reserved.some(suffix => url.hostname.endsWith(suffix) || url.hostname === suffix.slice(1))) {
+    throw new Error(`desktop package: ${name} points at the reserved host ${url.hostname}; set a real update origin before shipping`)
+  }
+if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
     throw new Error(`desktop package: ${name} requires an HTTPS origin without credentials, path, query, or fragment`)
   }
   return url.origin
@@ -42,3 +46,4 @@ export function resolveDesktopPolicyEnvironment(environment) {
     ...(deployment === 'test' ? { allowedAuthOrigins: authOrigins.map(value => origin(value, 'allowedAuthOrigins')) } : {}),
     authentication: deployment === 'test' ? 'feishu-test' : 'anonymous' }
 }
+

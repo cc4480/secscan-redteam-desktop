@@ -17,7 +17,7 @@
  * rewriting the bundle. That residual is accepted deliberately (audit
  * T10): the bar is tamper detection, not HMAC ceremony.
  */
-import { createHash } from "node:crypto";
+import { createHash } from 'node:crypto';
 /**
  * Canonical JSON: object keys sorted recursively, `undefined` properties
  * dropped (matching JSON.stringify semantics), array order preserved.
@@ -25,26 +25,26 @@ import { createHash } from "node:crypto";
  * verified from disk digests identically to the in-memory original.
  */
 function canonicalJson(value) {
-    if (value === null || typeof value !== "object") {
-        return JSON.stringify(value) ?? "null";
+    if (value === null || typeof value !== 'object') {
+        return JSON.stringify(value) ?? 'null';
     }
     if (Array.isArray(value)) {
-        return `[${value.map((v) => canonicalJson(v)).join(",")}]`;
+        return `[${value.map(v => canonicalJson(v)).join(',')}]`;
     }
     const rec = value;
     const keys = Object.keys(rec)
-        .filter((k) => rec[k] !== undefined)
+        .filter(k => rec[k] !== undefined)
         .sort();
-    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(rec[k])}`).join(",")}}`;
+    return `{${keys.map(k => `${JSON.stringify(k)}:${canonicalJson(rec[k])}`).join(',')}}`;
 }
 /** sha256 (hex) of the bundle's canonical form, integrity field excluded. */
 export function computeBundleDigest(bundle) {
     const { integrity: _excluded, ...unsigned } = bundle;
-    return createHash("sha256").update(canonicalJson(unsigned), "utf8").digest("hex");
+    return createHash('sha256').update(canonicalJson(unsigned), 'utf8').digest('hex');
 }
 /** Record the digest on a bundle the runner just built. Mutates; returns the bundle. */
 export function stampBundleIntegrity(bundle) {
-    bundle.integrity = { algorithm: "sha256", digest: computeBundleDigest(bundle) };
+    bundle.integrity = { algorithm: 'sha256', digest: computeBundleDigest(bundle) };
     return bundle;
 }
 /**
@@ -54,8 +54,8 @@ export function stampBundleIntegrity(bundle) {
 export function verifyBundleIntegrity(bundle) {
     const recorded = bundle.integrity;
     if (!recorded ||
-        recorded.algorithm !== "sha256" ||
-        typeof recorded.digest !== "string" ||
+        recorded.algorithm !== 'sha256' ||
+        typeof recorded.digest !== 'string' ||
         !/^[0-9a-f]{64}$/.test(recorded.digest)) {
         return "bundle provenance check failed: no runner-recorded integrity digest — the bundle's origin cannot be established";
     }
