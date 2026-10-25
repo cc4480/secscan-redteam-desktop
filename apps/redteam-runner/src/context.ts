@@ -59,6 +59,13 @@ export interface LiveFinding {
   attackId: string
   evidence: string
   payload?: string
+  /**
+   * Dual-exploiter cell outcome (spec §5), set only when the finding was
+   * recorded with a proven claim and adjudicated by exploit-cell/live.ts:
+   * 'proven' means both cell signatures plus a passing negative control;
+   * anything else ends 'detected'. Absent = never adjudicated.
+   */
+  cellState?: 'proven' | 'detected'
 }
 
 /** A killed hypothesis recorded live during exploitation (shared state). */

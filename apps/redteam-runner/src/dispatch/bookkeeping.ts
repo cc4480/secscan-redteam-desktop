@@ -1,25 +1,20 @@
 /**
  * Shared-state tool handlers: registry, target map, findings, verdicts, abort (v0.19.0 refactor — extracted from dispatch.ts).
  */
-import { HaltError, type KilledLive, type LiveFinding } from '../context.js'
+import { HaltError, type Ctx, type KilledLive, type LiveFinding } from '../context.js'
 import { queryRegistry, loadRegistryFile } from '../registry.js'
 import { redactPii } from '../safety/index.js'
 import { resolveItemKey, setDisposition } from '../coverage/items.js'
-import { type Ctx } from '../context.js'
 import { type ActorRole, type EngagementPhase } from '../types.js'
 import type { ToolCallRequest } from '@secscan/redteam-llm-router'
 import { type DispatchResult } from './types.js'
 import { syncLiveFindingsToState, writeFindingToRegistry, writeKilledToRegistry } from './verdicts.js'
+import { adjudicateRecordedClaim } from '../exploit-cell/live.js'
 import { closeVariantExpansion, startVariantExpansion } from '../variants/index.js'
 import { optStr } from './prelude.js'
 
-export async function handleBookkeepingTools(
-  ctx: Ctx,
-  role: ActorRole,
-  phase: EngagementPhase,
-  call: ToolCallRequest,
-  args: Record<string, unknown>,
-): Promise<DispatchResult | null> {
+export async function handleBookkeepingTools(ctx: Ctx, role: ActorRole, phase: EngagementPhase,
+  call: ToolCallRequest, args: Record<string, unknown>): Promise<DispatchResult | null> {
   if (!['query_registry','update_target_map','record_finding','record_killed','record_item_verdict','abort_engagement','variant_list'].includes(call.name)) return null
   if (call.name === 'query_registry') {
     const limit = Math.min(Math.max(Number(args['limit'] ?? 5) || 5, 1), 10)
@@ -33,9 +28,7 @@ export async function handleBookkeepingTools(
       attackId: optStr(args['attackId']),
       limit,
     })
-    for (const h of hits) {
-      if (!ctx.registryHits.some(e => e.id === h.id)) ctx.registryHits.push(h)
-    }
+    for (const h of hits) if (!ctx.registryHits.some(e => e.id === h.id)) ctx.registryHits.push(h)
     if (hits.length === 0) {
       return {
         result: 'Registry: no relevant entries for this target profile — uncharted territory. Proceed from first principles and write back everything you learn.',
@@ -111,6 +104,7 @@ export async function handleBookkeepingTools(
       evidence: redactPii(String(args['evidence'] ?? '').slice(0, 800)),
       payload: optStr(args['payload'])?.slice(0, 300),
     }
+    const cellNote = await adjudicateRecordedClaim(ctx, phase, lf, args)
     ctx.liveFindings.push(lf)
     syncLiveFindingsToState(ctx)
     writeFindingToRegistry(ctx, lf)
@@ -145,7 +139,7 @@ export async function handleBookkeepingTools(
       }
     }
     return {
-      result: `Finding recorded to shared state + registry: [${lf.severity}] ${lf.title} (${attackId}). The reporter and all future engagements see it.`,
+      result: `Finding recorded to shared state + registry: [${lf.severity}] ${lf.title} (${attackId}). The reporter and all future engagements see it.${cellNote}`,
       attackId,
       target: ctx.domain,
     }

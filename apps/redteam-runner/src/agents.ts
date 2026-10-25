@@ -6,7 +6,8 @@
  * model output, and commanderRedirect / blackout / halt plumbing keeps the
  * loop bounded and safe. HaltError is the loop's stop signal.
  */
-import { completeForRole as routerCompleteForRole, type AgentRole, type ChatMessage, type ChatResult, type JsonSchemaTool } from '@secscan/redteam-llm-router'
+import { type AgentRole, type ChatMessage, type ChatResult, type JsonSchemaTool } from '@secscan/redteam-llm-router'
+import { createCharteredComplete } from './charter-completion.js'
 import { TurnIntegrity, type DeliverableSpec, type RoundCaps } from './turn-integrity.js'
 import { inBlackout } from './gate.js'
 import { isPrivateOrLoopbackHost } from './prober.js'
@@ -76,7 +77,10 @@ export async function agentLoop(
     deliverable?: DeliverableSpec
   } = {},
 ): Promise<string> {
-  const complete = ctx.deps.completeForRole ?? routerCompleteForRole
+  // Production completions are chartered (charter-completion.ts): charter
+  // first, charter routing, phase anchors, refusal fallback. Tests inject
+  // deps.completeForRole and keep the bare seam.
+  const complete = ctx.deps.completeForRole ?? createCharteredComplete(ctx, phase)
   // H2-P1 section-5 full-text capture: one steps.jsonl record per prompt, tool
   // call and observation for this engagement (no-op when there is no run dir).
   const steps = stepJournalFor(ctx)

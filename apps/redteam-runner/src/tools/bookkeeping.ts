@@ -64,7 +64,7 @@ export const UPDATE_TARGET_MAP_TOOL: JsonSchemaTool = {
 export const RECORD_FINDING_TOOL: JsonSchemaTool = {
   name: 'record_finding',
   description:
-    'Record a CONFIRMED finding the moment it lands (two independent observations required). Writes to shared state AND the persistent registry immediately. Args: severity (critical|high|medium|low|info), title, attackId, evidence, vulnClass?, payload? (the proving payload pattern).',
+    'Record a CONFIRMED finding the moment it lands (two independent observations required). Writes to shared state AND the persistent registry immediately. Args: severity (critical|high|medium|low|info), title, attackId, evidence, vulnClass?, payload? (the proving payload pattern). To claim the finding PROVEN, also pass expectedMarker (the exact marker demonstrating the flaw), receipt (the full request/response the claim rests on), and targetUrl (the exact URL probed): a Challenger agent will falsify the claim against the raw receipts and the runner will re-run a negative control (same request, trigger removed). A claim that survives is stamped PROVEN; anything else stands DETECTED.',
   parameters: {
     type: 'object',
     properties: {
@@ -74,6 +74,9 @@ export const RECORD_FINDING_TOOL: JsonSchemaTool = {
       evidence: { type: 'string' },
       vulnClass: { type: 'string' },
       payload: { type: 'string' },
+      expectedMarker: { type: 'string' },
+      receipt: { type: 'string' },
+      targetUrl: { type: 'string' },
     },
     required: ['severity', 'title', 'attackId', 'evidence'],
   },
