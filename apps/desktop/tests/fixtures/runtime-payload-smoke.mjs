@@ -85,6 +85,13 @@ async function checkPty() {
     assert.equal(timedOut, false)
     assert.ok(result.signal === undefined || result.signal === 0, 'PTY exited without a signal')
     assert.equal(result.exitCode, 0)
+    // ConPTY delivers buffered output asynchronously around the exit event and
+    // node-pty exposes no end-of-data signal, so give the exited program's
+    // output a bounded window to arrive before asserting on its contents.
+    const drainDeadline = Date.now() + 10_000
+    while (!/runtime-payload-pty-ok/u.test(output) && Date.now() < drainDeadline) {
+      await new Promise(resolveDrain => setTimeout(resolveDrain, 50))
+    }
     assert.match(output, /runtime-payload-pty-ok/u)
   } finally {
     clearTimeout(timer)

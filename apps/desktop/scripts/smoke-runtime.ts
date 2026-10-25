@@ -103,13 +103,13 @@ export function apply(ctx) {
       timer = setTimeout(() => { reject(new Error('desktop runtime: Host readiness exceeded 120 seconds')) }, 120_000)
     })])
     clearTimeout(timer)
-    const login = await fetch(ready.url, { redirect: 'manual' })
+    const login = await fetch(ready.url, { redirect: 'manual', signal: AbortSignal.timeout(120_000) })
     const cookie = login.headers.getSetCookie().map(value => value.split(';')[0]).join('; ')
-    const response = await fetch(new URL('/', ready.url), { headers: { cookie } })
+    const response = await fetch(new URL('/', ready.url), { headers: { cookie }, signal: AbortSignal.timeout(120_000) })
     if (response.status !== 200 || !(await response.text()).includes('<html')) {
       throw new Error('desktop runtime: packaged frontend smoke failed')
     }
-    const pluginResponse = await fetch(new URL('/desktop-smoke', ready.url), { headers: { cookie } })
+    const pluginResponse = await fetch(new URL('/desktop-smoke', ready.url), { headers: { cookie }, signal: AbortSignal.timeout(120_000) })
     if (await pluginResponse.text() !== 'plugin route ready') throw new Error('desktop runtime: plugin HTTP route failed')
     for (const { extension } of inputs) {
       const converted = await fetch(new URL(`/desktop-smoke-office/${extension}`, ready.url), {

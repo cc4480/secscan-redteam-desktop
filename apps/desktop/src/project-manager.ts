@@ -33,24 +33,25 @@ const WEB_PROFILE = PROFILE_TEMPLATES.web as ProfileTemplate
 const WORKSPACE_SETTINGS = 'nodeLinker: hoisted\nautoInstallPeers: false\n'
 /** External transitive pins for the staged runtime. The staged install does a fresh
  *  resolution (--lockfile-only), so without these it drifts to the registry's latest at
- *  build time — e.g. koffi ^3.1.0 -> 3.3.3 and @deepseek-ai/libreoffice-kit ^0.1.0 -> 0.1.5,
- *  which caused the attempt-6 koffi 3.3.3 native-compile failure (uv.cc:88 under GCC 13.2.0).
- *  Pin to exactly what the monorepo lockfile qualifies. */
+ *  build time. Pin to exactly what the WORKING release ships: libreoffice-kit 0.1.5 with
+ *  koffi 3.1.1 — 0.1.5 declares `koffi: "3.1.1"` exactly, so koffi can neither drift nor
+ *  fall back to the 3.3.3 native compile (uv.cc:88 under GCC 13.2.0). Pinning
+ *  libreoffice-kit to 0.1.0 was wrong: 0.1.0's LibreOfficeKit fails to initialize, which is
+ *  what broke the packaged DOCX->PDF smoke. */
 const STAGED_EXTERNAL_OVERRIDES: Readonly<Record<string, string>> = {
   koffi: '3.1.1',
-  '@deepseek-ai/libreoffice-kit': '0.1.0',
+  '@deepseek-ai/libreoffice-kit': '0.1.5',
 }
-/** Patched-dependency entries the staged runtime must apply, mirroring the root workspace's
- *  patchedDependencies. The generated workspace file otherwise omits them, so the staged tree
- *  silently ships unpatched dependencies (e.g. node-pty 1.2.0-beta.15's macOS exec-bit patch).
- *  Kept in lock-step with pnpm-workspace.yaml; the patch files are copied by prepare-dsh. */
+/** Patched-dependency entries the staged runtime must apply — ONLY the subset of the root
+ *  workspace's patchedDependencies whose packages actually land in the staged runtime graph.
+ *  Declaring a patch for a package outside that graph makes pnpm fail with
+ *  ERR_PNPM_UNUSED_PATCH. The generated workspace file otherwise omits them, so the staged
+ *  tree silently ships unpatched dependencies (e.g. node-pty 1.2.0-beta.15's macOS exec-bit
+ *  patch). The patch files are copied by prepare-dsh; keep this list in step with the staged
+ *  graph's patched deps (build-time/UI-only packages like osx-sign, fortune-sheet, exceljs and
+ *  pkg are deliberately NOT here). */
 const STAGED_PATCHED_DEPENDENCIES: Readonly<Record<string, string>> = {
   '@earendil-works/pi-ai@0.85.1': 'patches/@earendil-works__pi-ai@0.85.1.patch',
-  '@electron/osx-sign@1.3.3': 'patches/@electron__osx-sign@1.3.3.patch',
-  '@fortune-sheet/core@1.0.4': 'patches/@fortune-sheet__core@1.0.4.patch',
-  '@fortune-sheet/react@1.0.4': 'patches/@fortune-sheet__react@1.0.4.patch',
-  '@yao-pkg/pkg@6.21.0': 'patches/@yao-pkg__pkg@6.21.0.patch',
-  'exceljs@4.4.0': 'patches/exceljs@4.4.0.patch',
   'node-pty@1.2.0-beta.15': 'patches/node-pty@1.2.0-beta.15.patch',
 }
 function writeJson(path: string, value: unknown): void {
