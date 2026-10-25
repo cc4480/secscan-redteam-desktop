@@ -9836,6 +9836,9 @@ importers:
       '@secscan/redteam-auth-gate':
         specifier: workspace:*
         version: link:../auth-gate
+      '@secscan/redteam-foundry-gate':
+        specifier: workspace:*
+        version: link:../foundry-gate
       '@secscan/redteam-llm-router':
         specifier: workspace:*
         version: link:../llm-router
