@@ -10,7 +10,7 @@ import { type ActorRole, type EngagementPhase } from "../types.js";
 import { type Ctx, HaltError } from "../context.js";
 import { type ToolCallRequest } from "@secscan/redteam-llm-router";
 import { checkTierAllows, recordExploitStep, readTierFile, TIER_NAMES } from "../accountability/index.js";
-import { isTargetDistress, readAbortFile, consumeAbortFile } from "../safety/index.js";
+import { distressEscalationResult, isTargetDistress, readAbortFile, consumeAbortFile } from "../safety/index.js";
 import { type DispatchResult } from "./types.js";
 import { recordItemAttempt } from "./verdicts.js";
 import { checkVariantCap, recordVariantExecution } from "../variants/index.js";
@@ -261,6 +261,8 @@ export async function dispatchTool(ctx: Ctx, role: ActorRole, phase: EngagementP
         target: host,
         result: `AUTO-HALT: ${host} — ${haltReason}. Further traffic to this host refused this engagement.`,
       });
+      // Spec §6: the halt escalates as a preserved distress record; resume is a recorded decision, never automatic (safety/distress-breaker.ts).
+      ctx.events.append({ phase, actor: "runner", action: "distress_escalation", target: host, result: distressEscalationResult(ctx.events.engagementId, host, haltReason) });
     }
     // v0.17.0 accountability: a successful validated exploit step consumes
     // the Tier 1 per-target chain budget. Denials, halts, and failures don't.

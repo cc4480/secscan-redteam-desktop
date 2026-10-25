@@ -122,6 +122,11 @@ export function isTargetDistress(result: string): boolean {
   return (
     /probe failed|connection refused|timed out|timeout|econnreset|econnrefused|enotfound|socket hang up/.test(r) ||
     /http 5\d\d/.test(r) ||
-    /\b5\d\d\b.*(error|from target)/.test(r)
+    /\b5\d\d\b.*(error|from target)/.test(r) ||
+    // Fleet charter spec §6 signals: a target throttling or locking
+    // accounts is a target under strain exactly like a 5xx storm —
+    // pushing harder against lockouts risks locking out real users.
+    /http 429|status 429|too many requests/.test(r) ||
+    /account (?:is )?(?:temporarily )?locked|locked out|login locked|too many (?:failed )?(?:login|sign-in|authentication) attempts/.test(r)
   );
 }

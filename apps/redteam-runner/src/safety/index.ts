@@ -36,6 +36,19 @@ export {
 export type { AutoHaltConfig } from "./autohalt.js";
 
 export {
+  ENGAGEMENT_DISTRESS_TARGET_THRESHOLD,
+  clearDistressRecord,
+  distressEscalationResult,
+  distressHalts,
+  engagementDistressed,
+  recordResumeDecision,
+  registerDistressHalt,
+  resumeDecisionFor,
+  resumeTarget,
+} from "./distress-breaker.js";
+export type { DistressHaltRecord, ResumeDecision } from "./distress-breaker.js";
+
+export {
   buildZeroDisruptionRecord,
   disruptionVerdict,
 } from "./disruption.js";
