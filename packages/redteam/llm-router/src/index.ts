@@ -122,3 +122,19 @@ export {
   CHARTER_ROUTE_ENV,
   resolveCharterRoute,
 } from './charter/routing.js'
+export {
+  classifyResponse,
+  type ClassifiedResponse,
+  type RefusalClass,
+  type RefusalTaskContext,
+} from './charter/refusal.js'
+export {
+  SessionAffinity,
+  completeWithFallback,
+  type FallbackCallImpl,
+  type FallbackFinalOutcome,
+  type FallbackOutcome,
+  type FallbackRoutes,
+  type FallbackTaskOptions,
+  type RefusalTelemetryEvent,
+} from './charter/fallback.js'
