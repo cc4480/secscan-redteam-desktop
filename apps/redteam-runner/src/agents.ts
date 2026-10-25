@@ -6,54 +6,54 @@
  * model output, and commanderRedirect / blackout / halt plumbing keeps the
  * loop bounded and safe. HaltError is the loop's stop signal.
  */
-import { completeForRole as routerCompleteForRole, type AgentRole, type ChatMessage, type ChatResult, type JsonSchemaTool } from "@secscan/redteam-llm-router";
-import { TurnIntegrity, type DeliverableSpec, type RoundCaps } from "./turn-integrity.js";
-import { inBlackout } from "./gate.js";
-import { isPrivateOrLoopbackHost } from "./prober.js";
-import { reconPrompt } from "./prompts.js";
-import { redactPii } from "./safety/index.js";
-import { tokenMeterFor } from "./harness2/trajectory-normalize.js";
-import { stepJournalFor, responseTokens, TOOL_ERROR_PREFIX } from "./harness2/steps.js";
-import { type EngagementMode, type EngagementPhase, type RulesOfEngagement } from "./types.js";
-import { type TargetId } from "./targets.js";
-import { HaltError, type Ctx } from "./context.js";
-import { sleep } from "./util.js";
-import { dispatchTool, type DispatchResult } from "./dispatch.js";
-import { sharedStateDigest } from "./coverage/cells.js";
-import { RECON_TOOLS } from "./tools.js";
+import { completeForRole as routerCompleteForRole, type AgentRole, type ChatMessage, type ChatResult, type JsonSchemaTool } from '@secscan/redteam-llm-router'
+import { TurnIntegrity, type DeliverableSpec, type RoundCaps } from './turn-integrity.js'
+import { inBlackout } from './gate.js'
+import { isPrivateOrLoopbackHost } from './prober.js'
+import { reconPrompt } from './prompts.js'
+import { redactPii } from './safety/index.js'
+import { tokenMeterFor } from './harness2/trajectory-normalize.js'
+import { stepJournalFor, responseTokens, TOOL_ERROR_PREFIX } from './harness2/steps.js'
+import { type EngagementMode, type EngagementPhase, type RulesOfEngagement } from './types.js'
+import { type TargetId } from './targets.js'
+import { HaltError, type Ctx } from './context.js'
+import { sleep } from './util.js'
+import { dispatchTool, type DispatchResult } from './dispatch.js'
+import { sharedStateDigest } from './coverage/cells.js'
+import { RECON_TOOLS } from './tools.js'
 
 // ---------------------------------------------------------------------------
 // Stop-condition plumbing
 // ---------------------------------------------------------------------------
 
 async function respectBlackout(ctx: Ctx, phase: EngagementPhase): Promise<void> {
-  const w = inBlackout(new Date(), ctx.input.roe.blackoutWindows);
-  if (!w) return;
+  const w = inBlackout(new Date(), ctx.input.roe.blackoutWindows)
+  if (!w) return
   ctx.events.append({
     phase,
-    actor: "runner",
-    action: "blackout_pause",
-    result: `Entering blackout window ${w.start}–${w.end}${w.tz ? ` ${w.tz}` : ""}. No traffic until it ends.`,
-  });
+    actor: 'runner',
+    action: 'blackout_pause',
+    result: `Entering blackout window ${w.start}–${w.end}${w.tz ? ` ${w.tz}` : ''}. No traffic until it ends.`,
+  })
   for (;;) {
-    await sleep(30_000);
-    if (!inBlackout(new Date(), ctx.input.roe.blackoutWindows)) break;
+    await sleep(30_000)
+    if (!inBlackout(new Date(), ctx.input.roe.blackoutWindows)) break
   }
-  ctx.events.append({ phase, actor: "runner", action: "blackout_resume", result: "Blackout window ended. Resuming." });
+  ctx.events.append({ phase, actor: 'runner', action: 'blackout_resume', result: 'Blackout window ended. Resuming.' })
 }
 
 function haltedByCaps(ctx: Ctx): string | null {
-  if (ctx.actions >= ctx.config.maxActions) return `action cap reached (${ctx.config.maxActions})`;
-  if (Date.now() - ctx.startedAt >= ctx.config.maxDurationMs) return `duration cap reached`;
-  if (ctx.consecutive5xx >= 3) return `three consecutive 5xx responses — possible production impact, halting`;
-  return null;
+  if (ctx.actions >= ctx.config.maxActions) return `action cap reached (${ctx.config.maxActions})`
+  if (Date.now() - ctx.startedAt >= ctx.config.maxDurationMs) return 'duration cap reached'
+  if (ctx.consecutive5xx >= 3) return 'three consecutive 5xx responses — possible production impact, halting'
+  return null
 }
 
 // ---------------------------------------------------------------------------
 // The agent loop: REASON → ACT → OBSERVE, bounded
 // ---------------------------------------------------------------------------
 
-export type { DeliverableSpec, RoundCaps } from "./turn-integrity.js";
+export type { DeliverableSpec, RoundCaps } from './turn-integrity.js'
 
 export async function agentLoop(
   ctx: Ctx,
@@ -66,103 +66,103 @@ export async function agentLoop(
   opts: {
     /** Called when the model stops calling tools. Return a follow-up prompt to
      *  keep the phase going, or null to finish the phase. */
-    onIdle?: () => string | null;
+    onIdle?: () => string | null
     /**
      * Progress-aware round caps (ZimZilla port, 2026-10-23). Per-call
      * override of config.softRoundCap / config.hardRoundCap.
      */
-    roundCaps?: RoundCaps;
+    roundCaps?: RoundCaps
     /** When declared, the turn is not finished until this file exists. */
-    deliverable?: DeliverableSpec;
+    deliverable?: DeliverableSpec
   } = {},
 ): Promise<string> {
-  const complete = ctx.deps.completeForRole ?? routerCompleteForRole;
+  const complete = ctx.deps.completeForRole ?? routerCompleteForRole
   // H2-P1 section-5 full-text capture: one steps.jsonl record per prompt, tool
   // call and observation for this engagement (no-op when there is no run dir).
-  const steps = stepJournalFor(ctx);
+  const steps = stepJournalFor(ctx)
   const messages: ChatMessage[] = [
-    { role: "system", content: system },
-    { role: "user", content: user },
-  ];
-  const notes: string[] = [];
+    { role: 'system', content: system },
+    { role: 'user', content: user },
+  ]
+  const notes: string[] = []
   // Progress-aware round caps + deliverable contracts (turn-integrity.ts):
   // the soft cap continues a progressing turn and stops only a stuck one,
   // the hard cap is the runaway backstop, and both announce themselves —
   // a capped turn is never indistinguishable from a completed one.
-  const integrity = new TurnIntegrity(ctx, phase, maxTurns, opts.roundCaps, opts.deliverable);
+  const integrity = new TurnIntegrity(ctx, phase, maxTurns, opts.roundCaps, opts.deliverable)
   for (let turn = 0; turn < integrity.effectiveMaxTurns; turn++) {
-    await respectBlackout(ctx, phase);
-    const cap = haltedByCaps(ctx);
+    await respectBlackout(ctx, phase)
+    const cap = haltedByCaps(ctx)
     if (cap) {
-      ctx.events.append({ phase, actor: "runner", action: "halt", result: `Halted: ${cap}.` });
-      throw new HaltError(cap);
+      ctx.events.append({ phase, actor: 'runner', action: 'halt', result: `Halted: ${cap}.` })
+      throw new HaltError(cap)
     }
-    if (integrity.checkpoint(turn)) break;
-    let res: ChatResult;
+    if (integrity.checkpoint(turn)) break
+    let res: ChatResult
     try {
-      res = await complete(role, messages, { tools });
+      res = await complete(role, messages, { tools })
     } catch (err) {
       // The outgoing prompt did exist; only the response's tokens are unknown.
-      steps.prompt(JSON.stringify(messages), null);
-      ctx.events.append({ phase, actor: "runner", action: "llm_error", result: `LLM call failed: ${(err as Error).message}` });
-      throw err;
+      steps.prompt(JSON.stringify(messages), null)
+      ctx.events.append({ phase, actor: 'runner', action: 'llm_error', result: `LLM call failed: ${(err as Error).message}` })
+      throw err
     }
     // Harness2 P1a: the provider's usage is real; accumulate it per engagement.
-    tokenMeterFor(ctx).record(res.usage);
+    tokenMeterFor(ctx).record(res.usage)
     // H2-P1 section-5: the FULL outgoing messages verbatim, plus the token
     // total of the response they produced (per-response tokens).
-    steps.prompt(JSON.stringify(messages), responseTokens(res.usage));
+    steps.prompt(JSON.stringify(messages), responseTokens(res.usage))
     if (res.text || res.reasoning) {
-      if (res.text) notes.push(res.text);
+      if (res.text) notes.push(res.text)
       // The thinking trace is first-class observability: it lands in the
       // event feed (and the console) alongside the visible reply.
       // v0.28.0: redact before the audit log — reasoning may echo secrets or
       // PII the upstream input redaction missed.
-      const thought = res.reasoning ? `\n[thinking] ${res.reasoning.slice(0, 600)}` : "";
-      const reasoningText = redactPii(`${res.text.slice(0, 500)}${thought}`.slice(0, 1200));
-      ctx.events.append({ phase, actor: role, action: "reasoning", result: reasoningText });
+      const thought = res.reasoning ? `\n[thinking] ${res.reasoning.slice(0, 600)}` : ''
+      const reasoningText = redactPii(`${res.text.slice(0, 500)}${thought}`.slice(0, 1200))
+      ctx.events.append({ phase, actor: role, action: 'reasoning', result: reasoningText })
     }
     if (!res.toolCalls || res.toolCalls.length === 0) {
-      const followUp = opts.onIdle?.();
+      const followUp = opts.onIdle?.()
       if (!followUp) {
         // Deliverable gate: a turn with a declared deliverable is not
         // finished until the file exists. Nudge while nudges remain; the
         // final `deliverable` event after the loop states the outcome.
-        const nudge = integrity.deliverableNudge();
+        const nudge = integrity.deliverableNudge()
         if (nudge) {
-          messages.push({ role: "assistant", content: res.text || "(stopped)" });
-          messages.push({ role: "user", content: nudge });
-          continue;
+          messages.push({ role: 'assistant', content: res.text || '(stopped)' })
+          messages.push({ role: 'user', content: nudge })
+          continue
         }
-        messages.push({ role: "assistant", content: res.text });
-        integrity.markFinished();
-        break;
+        messages.push({ role: 'assistant', content: res.text })
+        integrity.markFinished()
+        break
       }
-      messages.push({ role: "assistant", content: res.text || "(pausing)" });
-      messages.push({ role: "user", content: followUp });
-      ctx.events.append({ phase, actor: "runner", action: "phase_nudge", result: followUp.slice(0, 300) });
-      continue;
+      messages.push({ role: 'assistant', content: res.text || '(pausing)' })
+      messages.push({ role: 'user', content: followUp })
+      ctx.events.append({ phase, actor: 'runner', action: 'phase_nudge', result: followUp.slice(0, 300) })
+      continue
     }
     // The assistant message MUST carry the tool_calls it made: the tool
     // results pushed below are only valid in the API's eyes when preceded by
     // an assistant message containing these calls (ids must match).
-    messages.push({ role: "assistant", content: res.text || "(tool calls)", toolCalls: res.toolCalls });
+    messages.push({ role: 'assistant', content: res.text || '(tool calls)', toolCalls: res.toolCalls })
     for (const call of res.toolCalls) {
       // H2-P1 section-5: the full tool-call arguments, then the full result as
       // the observation (redaction happens inside the journal writer).
-      steps.tool(call.name, JSON.stringify(call.arguments ?? {}));
-      let d: DispatchResult;
+      steps.tool(call.name, JSON.stringify(call.arguments ?? {}))
+      let d: DispatchResult
       try {
-        d = await dispatchTool(ctx, role, phase, call);
+        d = await dispatchTool(ctx, role, phase, call)
       } catch (err) {
-        steps.observation(call.name, `${TOOL_ERROR_PREFIX}${(err as Error).message}`);
-        throw err;
+        steps.observation(call.name, `${TOOL_ERROR_PREFIX}${(err as Error).message}`)
+        throw err
       }
-      steps.observation(call.name, d.result);
+      steps.observation(call.name, d.result)
       // v0.13.0 safety case: PII is redacted from tool outputs BEFORE they
       // reach the audit log or the agent context. The agents reason about
       // vulnerability shapes, not other people's personal data.
-      const safeResult = redactPii(d.result);
+      const safeResult = redactPii(d.result)
       ctx.events.append({
         phase,
         actor: role,
@@ -171,41 +171,41 @@ export async function agentLoop(
         target: d.target,
         result: safeResult.slice(0, 800),
         opsec: d.opsec,
-      });
+      })
       messages.push({
-        role: "tool",
+        role: 'tool',
         toolCallId: call.id,
         // Every observation carries the current shared state — no agent ever
         // works from a stale or private picture (Megazord protocol).
-        content: safeResult.slice(0, 4000) + "\n" + sharedStateDigest(ctx, phase),
-      });
+        content: safeResult.slice(0, 4000) + '\n' + sharedStateDigest(ctx, phase),
+      })
       // Wall detection: consecutive blocked/cooled-down/OPSEC-signaled probes
       // with no successful observation. The coordinator redirects to re-recon.
-      const blocked = /^(DENIED|probe failed)/i.test(d.result) || /OPSEC SIGNAL|cooling down/i.test(d.result);
+      const blocked = /^(DENIED|probe failed)/i.test(d.result) || /OPSEC SIGNAL|cooling down/i.test(d.result)
       // Soft-cap progress verdict: one non-blocked, successful result means
       // the round advanced the work; a round of nothing but those is stuck.
-      integrity.noteToolResult(!blocked && d.ok !== false);
-      ctx.deniedStreak = blocked ? ctx.deniedStreak + 1 : 0;
-      const capAfter = haltedByCaps(ctx);
+      integrity.noteToolResult(!blocked && d.ok !== false)
+      ctx.deniedStreak = blocked ? ctx.deniedStreak + 1 : 0
+      const capAfter = haltedByCaps(ctx)
       if (capAfter) {
-        ctx.events.append({ phase, actor: "runner", action: "halt", result: `Halted: ${capAfter}.` });
-        throw new HaltError(capAfter);
+        ctx.events.append({ phase, actor: 'runner', action: 'halt', result: `Halted: ${capAfter}.` })
+        throw new HaltError(capAfter)
       }
     }
-    if (phase === "exploit" && ctx.deniedStreak >= 4 && ctx.redirects < 2) {
-      ctx.deniedStreak = 0;
-      ctx.redirects++;
+    if (phase === 'exploit' && ctx.deniedStreak >= 4 && ctx.redirects < 2) {
+      ctx.deniedStreak = 0
+      ctx.redirects++
       const intel = await commanderRedirect(
         ctx,
-        "The exploiter hit a wall: 4+ consecutive probes denied, cooled-down, or OPSEC-signaled with no successful observation.",
-      );
-      messages.push({ role: "user", content: intel });
+        'The exploiter hit a wall: 4+ consecutive probes denied, cooled-down, or OPSEC-signaled with no successful observation.',
+      )
+      messages.push({ role: 'user', content: intel })
     }
   }
   // Announce a hard-cap stop and state the deliverable's fate, if any —
   // a turn never ends at a limit, or without its deliverable, silently.
-  integrity.finalize();
-  return notes.join("\n\n");
+  integrity.finalize()
+  return notes.join('\n\n')
 }
 
 // ---------------------------------------------------------------------------
@@ -213,14 +213,14 @@ export async function agentLoop(
 // ---------------------------------------------------------------------------
 
 export function promptCtx(ctx: Ctx): {
-  mode: EngagementMode;
-  objective: string;
-  target: string;
-  scopeHosts: string[];
-  roe: RulesOfEngagement;
-  fullBattery?: boolean;
-  targets?: TargetId[];
-  localSandbox?: boolean;
+  mode: EngagementMode
+  objective: string
+  target: string
+  scopeHosts: string[]
+  roe: RulesOfEngagement
+  fullBattery?: boolean
+  targets?: TargetId[]
+  localSandbox?: boolean
 } {
   return {
     mode: ctx.input.mode,
@@ -233,8 +233,8 @@ export function promptCtx(ctx: Ctx): {
     // Only actually relax discipline when the target is genuinely
     // loopback/private — matches the gate's invariant exactly. Leaving
     // --local-sandbox on does nothing against a real domain.
-    localSandbox: ctx.config.localSandbox && ctx.hosts.every((h) => isPrivateOrLoopbackHost(h)),
-  };
+    localSandbox: ctx.config.localSandbox && ctx.hosts.every(h => isPrivateOrLoopbackHost(h)),
+  }
 }
 
 
@@ -246,28 +246,28 @@ export /**
  */
 async function commanderRedirect(ctx: Ctx, reason: string): Promise<string> {
   ctx.events.append({
-    phase: "exploit",
-    actor: "coordinator",
-    action: "redirect_rerecon",
+    phase: 'exploit',
+    actor: 'coordinator',
+    action: 'redirect_rerecon',
     result: `Commander redirect (${ctx.redirects}/2): ${reason}`,
-  });
-  const mapLines = ctx.targetMap.map((t) => `${t.method} ${t.area}${t.authState ? ` [${t.authState}]` : ""}`).join("; ");
+  })
+  const mapLines = ctx.targetMap.map(t => `${t.method} ${t.area}${t.authState ? ` [${t.authState}]` : ''}`).join('; ')
   const intel = await agentLoop(
     ctx,
-    "recon",
-    "recon",
+    'recon',
+    'recon',
     reconPrompt(promptCtx(ctx)),
     `COMMANDER REDIRECT — focused re-recon, not a full re-scan. ${reason}\n` +
-      `Current shared target map (${ctx.targetMap.length} entries): ${mapLines || "(empty)"}.\n` +
-      `Find NEW angles the exploiter has not tried: untested endpoints, parameters, methods, auth flows. ` +
-      `Write every discovery to the shared target map with update_target_map as you go. ` +
-      `End with a 5-line brief of the new angles.`,
+      `Current shared target map (${ctx.targetMap.length} entries): ${mapLines || '(empty)'}.\n` +
+      'Find NEW angles the exploiter has not tried: untested endpoints, parameters, methods, auth flows. ' +
+      'Write every discovery to the shared target map with update_target_map as you go. ' +
+      'End with a 5-line brief of the new angles.',
     RECON_TOOLS,
     6,
-  );
-  ctx.events.append({ phase: "recon", actor: "recon", action: "rerecon_brief", result: intel.slice(0, 800) });
+  )
+  ctx.events.append({ phase: 'recon', actor: 'recon', action: 'rerecon_brief', result: intel.slice(0, 800) })
   return (
     `COMMANDER REDIRECT — re-recon complete (redirect ${ctx.redirects}/2 used). New angles:\n${intel.slice(0, 1200)}\n` +
     `The shared target map now has ${ctx.targetMap.length} entries (see [SHARED STATE]). Form fresh hypotheses from the new angles — do not re-probe cooled-down vectors.`
-  );
+  )
 }
