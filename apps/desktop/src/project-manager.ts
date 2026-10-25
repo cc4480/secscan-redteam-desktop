@@ -40,17 +40,16 @@ const STAGED_EXTERNAL_OVERRIDES: Readonly<Record<string, string>> = {
   koffi: '3.1.1',
   '@deepseek-ai/libreoffice-kit': '0.1.0',
 }
-/** Patched-dependency entries the staged runtime must apply, mirroring the root workspace's
- *  patchedDependencies. The generated workspace file otherwise omits them, so the staged tree
- *  silently ships unpatched dependencies (e.g. node-pty 1.2.0-beta.15's macOS exec-bit patch).
- *  Kept in lock-step with pnpm-workspace.yaml; the patch files are copied by prepare-dsh. */
+/** Patched-dependency entries the staged runtime must apply — ONLY the subset of the root
+ *  workspace's patchedDependencies whose packages actually land in the staged runtime graph.
+ *  Declaring a patch for a package outside that graph makes pnpm fail with
+ *  ERR_PNPM_UNUSED_PATCH. The generated workspace file otherwise omits them, so the staged
+ *  tree silently ships unpatched dependencies (e.g. node-pty 1.2.0-beta.15's macOS exec-bit
+ *  patch). The patch files are copied by prepare-dsh; keep this list in step with the staged
+ *  graph's patched deps (build-time/UI-only packages like osx-sign, fortune-sheet, exceljs and
+ *  pkg are deliberately NOT here). */
 const STAGED_PATCHED_DEPENDENCIES: Readonly<Record<string, string>> = {
   '@earendil-works/pi-ai@0.85.1': 'patches/@earendil-works__pi-ai@0.85.1.patch',
-  '@electron/osx-sign@1.3.3': 'patches/@electron__osx-sign@1.3.3.patch',
-  '@fortune-sheet/core@1.0.4': 'patches/@fortune-sheet__core@1.0.4.patch',
-  '@fortune-sheet/react@1.0.4': 'patches/@fortune-sheet__react@1.0.4.patch',
-  '@yao-pkg/pkg@6.21.0': 'patches/@yao-pkg__pkg@6.21.0.patch',
-  'exceljs@4.4.0': 'patches/exceljs@4.4.0.patch',
   'node-pty@1.2.0-beta.15': 'patches/node-pty@1.2.0-beta.15.patch',
 }
 function writeJson(path: string, value: unknown): void {
