@@ -9,12 +9,14 @@ import {
   CharterError,
   ROLE_ADDENDA,
   buildSystemPrompt,
+  charterAssetCandidates,
   fillCharter,
   loadCharterText,
   roleAddendum,
   type CharterEngagement,
   type CharterRole,
 } from '../src/charter/loader.js'
+import { exemplarPackCandidates } from '../src/charter/exemplars.js'
 import {
   CHARTER_MARKER_QUESTIONS,
   buildPhaseAnchor,
@@ -49,6 +51,17 @@ describe('loadCharterText', () => {
 
   test('throws CharterError for an unreadable asset path', () => {
     assert.throws(() => loadCharterText('/nonexistent/charter.md'), CharterError)
+  })
+
+  test('asset candidates cover every compiled depth (bundled lib/, per-file, deep test layouts)', () => {
+    // Regression: the bundled face puts the module at lib/ (one level
+    // below the package root); the original two candidates both missed
+    // it, so the first live chartered call from the runner threw.
+    for (const candidates of [charterAssetCandidates(), exemplarPackCandidates()]) {
+      assert.equal(candidates.length, 4)
+      assert.ok(candidates.some(c => c.includes('/src/charter/')), 'a candidate reaches the source asset')
+    }
+    assert.ok(loadCharterText().length > 0)
   })
 
   test('the bundled asset carries the stay-in-mode standing orders', () => {

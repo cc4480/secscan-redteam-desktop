@@ -45,9 +45,11 @@ const PLACEHOLDER_FIELDS: ReadonlyArray<readonly [placeholder: string, field: ke
 /**
  * Candidate locations of the charter asset, in resolution order. The first
  * candidate serves runs from the source tree (the module sits beside the
- * asset); the second serves compiled output, which lives three levels below
- * the package root (lib/types/charter or dist-test/src/charter) while the
- * asset stays at src/charter/charter.md.
+ * asset). The rest serve compiled output at every depth the package is
+ * actually built to: the bundled face (module at lib/ or dist/, one level
+ * below the package root), per-file output (lib/types/charter or
+ * dist/charter, two levels), and deeper test layouts (three levels) —
+ * while the asset stays at src/charter/charter.md.
  *
  * @returns the candidate asset paths
  */
@@ -55,6 +57,8 @@ export function charterAssetCandidates(): string[] {
   const moduleDir = dirname(fileURLToPath(import.meta.url))
   return [
     join(moduleDir, 'charter.md'),
+    join(moduleDir, '..', 'src', 'charter', 'charter.md'),
+    join(moduleDir, '..', '..', 'src', 'charter', 'charter.md'),
     join(moduleDir, '..', '..', '..', 'src', 'charter', 'charter.md'),
   ]
 }

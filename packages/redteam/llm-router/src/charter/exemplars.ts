@@ -18,8 +18,8 @@ export const EXEMPLAR_PACK_ROLES: readonly CharterRole[] = ['exploiter-operator'
 
 /**
  * Candidate locations of the exemplar pack asset, in resolution order,
- * mirroring {@link charterAssetCandidates}: beside the module in the source
- * tree, or three levels up from compiled output.
+ * mirroring {@link charterAssetCandidates}: beside the module in the
+ * source tree, or one, two, or three levels up from compiled output.
  *
  * @returns the candidate asset paths
  */
@@ -27,6 +27,8 @@ export function exemplarPackCandidates(): string[] {
   const moduleDir = dirname(fileURLToPath(import.meta.url))
   return [
     join(moduleDir, 'exemplars.md'),
+    join(moduleDir, '..', 'src', 'charter', 'exemplars.md'),
+    join(moduleDir, '..', '..', 'src', 'charter', 'exemplars.md'),
     join(moduleDir, '..', '..', '..', 'src', 'charter', 'exemplars.md'),
   ]
 }
