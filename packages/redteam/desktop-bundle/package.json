@@ -1,6 +1,6 @@
 {
   "name": "@secscan/redteam-desktop-bundle",
-  "version": "0.1.0",
+  "version": "0.1.7-rc.7",
   "description": "DSH profile bundle: mounts the SecScan red team into a profile as ONE layer - the SecScan MCP client and the red-team plugin (auth gate + engagement-protocol prompt section).",
   "license": "UNLICENSED",
   "private": true,

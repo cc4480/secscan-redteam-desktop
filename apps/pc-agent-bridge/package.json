@@ -1,6 +1,6 @@
 {
   "name": "@secscan/pc-agent-bridge",
-  "version": "0.1.0",
+  "version": "0.1.7-rc.7",
   "private": true,
   "type": "module",
   "description": "Local-PC agent bridge: MCP Streamable HTTP server exposing eyes, hands and the robot path on Windows, with action receipts and tier gating.",
