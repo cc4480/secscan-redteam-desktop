@@ -25,16 +25,28 @@ export async function smokePreparedRuntime(
   const cache = await mkdtemp(join(tmpdir(), 'desktop-native-smoke-'))
   const environment = { ...scrubWindowsSigningEnvironment(process.env), NODE_OPTIONS: '',
     NARB_NATIVE_CACHE_DIR: cache, NARB_DISABLE_NATIVE_CACHE: '0' }
+  // A hang anywhere in the Host-boot smoke would otherwise surface as Node's opaque
+  // "Detected unsettled top-level await"; this deadline turns it into a named failure.
+  let deadlineTimer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<never>((_, reject) => {
+    deadlineTimer = setTimeout(() => {
+      reject(new Error('desktop runtime: packaged Host smoke exceeded 900 seconds'))
+    }, 900_000)
+  })
   try {
-    const archive = runtimeArchivePath(root)
-    if (archive !== undefined) await verifyRuntimeArchive(archive, descriptor)
-    const { stdout } = await promisify(execFile)(node, [
-      '--expose-internals', resolve(import.meta.dirname, '../tests/fixtures/runtime-payload-smoke.mjs'), root, resourcesRuntime,
-    ], { timeout: 120_000, windowsHide: true,
-      env: desktopNodeEnvironment(node, join(resourcesRuntime, 'bin'), environment) })
-    process.stdout.write(stdout)
-    await smokeDesktopRuntime(root, node, descriptor, environment, resourcesRuntime)
+    const work = (async () => {
+      const archive = runtimeArchivePath(root)
+      if (archive !== undefined) await verifyRuntimeArchive(archive, descriptor)
+      const { stdout } = await promisify(execFile)(node, [
+        '--expose-internals', resolve(import.meta.dirname, '../tests/fixtures/runtime-payload-smoke.mjs'), root, resourcesRuntime,
+      ], { timeout: 120_000, windowsHide: true,
+        env: desktopNodeEnvironment(node, join(resourcesRuntime, 'bin'), environment) })
+      process.stdout.write(stdout)
+      await smokeDesktopRuntime(root, node, descriptor, environment, resourcesRuntime)
+    })()
+    await Promise.race([work, deadline])
   } finally {
+    if (deadlineTimer !== undefined) clearTimeout(deadlineTimer)
     await rm(cache, { recursive: true, force: true })
   }
 }
