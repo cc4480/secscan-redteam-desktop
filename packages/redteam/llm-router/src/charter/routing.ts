@@ -8,7 +8,8 @@
 
 import type { AgentRole, RoleRoute } from '../types.js'
 import { roleModelPolicy } from '../policy.js'
-import type { CharterRole } from './loader.js'
+import { CharterError, type CharterEngagement, type CharterRole } from './loader.js'
+import { LOCAL_PROVIDER_ID } from '../providers/local.js'
 
 /** Which agent-role route each charter role rides by default. */
 export const CHARTER_ROLE_AGENT_ROLE: Record<CharterRole, AgentRole> = {
@@ -41,6 +42,23 @@ export const CHARTER_ROUTE_ENV: Record<'exploiter-operator' | 'exploiter-challen
  * @param override - an explicit route (per-engagement configuration)
  * @returns the effective route for the role
  */
+/**
+ * Enforce an engagement's local-only flag against one resolved route
+ * (spec §4). A local_only engagement routed to any non-local provider
+ * is a configuration error and fails loud before any call is made.
+ *
+ * @param engagement - the engagement record carrying the flag
+ * @param route - the route about to be used
+ * @throws CharterError when the engagement is local_only and the route is not local
+ */
+export function assertLocalOnlyRoute(engagement: CharterEngagement, route: RoleRoute): void {
+  if (engagement.localOnly === true && route.provider !== LOCAL_PROVIDER_ID) {
+    throw new CharterError(
+      `engagement ${engagement.engagementId} is local_only but route provider '${route.provider}' is not '${LOCAL_PROVIDER_ID}'`,
+    )
+  }
+}
+
 export function resolveCharterRoute(
   role: CharterRole,
   env: NodeJS.ProcessEnv = process.env,

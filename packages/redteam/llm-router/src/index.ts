@@ -120,8 +120,17 @@ export {
 export {
   CHARTER_ROLE_AGENT_ROLE,
   CHARTER_ROUTE_ENV,
+  assertLocalOnlyRoute,
   resolveCharterRoute,
 } from './charter/routing.js'
+export {
+  SanitizerError,
+  findSecretKinds,
+  sanitizeMessages,
+  sanitizeText,
+  type SanitizeFindings,
+  type SanitizedText,
+} from './charter/sanitize.js'
 export {
   classifyResponse,
   type ClassifiedResponse,

@@ -19,6 +19,12 @@ export interface CharterEngagement {
   proofMethod: string
   /** Fills {{IN_SCOPE}}: the in-scope targets for the engagement. */
   inScope: string
+  /**
+   * When true, the engagement's material never leaves local
+   * infrastructure: the router fails loud on any route whose provider
+   * is not the local provider (spec §4).
+   */
+  localOnly?: boolean
 }
 
 /** A charter asset, engagement record, or role is unusable. Always fatal. */

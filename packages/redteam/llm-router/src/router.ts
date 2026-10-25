@@ -33,7 +33,7 @@ import type {
 import { roleModelPolicy } from './policy.js'
 import type { CharterEngagement, CharterRole } from './charter/loader.js'
 import { assembleCharterMessages } from './charter/prompt.js'
-import { resolveCharterRoute } from './charter/routing.js'
+import { assertLocalOnlyRoute, resolveCharterRoute } from './charter/routing.js'
 import { DeepSeekProvider, DEEPSEEK_API_KEY_ENV } from './providers/deepseek.js'
 import { QwenProvider, QWEN_API_KEY_ENV } from './providers/qwen.js'
 import { LocalOpenAiProvider } from './providers/local.js'
@@ -146,6 +146,8 @@ export interface CharterCompleteOptions {
   includeExemplars?: boolean
   /** Per-engagement route override for this seat; wins over env and policy. */
   routeOverride?: RoleRoute
+  /** Per-engagement pseudonym map; task messages are sanitized before assembly (spec §4). */
+  pseudonyms?: Record<string, string>
   tools?: JsonSchemaTool[]
   signal?: AbortSignal
   maxTokens?: number
@@ -165,9 +167,11 @@ export interface CharterCompleteOptions {
  */
 export async function completeWithCharter(opts: CharterCompleteOptions): Promise<ChatResult> {
   const route = resolveCharterRoute(opts.role, process.env, opts.routeOverride)
+  assertLocalOnlyRoute(opts.engagement, route)
   const assembled = assembleCharterMessages(opts.engagement, opts.role, opts.messages, {
     anchor: opts.anchor,
     includeExemplars: opts.includeExemplars,
+    pseudonyms: opts.pseudonyms,
   })
   return complete(route.provider, {
     model: route.model,

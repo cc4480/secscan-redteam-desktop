@@ -9,6 +9,7 @@
 
 import type { ChatMessage } from '../types.js'
 import { buildSystemPrompt, type CharterEngagement, type CharterRole } from './loader.js'
+import { sanitizeMessages } from './sanitize.js'
 import {
   exemplarPackIncludedByDefault,
   exemplarPackVersion,
@@ -23,6 +24,14 @@ export interface CharterPromptOptions {
   includeExemplars?: boolean
   /** Pack asset text override, for tests and pinned assemblies. */
   exemplarPackText?: string
+  /**
+   * Per-engagement pseudonym map (spec §4). When supplied, every task
+   * message is passed through the sanitizer before assembly — the
+   * charter's own filled fields are the caller's responsibility, since
+   * the engagement record is where pseudonyms belong when they are
+   * needed there. Sanitization fails closed: a surviving secret throws.
+   */
+  pseudonyms?: Record<string, string>
 }
 
 /** A fully assembled chartered prompt plus the facts telemetry needs about it. */
@@ -72,9 +81,12 @@ export function assembleCharterMessages(
     sections.push(packText)
   }
 
+  const egressMessages =
+    opts.pseudonyms !== undefined ? sanitizeMessages(taskMessages, opts.pseudonyms).messages : taskMessages
+
   const personaTexts: string[] = []
   const rest: ChatMessage[] = []
-  for (const message of taskMessages) {
+  for (const message of egressMessages) {
     if (message.role === 'system') personaTexts.push(message.content)
     else rest.push(message)
   }

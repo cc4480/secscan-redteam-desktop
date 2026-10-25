@@ -22,7 +22,7 @@ import type { ChatMessage, ChatResult, RoleRoute } from '../types.js'
 import { complete } from '../router.js'
 import type { CharterEngagement, CharterRole } from './loader.js'
 import { assembleCharterMessages, type CharterPrompt } from './prompt.js'
-import { resolveCharterRoute } from './routing.js'
+import { assertLocalOnlyRoute, resolveCharterRoute } from './routing.js'
 import { classifyResponse, type RefusalClass } from './refusal.js'
 
 /** The final outcome of one task run through the chain. */
@@ -108,6 +108,8 @@ export interface FallbackTaskOptions {
   /** Providers known (by §7 measurement, never assumption) to support assistant prefill. */
   prefillProviders?: readonly string[]
   routes?: FallbackRoutes
+  /** Per-engagement pseudonym map; every hop's assembly sanitizes the task messages (spec §4). */
+  pseudonyms?: Record<string, string>
   affinity?: SessionAffinity
   /** Telemetry sink; receives every event once the run's outcome is known. */
   onTelemetry?: (event: RefusalTelemetryEvent) => void
@@ -182,10 +184,17 @@ export async function completeWithFallback(opts: FallbackTaskOptions): Promise<F
   const local = opts.routes?.local ?? localRouteFromEnv(process.env)
   if (local !== undefined) hops.push({ hop: 2, route: local, prefill: true, localValidation: true })
 
+  // Spec §4: a local_only engagement fails loud on ANY hop route that
+  // would leave local infrastructure — checked for the whole chain
+  // before the first call, so a misconfigured hop 1 cannot receive
+  // material that hop 0 handled lawfully.
+  for (const planned of hops) assertLocalOnlyRoute(opts.engagement, planned.route)
+
   for (const attempt of hops) {
     const assembled = assembleCharterMessages(opts.engagement, opts.role, opts.messages, {
       anchor: opts.anchor,
       includeExemplars: opts.includeExemplars,
+      pseudonyms: opts.pseudonyms,
     })
     const prefillUsed =
       attempt.prefill &&
@@ -232,6 +241,7 @@ export async function completeWithFallback(opts: FallbackTaskOptions): Promise<F
       const repairAssembled = assembleCharterMessages(opts.engagement, opts.role, repairMessages, {
         anchor: opts.anchor,
         includeExemplars: opts.includeExemplars,
+        pseudonyms: opts.pseudonyms,
       })
       try {
         const repaired = await callImpl(attempt.route, repairAssembled)
