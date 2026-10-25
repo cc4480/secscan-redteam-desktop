@@ -8,7 +8,14 @@ export type {
   RoleRoute,
   ToolCallRequest,
 } from './types.js'
-export { complete, completeForRole, listProviders, registerProvider } from './router.js'
+export {
+  complete,
+  completeForRole,
+  completeWithCharter,
+  listProviders,
+  registerProvider,
+  type CharterCompleteOptions,
+} from './router.js'
 export { LLM_PROVIDER_ENV, ROLE_MODEL_POLICY, ROLE_ORDER, roleModelPolicy } from './policy.js'
 export {
   ProviderError,
@@ -97,3 +104,21 @@ export {
   type CharterAnchorAnswers,
   type CharterMarkerQuestion,
 } from './charter/markers.js'
+export {
+  EXEMPLAR_PACK_ROLES,
+  defaultExemplarPackPath,
+  exemplarPackCandidates,
+  exemplarPackIncludedByDefault,
+  exemplarPackVersion,
+  loadExemplarPackText,
+} from './charter/exemplars.js'
+export {
+  assembleCharterMessages,
+  type CharterPrompt,
+  type CharterPromptOptions,
+} from './charter/prompt.js'
+export {
+  CHARTER_ROLE_AGENT_ROLE,
+  CHARTER_ROUTE_ENV,
+  resolveCharterRoute,
+} from './charter/routing.js'

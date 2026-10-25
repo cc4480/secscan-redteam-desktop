@@ -28,8 +28,12 @@ import type {
   CompleteOptions,
   JsonSchemaTool,
   LlmProvider,
+  RoleRoute,
 } from './types.js'
 import { roleModelPolicy } from './policy.js'
+import type { CharterEngagement, CharterRole } from './charter/loader.js'
+import { assembleCharterMessages } from './charter/prompt.js'
+import { resolveCharterRoute } from './charter/routing.js'
 import { DeepSeekProvider, DEEPSEEK_API_KEY_ENV } from './providers/deepseek.js'
 import { QwenProvider, QWEN_API_KEY_ENV } from './providers/qwen.js'
 import { LocalOpenAiProvider } from './providers/local.js'
@@ -120,6 +124,54 @@ export async function completeForRole(
   return complete(route.provider, {
     model: route.model,
     messages,
+    tools: opts.tools,
+    reasoningEffort: route.reasoningEffort,
+    signal: opts.signal,
+    maxTokens: opts.maxTokens,
+    temperature: opts.temperature,
+  })
+}
+
+/** Options for a chartered completion: the fleet's standard agent call. */
+export interface CharterCompleteOptions {
+  /** The engagement record the charter is filled from. No engagement, no call. */
+  engagement: CharterEngagement
+  /** The agent's charter role (five seats; see CHARTER_ROLE_AGENT_ROLE). */
+  role: CharterRole
+  /** Task messages; any system messages are treated as persona text and appended after the charter. */
+  messages: ChatMessage[]
+  /** The agent's generated phase anchor, from buildPhaseAnchor. */
+  anchor?: string
+  /** Include the exemplar pack; defaults per role. */
+  includeExemplars?: boolean
+  /** Per-engagement route override for this seat; wins over env and policy. */
+  routeOverride?: RoleRoute
+  tools?: JsonSchemaTool[]
+  signal?: AbortSignal
+  maxTokens?: number
+  temperature?: number
+}
+
+/**
+ * Complete one chartered agent call: assemble the system prompt from the
+ * charter (assembleCharterMessages), resolve the seat's route as data
+ * (resolveCharterRoute), and dispatch through the provider registry.
+ * This is the entry point spec §2 mandates for fleet agent calls; the
+ * charter is built — and throws — before any provider is touched, so a
+ * call with a broken engagement record never reaches a model.
+ *
+ * @param opts - the chartered call options
+ * @returns the provider's result for the assembled call
+ */
+export async function completeWithCharter(opts: CharterCompleteOptions): Promise<ChatResult> {
+  const route = resolveCharterRoute(opts.role, process.env, opts.routeOverride)
+  const assembled = assembleCharterMessages(opts.engagement, opts.role, opts.messages, {
+    anchor: opts.anchor,
+    includeExemplars: opts.includeExemplars,
+  })
+  return complete(route.provider, {
+    model: route.model,
+    messages: assembled.messages,
     tools: opts.tools,
     reasoningEffort: route.reasoningEffort,
     signal: opts.signal,
