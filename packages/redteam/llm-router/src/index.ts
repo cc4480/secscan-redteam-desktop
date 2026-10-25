@@ -138,6 +138,20 @@ export {
   type RefusalTaskContext,
 } from './charter/refusal.js'
 export {
+  BAKEOFF_ARMS,
+  BAKEOFF_BATTERY,
+  BAKEOFF_ENGAGEMENT,
+  probePrefillSupport,
+  runBakeoff,
+  type BakeoffArm,
+  type BakeoffCallImpl,
+  type BakeoffCandidate,
+  type BakeoffResult,
+  type BakeoffScore,
+  type BakeoffTask,
+  type PrefillSupport,
+} from './charter/bakeoff.js'
+export {
   SessionAffinity,
   completeWithFallback,
   type FallbackCallImpl,
