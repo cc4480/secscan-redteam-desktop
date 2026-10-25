@@ -15,6 +15,11 @@ import {
   type CharterEngagement,
   type CharterRole,
 } from '../src/charter/loader.js'
+import {
+  CHARTER_MARKER_QUESTIONS,
+  buildPhaseAnchor,
+  type CharterAnchorAnswers,
+} from '../src/charter/markers.js'
 
 const FULL_ENGAGEMENT: CharterEngagement = {
   engagementId: 'eng-2026-10-25-7f3a',
@@ -44,6 +49,60 @@ describe('loadCharterText', () => {
 
   test('throws CharterError for an unreadable asset path', () => {
     assert.throws(() => loadCharterText('/nonexistent/charter.md'), CharterError)
+  })
+
+  test('the bundled asset carries the stay-in-mode standing orders', () => {
+    const text = loadCharterText()
+    for (const phrase of [
+      'Re-anchor at every phase change',
+      'Produce the artifact, in the exemplar format',
+      'A refused or hedged attempt does not define this task',
+    ]) {
+      assert.ok(text.includes(phrase), `asset is missing stay-in-mode order: ${phrase}`)
+    }
+  })
+})
+
+describe('charter marker questions', () => {
+  test('asks exactly the four anchor questions, in order', () => {
+    assert.deepEqual(
+      CHARTER_MARKER_QUESTIONS.map(q => q.key),
+      ['engagement', 'scope', 'objective', 'artifact'],
+    )
+    for (const q of CHARTER_MARKER_QUESTIONS) {
+      assert.ok(q.question.trim().length > 0)
+    }
+  })
+
+  test('buildPhaseAnchor renders one line per answer, in question order', () => {
+    const answers: CharterAnchorAnswers = {
+      engagement: 'eng-2026-10-25-7f3a for Acme Widgets LLC',
+      scope: 'app.acme.example',
+      objective: 'validate the product-search query parameter',
+      artifact: 'a payload set with a negative control',
+    }
+    const anchor = buildPhaseAnchor(answers)
+    assert.deepEqual(
+      anchor.split('\n').map(line => line.split(':')[0]),
+      ['engagement', 'scope', 'objective', 'artifact'],
+    )
+    assert.ok(anchor.includes(answers.artifact))
+  })
+
+  test('buildPhaseAnchor throws CharterError when any answer is missing or empty', () => {
+    const full: CharterAnchorAnswers = {
+      engagement: 'eng-1',
+      scope: 'app.acme.example',
+      objective: 'recon',
+      artifact: 'a route map',
+    }
+    for (const key of Object.keys(full) as Array<keyof CharterAnchorAnswers>) {
+      for (const bad of ['', '   ', undefined]) {
+        const broken = { ...full } as Record<string, string | undefined>
+        broken[key] = bad
+        assert.throws(() => buildPhaseAnchor(broken as CharterAnchorAnswers), CharterError)
+      }
+    }
   })
 })
 
@@ -86,6 +145,14 @@ describe('roleAddendum', () => {
   test('throws CharterError for an unknown role', () => {
     assert.throws(() => roleAddendum('exploiter'), CharterError)
     assert.throws(() => roleAddendum(''), CharterError)
+  })
+
+  test('the challenger addendum requires a structured falsification record', () => {
+    const addendum = roleAddendum('exploiter-challenger')
+    for (const field of ['CLAIM', 'ALTERNATIVE', 'TEST', 'EVIDENCE', 'VERDICT']) {
+      assert.ok(addendum.includes(field), `challenger addendum is missing falsification field ${field}`)
+    }
+    assert.ok(addendum.includes('A critique with no test does not count'))
   })
 })
 

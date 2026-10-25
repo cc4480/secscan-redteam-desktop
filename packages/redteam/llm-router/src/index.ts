@@ -91,3 +91,9 @@ export {
   type CharterEngagement,
   type CharterRole,
 } from './charter/loader.js'
+export {
+  CHARTER_MARKER_QUESTIONS,
+  buildPhaseAnchor,
+  type CharterAnchorAnswers,
+  type CharterMarkerQuestion,
+} from './charter/markers.js'
