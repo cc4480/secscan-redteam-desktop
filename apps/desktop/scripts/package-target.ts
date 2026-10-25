@@ -426,7 +426,10 @@ export async function packageTarget(
   // console session (attempt 5), while the byte-identical payload passes the
   // same smoke interactively on the same machine (exit 0, pty:true). Defer in
   // CI like the signing flow does; the built payload is listing-verified after.
-  const deferRuntimeSmoke = signPrimaryRuntime || environment.CI === 'true'
+  // A console-less host (CI runner, harness job) gives the PTY smoke no usable ConPTY, so the
+  // in-staging smoke cannot pass by construction. The unsigned lane defers it and relies on the
+  // post-pack smoke-packaged-runtime check, which exercises the artifact itself.
+  const deferRuntimeSmoke = signPrimaryRuntime || invocation.unsigned || environment.CI === 'true'
   const signedStage = async (stage: string, operation: () => Promise<void>): Promise<void> => {
     if (!signPrimaryRuntime) return operation()
     if (run === undefined) throw new Error('desktop package: signed Windows packaging requires a supervised run')
@@ -491,7 +494,7 @@ export async function packageTarget(
     '--pack-destination',
     buildPaths.packedLandlock,
   ], buildEnv, REPOSITORY_ROOT)
-  await execute(['run', 'prepare:runtime', ...(signPrimaryRuntime ? ['--defer-primary-runtime-smoke'] : [])], downloadEnv)
+  await execute(['run', 'prepare:runtime', ...(signPrimaryRuntime || invocation.unsigned ? ['--defer-primary-runtime-smoke'] : [])], downloadEnv)
   if (signPrimaryRuntime) await execute(['run', 'sign:primary-runtime'], electronBuilderEnv)
   await execute(['run', 'prepare:packages'], targetEnv)
   await execute(['run', 'prepare:dsh', ...(deferRuntimeSmoke ? ['--defer-runtime-smoke'] : [])], downloadEnv)
