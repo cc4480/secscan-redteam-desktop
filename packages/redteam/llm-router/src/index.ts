@@ -77,3 +77,17 @@ export {
   QWEN_BASE_URL,
   QWEN_MODELS,
 } from './providers/qwen.js'
+export {
+  CharterError,
+  CHARTER_ROLES,
+  ROLE_ADDENDA,
+  buildSystemPrompt,
+  charterAssetCandidates,
+  defaultCharterPath,
+  defaultCharterText,
+  fillCharter,
+  loadCharterText,
+  roleAddendum,
+  type CharterEngagement,
+  type CharterRole,
+} from './charter/loader.js'
