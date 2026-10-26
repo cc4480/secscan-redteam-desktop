@@ -51,96 +51,15 @@ function confirmModal(title, bodyHtml, confirmLabel, danger) {
   });
 }
 
-/* ---------- engagements list ---------- */
+/* ---------- home: the chat (chat.js registers window.renderChat) ---------- */
 async function viewList() {
-  app.innerHTML = `<div class="card"><h3>Engagements</h3><div id="list"><p class="muted">Loading…</p></div></div>`;
-  try {
-    const list = await api.get("/api/engagements");
-    if (!list.length) {
-      $("#list").innerHTML = `<p class="muted">No engagements yet. <a href="#/launch">Launch one</a>.</p>`;
-      return;
-    }
-    $("#list").innerHTML = `<table><thead><tr><th>ID</th><th>Target</th><th>Mode</th><th>Status</th><th>Findings</th><th>Updated</th></tr></thead><tbody>` +
-      list.map((e) => `<tr class="clickable" data-id="${esc(e.id)}">
-        <td><code>${esc(e.id)}</code>${e.live ? ' <span class="badge running">live</span>' : ""}</td>
-        <td>${esc(e.target)}</td><td>${esc(e.mode)}</td><td>${statusBadge(e.status)}</td>
-        <td>${e.findings}</td><td class="muted small">${esc(time(e.updatedAt))}</td></tr>`).join("") +
-      `</tbody></table>`;
-    $$("#list tr.clickable").forEach((tr) => {
-      tr.onclick = () => location.hash = `#/e/${encodeURIComponent(tr.dataset.id)}`;
-    });
-  } catch (err) {
-    $("#list").innerHTML = `<p style="color:var(--red)">${esc(err.message)}</p>`;
+  if (window.renderChat) {
+    await window.renderChat(app);
+  } else {
+    // chat.js loads after app.js; on a cold load the view is not registered
+    // yet, so defer until the document is parsed.
+    window.addEventListener("DOMContentLoaded", () => { if (window.renderChat) window.renderChat(app); }, { once: true });
   }
-}
-
-/* ---------- launcher ---------- */
-function launchForm() {
-  return `<div class="card"><h3>Launch engagement</h3>
-  <form id="launch-form">
-  <div class="grid2">
-    <label><span>Target (domain or URL)</span><input name="target" required placeholder="secscan.us"></label>
-    <label><span>Mode</span><select name="mode"><option value="red">red — broad adversary emulation</option><option value="black">black — covert, stealth-first</option></select></label>
-  </div>
-  <label><span>Objective</span><input name="objective" required placeholder="assess the external attack surface"></label>
-  <label><span>Scope — exact hosts, one per line</span><textarea name="scope" rows="3" required placeholder="secscan.us"></textarea></label>
-  <div class="grid2">
-    <label><span>Client (optional)</span><input name="client"></label>
-    <label><span>Operator name</span><input name="operatorName" placeholder="required for production"></label>
-  </div>
-  <div class="grid2">
-    <label><span>Environment</span><select name="environment"><option value="staging">staging</option><option value="production">production</option></select></label>
-    <label><span>Autonomy tier</span><select name="tier"><option value="1">1 — validate (single-step)</option><option value="0">0 — observe (read-only)</option><option value="2">2 — chain (multi-step)</option></select></label>
-  </div>
-  <label><span>Battery targets</span><div class="chips" id="tchips">
-    ${["secscan", "seclayer", "windows", "linux"].map((t) => `<span class="chip active" data-t="${t}">${t}</span>`).join("")}
-  </div></label>
-  <label><span>Excluded techniques (comma-separated, optional)</span><input name="excludedTechniques" placeholder="T1110"></label>
-  <div class="row" style="margin-bottom:12px">
-    <label style="margin:0"><input type="checkbox" name="fullBattery" checked style="width:auto"> full battery</label>
-    <label style="margin:0"><input type="checkbox" name="confirmProduction" style="width:auto"> confirm production</label>
-    <label style="margin:0"><input type="checkbox" name="confirmTier2Production" style="width:auto"> confirm tier-2 on prod</label>
-    <label style="margin:0"><input type="checkbox" name="dryRun" style="width:auto"> dry run (no agents)</label>
-  </div>
-  <button type="submit">Review & launch</button>
-  </form></div>`;
-}
-
-async function viewLaunch() {
-  app.innerHTML = launchForm();
-  $$("#tchips .chip").forEach((c) => c.onclick = () => c.classList.toggle("active"));
-  $("#launch-form").onsubmit = async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const body = {
-      target: fd.get("target").trim(),
-      mode: fd.get("mode"),
-      objective: fd.get("objective").trim(),
-      scope: String(fd.get("scope")).split("\n").map((s) => s.trim()).filter(Boolean),
-      client: fd.get("client").trim() || undefined,
-      operatorName: fd.get("operatorName").trim() || undefined,
-      fullBattery: fd.get("fullBattery") === "on",
-      targets: $$("#tchips .chip.active").map((c) => c.dataset.t),
-      environment: fd.get("environment"),
-      confirmProduction: fd.get("confirmProduction") === "on",
-      confirmTier2Production: fd.get("confirmTier2Production") === "on",
-      tier: Number(fd.get("tier")),
-      excludedTechniques: String(fd.get("excludedTechniques")).split(",").map((s) => s.trim()).filter(Boolean),
-      dryRun: fd.get("dryRun") === "on",
-    };
-    const ok = await confirmModal("Launch engagement?",
-      `<p>Target <strong>${esc(body.target)}</strong> · mode <strong>${esc(body.mode)}</strong> · env <strong>${esc(body.environment)}</strong> · tier <strong>${esc(body.tier)}</strong></p>
-       <p class="muted small">Scope: ${body.scope.map(esc).join(", ")}<br>Targets: ${body.targets.map(esc).join(", ") || "(all)"}${body.dryRun ? "<br><strong>Dry run — no agents, no traffic.</strong>" : ""}</p>
-       <p class="muted small">Authorization gates run first and fail closed. The kill switch is available on the live view.</p>`,
-      "Launch", false);
-    if (!ok) return;
-    try {
-      const { id } = await api.post("/api/engagements", body);
-      location.hash = `#/e/${encodeURIComponent(id)}`;
-    } catch (err) {
-      confirmModal("Launch failed", `<p style="color:var(--red)">${esc(err.message)}</p>`, "Close", false);
-    }
-  };
 }
 
 /* ---------- engagement detail ---------- */
@@ -345,98 +264,6 @@ async function tabCompliance(id) {
   }
 }
 
-/* ---------- watch ---------- */
-async function viewWatch() {
-  app.innerHTML = `<div class="card"><h3>Continuous watch</h3>
-  <label><span>Profiles directory</span><div class="row"><input id="wdir" style="flex:1" placeholder="/path/to/profiles"><button class="ghost" id="wlist">List</button></div></label>
-  <div id="wprofiles"></div></div>
-  <div class="card"><h3>Trigger a cycle</h3>
-  <label><span>Profile path</span><input id="wpath" placeholder="/path/to/profile.json"></label>
-  <label><span>Change reference (optional — CI/CD hook)</span><input id="wtrigger" placeholder="deploy abc123"></label>
-  <button id="wgo">Trigger one cycle</button> <span id="wstatus" class="muted small"></span></div>`;
-  const list = async () => {
-    const dir = $("#wdir").value.trim() || ".";
-    try {
-      const profiles = await api.get(`/api/watch/profiles?dir=${encodeURIComponent(dir)}`);
-      $("#wprofiles").innerHTML = profiles.length
-        ? `<table><thead><tr><th>Profile</th><th>Target</th><th>Cadence</th><th></th></tr></thead><tbody>` +
-          profiles.map((p) => `<tr><td class="small"><code>${esc(p.path)}</code></td><td>${esc(p.target || "")}</td><td class="muted">${p.intervalHours ? p.intervalHours + "h" : ""}</td><td><button class="ghost" data-p="${esc(p.path)}">Trigger</button></td></tr>`).join("") + `</tbody></table>`
-        : `<p class="muted">No watch profiles in ${esc(dir)}.</p>`;
-      $$("#wprofiles button[data-p]").forEach((b) => b.onclick = () => { $("#wpath").value = b.dataset.p; $("#wgo").click(); });
-    } catch (err) {
-      $("#wprofiles").innerHTML = `<p style="color:var(--red)">${esc(err.message)}</p>`;
-    }
-  };
-  $("#wlist").onclick = list;
-  $("#wgo").onclick = async () => {
-    const profilePath = $("#wpath").value.trim();
-    if (!profilePath) return;
-    const ok = await confirmModal("Trigger watch cycle?", `<p>Runs one full cycle of <code>${esc(profilePath)}</code> now — engagement, drift detection, alerts.</p>`, "Trigger", false);
-    if (!ok) return;
-    $("#wstatus").textContent = "triggered…";
-    try {
-      const { jobId } = await api.post("/api/watch/trigger", { profilePath, trigger: $("#wtrigger").value.trim() || undefined });
-      pollJob(jobId, $("#wstatus"));
-    } catch (err) {
-      $("#wstatus").textContent = err.message;
-    }
-  };
-  list();
-}
-
-async function pollJob(jobId, el) {
-  const tick = async () => {
-    try {
-      const job = await api.get(`/api/jobs/${encodeURIComponent(jobId)}`);
-      if (job.status === "running") {
-        el.textContent = "running…";
-        setTimeout(tick, 2000);
-      } else if (job.status === "done") {
-        el.textContent = "done: " + JSON.stringify(job.result).slice(0, 300);
-      } else {
-        el.textContent = "failed: " + (job.error || "unknown");
-      }
-    } catch (err) {
-      el.textContent = err.message;
-    }
-  };
-  tick();
-}
-
-/* ---------- reverify ---------- */
-async function viewReverify() {
-  app.innerHTML = `<div class="card"><h3>Reverify a proof bundle</h3>
-  <p class="muted small">Re-executes a PoC bundle's steps with a fresh canary marker. Plan mode shows the replay plan with zero traffic.</p>
-  <label><span>Bundle path</span><input id="rbundle" placeholder="/path/to/engagements/live/eng-.../poc/F-1.json"></label>
-  <label><span>Scope — exact hosts, one per line (required for execute)</span><textarea id="rscope" rows="2"></textarea></label>
-  <label style="margin-bottom:12px"><input type="checkbox" id="rexec" style="width:auto"> execute (otherwise plan only)</label>
-  <div><button id="rgo">Run</button> <span id="rstatus" class="muted small"></span></div>
-  <div id="rout"></div></div>`;
-  $("#rgo").onclick = async () => {
-    const bundlePath = $("#rbundle").value.trim();
-    const scope = $("#rscope").value.split("\n").map((s) => s.trim()).filter(Boolean);
-    const execute = $("#rexec").checked;
-    if (!bundlePath) return;
-    if (execute) {
-      const ok = await confirmModal("Execute reverify?", `<p>This sends real traffic to: ${scope.map(esc).join(", ") || "(no scope!)"}.</p>`, "Execute", true);
-      if (!ok) return;
-    }
-    $("#rstatus").textContent = "working…";
-    try {
-      const res = await api.post("/api/reverify", { bundlePath, scope, execute });
-      if (res.plan) {
-        $("#rstatus").textContent = `plan: ${res.steps.length} steps, no traffic sent`;
-        $("#rout").innerHTML = `<table><thead><tr><th>Seq</th><th>Tool</th><th>Target</th><th>Command</th><th>Replayable</th></tr></thead><tbody>` +
-          res.steps.map((s) => `<tr><td>${s.seq}</td><td><code>${esc(s.tool)}</code></td><td class="small">${esc(s.target || "")}</td><td class="small"><code>${esc(s.command)}</code></td><td>${s.replayable ? "yes" : "no"}</td></tr>`).join("") + `</tbody></table>`;
-      } else {
-        pollJob(res.jobId, $("#rstatus"));
-      }
-    } catch (err) {
-      $("#rstatus").textContent = err.message;
-    }
-  };
-}
-
 /* ---------- router ---------- */
 function nav() {
   $$("[data-nav]").forEach((a) => {
@@ -451,15 +278,6 @@ async function router() {
   const h = location.hash || "#/";
   const m = h.match(/^#\/e\/([^/]+)$/);
   if (h === "#/" || h === "") await viewList();
-  else if (h === "#/console") {
-    // console.js loads after app.js; on a cold load straight at #/console the
-    // shell is not registered yet, so defer until the document is parsed.
-    if (window.renderConsole) window.renderConsole(app);
-    else window.addEventListener("DOMContentLoaded", () => { if (window.renderConsole) window.renderConsole(app); }, { once: true });
-  }
-  else if (h === "#/launch") await viewLaunch();
-  else if (h === "#/watch") await viewWatch();
-  else if (h === "#/reverify") await viewReverify();
   else if (m) await viewDetail(decodeURIComponent(m[1]));
   else app.innerHTML = `<div class="card"><p>Unknown view.</p></div>`;
 }
