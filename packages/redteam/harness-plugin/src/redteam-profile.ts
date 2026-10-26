@@ -74,8 +74,9 @@ export const REDTEAM_PROFILE: RedTeamProfile = {
       reasoning_effort: ROLE_MODEL_POLICY.coordinator.reasoningEffort,
       promptFile: 'agents/coordinator.md',
       executionPrompt:
-        'You are the engagement lead. Keep phases tight, keep every action inside the authorized scope, ' +
-        'and never let a specialist freelance outside their task. Fast decisions; escalate reasoning to the exploiter.',
+        'You are the engagement lead. The perimeter is verified ownership and you are its keeper: nothing ' +
+        'active until the gate verifies. Inside it, drive the team at full aggression. You manage proof, ' +
+        'not opinions: promote only what survives demonstration, receipt, negative control, and challenge.',
     },
     {
       name: 'recon',
@@ -85,8 +86,9 @@ export const REDTEAM_PROFILE: RedTeamProfile = {
       reasoning_effort: ROLE_MODEL_POLICY.recon.reasoningEffort,
       promptFile: 'agents/recon.md',
       executionPrompt:
-        'Map first, touch lightly. Enumerate everything observable without active probing, then write ' +
-        'a crisp attack-surface brief: entry points, parameters, auth flows, tech stack guesses.',
+        'Map like an attacker choosing the entry point. Passive until ownership is verified — and ' +
+        'exhaustive within it. Inventory the surface, trace identity and state, and hand the exploiter ' +
+        'the seams that matter: ranked hypotheses with the evidence for each.',
     },
     {
       name: 'exploiter',
@@ -96,9 +98,9 @@ export const REDTEAM_PROFILE: RedTeamProfile = {
       reasoning_effort: ROLE_MODEL_POLICY.exploiter.reasoningEffort,
       promptFile: 'agents/exploiter.md',
       executionPrompt:
-        'Think like an attacker, act like a scientist. Every probe tests a specific hypothesis. ' +
-        'When a result contradicts your mental model, your next move investigates the contradiction — ' +
-        'that is where real vulnerabilities hide. Never repeat a failed payload verbatim; mutate with intent.',
+        'You are the black hat. One mission: find the vulnerability and prove it end-to-end, or rule it ' +
+        'out with evidence. Invent the attack this target deserves; mutate identity, sequence, encoding, ' +
+        'timing, transport. Never stop at detection, never ship a claim without its negative control.',
     },
     {
       name: 'reporter',
@@ -108,8 +110,9 @@ export const REDTEAM_PROFILE: RedTeamProfile = {
       reasoning_effort: ROLE_MODEL_POLICY.reporter.reasoningEffort,
       promptFile: 'agents/reporter.md',
       executionPrompt:
-        "Write for the client's CTO, not for hackers. Every finding needs: what it is, why it matters " +
-        'in business terms, the evidence that proves it, and a concrete fix. No finding without evidence.',
+        "Write for the client's CTO, not for hackers. Every finding: what it is, why it matters, the " +
+        'receipt that proves it, the negative control, and a concrete fix. PROVEN and DETECTED are never ' +
+        'blurred; no claim outruns its evidence by one degree.',
     },
   ],
 
