@@ -132,17 +132,14 @@ describe('MetaProvider wire translation', () => {
 })
 
 describe('Meta seat policy', () => {
-  test('REDTEAM_LLM_PROVIDER=meta seats Wonder on coordinator+exploiter, Spark on recon+reporter', () => {
+  test('REDTEAM_LLM_PROVIDER=meta seats Spark on all four roles, exploiter at high effort', () => {
     const policy = roleModelPolicy({ REDTEAM_LLM_PROVIDER: 'meta' })
-    assert.equal(policy.coordinator.provider, 'meta')
-    assert.equal(policy.coordinator.model, META_MODELS.wonder)
-    assert.equal(policy.exploiter.provider, 'meta')
-    assert.equal(policy.exploiter.model, META_MODELS.wonder)
+    for (const role of ['coordinator', 'recon', 'exploiter', 'reporter'] as const) {
+      assert.equal(policy[role].provider, 'meta')
+      assert.equal(policy[role].model, META_MODELS.spark)
+    }
     assert.equal(policy.exploiter.reasoningEffort, 'high')
-    assert.equal(policy.recon.provider, 'meta')
-    assert.equal(policy.recon.model, META_MODELS.spark)
-    assert.equal(policy.reporter.provider, 'meta')
-    assert.equal(policy.reporter.model, META_MODELS.spark)
+    assert.equal(policy.recon.reasoningEffort, 'low')
   })
 
   test('the default policy still routes to DeepSeek when meta is not selected', () => {

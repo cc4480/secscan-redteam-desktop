@@ -38,9 +38,9 @@ export const META_BASE_URL_ENV = 'META_BASE_URL'
 export const META_BASE_URL = 'https://api.meta.ai/v1'
 
 export const META_MODELS = {
-  /** Frontier reasoning. The coordinator's and exploiter's engine. */
+  /** Frontier-priced tier. Registered for explicit calls, small one-off jobs, and A/B lanes; not seated by default (see policy.ts). */
   wonder: 'muse-wonder-1.0',
-  /** Fast volume tier for recon loops and report drafting. */
+  /** The fleet's engine on the Meta seats: all four roles, exploiter included. */
   spark: 'muse-spark-1.3',
 } as const
 

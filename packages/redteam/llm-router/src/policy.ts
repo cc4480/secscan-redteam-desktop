@@ -38,17 +38,19 @@ import { META_MODELS, META_PROVIDER_ID } from './providers/meta.js'
 export const LLM_PROVIDER_ENV = 'REDTEAM_LLM_PROVIDER'
 
 /**
- * Meta Model API seats (operator decision, 2026-10-26: Meta models from here
- * on out, seated in this harness). Wonder takes the seats that think once —
- * coordinator and exploiter — because output-priced reasoning is spent best
- * there; Spark takes the volume seats — recon tool loops and report
- * drafting. The charter prefix is byte-stable per role, so repeated calls
- * ride the cached-input rate instead of full price.
+ * Meta Model API seats (operator decisions, 2026-10-26: Meta models from
+ * here on out, seated in this harness; the Red Team runs on Muse Spark).
+ * Spark takes all four fleet seats — it is the brain the operator chose for
+ * the complicated work, exploiter included. Wonder stays registered for
+ * explicit complete() calls, small one-off jobs, and A/B lanes against
+ * these seats; it is not seated by default. The charter prefix is
+ * byte-stable per role, so repeated calls ride the cached-input rate
+ * instead of full price.
  */
 export const META_ROLE_MODEL_POLICY: Record<AgentRole, RoleRoute> = {
-  coordinator: { provider: META_PROVIDER_ID, model: META_MODELS.wonder },
+  coordinator: { provider: META_PROVIDER_ID, model: META_MODELS.spark },
   recon: { provider: META_PROVIDER_ID, model: META_MODELS.spark, reasoningEffort: 'low' },
-  exploiter: { provider: META_PROVIDER_ID, model: META_MODELS.wonder, reasoningEffort: 'high' },
+  exploiter: { provider: META_PROVIDER_ID, model: META_MODELS.spark, reasoningEffort: 'high' },
   reporter: { provider: META_PROVIDER_ID, model: META_MODELS.spark },
 }
 
