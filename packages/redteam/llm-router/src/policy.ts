@@ -23,6 +23,7 @@
 import type { AgentRole, RoleRoute } from './types.js'
 import { DEEPSEEK_MODELS } from './providers/deepseek.js'
 import { LOCAL_MODEL_ENV, LOCAL_PROVIDER_ID } from './providers/local.js'
+import { META_MODELS, META_PROVIDER_ID } from './providers/meta.js'
 
 /**
  * Selects the provider family for every agent role.
@@ -30,9 +31,26 @@ import { LOCAL_MODEL_ENV, LOCAL_PROVIDER_ID } from './providers/local.js'
  * `REDTEAM_LLM_PROVIDER=local` routes all four roles to the local
  * OpenAI-compatible endpoint (llama.cpp / Ollama) so an engagement can run with
  * no cloud API at all; `REDTEAM_LOCAL_MODEL` names the model that server
- * exposes. Any other value, or unset, uses the default policy below.
+ * exposes. `REDTEAM_LLM_PROVIDER=meta` routes all four roles to the Meta
+ * Model API (META_ROLE_MODEL_POLICY). Any other value, or unset, uses the
+ * default policy below.
  */
 export const LLM_PROVIDER_ENV = 'REDTEAM_LLM_PROVIDER'
+
+/**
+ * Meta Model API seats (operator decision, 2026-10-26: Meta models from here
+ * on out, seated in this harness). Wonder takes the seats that think once —
+ * coordinator and exploiter — because output-priced reasoning is spent best
+ * there; Spark takes the volume seats — recon tool loops and report
+ * drafting. The charter prefix is byte-stable per role, so repeated calls
+ * ride the cached-input rate instead of full price.
+ */
+export const META_ROLE_MODEL_POLICY: Record<AgentRole, RoleRoute> = {
+  coordinator: { provider: META_PROVIDER_ID, model: META_MODELS.wonder },
+  recon: { provider: META_PROVIDER_ID, model: META_MODELS.spark, reasoningEffort: 'low' },
+  exploiter: { provider: META_PROVIDER_ID, model: META_MODELS.wonder, reasoningEffort: 'high' },
+  reporter: { provider: META_PROVIDER_ID, model: META_MODELS.spark },
+}
 
 export const ROLE_MODEL_POLICY: Record<AgentRole, RoleRoute> = {
   coordinator: { provider: 'deepseek', model: DEEPSEEK_MODELS.flash },
@@ -53,6 +71,7 @@ export const ROLE_ORDER: AgentRole[] = ['coordinator', 'recon', 'exploiter', 're
  */
 export function roleModelPolicy(env: NodeJS.ProcessEnv = process.env): Record<AgentRole, RoleRoute> {
   const selected = env[LLM_PROVIDER_ENV]?.trim().toLowerCase()
+  if (selected === META_PROVIDER_ID) return META_ROLE_MODEL_POLICY
   if (selected !== LOCAL_PROVIDER_ID) return ROLE_MODEL_POLICY
   const model = env[LOCAL_MODEL_ENV]?.trim()
   if (model === undefined || model.length === 0) {

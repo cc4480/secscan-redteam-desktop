@@ -35,6 +35,7 @@ import type { CharterEngagement, CharterRole } from './charter/loader.js'
 import { assembleCharterMessages } from './charter/prompt.js'
 import { assertLocalOnlyRoute, resolveCharterRoute } from './charter/routing.js'
 import { DeepSeekProvider, DEEPSEEK_API_KEY_ENV } from './providers/deepseek.js'
+import { MetaProvider, META_API_KEY_ENV } from './providers/meta.js'
 import { QwenProvider, QWEN_API_KEY_ENV } from './providers/qwen.js'
 import { LocalOpenAiProvider } from './providers/local.js'
 import { ResilienceError } from './executor.js'
@@ -202,5 +203,7 @@ function resilient(provider: LlmProvider, keyEnv?: string): LlmProvider {
 
 registerProvider(resilient(new DeepSeekProvider(), DEEPSEEK_API_KEY_ENV))
 registerProvider(resilient(new QwenProvider(), QWEN_API_KEY_ENV))
+// Meta Model API: routed for all roles when REDTEAM_LLM_PROVIDER=meta (see policy.ts).
+registerProvider(resilient(new MetaProvider(), META_API_KEY_ENV))
 // Offline/self-hosted route: selected by REDTEAM_LLM_PROVIDER=local (see policy.ts).
 registerProvider(resilient(new LocalOpenAiProvider()))

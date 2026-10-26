@@ -16,7 +16,7 @@ export {
   registerProvider,
   type CharterCompleteOptions,
 } from './router.js'
-export { LLM_PROVIDER_ENV, ROLE_MODEL_POLICY, ROLE_ORDER, roleModelPolicy } from './policy.js'
+export { LLM_PROVIDER_ENV, META_ROLE_MODEL_POLICY, ROLE_MODEL_POLICY, ROLE_ORDER, roleModelPolicy } from './policy.js'
 export {
   ProviderError,
   parseRateLimitResetHeader,
@@ -84,6 +84,15 @@ export {
   QWEN_BASE_URL,
   QWEN_MODELS,
 } from './providers/qwen.js'
+export {
+  MetaProvider,
+  META_PROVIDER_ID,
+  META_API_KEY_ENV,
+  META_API_KEY_FALLBACK_ENV,
+  META_BASE_URL_ENV,
+  META_BASE_URL,
+  META_MODELS,
+} from './providers/meta.js'
 export {
   CharterError,
   CHARTER_ROLES,
