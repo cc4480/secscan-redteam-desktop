@@ -20,6 +20,7 @@ import { type TargetId } from './targets.js'
 import { HaltError, type Ctx } from './context.js'
 import { sleep } from './util.js'
 import { partitionToolCalls, executeToolGroup } from './dispatch/parallel-batch.js'
+import { maybeCompactMessages } from './compaction/compact.js'
 import { toolTargetHost } from './dispatch/target-host.js'
 import { sharedStateDigest } from './coverage/cells.js'
 import { RECON_TOOLS } from './tools.js'
@@ -103,6 +104,9 @@ export async function agentLoop(
       throw new HaltError(cap)
     }
     if (integrity.checkpoint(turn)) break
+    // A3 Deep: compact an over-budget history before it is sent, so the
+    // steps journal below logs exactly what the model actually saw.
+    await maybeCompactMessages(ctx, role, phase, messages, complete, (usage) => tokenMeterFor(ctx).record(usage))
     let res: ChatResult
     try {
       res = await complete(role, messages, { tools })
