@@ -9,12 +9,14 @@ import { coordinatorPrompt } from "../prompts.js";
 import { extractJsonBlock } from "../util.js";
 import { lookupTechnique } from "../attack.js";
 import { techniqueAllowed } from "../gate.js";
+import { ensureWorkGraph } from "../workgraph/wiring.js";
 
 export async function planPhase(ctx: Ctx, critique?: string): Promise<void> {
   if (ctx.config.dryRunAgents) {
     ctx.plan = { mode: ctx.input.mode, objective: ctx.input.objective, adversaryProfile: "dry-run", steps: [] };
     ctx.events.updateState({ plan: ctx.plan });
     ctx.events.append({ phase: "plan", actor: "coordinator", action: "plan", result: "dry-run: planning skipped." });
+    ensureWorkGraph(ctx);
     return;
   }
   const text = await agentLoop(
@@ -57,6 +59,9 @@ export async function planPhase(ctx: Ctx, critique?: string): Promise<void> {
     steps,
   };
   ctx.events.updateState({ plan: ctx.plan });
+  // A4 Deeper: the plan is the work-graph's Generator decomposition —
+  // persisted now, resumed (not rebuilt) on a relaunch of this engagement.
+  ensureWorkGraph(ctx);
 }
 
 // ---------------------------------------------------------------------------

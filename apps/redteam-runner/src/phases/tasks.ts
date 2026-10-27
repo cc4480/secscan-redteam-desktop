@@ -9,6 +9,12 @@ import { lookupTechnique } from "../attack.js";
 import { mergeVerdictBlock } from "../dispatch.js";
 import { taskPrompt } from "../prompts.js";
 import { techniqueAllowed } from "../gate.js";
+import {
+  completeGraphSubtask,
+  failGraphSubtask,
+  graphSubtaskFor,
+  startGraphSubtask,
+} from "../workgraph/wiring.js";
 
 export interface TaskDef {
   id: string;
@@ -42,6 +48,11 @@ export async function runTask(ctx: Ctx, task: TaskDef): Promise<TaskResult> {
   const probesBefore = ctx.probesUsed;
   const findingsBefore = ctx.liveFindings.length;
   const killedBefore = ctx.killedLive.length;
+  const actionsBefore = ctx.actions;
+  // A4 Deeper: this assignment is a work-graph Subtask (idempotent — a
+  // resumed run reuses the settled record instead of re-running it).
+  const graphSub = graphSubtaskFor(ctx, task);
+  if (graphSub) startGraphSubtask(ctx, graphSub.id);
   ctx.events.append({
     phase: "exploit",
     actor: "coordinator",
@@ -50,15 +61,26 @@ export async function runTask(ctx: Ctx, task: TaskDef): Promise<TaskResult> {
     attackId: task.attackId,
     result: `[${task.kind}] ${task.brief.slice(0, 200)}${task.category ? ` (${task.category})` : ""}`,
   });
-  const summary = await agentLoop(
-    ctx,
-    role,
-    "exploit",
-    taskPrompt(promptCtx(ctx), task),
-    "Execute the task now.",
-    tools,
-    task.maxTurns,
-  );
+  let summary: string;
+  try {
+    summary = await agentLoop(
+      ctx,
+      role,
+      "exploit",
+      taskPrompt(promptCtx(ctx), task),
+      "Execute the task now.",
+      tools,
+      task.maxTurns,
+    );
+  } catch (err) {
+    if (graphSub) failGraphSubtask(ctx, graphSub.id, (err as Error).message);
+    throw err;
+  }
+  // A4 Deeper: settle the subtask, count its Actions, persist, and run
+  // the Refiner before the next assignment is planned.
+  if (graphSub) {
+    await completeGraphSubtask(ctx, graphSub.id, summary, ctx.actions - actionsBefore);
+  }
   mergeVerdictBlock(ctx, summary);
   const verdictNote =
     `probes +${ctx.probesUsed - probesBefore}, ` +
