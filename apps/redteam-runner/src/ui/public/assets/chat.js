@@ -17,6 +17,7 @@ window.renderChat = function (el) {
       <button type="submit">Send the team</button>
     </form>
     <div class="card chat-history"><h3>Past runs</h3><div id="chat-runs"><p class="muted">Loading…</p></div></div>
+    <div class="card chat-foundry"><h3>Foundry</h3><div id="chat-foundry"><p class="muted">Loading…</p></div></div>
   </div>`;
 
   const log = el.querySelector("#chat-log");
@@ -68,6 +69,28 @@ window.renderChat = function (el) {
     }
   };
   loadRuns();
+
+  const loadFoundry = async () => {
+    const box = el.querySelector("#chat-foundry");
+    try {
+      const f = await api.get("/api/foundry");
+      const snap = f.snapshot && f.snapshot.counts
+        ? `${f.snapshot.counts.total} snapshot bundles (${f.snapshot.counts.gold} gold)`
+        : "no snapshot located";
+      const store = f.store && f.store.available
+        ? `${f.store.cases.length} case(s), ${f.store.bundles.length} bundle(s) in the store`
+        : "no store yet — the first completed run creates it";
+      const cycles = f.loop ? f.loop.cyclesRun : 0;
+      const latest = (f.store && f.store.cases || []).slice(-3).reverse()
+        .map((c) => `<div class="small">🧬 ${esc(c.family)} · ${esc(c.tier)} · ${esc(c.id)}</div>`).join("");
+      box.innerHTML =
+        `<div>Snapshot: ${esc(snap)}</div><div>Store: ${esc(store)}</div>` +
+        `<div>Gold Loop cycles run: ${cycles}</div>${latest}`;
+    } catch (err) {
+      box.innerHTML = `<p style="color:var(--red)">${esc(err.message)}</p>`;
+    }
+  };
+  loadFoundry();
 
   bubble("team", "I'm here with the whole team. Give me a target — a domain or a URL — and what you want done. We take it from there.");
 

@@ -26,6 +26,7 @@ import { handleAbort, handleEscalate, handleReverify, handleJob, handleWatchProf
 import { json, notFound, readJsonBody } from './routes/http.js'
 import { handleMcp } from './mcp-endpoint.js'
 import { handleModels } from './routes/models.js'
+import { handleFoundry, handleFoundryLoop, handleFoundryRunGold, handleFoundryVerify } from './routes/foundry.js'
 import type { UiServerOptions } from './types.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -180,6 +181,11 @@ async function route(store: UiStore, token: string, req: IncomingMessage, res: S
     if (seg[1] === 'console' && seg[2] === 'layers' && method === 'GET') return handleConsoleLayers(store, res)
     if (seg[1] === 'console' && seg[2] === 'benchmark' && method === 'GET') return handleConsoleBenchmark(store, res)
     if (seg[1] === 'console' && seg[2] === 'scope' && method === 'GET') return handleConsoleScope(store, res)
+    // Foundry (D2) — store/loop state + gate actions for the chat view.
+    if (seg[1] === 'foundry' && method === 'GET' && seg.length === 2) return handleFoundry(store, res)
+    if (seg[1] === 'foundry' && seg[2] === 'verify' && method === 'POST') return handleFoundryVerify(store, res)
+    if (seg[1] === 'foundry' && seg[2] === 'run-gold' && method === 'POST') return handleFoundryRunGold(store, res)
+    if (seg[1] === 'foundry' && seg[2] === 'loop' && method === 'POST') return handleFoundryLoop(store, res)
     if (seg[1] === 'reverify' && method === 'POST') {
       const body = await readJsonBody(req)
       return handleReverify(store, res, body)
