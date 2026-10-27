@@ -59,11 +59,15 @@ function canonical(value: unknown): string {
   return JSON.stringify(value) ?? "null";
 }
 
-function fingerprint(role: ActorRole, phase: EngagementPhase, call: ToolCallRequest): string {
-  const hash = createHash("sha256")
+/** Identity of a call itself: tool name + canonical arguments, hashed. */
+export function toolCallKey(call: ToolCallRequest): string {
+  return createHash("sha256")
     .update(`${call.name}\n${canonical(call.arguments ?? {})}`)
     .digest("hex");
-  return `${role}|${phase}|${hash}`;
+}
+
+function fingerprint(role: ActorRole, phase: EngagementPhase, call: ToolCallRequest): string {
+  return `${role}|${phase}|${toolCallKey(call)}`;
 }
 
 /** The dispatcher's own clean-result heuristic, mirrored from router.ts. */

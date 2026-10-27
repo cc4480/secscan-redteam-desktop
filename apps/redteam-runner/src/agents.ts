@@ -19,7 +19,8 @@ import { type EngagementMode, type EngagementPhase, type RulesOfEngagement } fro
 import { type TargetId } from './targets.js'
 import { HaltError, type Ctx } from './context.js'
 import { sleep } from './util.js'
-import { dispatchTool, type DispatchResult } from './dispatch.js'
+import { partitionToolCalls, executeToolGroup } from './dispatch/parallel-batch.js'
+import { toolTargetHost } from './dispatch/target-host.js'
 import { sharedStateDigest } from './coverage/cells.js'
 import { RECON_TOOLS } from './tools.js'
 
@@ -151,49 +152,57 @@ export async function agentLoop(
     // results pushed below are only valid in the API's eyes when preceded by
     // an assistant message containing these calls (ids must match).
     messages.push({ role: 'assistant', content: res.text || '(tool calls)', toolCalls: res.toolCalls })
-    for (const call of res.toolCalls) {
+    // A2: independent target-traffic calls in one response execute in
+    // parallel groups (dispatch/parallel-batch.ts). Bookkeeping below
+    // still runs per call in the original order, so observations, the
+    // event log, and the shared-state digest read as they did when the
+    // calls ran one at a time — the digest is computed after its group
+    // completes, so it reflects the group's full state.
+    for (const group of partitionToolCalls(res.toolCalls, (c) => toolTargetHost(c), phase === 'recon')) {
       // H2-P1 section-5: the full tool-call arguments, then the full result as
       // the observation (redaction happens inside the journal writer).
-      steps.tool(call.name, JSON.stringify(call.arguments ?? {}))
-      let d: DispatchResult
-      try {
-        d = await dispatchTool(ctx, role, phase, call)
-      } catch (err) {
-        steps.observation(call.name, `${TOOL_ERROR_PREFIX}${(err as Error).message}`)
-        throw err
-      }
-      steps.observation(call.name, d.result)
-      // v0.13.0 safety case: PII is redacted from tool outputs BEFORE they
-      // reach the audit log or the agent context. The agents reason about
-      // vulnerability shapes, not other people's personal data.
-      const safeResult = redactPii(d.result)
-      ctx.events.append({
-        phase,
-        actor: role,
-        action: call.name,
-        attackId: d.attackId,
-        target: d.target,
-        result: safeResult.slice(0, 800),
-        opsec: d.opsec,
-      })
-      messages.push({
-        role: 'tool',
-        toolCallId: call.id,
-        // Every observation carries the current shared state — no agent ever
-        // works from a stale or private picture (Megazord protocol).
-        content: safeResult.slice(0, 4000) + '\n' + sharedStateDigest(ctx, phase),
-      })
-      // Wall detection: consecutive blocked/cooled-down/OPSEC-signaled probes
-      // with no successful observation. The coordinator redirects to re-recon.
-      const blocked = /^(DENIED|probe failed)/i.test(d.result) || /OPSEC SIGNAL|cooling down/i.test(d.result)
-      // Soft-cap progress verdict: one non-blocked, successful result means
-      // the round advanced the work; a round of nothing but those is stuck.
-      integrity.noteToolResult(!blocked && d.ok !== false)
-      ctx.deniedStreak = blocked ? ctx.deniedStreak + 1 : 0
-      const capAfter = haltedByCaps(ctx)
-      if (capAfter) {
-        ctx.events.append({ phase, actor: 'runner', action: 'halt', result: `Halted: ${capAfter}.` })
-        throw new HaltError(capAfter)
+      for (const call of group.calls) steps.tool(call.name, JSON.stringify(call.arguments ?? {}))
+      const settled = await executeToolGroup(ctx, role, phase, group)
+      for (const s of settled) {
+        const call = s.call
+        if (s.error) {
+          steps.observation(call.name, `${TOOL_ERROR_PREFIX}${s.error.message}`)
+          throw s.error
+        }
+        const d = s.d
+        steps.observation(call.name, d.result)
+        // v0.13.0 safety case: PII is redacted from tool outputs BEFORE they
+        // reach the audit log or the agent context. The agents reason about
+        // vulnerability shapes, not other people's personal data.
+        const safeResult = redactPii(d.result)
+        ctx.events.append({
+          phase,
+          actor: role,
+          action: call.name,
+          attackId: d.attackId,
+          target: d.target,
+          result: safeResult.slice(0, 800),
+          opsec: d.opsec,
+        })
+        messages.push({
+          role: 'tool',
+          toolCallId: call.id,
+          // Every observation carries the current shared state — no agent ever
+          // works from a stale or private picture (Megazord protocol).
+          content: safeResult.slice(0, 4000) + '\n' + sharedStateDigest(ctx, phase),
+        })
+        // Wall detection: consecutive blocked/cooled-down/OPSEC-signaled probes
+        // with no successful observation. The coordinator redirects to re-recon.
+        const blocked = /^(DENIED|probe failed)/i.test(d.result) || /OPSEC SIGNAL|cooling down/i.test(d.result)
+        // Soft-cap progress verdict: one non-blocked, successful result means
+        // the round advanced the work; a round of nothing but those is stuck.
+        integrity.noteToolResult(!blocked && d.ok !== false)
+        ctx.deniedStreak = blocked ? ctx.deniedStreak + 1 : 0
+        const capAfter = haltedByCaps(ctx)
+        if (capAfter) {
+          ctx.events.append({ phase, actor: 'runner', action: 'halt', result: `Halted: ${capAfter}.` })
+          throw new HaltError(capAfter)
+        }
       }
     }
     if (phase === 'exploit' && ctx.deniedStreak >= 4 && ctx.redirects < 2) {
