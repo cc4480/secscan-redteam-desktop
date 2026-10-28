@@ -116,10 +116,31 @@ describe("readiness report", () => {
     assert.equal(report.ok, false, "an environment without tokens cannot be ready");
     const missingRequired = report.items.filter((i) => i.required && i.state !== "ready").map((i) => i.id);
     assert.ok(missingRequired.includes("nmap"));
-    assert.ok(missingRequired.includes("secscan_token"));
+    // The SecScan token is not a start requirement in-house: verification
+    // comes from the engagement record unless the service opt-in is set.
+    assert.ok(!missingRequired.includes("secscan_token"));
     assert.ok(missingRequired.includes("deepseek_key"));
     assert.match(formatReadiness(report), /readiness:/);
     assert.match(report.summary, /required missing/);
+  });
+
+  it("treats the Meta key as the model-key requirement, and the SecScan token as required only under the service opt-in", async () => {
+    _resetNmapProbeCache();
+    const metaOnly = await readinessReport({
+      REDTEAM_NMAP_BIN: "/no/such/nmap",
+      MODEL_API_KEY: "test",
+    } as NodeJS.ProcessEnv);
+    assert.equal(metaOnly.items.find((i) => i.id === "deepseek_key")?.state, "ready");
+    assert.equal(metaOnly.items.find((i) => i.id === "secscan_token")?.required, false);
+
+    const optIn = await readinessReport({
+      REDTEAM_NMAP_BIN: "/no/such/nmap",
+      MODEL_API_KEY: "test",
+      REDTEAM_VERIFY_VIA_SERVICE: "1",
+    } as NodeJS.ProcessEnv);
+    const token = optIn.items.find((i) => i.id === "secscan_token");
+    assert.equal(token?.required, true);
+    assert.equal(token?.state, "missing");
   });
 
   it("reports the RPC daemon as not-configured when credentials are absent and unreachable when they are not", async () => {

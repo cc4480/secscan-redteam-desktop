@@ -203,8 +203,18 @@ export interface RunnerOptions {
 
 export interface ResolvedRunnerConfig {
   mcpEndpoint: string;
+  /** SecScan MCP token. Optional: read only by the opt-in service-verification path (verifyViaService). */
   mcpToken: string;
   deepseekApiKey: string;
+  /** Meta Model API key (MODEL_API_KEY / META_API_KEY). The fleet's provider key; the router provider reads it from env at call time — this field records that config resolved it. */
+  modelApiKey: string;
+  /**
+   * Ownership-verification basis. Default false: the authorize phase takes
+   * verification from the engagement record (operator attestation) and never
+   * calls the SecScan service. True (env REDTEAM_VERIFY_VIA_SERVICE=1) opts
+   * back into the server-authoritative check, which then requires mcpToken.
+   */
+  verifyViaService: boolean;
   /** Alibaba Model Studio key — optional since v0.6 (DeepSeek-only policy); the provider still reads it from env when configured. */
   qwenApiKey: string;
   maxReconTurns: number;

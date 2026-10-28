@@ -204,16 +204,19 @@ export async function readinessReport(env: NodeJS.ProcessEnv = process.env): Pro
   const secrets: ReadinessItem[] = [
     {
       id: "secscan_token",
-      label: "SecScan MCP token (ownership verification)",
+      label: "SecScan MCP token (service verification opt-in only)",
       state: (env["SECSCAN_MCP_TOKEN"] ?? "").trim() ? "ready" : "missing",
-      fix: "Set SECSCAN_MCP_TOKEN (Secure Vault → lands in the environment). Create one at https://secscan.us/settings.",
-      required: true,
+      fix: "Only needed with REDTEAM_VERIFY_VIA_SERVICE=1: ownership verification otherwise comes from the engagement record, in-house. Set SECSCAN_MCP_TOKEN (Secure Vault → lands in the environment) to use the service check.",
+      required: (env["REDTEAM_VERIFY_VIA_SERVICE"] ?? "").trim() === "1",
     },
     {
       id: "deepseek_key",
-      label: "DeepSeek API key (agent loops)",
-      state: (env["DEEPSEEK_API_KEY"] ?? "").trim() ? "ready" : "missing",
-      fix: "Set DEEPSEEK_API_KEY (Secure Vault). No live engagement can run without it.",
+      label: "Model provider key (agent loops)",
+      state:
+        (env["MODEL_API_KEY"] ?? "").trim() || (env["META_API_KEY"] ?? "").trim() || (env["DEEPSEEK_API_KEY"] ?? "").trim()
+          ? "ready"
+          : "missing",
+      fix: "Set MODEL_API_KEY (Meta Model API, Secure Vault). No live engagement can run without a model provider key.",
       required: true,
     },
     {

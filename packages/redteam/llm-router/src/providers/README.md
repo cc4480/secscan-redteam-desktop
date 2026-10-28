@@ -16,9 +16,9 @@
  *     Qwen back later — swap it back in via src/policy.ts).
  *   - meta (Meta Model API) : REGISTERED 2026-10-26 — Muse Wonder
  *     (muse-wonder-1.0) + Muse Spark (muse-spark-1.3). Routed for all
- *     roles when REDTEAM_LLM_PROVIDER=meta (seats in src/policy.ts);
- *     otherwise available to explicit complete() calls and the fallback
- *     chain. Key env: MODEL_API_KEY (fallback META_API_KEY).
+ *     roles when REDTEAM_LLM_PROVIDER=meta, and by default whenever a
+ *     Meta key is configured and the selector is unset (seats in
+ *     src/policy.ts). Key env: MODEL_API_KEY (fallback META_API_KEY).
  *   - anthropic (Claude), openai (ChatGPT), google (Gemini), zhipu (GLM),
  *     moonshot (Kimi — the runner-up for the next swap) : PLANNED —
  *     interface is ready, no implementation yet.

@@ -251,6 +251,30 @@ describe("runEngagement gating (dry-run agents, fake gate)", () => {
     assert.equal(tail.length, events.length - 1);
   });
 
+  it("completes on the engagement record's attestation when no verifier is injected (the in-house default)", async () => {
+    const inp = input("red");
+    inp.operatorName = "C. Operator";
+    const res = await runEngagement(inp, {
+      modelApiKey: "test",
+      engagementsDir: dir,
+      dryRunAgents: true,
+      verifyViaService: false,
+      deps: {},
+    });
+    assert.equal(res.status, "complete");
+    const state = readState(join(dir, res.engagementId));
+    assert.equal(state?.verified, true);
+    assert.match(state?.verificationProof ?? "", /Operator-attested ownership/);
+    assert.match(state?.verificationProof ?? "", /C\. Operator/);
+    assert.match(state?.verificationProof ?? "", /no external service was consulted/);
+  });
+
+  it("the service opt-in still gates: an injected refusing verifier blocks", async () => {
+    const res = await runEngagement(input("red"), { ...opts(noVerify), verifyViaService: true });
+    assert.equal(res.status, "blocked");
+    assert.match(res.blockedReason ?? "", /not ownership-verified/);
+  });
+
   it("refuses to run outside the ROE test window", async () => {
     const inp = input("red");
     inp.roe.testWindow = { start: "2020-01-01T00:00:00Z", end: "2020-01-02T00:00:00Z" };
@@ -263,9 +287,25 @@ describe("runEngagement gating (dry-run agents, fake gate)", () => {
     await assert.rejects(() => runEngagement(inp, opts(yesVerify)), /scope/);
   });
 
-  it("fails fast without the DeepSeek key when agents are live", () => {
+  it("starts with only the Meta key — no SecScan token, no DeepSeek key", () => {
+    const env = { MODEL_API_KEY: "test" } as NodeJS.ProcessEnv;
+    const cfg = resolveConfig(env, { engagementsDir: dir });
+    assert.equal(cfg.modelApiKey, "test");
+    assert.equal(cfg.mcpToken, "");
+    assert.equal(cfg.verifyViaService, false);
+  });
+
+  it("fails fast with no model key at all, naming MODEL_API_KEY", () => {
+    assert.throws(() => resolveConfig({} as NodeJS.ProcessEnv, { engagementsDir: dir }), /MODEL_API_KEY/);
+    // A SecScan token alone starts nothing: it is not a model key and the
+    // in-house default never consults the service.
     const env = { SECSCAN_MCP_TOKEN: "test" } as NodeJS.ProcessEnv;
-    assert.throws(() => resolveConfig(env, { engagementsDir: dir }), /DEEPSEEK_API_KEY/);
+    assert.throws(() => resolveConfig(env, { engagementsDir: dir }), /MODEL_API_KEY/);
+  });
+
+  it("the service-verification opt-in fails fast without its token", () => {
+    const env = { MODEL_API_KEY: "test", REDTEAM_VERIFY_VIA_SERVICE: "1" } as NodeJS.ProcessEnv;
+    assert.throws(() => resolveConfig(env, { engagementsDir: dir }), /SECSCAN_MCP_TOKEN/);
   });
 
   it("v0.6: does NOT require a Qwen key — no role currently routes to Qwen (see llm-router/src/policy.ts)", () => {

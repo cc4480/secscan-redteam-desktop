@@ -5,12 +5,35 @@ import { type Ctx } from "../context.js";
 import { type GateVerdict, checkAuthorization, checkScopeAuthorization } from "../gate.js";
 import { scopeGuardFor } from "../safety/scope-guard.js";
 
+/**
+ * The engagement record's ownership attestation: the named operator (or
+ * client of record) attests they own the target and every host in the
+ * declared scope, or are authorized to test them. This text becomes the
+ * engagement's verificationProof — the record the verification-gated
+ * tools check — so it names its basis plainly: an attestation, not a
+ * server lookup.
+ */
+function operatorAttestation(ctx: Ctx): string {
+  const operator = ctx.input.operatorName ?? ctx.input.client ?? "the engagement operator";
+  return (
+    `Operator-attested ownership: ${operator} attests on the engagement record that they own ` +
+    `${ctx.domain} and every host in the declared scope, or are authorized to test them. ` +
+    `Verification taken from the engagement record; no external service was consulted.`
+  );
+}
+
 export async function authorizePhase(ctx: Ctx): Promise<GateVerdict> {
+  // Verification basis: an explicitly injected verifier (tests, embedded
+  // callers) or the REDTEAM_VERIFY_VIA_SERVICE=1 opt-in uses the SecScan
+  // service check. Otherwise — the default — verification comes from the
+  // engagement record and the service is never consulted.
+  const viaService = ctx.deps.verify !== undefined || ctx.config.verifyViaService;
+  const attestedProof = viaService ? undefined : operatorAttestation(ctx);
   const verdict = await checkAuthorization(
     ctx.domain,
     { mcpEndpoint: ctx.config.mcpEndpoint, mcpToken: ctx.config.mcpToken },
     ctx.deps.verify,
-    { allowLocalSandbox: ctx.config.localSandbox },
+    { allowLocalSandbox: ctx.config.localSandbox, attestedProof },
   );
   if (!verdict.allowed) {
     ctx.events.append({ phase: "authorize", actor: "coordinator", action: "authorization_denied", target: ctx.domain, result: verdict.reason ?? "denied" });
@@ -25,7 +48,7 @@ export async function authorizePhase(ctx: Ctx): Promise<GateVerdict> {
     ctx.hosts,
     { mcpEndpoint: ctx.config.mcpEndpoint, mcpToken: ctx.config.mcpToken },
     ctx.deps.verify,
-    { allowLocalSandbox: ctx.config.localSandbox, verifiedTarget: ctx.domain },
+    { allowLocalSandbox: ctx.config.localSandbox, verifiedTarget: ctx.domain, attestedProof },
   );
   if (!scopeVerdict.allowed) {
     ctx.events.append({

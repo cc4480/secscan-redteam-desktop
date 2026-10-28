@@ -147,4 +147,32 @@ describe('Meta seat policy', () => {
     assert.equal(policy.coordinator.provider, 'deepseek')
     assert.equal(policy.exploiter.provider, 'deepseek')
   })
+
+  test('a configured MODEL_API_KEY seats the fleet on Meta with no selector set', () => {
+    const policy = roleModelPolicy({ MODEL_API_KEY: 'test-key' })
+    for (const role of ['coordinator', 'recon', 'exploiter', 'reporter'] as const) {
+      assert.equal(policy[role].provider, 'meta')
+      assert.equal(policy[role].model, META_MODELS.spark)
+    }
+    assert.equal(policy.exploiter.reasoningEffort, 'high')
+    // The provider those seats dispatch to posts to the Meta Model API.
+    assert.equal(META_BASE_URL, 'https://api.meta.ai/v1')
+  })
+
+  test('the META_API_KEY fallback name also seats Meta by default', () => {
+    const policy = roleModelPolicy({ META_API_KEY: 'test-key' })
+    assert.equal(policy.coordinator.provider, 'meta')
+    assert.equal(policy.exploiter.model, META_MODELS.spark)
+  })
+
+  test('an explicit selector wins over a configured Meta key', () => {
+    const policy = roleModelPolicy({ MODEL_API_KEY: 'test-key', REDTEAM_LLM_PROVIDER: 'deepseek' })
+    assert.equal(policy.coordinator.provider, 'deepseek')
+    assert.equal(policy.exploiter.provider, 'deepseek')
+  })
+
+  test('a blank MODEL_API_KEY does not seat Meta', () => {
+    const policy = roleModelPolicy({ MODEL_API_KEY: '   ' })
+    assert.equal(policy.coordinator.provider, 'deepseek')
+  })
 })

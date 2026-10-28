@@ -110,6 +110,54 @@ describe("checkScopeAuthorization", () => {
   });
 });
 
+describe("record attestation basis (the in-house default)", () => {
+  const proof = "Operator-attested ownership: the operator attests on the engagement record.";
+
+  it("checkAuthorization allows on the attestation and never calls verify", async () => {
+    const calls: string[] = [];
+    const verdict = await checkAuthorization("app.example.com", cfg, verifier(() => false, calls), {
+      attestedProof: proof,
+    });
+    assert.equal(verdict.allowed, true);
+    assert.equal(verdict.reason, proof);
+    assert.deepEqual(calls, [], "the service check must not be consulted on the record basis");
+  });
+
+  it("checkAuthorization still rejects an unparseable target before the attestation applies", async () => {
+    const verdict = await checkAuthorization("not a url %%%", cfg, verifier(() => true), {
+      attestedProof: proof,
+    });
+    assert.equal(verdict.allowed, false);
+  });
+
+  it("checkScopeAuthorization covers every in-scope public host by the attestation, with no verify call", async () => {
+    const calls: string[] = [];
+    const verdict = await checkScopeAuthorization(
+      ["app.example.com", "api.example.com"],
+      cfg,
+      verifier(() => false, calls),
+      { verifiedTarget: "app.example.com", attestedProof: proof },
+    );
+    assert.equal(verdict.allowed, true);
+    assert.deepEqual(calls, [], "the service check must not be consulted on the record basis");
+  });
+
+  it("the attestation does not widen the structural rules: a private scope host is still denied outside sandbox mode", async () => {
+    const verdict = await checkScopeAuthorization(["app.example.com", "127.0.0.1"], cfg, verifier(() => true), {
+      verifiedTarget: "app.example.com",
+      attestedProof: proof,
+    });
+    assert.equal(verdict.allowed, false);
+    assert.match(verdict.reason ?? "", /local sandbox/);
+  });
+
+  it("the attestation does not rescue an empty scope", async () => {
+    const verdict = await checkScopeAuthorization(["   "], cfg, verifier(() => true), { attestedProof: proof });
+    assert.equal(verdict.allowed, false);
+    assert.match(verdict.reason ?? "", /scope is empty/);
+  });
+});
+
 describe("checkAuthorization still gates the target itself", () => {
   it("denies an unverified public target even when the scope is otherwise clean", async () => {
     const verdict = await checkAuthorization("app.example.com", cfg, async () => false);

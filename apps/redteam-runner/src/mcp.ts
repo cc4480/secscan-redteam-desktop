@@ -29,13 +29,17 @@ export class McpClient {
   private readonly timeoutMs: number;
 
   constructor(cfg: McpConfig) {
-    if (!cfg.token) throw new Error("[mcp] SECSCAN_MCP_TOKEN is not set.");
+    // An empty token is constructible: in-house engagements carry no
+    // SecScan token at all, and the context builds this client before the
+    // authorize basis is known. The missing-token error surfaces at call
+    // time instead — the only place a token is actually needed.
     this.endpoint = cfg.endpoint.replace(/\/+$/, "");
     this.token = cfg.token;
     this.timeoutMs = cfg.timeoutMs ?? 30_000;
   }
 
   private async post(body: unknown): Promise<unknown> {
+    if (!this.token) throw new Error("[mcp] SECSCAN_MCP_TOKEN is not set.");
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
     try {

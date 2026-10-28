@@ -22,6 +22,10 @@ function parseEnvPositiveNumber(raw: string | undefined, name: string): number |
 export function resolveConfig(env: NodeJS.ProcessEnv, opts: {
   mcpToken?: string;
   deepseekApiKey?: string;
+  /** Meta Model API key. Env MODEL_API_KEY (META_API_KEY fallback). The fleet's provider key. */
+  modelApiKey?: string;
+  /** Opt-in service verification (env REDTEAM_VERIFY_VIA_SERVICE=1). Default: verification from the engagement record. */
+  verifyViaService?: boolean;
   qwenApiKey?: string;
   mcpEndpoint?: string;
   maxReconTurns?: number;
@@ -41,22 +45,33 @@ export function resolveConfig(env: NodeJS.ProcessEnv, opts: {
   /** v0.20.0: per-item variant cap override. Env REDTEAM_MAX_VARIANTS. Undefined = env default (25 staging, 10 production). */
   maxVariantsPerItem?: number;
 } = {}): ResolvedRunnerConfig {
-  const mcpToken = opts.mcpToken ?? env["SECSCAN_MCP_TOKEN"];
-  if (!mcpToken) {
+  // The SecScan MCP token is NOT a startup requirement: it is only read
+  // when the operator opts into service verification
+  // (REDTEAM_VERIFY_VIA_SERVICE=1). The default authorize path verifies
+  // from the engagement record and never touches the service.
+  const mcpToken = opts.mcpToken ?? env["SECSCAN_MCP_TOKEN"] ?? "";
+  const verifyViaService = opts.verifyViaService ?? env["REDTEAM_VERIFY_VIA_SERVICE"] === "1";
+  if (verifyViaService && !mcpToken) {
     throw new Error(
-      "[runner] SECSCAN_MCP_TOKEN is not set. Enter the SecScan MCP token via the Secure Vault (it lands in the environment).",
+      "[runner] REDTEAM_VERIFY_VIA_SERVICE=1 asks the SecScan service to verify domains, but SECSCAN_MCP_TOKEN is not set. Enter the SecScan MCP token via the Secure Vault, or unset REDTEAM_VERIFY_VIA_SERVICE to verify from the engagement record.",
     );
   }
   const deepseekApiKey = opts.deepseekApiKey ?? env["DEEPSEEK_API_KEY"];
-  if (!deepseekApiKey && !opts.dryRunAgents) {
+  const modelApiKey = opts.modelApiKey ?? env["MODEL_API_KEY"] ?? env["META_API_KEY"];
+  // A live engagement needs ONE configured model provider: the fleet's
+  // Meta key, a DeepSeek key, or the offline local provider
+  // (REDTEAM_LLM_PROVIDER=local, keyless by design). Nothing else — in
+  // particular not the SecScan service — gates the start.
+  const localProvider = env["REDTEAM_LLM_PROVIDER"]?.trim().toLowerCase() === "local";
+  if (!modelApiKey && !deepseekApiKey && !localProvider && !opts.dryRunAgents) {
     throw new Error(
-      "[runner] DEEPSEEK_API_KEY is not set. Enter the DeepSeek API key via the Secure Vault.",
+      "[runner] No model provider key is configured. Set MODEL_API_KEY (Meta Model API — the fleet's provider) via the Secure Vault (it lands in the environment).",
     );
   }
-  // v0.6: no role currently routes to Qwen (see llm-router/src/policy.ts —
-  // operator is running DeepSeek-only for now, Qwen to come back later), so
-  // its key is optional here. It's still read/threaded through so flipping
-  // policy.ts back to Qwen for the exploiter needs no config-layer change.
+  // v0.6: no role currently routes to Qwen (see llm-router/src/policy.ts),
+  // so its key is optional here. It's still read/threaded through so
+  // flipping policy.ts back to Qwen for the exploiter needs no
+  // config-layer change.
   const qwenApiKey = opts.qwenApiKey ?? env["QWEN_API_KEY"] ?? env["DASHSCOPE_API_KEY"];
   if (opts.qwenApiKey && !env["QWEN_API_KEY"] && !env["DASHSCOPE_API_KEY"]) {
     // Key passed programmatically: make it visible to the provider, which
@@ -70,6 +85,8 @@ export function resolveConfig(env: NodeJS.ProcessEnv, opts: {
     mcpEndpoint: opts.mcpEndpoint || env["SECSCAN_MCP_URL"]?.trim() || "https://secscan.us/api/mcp",
     mcpToken,
     deepseekApiKey: deepseekApiKey ?? "",
+    modelApiKey: modelApiKey ?? "",
+    verifyViaService,
     qwenApiKey: qwenApiKey ?? "",
     maxReconTurns: opts.maxReconTurns ?? 10,
     maxExploitProbes: opts.maxExploitProbes ?? 12,

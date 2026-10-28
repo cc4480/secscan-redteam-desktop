@@ -8,8 +8,10 @@
  *
  *   redteam-runner watch [--queue <dir>]   # run queued console jobs
  *
- * Credentials via environment only: SECSCAN_MCP_TOKEN, DEEPSEEK_API_KEY,
- * QWEN_API_KEY (optional since v0.6 — DeepSeek-only policy), SECSCAN_MCP_URL (optional).
+ * Credentials via environment only: MODEL_API_KEY (Meta Model API — the
+ * fleet's provider key; DEEPSEEK_API_KEY remains supported), QWEN_API_KEY
+ * (optional since v0.6), SECSCAN_MCP_TOKEN + SECSCAN_MCP_URL (optional —
+ * only the REDTEAM_VERIFY_VIA_SERVICE=1 verification opt-in reads them).
  *
  * Local dev convenience: a .env file is loaded automatically (Node's
  * built-in process.loadEnvFile — no dotenv dependency). Checked in order:

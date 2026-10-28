@@ -2,7 +2,9 @@
  * Engagement-level gating. Every check fails closed: uncertainty → deny.
  *
  * Layers (all must pass before aggressive work):
- *  1. Server-authoritative ownership verification (auth-gate's isServerVerified).
+ *  1. Ownership verification: by default the engagement record's operator
+ *     attestation; server-authoritative (auth-gate's isServerVerified)
+ *     only when the operator opts into service verification.
  *  2. Scope: every probed/scanned URL's hostname must be an exact in-scope host.
  *  3. Technique exclusions: always-excluded + mode defaults + ROE exclusions.
  *  4. Blackout windows: the runner pauses, it does not skip.
@@ -98,6 +100,14 @@ export interface ServerGateConfig {
 
 export interface CheckAuthorizationOptions {
   /**
+   * The engagement record's ownership attestation (operator attestation /
+   * proofMethod text), when verification is taken from the record — the
+   * default basis. When set, the gate returns it as the verdict reason and
+   * the server check is never consulted. Unset means the caller opted into
+   * service verification and the server check decides.
+   */
+  attestedProof?: string;
+  /**
    * LOCAL SANDBOX MODE ONLY. When true, skips the server verification call
    * — but ONLY when `domain` itself resolves to a private/loopback host
    * (e.g. localhost, 127.0.0.1, a RFC1918 address). For any real-looking
@@ -112,8 +122,12 @@ export interface CheckAuthorizationOptions {
 }
 
 /**
- * The authorization gate: the SecScan server must positively list the domain
- * as verified. Network errors, timeouts, missing token → denied (fail closed).
+ * The authorization gate. Default basis: the engagement record's operator
+ * attestation (opts.attestedProof) — allowed, with the attestation as the
+ * recorded proof, and no service call. When no attestation is supplied the
+ * caller opted into service verification: the SecScan server must positively
+ * list the domain as verified, and network errors, timeouts, missing
+ * token → denied (fail closed).
  * `verify` is injectable so unit tests never touch the network.
  */
 export async function checkAuthorization(
@@ -140,6 +154,9 @@ export async function checkAuthorization(
         `This bypass never applies to a non-private domain.`,
     };
   }
+  if (opts.attestedProof) {
+    return { allowed: true, reason: opts.attestedProof };
+  }
   let verified = false;
   try {
     verified = await verify(target, { endpoint: cfg.mcpEndpoint, token: cfg.mcpToken });
@@ -161,6 +178,14 @@ export async function checkAuthorization(
 }
 
 export interface ScopeAuthorizationOptions {
+  /**
+   * The engagement record's ownership attestation, as in
+   * {@link CheckAuthorizationOptions.attestedProof}: when set, an in-scope
+   * public host is covered by the attestation and the server check is never
+   * consulted for it. The structural rules below (empty scope, private
+   * hosts, sandbox containment) apply unchanged under either basis.
+   */
+  attestedProof?: string;
   /**
    * LOCAL SANDBOX MODE ONLY. When true, the whole engagement is restricted to
    * private/loopback hosts: every scope entry must be private too, because a
@@ -186,7 +211,9 @@ export interface ScopeAuthorizationOptions {
  *    never be combined with a public host in scope;
  *  - otherwise: the target needs no second call; an IP-literal scope entry is a
  *    host-engagement target authorized by the ROE (domain verification cannot
- *    apply to an address); every other host must be server-verified.
+ *    apply to an address); every other host must be verified — by the
+ *    engagement record's attestation on the default basis, or server-verified
+ *    when the operator opted into service verification.
  *
  * `verify` is injectable so unit tests never touch the network.
  */
@@ -238,6 +265,9 @@ export async function checkScopeAuthorization(
     // An IP-literal scope entry is a host-engagement target: the client authorizes it
     // through the ROE and credentials, and domain verification cannot apply to an address.
     if (isIP(host) !== 0) continue;
+    // Record basis: the operator's attestation covers every host they
+    // declared in scope; no server call is made for it.
+    if (opts.attestedProof) continue;
     let verified = false;
     try {
       verified = await verify(host, { endpoint: cfg.mcpEndpoint, token: cfg.mcpToken });

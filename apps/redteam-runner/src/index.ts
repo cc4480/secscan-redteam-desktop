@@ -12,8 +12,9 @@
  * ```
  *
  * Credentials come from the environment (Secure Vault), never from code:
- *   SECSCAN_MCP_TOKEN, DEEPSEEK_API_KEY, QWEN_API_KEY (optional since v0.6 â€”
- *   DeepSeek-only policy), SECSCAN_MCP_URL (optional).
+ *   MODEL_API_KEY (Meta Model API — the fleet’s provider key; DEEPSEEK_API_KEY
+ *   remains supported), QWEN_API_KEY (optional since v0.6), SECSCAN_MCP_TOKEN +
+ *   SECSCAN_MCP_URL (optional — only the REDTEAM_VERIFY_VIA_SERVICE=1 opt-in reads them).
  *
  * Console bridge: the console's "start engagement" action writes an
  * EngagementInput JSON file into the queue dir; `watchQueue()` picks it up
