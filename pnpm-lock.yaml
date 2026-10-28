@@ -728,6 +728,9 @@ importers:
       ssh2:
         specifier: ^1.17.0
         version: 1.17.0
+      undici:
+        specifier: ^7.28.0
+        version: 7.28.0
       winrm-client:
         specifier: ^0.0.12
         version: 0.0.12

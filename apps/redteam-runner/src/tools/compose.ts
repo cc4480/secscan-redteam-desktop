@@ -4,6 +4,14 @@
 import type { JsonSchemaTool } from "@secscan/redteam-llm-router";
 import { BURST_PROBE_TOOL, MCP_TOOLS, PROBE_TOOL, READ_TOOLS } from "./web.js";
 import { SECSCAN_EXEC_TOOL } from "./secscan.js";
+import {
+  SECLAYER_REDTEAM_TOOL,
+  SECLAYER_BOLA_TOOL,
+  SECLAYER_API_TOOL,
+  SECLAYER_WEBHOOK_TOOL,
+  SECLAYER_DAST_TOOL,
+  SECLAYER_AGGRESSIVE_TOOL,
+} from "./seclayer.js";
 import { HOST_TOOLS } from "./host.js";
 import { MSF_EXEC_TOOL } from "./msf.js";
 import { NUCLEI_EXEC_TOOL } from "./nuclei.js";
@@ -45,6 +53,6 @@ function withBatteryItem(t: JsonSchemaTool): JsonSchemaTool {
 }
 
 export const RECON_TOOLS = [...MCP_TOOLS, withBatteryItem(SECSCAN_EXEC_TOOL), ...HOST_TOOLS.map(withBatteryItem), withBatteryItem(MSF_EXEC_TOOL), withBatteryItem(NUCLEI_EXEC_TOOL), withBatteryItem(NMAP_EXEC_TOOL), ...XTOOL_DEFS.map(withBatteryItem), ...PC_AGENT_TOOLS, QUERY_REGISTRY_TOOL, UPDATE_TARGET_MAP_TOOL, withBatteryItem(RECORD_ITEM_VERDICT_TOOL), VARIANT_LIST_TOOL];
-export const EXPLOIT_TOOLS = [...READ_TOOLS, withBatteryItem(PROBE_TOOL), withBatteryItem(BURST_PROBE_TOOL), ...HOST_TOOLS.map(withBatteryItem), withBatteryItem(MSF_EXEC_TOOL), withBatteryItem(NUCLEI_EXEC_TOOL), withBatteryItem(NMAP_EXEC_TOOL), ...PC_AGENT_TOOLS, QUERY_REGISTRY_TOOL, withBatteryItem(RECORD_FINDING_TOOL), withBatteryItem(RECORD_KILLED_TOOL), withBatteryItem(RECORD_ITEM_VERDICT_TOOL), VARIANT_LIST_TOOL];
+export const EXPLOIT_TOOLS = [...READ_TOOLS, withBatteryItem(PROBE_TOOL), withBatteryItem(BURST_PROBE_TOOL), ...HOST_TOOLS.map(withBatteryItem), withBatteryItem(MSF_EXEC_TOOL), withBatteryItem(NUCLEI_EXEC_TOOL), withBatteryItem(NMAP_EXEC_TOOL), ...PC_AGENT_TOOLS, QUERY_REGISTRY_TOOL, withBatteryItem(RECORD_FINDING_TOOL), withBatteryItem(RECORD_KILLED_TOOL), withBatteryItem(RECORD_ITEM_VERDICT_TOOL), VARIANT_LIST_TOOL, withBatteryItem(SECLAYER_REDTEAM_TOOL), withBatteryItem(SECLAYER_BOLA_TOOL), withBatteryItem(SECLAYER_API_TOOL), withBatteryItem(SECLAYER_WEBHOOK_TOOL), withBatteryItem(SECLAYER_DAST_TOOL), withBatteryItem(SECLAYER_AGGRESSIVE_TOOL)];
 /** The coordinator's command tools: no probes, only command authority. */
 export const COMMAND_TOOLS = [ABORT_TOOL];

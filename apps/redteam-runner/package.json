@@ -12,16 +12,17 @@
     ".": "./dist/index.js"
   },
   "imports": {
-    "#secscan/*": "./dist/secscan/*"
+    "#secscan/*": "./dist/secscan/*",
+    "#seclayer/*": "./dist/seclayer/*"
   },
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc -p src/secscan/tsconfig.json && node scripts/secscan-dist.mjs && tsc -p tsconfig.json && node scripts/copy-dir.mjs src/ui/public dist/ui/public && node scripts/copy-dir.mjs assets dist/assets && node scripts/dist-hash.mjs write . && node scripts/stamp-deps.mjs",
+    "build": "tsc -p src/secscan/tsconfig.json && node scripts/secscan-dist.mjs && tsc -p src/seclayer/tsconfig.json && node scripts/seclayer-dist.mjs && tsc -p tsconfig.json && node scripts/copy-dir.mjs src/ui/public dist/ui/public && node scripts/copy-dir.mjs assets dist/assets && node scripts/dist-hash.mjs write . && node scripts/stamp-deps.mjs",
     "pretest": "pnpm run build",
     "test": "tsc -p tsconfig.test.json && node --test dist-test/test/*.test.js",
-    "typecheck": "tsc -p src/secscan/tsconfig.json && tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
+    "typecheck": "tsc -p src/secscan/tsconfig.json && tsc -p src/seclayer/tsconfig.json && tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "harness2": "node dist/harness2/cli.js",
     "coverage": "node scripts/coverage-matrix.mjs --write",
     "smoke:cdp": "node scripts/smoke-cdp.mjs",
@@ -35,6 +36,7 @@
     "js-md4": "^0.3.2",
     "ldapts": "^9.2.0",
     "ssh2": "^1.17.0",
+    "undici": "^7.28.0",
     "winrm-client": "^0.0.12"
   },
   "devDependencies": {

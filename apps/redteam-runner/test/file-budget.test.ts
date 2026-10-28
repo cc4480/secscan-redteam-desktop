@@ -32,7 +32,12 @@ describe("file budget", () => {
     // splitting those files to fit this budget would void the as-is
     // guarantee the copy exists to provide. The budget governs the code
     // this repo owns and edits, so the vendored tree is walked past.
-    const files = walkTs(srcDir()).filter((f) => !f.split("/").includes("secscan") && !f.split("\\").includes("secscan"));
+    // Same exemption, same reason: src/seclayer/ is the byte-frozen copy
+    // of the Seclayer non-repeat modules (its own AS-IS-MANIFEST.json).
+    const files = walkTs(srcDir()).filter((f) => {
+      const seg = f.split(/[\\/]/);
+      return !seg.includes("secscan") && !seg.includes("seclayer");
+    });
     assert.ok(files.length > 100, `expected the full source tree, found ${files.length} files`);
     const over = files
       .map((f) => ({ file: f, lines: (readFileSync(f, "utf8").match(/\n/g) || []).length }))

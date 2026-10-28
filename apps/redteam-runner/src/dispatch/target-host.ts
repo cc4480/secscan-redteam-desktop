@@ -46,6 +46,12 @@ export const RATE_LIMITED_TOOLS = new Set([
   "ffuf_exec",
   "gobuster_exec",
   "nikto_exec",
+  "seclayer_redteam",
+  "seclayer_bola",
+  "seclayer_api",
+  "seclayer_webhook",
+  "seclayer_dast",
+  "seclayer_aggressive",
 ]);
 
 /** Best-effort target host for a tool call — undefined when the tool has no target traffic. */

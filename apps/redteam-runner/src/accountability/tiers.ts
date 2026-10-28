@@ -119,6 +119,15 @@ const TIER1_TOOLS = new Set([
   "krb_ptt",
   "ssh_agent_audit",
   "nfs_enum",
+  // Native Seclayer modules: active single-target web app tests (exploit
+  // attempts, authenticated probes) — validated steps, and every call is
+  // additionally refused without owner verification on the record.
+  "seclayer_redteam",
+  "seclayer_bola",
+  "seclayer_api",
+  "seclayer_webhook",
+  "seclayer_dast",
+  "seclayer_aggressive",
 ]);
 
 /**
@@ -179,7 +188,7 @@ export function toolMinTier(toolName: string, args: Record<string, unknown> = {}
  * ad_enum, nfs_enum, ssh_agent_audit, rdp_shadow_prep) observe; they don't
  * execute against the target, so they don't consume the budget.
  */
-const EXPLOIT_STEP_TOOLS = new Set(["ssh_exec", "smb_exec", "winrm_exec", "smb_pth", "krb_ptt", "rdp_auth"]);
+const EXPLOIT_STEP_TOOLS = new Set(["ssh_exec", "smb_exec", "winrm_exec", "smb_pth", "krb_ptt", "rdp_auth", "seclayer_redteam", "seclayer_bola", "seclayer_api", "seclayer_webhook", "seclayer_dast", "seclayer_aggressive"]);
 
 export function isExploitStepTool(toolName: string, args: Record<string, unknown> = {}): boolean {
   if (toolName === "scan_url") return args["aggressive"] === true;

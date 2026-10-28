@@ -31,6 +31,7 @@ import { writeSafetyArtifacts } from "./safety.js";
 import { writeComplianceArtifacts } from "./compliance.js";
 import { extractNarrative } from "./narrative.js";
 import { buildEngagementMeta, renderReportHtml } from "./html.js";
+import { buildGradeSection, gradeFindings } from "./grading.js";
 
 export async function reportPhase(
   ctx: Ctx,
@@ -164,6 +165,19 @@ export async function reportPhase(
   }
   // Runner-computed facts are appended deterministically — never trusted to the model.
   reportMd += `\n\n---\n\n## Battery coverage (runner-computed)\n\n${batteryLine}\n`;
+  // The engagement grade: the embedded Seclayer anchored scoring engine
+  // is the runner's one grading voice (report/grading.ts) — deterministic,
+  // computed here from the final confirmed findings, never the model's.
+  {
+    const posture = gradeFindings(findings);
+    reportMd += `\n---\n\n${buildGradeSection(findings)}`;
+    ctx.events.append({
+      phase: "report",
+      actor: "runner",
+      action: "report_grade",
+      result: `Security grade ${posture.grade} (${posture.score}/100, ${posture.postureRating}) over ${posture.activeCount} confirmed finding(s) — Seclayer anchored scoring.`,
+    });
+  }
   // v0.21.0 nuclei: honest counting — template executions are variant-level
   // checks, printed whenever nuclei ran (not only full-battery), reported
   // separately from intents, never merged.
