@@ -137,7 +137,7 @@ describe('Fleet cap at the raised bounds', () => {
     // outright by the activation pool and its roster row lands as failed -
     // the throttle the override removes.
     const capped = await setup(Array.from({ length: 16 }, () => 'hang'), FLEET)
-    const admitted = []
+    const admitted: (Awaited<ReturnType<typeof spawn>> | undefined)[] = []
     for (const name of names) {
       try {
         admitted.push(await spawn(capped.ctx, capped.lead, name))
