@@ -16,6 +16,7 @@ import { handleFindings, handleProof } from "./routes/findings.js";
 import { handleCoverage, handleCompliance } from "./routes/coverage.js";
 import { handleAbort, handleEscalate, handleReverify, handleWatchProfiles, handleWatchTrigger } from "./routes/actions.js";
 import { engagementDir, type UiStore } from "./store.js";
+import { ENGAGEMENT_TOOLS } from "./engagement-tools.js";
 import { readEvents } from "../events.js";
 
 /** What a handler produced, instead of writing it to a socket. */
@@ -83,7 +84,7 @@ function byId(fn: (store: UiStore, res: ServerResponse, id: string) => void): To
   };
 }
 
-export const TOOLS: ToolDef[] = [
+const COCKPIT_TOOLS: ToolDef[] = [
   {
     name: "list_engagements",
     description: "List every engagement this console knows: live runs first, then history.",
@@ -283,5 +284,13 @@ export const TOOLS: ToolDef[] = [
     },
   },
 ];
+
+/**
+ * The full cockpit surface: the CLI-shaped tools above plus the
+ * chat-shaped engagement trio (engagement-tools.ts). One list, so the
+ * console chat and the desktop host's chat — both fed by mcp-endpoint.ts —
+ * see the same registry.
+ */
+export const TOOLS: ToolDef[] = [...COCKPIT_TOOLS, ...ENGAGEMENT_TOOLS];
 
 export const TOOLS_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
