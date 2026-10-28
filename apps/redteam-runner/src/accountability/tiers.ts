@@ -125,6 +125,10 @@ const TIER1_TOOLS = new Set([
  * Minimum tier for a tool call. Three tools are argument-sensitive:
  *  - scan_url: passive scan is Tier 0; aggressive=true runs the active test
  *    tier (injection, XSS, SSRF) → Tier 1.
+ *  - secscan_exec: depth=passive is Tier 0; depth=deep runs the embedded
+ *    engine's verification-gated active web app tests → Tier 1 (mirrors
+ *    scan_url; the verification-record refusal itself lives in the
+ *    dispatch handler, which can name what is missing).
  *  - msf_exec: search/suggest never fire → Tier 1; run fires exploits → Tier 2.
  *  - nuclei_exec: templates never fires (local template listing) → Tier 1;
  *    run executes templates against the target → Tier 2.
@@ -138,6 +142,9 @@ const TIER1_TOOLS = new Set([
 export function toolMinTier(toolName: string, args: Record<string, unknown> = {}): AutonomyTier {
   if (toolName === "scan_url") {
     return args["aggressive"] === true ? 1 : 0;
+  }
+  if (toolName === "secscan_exec") {
+    return args["depth"] === "deep" ? 1 : 0;
   }
   if (toolName === "msf_exec") {
     return args["action"] === "run" ? 2 : 1;
@@ -176,6 +183,7 @@ const EXPLOIT_STEP_TOOLS = new Set(["ssh_exec", "smb_exec", "winrm_exec", "smb_p
 
 export function isExploitStepTool(toolName: string, args: Record<string, unknown> = {}): boolean {
   if (toolName === "scan_url") return args["aggressive"] === true;
+  if (toolName === "secscan_exec") return args["depth"] === "deep";
   return EXPLOIT_STEP_TOOLS.has(toolName);
 }
 

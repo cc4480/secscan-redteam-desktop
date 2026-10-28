@@ -26,13 +26,14 @@ import { toolTargetHost } from "./target-host.js";
 export { RATE_LIMITED_TOOLS } from "./target-host.js";
 import { duplicateRefusal, recordCallOutcome } from "./duplicate-guard.js";
 import { handleMcpTools } from "./mcp.js";
+import { handleSecscanTools } from "./secscan.js";
 import { handleBookkeepingTools } from "./bookkeeping.js";
 import { handlePcAgentTools } from "./pc-agent.js";
 async function dispatchToolInner(ctx: Ctx, role: ActorRole, phase: EngagementPhase, call: ToolCallRequest): Promise<DispatchResult> {
   const args = call.arguments ?? {};
   ctx.actions++;
 
-  const handlers = [handleWebTools, handleHostTools, handleMsfTools, handleNucleiTools, handleNmapTools, handleXTool, handlePcAgentTools, handleMcpTools, handleBookkeepingTools];
+  const handlers = [handleWebTools, handleHostTools, handleMsfTools, handleNucleiTools, handleNmapTools, handleXTool, handlePcAgentTools, handleMcpTools, handleSecscanTools, handleBookkeepingTools];
   for (const h of handlers) {
     const r = await h(ctx, role, phase, call, args);
     if (r) return r;

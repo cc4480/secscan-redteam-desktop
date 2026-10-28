@@ -27,6 +27,7 @@ export const RATE_LIMITED_TOOLS = new Set([
   "http_probe",
   "burst_probe",
   "scan_url",
+  "secscan_exec",
   "ssh_exec",
   "smb_exec",
   "winrm_exec",
