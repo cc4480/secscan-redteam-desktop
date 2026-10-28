@@ -117,7 +117,7 @@ describe('buildProofSection — hostile finding ids stay inside poc/', () => {
     const evil = confirmedFinding({ id: '../../registry' })
     const normal = confirmedFinding({ id: 'F-1' })
     const section = buildProofSection(ctx, [evil, normal], new Map())
-    assert.ok(section.includes('Proof of exploitation'), 'proof section still renders')
+    assert.ok(section.markdown.includes('Proof of exploitation'), 'proof section still renders')
 
     const pocDir = join(dir, 'poc')
     const names = readdirSync(pocDir).sort()

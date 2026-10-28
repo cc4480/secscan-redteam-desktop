@@ -29,7 +29,9 @@ import { readEvents } from "../events.js";
 import { writeSafetyArtifacts } from "./safety.js";
 import { writeComplianceArtifacts } from "./compliance.js";
 import { extractNarrative } from "./narrative.js";
-import { buildEngagementMeta, renderReportHtml } from "./html.js";
+import { buildEngagementMeta } from "./html.js";
+import { renderEngagementReportHtml } from "./html/render.js";
+import { buildEngagementReportInput } from "./html/wire.js";
 import { buildGradeSection, gradeFindings } from "./grading.js";
 
 export async function reportPhase(
@@ -162,6 +164,9 @@ export async function reportPhase(
     ctx.operationNarrative = narrative;
     ctx.events.updateState({ operationNarrative: narrative });
   }
+  // Snapshot for the HTML renderer's executive-summary slot: the narrative
+  // before the runner-computed sections are appended to report.md below.
+  const narrativeSource = reportMd;
   // Runner-computed facts are appended deterministically — never trusted to the model.
   reportMd += `\n\n---\n\n## Battery coverage (runner-computed)\n\n${batteryLine}\n`;
   // The engagement grade: the embedded Seclayer anchored scoring engine
@@ -183,7 +188,8 @@ export async function reportPhase(
   const ncAny = nucleiCountLine(ctx.nuclei);
   if (ncAny) reportMd += `\n${ncAny}\n`;
   const pocBundleMap = new Map<string, PocBundle>();
-  reportMd += buildProofSection(ctx, findings, pocBundleMap);
+  const proofData = buildProofSection(ctx, findings, pocBundleMap);
+  reportMd += proofData.markdown;
   // v0.18.0 per-item verdicts: the item reconciliation section — every
   // battery item's disposition, derived from the ledger (audit log +
   // verdict tools), never hand-waved. Full ledger: item-verdicts.json.
@@ -222,7 +228,8 @@ export async function reportPhase(
         `See Honest limits.\n`;
     }
   }
-  reportMd += buildActivitySection(readEvents(ctx.events.dir, 0, 100000));
+  const reportEvents = readEvents(ctx.events.dir, 0, 100000);
+  reportMd += buildActivitySection(reportEvents);
   reportMd += await buildIntegrationsSection(ctx, findings, pocBundleMap);
   writeFileSync(join(ctx.events.dir, "report.md"), reportMd);
   // The HTML twin is the human-facing deliverable — self-contained, severity
@@ -241,12 +248,30 @@ export async function reportPhase(
     });
     writeFileSync(
       join(ctx.events.dir, "report.html"),
-      renderReportHtml({
-        title: "Penetration Test Report",
-        subtitle: `${ctx.input.mode === "red" ? "Full-knowledge" : "Black-box"} engagement against ${ctx.input.target}`,
-        meta,
-        markdown: reportMd,
-      }),
+      renderEngagementReportHtml(
+        buildEngagementReportInput({
+          ctx,
+          meta,
+          title: "Penetration Test Report",
+          findings,
+          narrativeMd: narrativeSource,
+          bundles: pocBundleMap,
+          proof: proofData,
+          cells: fbStatus.map(({ t, c, s }) => ({ target: t, category: c, state: s })),
+          totals: {
+            total: lsum.total,
+            confirmed: lsum.confirmed,
+            executedClean: lsum.executedClean,
+            killed: lsum.killed,
+            blocked: lsum.blocked,
+            na: lsum.na,
+            pending: lsum.pending,
+          },
+          planOnly: fbPlanOnly,
+          events: reportEvents,
+          haltedReason: opts.haltedReason,
+        }),
+      ),
     );
     ctx.events.append({ phase: "report", actor: "runner", action: "report_html_written", result: "HTML report written alongside report.md." });
   } catch (err) {
