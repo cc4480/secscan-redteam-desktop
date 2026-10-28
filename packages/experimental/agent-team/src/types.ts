@@ -220,6 +220,14 @@ export interface Config {
    * wide one Team may grow. Set 1 to restore Lead-only creation.
    */
   readonly maxMemberDepth?: number
+  /**
+   * Maximum live helpers one member may have created at once: a member's direct
+   * children on the roster that have not failed, counted per creator, Lead
+   * included. `maxMembers` caps the Team as a whole; this caps how much of that
+   * width any one member may consume for its own slice. Unset leaves spawning
+   * bounded only by `maxMembers` and `maxMemberDepth`.
+   */
+  readonly maxChildrenPerMember?: number
   /** Maximum non-deleted tasks retained by one Team. */
   readonly maxTasks?: number
   /** Maximum queued-minus-delivered messages for one target member. */

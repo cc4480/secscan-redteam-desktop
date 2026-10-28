@@ -50,6 +50,7 @@ kind: "package-reference"
 |---|---|---|
 | `maxMembers` | `16` | 一支团队最多可创建的 teammate 数，包括失败的 |
 | `maxMemberDepth` | `2` | 成员的嵌套深度上限：Lead 为 `0`，Lead 创建的成员为 `1`；达到上限的成员不能再创建成员 |
+| `maxChildrenPerMember` | *(未设置)* | 单个成员同时可拥有的存活 helper 上限，按创建者计数，不含创建失败的；未设置表示没有单成员上限 |
 | `maxTasks` | `256` | 任务板上最多的活动任务数 |
 | `maxPendingMessagesPerMember` | `64` | 单个成员最多可排队的消息数 |
 | `maxMessageBytes` | `65,536` | 单条发送消息的最大尺寸 |

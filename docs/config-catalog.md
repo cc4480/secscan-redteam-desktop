@@ -743,6 +743,14 @@ export interface Config {
    * wide one Team may grow. Set 1 to restore Lead-only creation.
    */
   readonly maxMemberDepth?: number
+  /**
+   * Maximum live helpers one member may have created at once: a member's direct
+   * children on the roster that have not failed, counted per creator, Lead
+   * included. `maxMembers` caps the Team as a whole; this caps how much of that
+   * width any one member may consume for its own slice. Unset leaves spawning
+   * bounded only by `maxMembers` and `maxMemberDepth`.
+   */
+  readonly maxChildrenPerMember?: number
   /** Maximum non-deleted tasks retained by one Team. */
   readonly maxTasks?: number
   /** Maximum queued-minus-delivered messages for one target member. */
@@ -4300,4 +4308,5 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 - `@deepseek-ai/dsh-win32-process` ([`packages/subprocess/win32-process/src/index.ts`](../packages/subprocess/win32-process/src/index.ts))
 - `@secscan/redteam-auth-gate` ([`packages/redteam/auth-gate/src/index.ts`](../packages/redteam/auth-gate/src/index.ts))
 - `@secscan/redteam-desktop-bundle` ([`packages/redteam/desktop-bundle/src/index.ts`](../packages/redteam/desktop-bundle/src/index.ts))
+- `@secscan/redteam-foundry-gate` ([`packages/redteam/foundry-gate/src/index.ts`](../packages/redteam/foundry-gate/src/index.ts))
 - `@secscan/redteam-llm-router` ([`packages/redteam/llm-router/src/index.ts`](../packages/redteam/llm-router/src/index.ts))

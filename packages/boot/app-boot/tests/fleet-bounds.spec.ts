@@ -22,6 +22,7 @@ const ROOT = fileURLToPath(new URL('../../../..', import.meta.url))
 const FLEET_CONFIG = {
   maxMembers: 100,
   maxMemberDepth: 4,
+  maxChildrenPerMember: 25,
   maxTasks: 4096,
   maxPendingMessagesPerMember: 64,
   maxMessageBytes: 65536,

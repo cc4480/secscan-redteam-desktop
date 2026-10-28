@@ -50,6 +50,7 @@ With the tools installed, the model does the rest on request — for example, "c
 |---|---|---|
 | `maxMembers` | `16` | Maximum teammates a team may ever create, including failed ones |
 | `maxMemberDepth` | `2` | Maximum member nesting depth: the Lead is `0`, a member the Lead created is `1`, and a member at the limit may not create another |
+| `maxChildrenPerMember` | *(unset)* | Maximum live helpers one member may have created at once, counted per creator, failed creations excluded; unset means no per-member bound |
 | `maxTasks` | `256` | Maximum active tasks on the board |
 | `maxPendingMessagesPerMember` | `64` | Maximum queued messages for one member |
 | `maxMessageBytes` | `65,536` | Maximum size of one sent message |

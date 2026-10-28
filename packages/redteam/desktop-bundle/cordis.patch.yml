@@ -204,6 +204,13 @@
         # and the wide cap above is the real limit on engagement size: a failure
         # inside a very long chain would consume names and seats for nothing.
         maxMemberDepth: 4
+        # The per-member bound sits inside those two: no member - Lead included -
+        # may have more than 25 live helpers of its own at once, so one wide
+        # slice cannot consume the whole roster width on its own. A creation
+        # that failed never produced a helper and does not count against its
+        # creator. A member that genuinely needs more than its share raises it
+        # with the Lead instead of routing spawns through a peer.
+        maxChildrenPerMember: 25
         # Board sized for the 100-member fleet: 1024 was the 64-member sizing
         # (16 tasks per member). 4096 keeps that headroom per member and more
         # (~41 per member), so the board refuses work (TEAM_TASK_LIMIT) only

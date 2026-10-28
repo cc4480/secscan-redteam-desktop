@@ -175,8 +175,10 @@ record of it. Every teammate, including a helper a specialist raises for its own
 slice, is a named entry on the one roster with a unique name, so the audit trail
 holds no matter how the team grows.
 
-Spawning is bounded twice, and both bounds are enforced by the Team service
-rather than left to your judgement. The team has a member cap. Nesting has a
+Spawning is bounded, and the bounds are enforced by the Team service
+rather than left to your judgement. The team has a member cap, and each
+member has a cap of its own: no member may have more than 25 live helpers
+at once, so one slice cannot consume the whole roster. Nesting has a
 depth limit: the Lead is depth 0, each specialist the Lead spawns is depth 1,
 and a helper one of those raises is depth 2. A member already at the limit
 cannot create helpers at all — \`spawn_teammate\` refuses the call. So a

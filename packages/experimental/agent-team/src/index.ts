@@ -60,14 +60,22 @@ export class TeamService extends Service {
   static Config: z<Config> = z.object({
     maxMembers: z.number().step(1).min(1).default(DEFAULT_MAX_MEMBERS),
     maxMemberDepth: z.number().step(1).min(1).default(DEFAULT_MAX_MEMBER_DEPTH),
+    // No default on purpose: an unset per-member cap means unbounded, so the
+    // key stays absent unless a deployment layer sets it.
+    maxChildrenPerMember: z.number().step(1).min(1),
     maxTasks: z.number().step(1).min(1).default(DEFAULT_MAX_TASKS),
     maxPendingMessagesPerMember: z.number().step(1).min(1).default(DEFAULT_MAX_PENDING_MESSAGES),
     maxMessageBytes: z.number().step(1).min(1).default(DEFAULT_MAX_MESSAGE_BYTES),
     disposalTimeoutMs: z.number().step(1).min(1).default(DEFAULT_DISPOSAL_TIMEOUT_MS),
   })
 
-  /** Validated deployment limits used by every Team operation. */
-  private readonly config: Required<Config>
+  /**
+   * Validated deployment limits used by every Team operation. Every limit
+   * resolves to a value except the per-member cap, which may stay unset -
+   * unset is its meaning (no per-member bound), not a missing default.
+   */
+  private readonly config: Required<Omit<Config, 'maxChildrenPerMember'>>
+    & { readonly maxChildrenPerMember: number | undefined }
 
   private readonly activity: TeamActivity
   private readonly lifecycle: TeamRuntimeLifecycle
@@ -81,6 +89,9 @@ export class TeamService extends Service {
     this.config = {
       maxMembers: positiveLimit('maxMembers', config.maxMembers ?? DEFAULT_MAX_MEMBERS),
       maxMemberDepth: positiveLimit('maxMemberDepth', config.maxMemberDepth ?? DEFAULT_MAX_MEMBER_DEPTH),
+      maxChildrenPerMember: config.maxChildrenPerMember === undefined
+        ? undefined
+        : positiveLimit('maxChildrenPerMember', config.maxChildrenPerMember),
       maxTasks: positiveLimit('maxTasks', config.maxTasks ?? DEFAULT_MAX_TASKS),
       maxPendingMessagesPerMember: positiveLimit(
         'maxPendingMessagesPerMember',
@@ -96,7 +107,14 @@ export class TeamService extends Service {
     this.activity = new TeamActivity()
     this.lifecycle = new TeamRuntimeLifecycle(this.config.disposalTimeoutMs)
     this.journal = new TeamJournal(ctx, (root) => { this.activity.notify(TeamId(root.id)) })
-    this.roster = new TeamRoster(ctx, this.journal, this.lifecycle, this.config.maxMembers, this.config.maxMemberDepth)
+    this.roster = new TeamRoster(
+      ctx,
+      this.journal,
+      this.lifecycle,
+      this.config.maxMembers,
+      this.config.maxMemberDepth,
+      this.config.maxChildrenPerMember,
+    )
     this.mailbox = new TeamMailbox(
       ctx,
       this.journal,

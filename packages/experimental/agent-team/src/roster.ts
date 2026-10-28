@@ -106,6 +106,8 @@ export class TeamRoster {
    * @param lifecycle - shared Team runtime admission cutoff.
    * @param maxMembers - maximum immutable roster entries per Team.
    * @param maxMemberDepth - deepest a member may sit before it may no longer create helpers.
+   * @param maxChildrenPerMember - maximum live helpers one member may have created
+   *   at once, or undefined for no per-member bound.
    */
   constructor(
     private readonly ctx: Context,
@@ -113,6 +115,7 @@ export class TeamRoster {
     private readonly lifecycle: TeamRuntimeLifecycle,
     private readonly maxMembers: number,
     private readonly maxMemberDepth: number,
+    private readonly maxChildrenPerMember?: number,
   ) {}
 
   /**
@@ -308,9 +311,10 @@ export class TeamRoster {
     // engagement and makes the Lead the bottleneck. What creation records is
     // unchanged - every helper is a roster entry under a unique name, with the
     // member that created it recorded alongside - so this widens WHO may create,
-    // not what the audit trail holds. The two bounds below keep that widening
+    // not what the audit trail holds. The bounds below keep that widening
     // finite: `maxMembers` caps how wide the Team grows, `maxMemberDepth` caps
-    // how deep the creating recurses.
+    // how deep the creating recurses, and a configured `maxChildrenPerMember`
+    // caps how many live helpers any one member may have raised.
     const signal = AbortSignal.any([request.signal, this.lifecycle.signal])
     signal.throwIfAborted()
     const root = membership.root
@@ -348,6 +352,25 @@ export class TeamRoster {
           throw new TeamError(
             `member "${membership.name}" is at nesting depth ${depth} of ${this.maxMemberDepth} and may not create helpers`,
             'TEAM_MEMBER_DEPTH',
+          )
+        }
+      }
+      // The per-member bound counts this creator's own direct children, so
+      // one member's wide slice cannot consume the roster width the global
+      // cap reserves for the whole Team. A child counts while it is live -
+      // provisioning or active; a creation that FAILED never produced a
+      // helper and does not consume its creator's quota. Rows written
+      // before `spawnedBy` existed were created by the Lead, as in `list`.
+      // The count runs inside this transaction, over the same durable rows
+      // the global check reads, so concurrent spawns cannot overrun it.
+      if (this.maxChildrenPerMember !== undefined) {
+        const liveChildren = state.members.filter(member => member.phase !== 'failed'
+          && (member.spawnedBy === membership.name
+            || (membership.name === 'lead' && member.spawnedBy === undefined))).length
+        if (liveChildren >= this.maxChildrenPerMember) {
+          throw new TeamError(
+            `member "${membership.name}" already has ${liveChildren} live helpers, at the per-member limit of ${this.maxChildrenPerMember}`,
+            'TEAM_MEMBER_CHILD_LIMIT',
           )
         }
       }
