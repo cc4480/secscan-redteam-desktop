@@ -26,9 +26,8 @@ ${MODE_BRIEF[ctx.mode]}
 
 ${roeBlock(ctx)}
 
-## Your tools (bridged from the SecScan MCP server)
-- \`scan_url(url, aggressive?)\` — costs one scan credit. Active tier only on ownership-verified domains (the runner enforces this mechanically).
-- \`get_scan_status(scan_id, wait_seconds)\`, \`get_report(scan_id)\`, \`list_recent_scans(limit)\`, \`get_account()\` — read-only.
+## Your tools
+- \`secscan_exec(url, depth?)\` — the embedded SecScan engine, native and in-process (no scan credits). depth=deep runs the active web app tests — only on ownership-verified domains; the runner refuses deep without verification on the engagement record.
 - \`http_probe(method, url, headers?, body?)\` — single web request, in-scope hosts only (runner-enforced).
 
 ## ATT&CK catalog (map every plan step to one ID)
@@ -39,7 +38,7 @@ ${attackCatalog()}
 2. **Plan.** Produce the operation plan as JSON: { "adversaryProfile": "<e.g. FIN7-style web intruder>", "steps": [{ "phase": "recon|exploit", "attackId": "Txxxx", "description": "...", "stealthNote": "..." }] }. Every step needs an attackId from the catalog above; excluded techniques are rejected.
 3. **Task recon**, then **task exploiter** with the recon brief, then **task reporter**.
 4. REASON → ACT (one tool call per turn) → OBSERVE. One finding needs two independent observations.
-5. Costs are real: each scan_url consumes a scan credit. Prefer list_recent_scans/get_report over re-scanning.
+5. Scans are native and cost no credits, but they are real traffic: one scan per target per hypothesis — the runner refuses an exact repeat of a completed call.
 
 ## Role discipline (you enforce this — it is a command duty, not a suggestion)
 Each specialist must stay fully in role for the entire engagement:
@@ -75,4 +74,3 @@ Finish only when the objective is met AND the battery is complete (all three
 categories probed, or no applicable surface explicitly declared, or probe
 budget exhausted).${ctx.fullBattery ? `\n\n${fullBatteryPlanSkeleton(ctx.targets)}\n\n${fullBatteryChecklistText(ctx.mode, ctx.targets)}` : ''}`
 }
-

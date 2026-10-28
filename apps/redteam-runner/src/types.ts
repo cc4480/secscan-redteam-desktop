@@ -136,7 +136,7 @@ export interface EngagementEvent {
   engagementId: string;
   phase: EngagementPhase;
   actor: ActorRole;
-  /** Short machine-readable action, e.g. "scan_url", "http_probe", "plan_step". */
+  /** Short machine-readable action, e.g. "secscan_exec", "http_probe", "plan_step". */
   action: string;
   /** MITRE ATT&CK technique ID when the action maps to one. */
   attackId?: string;

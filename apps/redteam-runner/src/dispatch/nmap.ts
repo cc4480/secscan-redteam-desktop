@@ -81,7 +81,7 @@ export async function handleNmapTools(
   // Scope gate — fail closed BEFORE any packet. The executor deliberately does
   // NOT re-check (its contract says the dispatch layer owns the ROE host check),
   // so this is the one and only place it happens. Every other host-touching
-  // tool (prober, scan_url, host-exec, nuclei, msf) validates here; nmap must
+  // tool (prober, secscan_exec, host-exec, nuclei, msf) validates here; nmap must
   // not be the exception, or an agent can point a port sweep at any host/CIDR.
   if (action === "scan") {
     const scope = validateHostTarget(host, ctx.hosts);

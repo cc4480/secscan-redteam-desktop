@@ -66,7 +66,7 @@ export const COMMANDS: readonly CommandSpec[] = [
     usage: "/scan <target> [family]",
     phases: ["recon", "exploit", "report"],
     targets: ["webapp"],
-    tools: ["scan_url", "get_report", "http_probe", "nuclei_exec", "nmap_exec"],
+    tools: ["secscan_exec", "http_probe", "nuclei_exec", "nmap_exec"],
     tier: 1,
     requiresApproval: false,
     artifacts: ["report.html", "report.md"],
@@ -78,7 +78,7 @@ export const COMMANDS: readonly CommandSpec[] = [
     phases: ["recon", "exploit", "report"],
     targets: ["webapp", "windows", "linux"],
     tools: [
-      "scan_url", "get_report", "http_probe", "burst_probe", "nmap_exec", "nuclei_exec",
+      "secscan_exec", "http_probe", "burst_probe", "nmap_exec", "nuclei_exec",
       "sqlmap_exec", "ffuf_exec", "gobuster_exec", "nikto_exec",
       "ssh_exec", "smb_exec", "winrm_exec", "ad_enum",
     ],

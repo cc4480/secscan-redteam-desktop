@@ -1,7 +1,7 @@
 /**
  * Scope enforcement in the nmap and xtool dispatch handlers.
  *
- * This pins a CRITICAL fix. The web prober, scan_url, host-exec, nuclei and msf
+ * This pins a CRITICAL fix. The web prober, host-exec, nuclei and msf
  * all validated the target against ctx.hosts before any packet; nmap_exec and
  * the four network xtools (sqlmap/ffuf/gobuster/nikto) did NOT — their executors
  * even documented that "the dispatch layer owns the ROE host check", a check

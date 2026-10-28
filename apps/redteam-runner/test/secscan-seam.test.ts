@@ -4,7 +4,8 @@
  * The dispatch handler fronts a byte-frozen vendored engine, so these
  * tests pin the seam's own decisions — never the engine's behavior:
  * the finding mapping is verbatim, depth is classified on the autonomy
- * ladder like scan_url's aggressive flag, the target host resolves for
+ * ladder (the one the retired scan_url wrapper's aggressive flag used),
+ * the target host resolves for
  * the rate limiter, and the verification-gated deep depth refuses when
  * the engagement record carries no owner verification.
  */
@@ -69,7 +70,7 @@ describe("secscan seam — finding mapping", () => {
 });
 
 describe("secscan seam — depth on the autonomy ladder", () => {
-  it("classifies passive as Tier 0 and deep as Tier 1, mirroring scan_url", () => {
+  it("classifies passive as Tier 0 and deep as Tier 1 (the retired scan_url ladder)", () => {
     assert.equal(toolMinTier("secscan_exec", {}), 0);
     assert.equal(toolMinTier("secscan_exec", { depth: "passive" }), 0);
     assert.equal(toolMinTier("secscan_exec", { depth: "deep" }), 1);

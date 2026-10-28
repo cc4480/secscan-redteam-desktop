@@ -101,7 +101,7 @@ describe("executor tool surface", () => {
   });
 
   it("carries the tools an operator actually needs on command", () => {
-    for (const n of ["nuclei_exec", "msf_exec", "http_probe", "burst_probe", "scan_url", "ssh_exec", "ad_enum"]) {
+    for (const n of ["nuclei_exec", "msf_exec", "http_probe", "burst_probe", "ssh_exec", "ad_enum"]) {
       assert.ok(EXEC_TOOLS_BY_NAME.has(n), `missing ${n}`);
     }
   });

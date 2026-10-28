@@ -116,19 +116,15 @@ describe("toolMinTier", () => {
     // Tier 0 — read-only
     ["http_probe", {}, 0],
     ["burst_probe", {}, 0],
-    ["get_scan_status", {}, 0],
-    ["get_report", {}, 0],
-    ["list_recent_scans", {}, 0],
-    ["get_account", {}, 0],
     ["query_registry", {}, 0],
     ["update_target_map", {}, 0],
     ["record_finding", {}, 0],
     ["record_killed", {}, 0],
     ["abort_engagement", {}, 0],
-    ["scan_url", {}, 0],
-    ["scan_url", { aggressive: false }, 0],
+    ["secscan_exec", {}, 0],
+    ["secscan_exec", { depth: "passive" }, 0],
     // Tier 1 — single validated steps
-    ["scan_url", { aggressive: true }, 1],
+    ["secscan_exec", { depth: "deep" }, 1],
     ["ssh_exec", {}, 1],
     ["smb_exec", {}, 1],
     ["winrm_exec", {}, 1],
@@ -158,8 +154,8 @@ describe("toolMinTier", () => {
     for (const t of ["ssh_exec", "smb_exec", "winrm_exec", "smb_pth", "krb_ptt", "rdp_auth"]) {
       assert.ok(isExploitStepTool(t, {}), `${t} consumes the chain budget`);
     }
-    assert.ok(isExploitStepTool("scan_url", { aggressive: true }));
-    assert.ok(!isExploitStepTool("scan_url", {}));
+    assert.ok(isExploitStepTool("secscan_exec", { depth: "deep" }));
+    assert.ok(!isExploitStepTool("secscan_exec", {}));
     for (const t of ["winrm_probe", "ad_enum", "nfs_enum", "ssh_agent_audit", "rdp_shadow_prep", "http_probe"]) {
       assert.ok(!isExploitStepTool(t, {}), `${t} observes; it does not consume the budget`);
     }
@@ -178,7 +174,7 @@ describe("checkTierAllows", () => {
   it("Tier 0 allows recon, refuses exploitation", () => {
     const s = tierState(0);
     assert.equal(checkTierAllows(s, "http_probe", {}, "h"), undefined);
-    assert.equal(checkTierAllows(s, "scan_url", {}, "h"), undefined);
+    assert.equal(checkTierAllows(s, "secscan_exec", {}, "h"), undefined);
     const d = checkTierAllows(s, "ssh_exec", {}, "h");
     assert.ok(d?.includes("DENIED by autonomy tier"), d ?? "no denial");
     assert.ok(d?.includes("Tier 1"), d ?? "no tier named");

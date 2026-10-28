@@ -1,44 +1,7 @@
 /**
- * SecScan MCP + web prober tool definitions.
+ * Web prober tool definitions.
  */
 import type { JsonSchemaTool } from "@secscan/redteam-llm-router";
-
-export const MCP_TOOLS: JsonSchemaTool[] = [
-  {
-    name: "scan_url",
-    description:
-      "Run a SecScan assessment of a URL. Costs one scan credit. aggressive=true runs the active test tier (injection, XSS, SSRF…) — allowed only on ownership-verified domains; the runner denies it otherwise.",
-    parameters: {
-      type: "object",
-      properties: { url: { type: "string" }, aggressive: { type: "boolean" } },
-      required: ["url"],
-    },
-  },
-  {
-    name: "get_scan_status",
-    description: "Poll a scan until it completes. wait_seconds up to 60; returns the report when done.",
-    parameters: {
-      type: "object",
-      properties: { scan_id: { type: "string" }, wait_seconds: { type: "number" } },
-      required: ["scan_id"],
-    },
-  },
-  {
-    name: "get_report",
-    description: "Fetch a full past report (read-only, free).",
-    parameters: { type: "object", properties: { scan_id: { type: "string" } }, required: ["scan_id"] },
-  },
-  {
-    name: "list_recent_scans",
-    description: "Recall previous scans (read-only, free). Prefer this over re-scanning.",
-    parameters: { type: "object", properties: { limit: { type: "number" } } },
-  },
-  {
-    name: "get_account",
-    description: "Check scan credits remaining (read-only, free).",
-    parameters: { type: "object", properties: {} },
-  },
-];
 
 export const PROBE_TOOL: JsonSchemaTool = {
   name: "http_probe",
@@ -75,5 +38,3 @@ export const BURST_PROBE_TOOL: JsonSchemaTool = {
     required: ["url"],
   },
 };
-
-export const READ_TOOLS = MCP_TOOLS.filter((t) => t.name !== "scan_url");

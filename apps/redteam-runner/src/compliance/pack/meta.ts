@@ -97,7 +97,7 @@ export interface CompliancePack {
 /** The tools the runner can put in play — named exactly as the agents know them. */
 export const METHODOLOGY_TOOLS: string[] = [
   "http_probe (web/API reconnaissance)",
-  "scan_url (SecScan assessment via MCP)",
+  "secscan_exec (SecScan assessment, embedded engine)",
   "ssh_exec (Linux command execution)",
   "smb_exec (SMB share/directory enumeration)",
   "winrm_exec (Windows command execution)",

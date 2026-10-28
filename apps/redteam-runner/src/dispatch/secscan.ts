@@ -9,7 +9,8 @@
  *    passive → "basic", deep → "deep". The engine's tier is scan DEPTH,
  *    not the runner's autonomy tier — dispatch enforces autonomy tiers
  *    mechanically (tiers.ts classifies secscan_exec argument-sensitively,
- *    mirroring scan_url: passive Tier 0, deep Tier 1).
+ *    on the ladder the retired scan_url wrapper used: passive Tier 0,
+ *    deep Tier 1).
  *  - depth=deep is VERIFICATION-GATED. The deep tier's active web app
  *    tests (path traversal, JS secret scanning, deep crawl) fire only
  *    when owner verification is on the engagement record

@@ -116,19 +116,8 @@ export class McpClient {
       .join("\n");
   }
 
-  // Convenience wrappers (all read-only except scan_url / start_domain_verification).
-  scanUrl(url: string, aggressive = false): Promise<string> {
-    return this.callTool("scan_url", aggressive ? { url, aggressive: true } : { url });
-  }
-  getScanStatus(scanId: string, waitSeconds = 60): Promise<string> {
-    return this.callTool("get_scan_status", { scan_id: scanId, wait_seconds: waitSeconds });
-  }
-  getReport(scanId: string): Promise<string> {
-    return this.callTool("get_report", { scan_id: scanId });
-  }
-  listRecentScans(limit = 10): Promise<string> {
-    return this.callTool("list_recent_scans", { limit });
-  }
+  // Convenience wrappers for the domain-verification surface (all read-only
+  // except start_domain_verification, which opens a verification challenge).
   listVerifiedDomains(): Promise<string> {
     return this.callTool("list_verified_domains", {});
   }
@@ -137,8 +126,5 @@ export class McpClient {
   }
   checkDomainVerification(domain: string): Promise<string> {
     return this.callTool("check_domain_verification", { domain });
-  }
-  getAccount(): Promise<string> {
-    return this.callTool("get_account", {});
   }
 }

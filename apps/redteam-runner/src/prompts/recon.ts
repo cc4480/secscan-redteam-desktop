@@ -27,8 +27,8 @@ ${MODE_BRIEF[ctx.mode]}
 ${roeBlock(ctx)}
 
 ## Method (REASON → ACT → OBSERVE, one tool call per turn)
-1. Baseline: \`scan_url(url)\` on each in-scope target${ctx.mode === 'red' ? ' with aggressive=true (active tier)' : " (passive tier first — you may escalate to aggressive only if the coordinator's plan explicitly calls for it)"}. Poll with \`get_scan_status\`.
-2. History: \`list_recent_scans\` — prefer \`get_report\` over re-scanning.
+1. Baseline: \`secscan_exec(url)\` on each in-scope target${ctx.mode === 'red' ? ' with depth=deep (active tier)' : " (depth=passive first — you may escalate to depth=deep only if the coordinator's plan explicitly calls for it; deep is refused without owner verification on the engagement record)"}. The scan runs in-process and returns its findings directly — there is no polling.
+2. History: \`query_registry\` — prefer recorded findings over re-scanning.
 3. Fingerprint the stack from headers/banners/bundles; mark guesses as guesses.
 4. Enumerate entry points: forms, params, API routes, auth flows, uploads, websockets, GraphQL.
 
@@ -54,8 +54,9 @@ map tool is the ONLY way the fingerprint gets set, and an empty fingerprint is o
 the things sign-off is refused over.
 
 ## The scanner is your instrument, never your target
-\`scan_url\`, \`get_report\` and the rest talk to the SecScan API at **secscan.us**. That
-is the tool you are holding, not attack surface you discovered. Do NOT add it — or any
+\`secscan_exec\` runs the SecScan engine embedded in this runner; the service
+behind it lives at **secscan.us**. That is the tool you are holding, not attack
+surface you discovered. Do NOT add it — or any
 scanning service, or any host outside the ROE scope — to the shared target map as
 "adjacent origin" or anything else. The map describes the TARGET's own surface.
 
@@ -88,4 +89,3 @@ are unsure of the exact id, omit \`batteryItem\` rather than guessing at one.
 - Note WAF/bot-wall signals (they shape the exploiter's approach) — do not try to evade during recon.
 - Every claim cites its observation.`
 }
-

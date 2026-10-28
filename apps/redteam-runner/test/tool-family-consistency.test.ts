@@ -59,7 +59,7 @@ describe("tool-family consistency", () => {
   it("lists no rate-limited tool that the dispatcher cannot route", () => {
     // Every rate-limited name must be a tool the runner actually exposes, or the
     // entry is dead and a real tool may be missing its limiter in its place.
-    const exposed = new Set([...HOST_TOOLS.map((t) => t.name), "http_probe", "burst_probe", "scan_url", "secscan_exec", "seclayer_redteam", "seclayer_bola", "seclayer_api", "seclayer_webhook", "seclayer_dast", "seclayer_aggressive", "msf_exec", "nuclei_exec", "nmap_exec", "sqlmap_exec", "ffuf_exec", "gobuster_exec", "nikto_exec"]);
+    const exposed = new Set([...HOST_TOOLS.map((t) => t.name), "http_probe", "burst_probe", "secscan_exec", "seclayer_redteam", "seclayer_bola", "seclayer_api", "seclayer_webhook", "seclayer_dast", "seclayer_aggressive", "msf_exec", "nuclei_exec", "nmap_exec", "sqlmap_exec", "ffuf_exec", "gobuster_exec", "nikto_exec"]);
     for (const name of RATE_LIMITED_TOOLS) {
       assert.ok(exposed.has(name), `${name} is rate-limited but is not a tool this runner exposes (typo?)`);
     }

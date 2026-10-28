@@ -204,7 +204,7 @@ export async function readinessReport(env: NodeJS.ProcessEnv = process.env): Pro
   const secrets: ReadinessItem[] = [
     {
       id: "secscan_token",
-      label: "SecScan MCP token (scan_url / get_report)",
+      label: "SecScan MCP token (ownership verification)",
       state: (env["SECSCAN_MCP_TOKEN"] ?? "").trim() ? "ready" : "missing",
       fix: "Set SECSCAN_MCP_TOKEN (Secure Vault → lands in the environment). Create one at https://secscan.us/settings.",
       required: true,

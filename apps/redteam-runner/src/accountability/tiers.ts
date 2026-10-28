@@ -90,10 +90,6 @@ export function requireTier2ProductionApproval(tier: AutonomyTier, environment: 
 
 /** Tool names that never touch a target: pure bookkeeping / control. */
 const TIER0_TOOLS = new Set([
-  "get_scan_status",
-  "get_report",
-  "list_recent_scans",
-  "get_account",
   "query_registry",
   "update_target_map",
   "record_finding",
@@ -132,12 +128,10 @@ const TIER1_TOOLS = new Set([
 
 /**
  * Minimum tier for a tool call. Three tools are argument-sensitive:
- *  - scan_url: passive scan is Tier 0; aggressive=true runs the active test
- *    tier (injection, XSS, SSRF) → Tier 1.
  *  - secscan_exec: depth=passive is Tier 0; depth=deep runs the embedded
- *    engine's verification-gated active web app tests → Tier 1 (mirrors
- *    scan_url; the verification-record refusal itself lives in the
- *    dispatch handler, which can name what is missing).
+ *    engine's verification-gated active web app tests → Tier 1 (the ladder
+ *    the retired scan_url wrapper used; the verification-record refusal
+ *    itself lives in the dispatch handler, which can name what is missing).
  *  - msf_exec: search/suggest never fire → Tier 1; run fires exploits → Tier 2.
  *  - nuclei_exec: templates never fires (local template listing) → Tier 1;
  *    run executes templates against the target → Tier 2.
@@ -149,9 +143,6 @@ const TIER1_TOOLS = new Set([
  *    can name the tier that would allow it.
  */
 export function toolMinTier(toolName: string, args: Record<string, unknown> = {}): AutonomyTier {
-  if (toolName === "scan_url") {
-    return args["aggressive"] === true ? 1 : 0;
-  }
   if (toolName === "secscan_exec") {
     return args["depth"] === "deep" ? 1 : 0;
   }
@@ -191,7 +182,6 @@ export function toolMinTier(toolName: string, args: Record<string, unknown> = {}
 const EXPLOIT_STEP_TOOLS = new Set(["ssh_exec", "smb_exec", "winrm_exec", "smb_pth", "krb_ptt", "rdp_auth", "seclayer_redteam", "seclayer_bola", "seclayer_api", "seclayer_webhook", "seclayer_dast", "seclayer_aggressive"]);
 
 export function isExploitStepTool(toolName: string, args: Record<string, unknown> = {}): boolean {
-  if (toolName === "scan_url") return args["aggressive"] === true;
   if (toolName === "secscan_exec") return args["depth"] === "deep";
   return EXPLOIT_STEP_TOOLS.has(toolName);
 }

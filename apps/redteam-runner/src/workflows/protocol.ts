@@ -30,7 +30,7 @@ export const PROTOCOL_ROLES: readonly ProtocolRole[] = [
   {
     id: "recon",
     mandate: "Map the surface without touching it.",
-    may: ["scan_url/get_report", "http_probe GET/HEAD", "nmap/nuclei recon-safe actions", "write the shared target map"],
+    may: ["secscan_exec", "http_probe GET/HEAD", "nmap/nuclei recon-safe actions", "write the shared target map"],
     never: ["craft payloads", "exploit", "confirm by touching", "report a guess as a fact"],
     outputs: ["target map entries", "fingerprint", "attack-surface brief"],
   },

@@ -17,7 +17,6 @@ import { ledgerSummary, serializeLedger } from "../coverage/items.js";
 import { type Ctx } from "../context.js";
 import { agentLoop, promptCtx } from "../agents.js";
 import { extractJsonBlock } from "../util.js";
-import { READ_TOOLS } from "../tools.js";
 import { batteryStatusLine } from "../coverage/cells.js";
 import { PocBundle } from "../proof/index.js";
 import { resolveOperatorName } from "../accountability/index.js";
@@ -143,7 +142,7 @@ export async function reportPhase(
       "report",
       reporterPrompt(promptCtx(ctx)),
       `Write the client report now.\n\nAuthorization: ${ctx.verificationProof}\n\nOperation plan: ${JSON.stringify(ctx.plan)}\n\nShared verdicts this engagement — confirmed (${ctx.liveFindings.length}):\n${ctx.liveFindings.map((f) => `- [${f.severity}] ${f.title} (${f.attackId}${f.vulnClass ? `, ${f.vulnClass}` : ""}): ${f.evidence}`).join("\n") || "(none)"}\nKilled hypotheses (${ctx.killedLive.length}):\n${ctx.killedLive.map((k) => `- ${k.hypothesis} → ${k.killingObservation}`).join("\n") || "(none)"}\nRegistry hits consulted: ${ctx.registryHits.length}. Target fingerprint: ${JSON.stringify(ctx.fingerprint)}.\n\n${batteryLine}\n\nRecon brief:\n${reconBrief.slice(0, 4000)}\n\nExploitation summary:\n${exploitSummary.slice(0, 4000)}\n\nProof of exploitation is appended mechanically by the runner from the audit log — do not invent PoC details, marker values, or reproduction steps in your narrative; describe findings only from the evidence given.\n\nEnd the report with a JSON block: \`\`\`json {"findings": [{"id":"F-1","severity":"low","title":"...","attackIds":["T1190"],"evidence":"...","fix":"...","retest":"...","status":"confirmed"}]} \`\`\``,
-      READ_TOOLS,
+      [],
       4,
     );
     const parsed = extractJsonBlock(reportMd) as { findings?: Finding[] } | null;

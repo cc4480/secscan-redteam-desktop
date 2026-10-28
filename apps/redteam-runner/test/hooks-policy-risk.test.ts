@@ -114,7 +114,7 @@ describe("risk profiles and arbitration", () => {
   });
 
   it("benign trajectories outrank destructive ones", () => {
-    const benign = scoreTrajectory(["get_engagement", "list_recent_scans", "query_registry"]);
+    const benign = scoreTrajectory(["get_engagement", "list_verified_domains", "query_registry"]);
     const destructive = scoreTrajectory(["msf_exec", "ssh_exec"]);
     assert.ok(benign.score > destructive.score, `${benign.score} vs ${destructive.score}`);
     assert.equal(benign.tier, "auto");

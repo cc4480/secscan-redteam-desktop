@@ -66,10 +66,6 @@ export const RISK_PROFILES: Record<string, RiskProfile> = {
   task_status: p("none", 10),
   task_complete: p("none", 10, ["task closed"]),
   query_registry: p("none", 10),
-  get_report: p("none", 10, ["read of a stored report"]),
-  get_scan_status: p("none", 10),
-  list_recent_scans: p("none", 10),
-  get_account: p("none", 10),
   list_verified_domains: p("none", 10),
   variant_list: p("none", 10),
   watch_profiles: p("none", 10),
@@ -82,7 +78,6 @@ export const RISK_PROFILES: Record<string, RiskProfile> = {
 
   // Network probes: external blast, no target change, fully reversible.
   http_probe: p("external", 10, ["HTTP request to target"], "no rollback needed", ["network"]),
-  scan_url: p("external", 10, ["scan of target issued"], "stop the scan", ["network"]),
   send_message: p("none", 10, ["message queued"]),
   spawn_teammate: p("session", 10, ["teammate created"]),
   team_task_create: p("none", 10, ["task created"]),

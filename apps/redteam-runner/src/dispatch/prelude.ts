@@ -4,20 +4,6 @@
 import { type Ctx } from "../context.js";
 import { type BatteryCategory } from "../battery.js";
 import { type TargetId } from "../targets.js";
-import { checkAuthorization } from "../gate.js";
-
-export async function recheckVerified(ctx: Ctx): Promise<boolean> {
-  // Cache the authorize-phase proof for 5 minutes; re-check after that.
-  if (ctx.verifiedAt && Date.now() - Date.parse(ctx.verifiedAt) < 5 * 60_000) return true;
-  const v = await checkAuthorization(
-    ctx.domain,
-    { mcpEndpoint: ctx.config.mcpEndpoint, mcpToken: ctx.config.mcpToken },
-    ctx.deps.verify,
-    { allowLocalSandbox: ctx.config.localSandbox },
-  );
-  if (v.allowed) ctx.verifiedAt = new Date().toISOString();
-  return v.allowed;
-}
 
 
 /** Optional string arg: trimmed, or undefined when absent/blank. */

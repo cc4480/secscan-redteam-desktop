@@ -26,7 +26,6 @@ const XTOOL_TOOL_NAMES = new Set(XTOOLS.map((t) => `${t.id}_exec`));
 export const RATE_LIMITED_TOOLS = new Set([
   "http_probe",
   "burst_probe",
-  "scan_url",
   "secscan_exec",
   "ssh_exec",
   "smb_exec",

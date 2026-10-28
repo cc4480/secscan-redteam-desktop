@@ -2,7 +2,7 @@
  * Tool dispatcher: router + safety wrapper (v0.19.0 refactor — extracted from dispatch.ts).
  *
  * dispatchToolInner routes each tool call to its handler module (web, host,
- * msf, mcp, bookkeeping) in the original order. dispatchTool wraps it with
+ * msf, bookkeeping) in the original order. dispatchTool wraps it with
  * the v0.13.0 safety wrapper: rate limiting + per-target auto-halt +
  * autonomy-tier enforcement, all mechanical.
  */
@@ -25,7 +25,6 @@ import { handleXTool } from "./xtool.js";
 import { toolTargetHost } from "./target-host.js";
 export { RATE_LIMITED_TOOLS } from "./target-host.js";
 import { duplicateRefusal, recordCallOutcome } from "./duplicate-guard.js";
-import { handleMcpTools } from "./mcp.js";
 import { handleSecscanTools } from "./secscan.js";
 import { handleSeclayerTools } from "./seclayer.js";
 import { handleSeclayerDastTool } from "./seclayer-dast.js";
@@ -35,7 +34,7 @@ async function dispatchToolInner(ctx: Ctx, role: ActorRole, phase: EngagementPha
   const args = call.arguments ?? {};
   ctx.actions++;
 
-  const handlers = [handleWebTools, handleHostTools, handleMsfTools, handleNucleiTools, handleNmapTools, handleXTool, handlePcAgentTools, handleMcpTools, handleSecscanTools, handleSeclayerTools, handleSeclayerDastTool, handleBookkeepingTools];
+  const handlers = [handleWebTools, handleHostTools, handleMsfTools, handleNucleiTools, handleNmapTools, handleXTool, handlePcAgentTools, handleSecscanTools, handleSeclayerTools, handleSeclayerDastTool, handleBookkeepingTools];
   for (const h of handlers) {
     const r = await h(ctx, role, phase, call, args);
     if (r) return r;

@@ -1,7 +1,7 @@
 /**
  * MCP surface for the runner's EXECUTOR tools (v0.30.0).
  *
- * The 13 tools in mcp-tools.ts drive ENGAGEMENTS. These 32 drive the tools
+ * The 13 tools in mcp-tools.ts drive ENGAGEMENTS. These 27 drive the tools
  * INSIDE a running engagement: nuclei_exec, msf_exec, http_probe, ssh_exec,
  * ad_enum, query_registry, and the rest. Without them an operator could start
  * an engagement and read its results but never reach the tooling itself, which
@@ -20,7 +20,7 @@
  * schema, drifts the moment someone edits tools/*.ts.
  */
 
-import { MCP_TOOLS, READ_TOOLS, PROBE_TOOL, BURST_PROBE_TOOL } from "../tools/web.js";
+import { PROBE_TOOL, BURST_PROBE_TOOL } from "../tools/web.js";
 import { HOST_TOOLS } from "../tools/host.js";
 import { MSF_EXEC_TOOL } from "../tools/msf.js";
 import { NUCLEI_EXEC_TOOL } from "../tools/nuclei.js";
@@ -93,9 +93,9 @@ function bindToEngagement(t: JsonSchemaTool): ExecToolDef {
 /**
  * All executor tools, reachable only against a live engagement.
  *
- * The composed sets in tools/compose.ts overlap — MCP_TOOLS and READ_TOOLS both
- * carry get_scan_status / get_report / list_recent_scans / get_account — so they
- * are concatenated here and de-duplicated by name, first definition winning.
+ * The composed sets in tools/compose.ts overlap — the same tool can appear
+ * in more than one phase set — so they are concatenated here and
+ * de-duplicated by name, first definition winning.
  * Exposing a name twice makes tools/call ambiguous (whichever Map entry was
  * written last silently wins) and reports a tool count that is not real.
  *
@@ -111,8 +111,6 @@ function collect(): JsonSchemaTool[] {
   const out: JsonSchemaTool[] = [];
   const seen = new Set<string>();
   for (const t of [
-    ...MCP_TOOLS,
-    ...READ_TOOLS,
     PROBE_TOOL,
     BURST_PROBE_TOOL,
     ...HOST_TOOLS,
