@@ -33,7 +33,7 @@
  * left unset too: no finding is promoted to the engine's PROVEN tier
  * (which would require its anchored evidence bundle verbatim).
  */
-import { deriveSecurityPosture, bannerForPosture, type SecurityPosture } from "#seclayer/server/scoring.js";
+import { deriveSecurityPosture, bannerForPosture, type PostureBanner, type SecurityPosture } from "#seclayer/server/scoring.js";
 import type { Finding as SeclayerFinding, Severity } from "#seclayer/src/types.js";
 import type { Finding } from "../types.js";
 
@@ -60,6 +60,13 @@ export function runnerFindingToSeclayerFinding(f: Finding): SeclayerFinding {
 export function gradeFindings(findings: Finding[]): SecurityPosture {
   const confirmed = findings.filter((f) => f.status === "confirmed");
   return deriveSecurityPosture(confirmed.map(runnerFindingToSeclayerFinding));
+}
+
+/** The posture banner over the confirmed findings — the same banner
+ * buildGradeSection renders into report.md, exposed for the HTML cover. */
+export function gradeBanner(findings: Finding[]): PostureBanner | null {
+  const confirmed = findings.filter((f) => f.status === "confirmed");
+  return bannerForPosture(confirmed.map(runnerFindingToSeclayerFinding));
 }
 
 /** The report.md section: deterministic, computed by the runner (never

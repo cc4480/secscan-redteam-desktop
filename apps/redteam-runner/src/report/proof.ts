@@ -9,13 +9,25 @@
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { readEvents } from '../events.js'
-import { PocBundle, buildNegativeProof, buildPocBundle, bundleFileName, bundleSummary } from '../proof/index.js'
+import { PocBundle, buildNegativeProof, buildPocBundle, bundleFileName, bundleSummary, type NegativeProof } from '../proof/index.js'
 import { type Finding } from '../types.js'
 import { TARGET_PROFILES, activeTargets, type TargetId } from '../targets.js'
 import { type Ctx } from '../context.js'
 
-export function buildProofSection(ctx: Ctx, findings: Finding[], pocBundleMap: Map<string, PocBundle>): string {
+/** The proof section's output: the markdown for report.md plus the
+ * structured records the HTML renderer consumes (the per-finding
+ * no-bundle reasons and the negative proofs), so both surfaces state
+ * the same facts from the same computation. */
+export interface ProofSectionResult {
+  markdown: string
+  noBundleReasons: Map<string, string>
+  negative: NegativeProof[]
+}
+
+export function buildProofSection(ctx: Ctx, findings: Finding[], pocBundleMap: Map<string, PocBundle>): ProofSectionResult {
   let section = ''
+  const noBundleReasons = new Map<string, string>()
+  let negativeProofs: NegativeProof[] = []
   // v0.14.0 proof of exploitation: PoC bundles derived MECHANICALLY from the
   // audit log (events.jsonl) — one per CONFIRMED finding with a genuine
   // validation signal (marker echo = execution tier; read-only evidence
@@ -76,9 +88,11 @@ export function buildProofSection(ctx: Ctx, findings: Finding[], pocBundleMap: M
         bundleLines.push(`- ${bundleSummary(bundle)}`)
       } else {
         noBundleLines.push(`- **${f.id}** — ${f.title}: no PoC bundle — ${reason}`)
+        noBundleReasons.set(f.id, reason ?? 'no validation signal in the audit log')
       }
     }
     const negative = buildNegativeProof(ctx.killedLive, proofEvents, proofSecrets)
+    negativeProofs = negative
     section += '\n\n---\n\n## Proof of exploitation (runner-computed)\n\n'
     section += 'Each bundle below was derived mechanically from the audit log (events.jsonl) — the exact ' +
       'redacted steps, in order, that validated the finding. Full bundles: `poc/<finding-id>.json`.\n\n'
@@ -117,5 +131,5 @@ export function buildProofSection(ctx: Ctx, findings: Finding[], pocBundleMap: M
       result: `PoC bundle generation failed (report.md unaffected): ${(err as Error).message}`,
     })
   }
-  return section
+  return { markdown: section, noBundleReasons, negative: negativeProofs }
 }
