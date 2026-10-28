@@ -47,7 +47,11 @@ describe('GET /api/models', () => {
       const meta = data.providers.find(p => p.id === 'meta')
       assert.ok(meta, 'meta provider is registered')
       assert.equal(meta.configured, true)
-      assert.equal(data.seats.length, 4)
+      assert.equal(data.seats.length, 5)
+      assert.ok(
+        data.seats.some(s => s.role === 'architect'),
+        'the architect seat is reported',
+      )
       for (const seat of data.seats) {
         assert.equal(seat.provider, 'meta')
         assert.equal(seat.model, 'muse-spark-1.3')

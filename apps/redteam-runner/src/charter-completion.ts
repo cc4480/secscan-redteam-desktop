@@ -59,6 +59,7 @@ const AGENT_TO_CHARTER: Readonly<Record<AgentRole, CharterRole>> = {
   recon: 'recon',
   exploiter: 'exploiter-operator',
   reporter: 'reporter',
+  architect: 'coordinator',
 }
 
 const engagementCache = new WeakMap<Ctx, CharterEngagement>()

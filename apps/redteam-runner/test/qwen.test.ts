@@ -160,7 +160,7 @@ describe('role model policy (v0.6)', () => {
       model: 'deepseek-v4-pro',
       reasoningEffort: 'high',
     })
-    for (const role of ['coordinator', 'recon', 'reporter'] as const) {
+    for (const role of ['coordinator', 'recon', 'reporter', 'architect'] as const) {
       assert.equal(ROLE_MODEL_POLICY[role].provider, 'deepseek')
       assert.equal(ROLE_MODEL_POLICY[role].model, 'deepseek-flash')
     }

@@ -99,7 +99,7 @@ export interface LlmProvider {
 }
 
 /** Agent roles the red-team uses. */
-export type AgentRole = 'coordinator' | 'recon' | 'exploiter' | 'reporter'
+export type AgentRole = 'coordinator' | 'recon' | 'exploiter' | 'reporter' | 'architect'
 
 export interface RoleRoute {
   provider: string

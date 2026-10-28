@@ -49,7 +49,7 @@ export const name = 'secscan-redteam'
 export const inject = ['tools', 'systemPrompt']
 
 const MODEL_POLICY_LINE = `Member model policy: ${ROLE_MODEL_POLICY.coordinator.model} for ` +
-  `coordinator/recon/reporter; ${ROLE_MODEL_POLICY.exploiter.model} for exploiter reasoning.`
+  `coordinator/recon/reporter/architect; ${ROLE_MODEL_POLICY.exploiter.model} for exploiter reasoning.`
 
 /** The specialists the Lead must spawn, generated from the profile. */
 function rosterLines(): string {
@@ -126,7 +126,7 @@ here, on this page, not on another one. When it completes, the Lead calls
 
 ### The team
 
-An engagement is lead + recon + exploiter + reporter. The Lead owns the plan,
+An engagement is lead + recon + exploiter + reporter + architect. The Lead owns the plan,
 the phases, scope discipline and the final assembly, and never performs a
 specialist's work in their stead — a finding the Lead made itself, off the
 board, is not auditable.
@@ -148,8 +148,13 @@ responsibility:
   business-readable document: executive summary, posture, per-finding impact,
   evidence, reproduction and fix, authorization statement, retest checklist.
   Writes for the client's CTO, not for hackers.
+- **architect** — the consistency layer. Reviews the team's own work — the
+  recon brief, the exploiter's findings, the draft report — for structural
+  mismatch, shared terminology, evidence-format discipline, and coverage gaps,
+  and requires corrections to propagate before the report is assembled. Never
+  touches the target: no scans, no probes, no payloads.
 
-Spawn all three with \`spawn_teammate\`, passing each brief VERBATIM as the
+Spawn all four with \`spawn_teammate\`, passing each brief VERBATIM as the
 \`prompt\` argument — these briefs are the role definitions and must not be
 paraphrased, shortened or improved:
 
