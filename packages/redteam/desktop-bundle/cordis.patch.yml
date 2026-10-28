@@ -70,6 +70,19 @@
 - id: workflow-ptc
   disabled: true
 
+# The roster cap below is not the only fleet bound: the subagent service
+# (inserted bare by dsh-base) defaults maxActiveSubagents to 8, and its
+# activation pool refuses - does not queue - a spawn that would exceed it
+# (ACTIVATION_LIMIT_REACHED; the roster row lands as failed). A 100-member
+# roster would fail every spawn past 8 concurrently running members. Raise
+# the active cap to the roster width so the whole fleet can work
+# concurrently; the bounds that then bite first are the model provider's
+# rate and token limits and the host's CPU and memory. The setting is
+# volatile: an operator can still lower it live in Settings.
+- id: subagent
+  config:
+    maxActiveSubagents: 100
+
 - insert:
     - id: mcp-secscan
       name: '@deepseek-ai/dsh-mcp-client'
@@ -163,13 +176,22 @@
         # second and third exploiter per host, dedicated verifiers re-testing a
         # peer's findings, parallel report authors.
         #
-        # 64 is a safety valve on API cost and machine load, not a statement about
-        # how many specialists an engagement wants. Raise it in this row to go
-        # wider. The audit trail does not depend on this number: every member,
-        # however spawned, is still an entry on the one roster. (A teammate whose
-        # creation FAILED still consumes a name permanently, which is part of why
-        # the valve exists at all.)
-        maxMembers: 64
+        # These bounds are mirrored in the experimental agent-team-profile
+        # bundle's agent-team row. Patch composition resolves a repeated plugin
+        # id to the LAST layer that inserts it, so two different values would
+        # make the effective ceiling depend on bundle order; identical values
+        # keep the fleet bounds the same in every order.
+        #
+        # 100 is the widest fleet the operator runs: one member per host, shard
+        # or source on a large surface, with seats left for verifiers and report
+        # authors. It is a runaway guard, not the working limit - at 100 wide,
+        # the bounds that bite first are the model provider's rate and token
+        # limits and the host's CPU and memory, both outside this file. Raise it
+        # in this row to go wider. The audit trail does not depend on this
+        # number: every member, however spawned, is still an entry on the one
+        # roster. (A teammate whose creation FAILED still consumes a name
+        # permanently, which is part of why the guard exists at all.)
+        maxMembers: 100
         # Depth is the other half of the bound: maxMembers caps how WIDE the team
         # grows, maxMemberDepth caps how DEEP. The Lead is depth 0, each specialist
         # the Lead spawns is depth 1, and a helper one of those raises is depth 2.
@@ -182,7 +204,12 @@
         # and the wide cap above is the real limit on engagement size: a failure
         # inside a very long chain would consume names and seats for nothing.
         maxMemberDepth: 4
-        maxTasks: 1024
+        # Board sized for the 100-member fleet: 1024 was the 64-member sizing
+        # (16 tasks per member). 4096 keeps that headroom per member and more
+        # (~41 per member), so the board refuses work (TEAM_TASK_LIMIT) only
+        # after the roster itself is full - the member cap stays the single
+        # width bound an operator reasons about.
+        maxTasks: 4096
         maxPendingMessagesPerMember: 64
         maxMessageBytes: 65536
         disposalTimeoutMs: 5000
