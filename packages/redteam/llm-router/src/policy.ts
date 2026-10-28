@@ -10,6 +10,7 @@
  *   exploiter   → deepseek / deepseek-v4-pro  (strongest reasoning: hypotheses,
  *                                              exploit chains, pivot decisions)
  *   reporter    → deepseek / deepseek-flash   (fast write-up)
+ *   architect   → deepseek / deepseek-flash   (consistency review of team output)
  *
  * Rationale: recon burns the most tokens on the least thinking (listing
  * endpoints, reading headers, paging scan history) — flash keeps engagements
@@ -36,10 +37,10 @@ import {
 /**
  * Selects the provider family for every agent role.
  *
- * `REDTEAM_LLM_PROVIDER=local` routes all four roles to the local
+ * `REDTEAM_LLM_PROVIDER=local` routes all five roles to the local
  * OpenAI-compatible endpoint (llama.cpp / Ollama) so an engagement can run with
  * no cloud API at all; `REDTEAM_LOCAL_MODEL` names the model that server
- * exposes. `REDTEAM_LLM_PROVIDER=meta` routes all four roles to the Meta
+ * exposes. `REDTEAM_LLM_PROVIDER=meta` routes all five roles to the Meta
  * Model API (META_ROLE_MODEL_POLICY). With the selector unset, a configured
  * Meta key (MODEL_API_KEY / META_API_KEY) seats the fleet on Meta — the
  * fleet's provider since 2026-10-26 — and only a keyless environment falls
@@ -59,7 +60,7 @@ function metaKeyConfigured(env: NodeJS.ProcessEnv): boolean {
 /**
  * Meta Model API seats (operator decisions, 2026-10-26: Meta models from
  * here on out, seated in this harness; the Red Team runs on Muse Spark).
- * Spark takes all four fleet seats — it is the brain the operator chose for
+ * Spark takes all five fleet seats — it is the brain the operator chose for
  * the complicated work, exploiter included. Wonder stays registered for
  * explicit complete() calls, small one-off jobs, and A/B lanes against
  * these seats; it is not seated by default. The charter prefix is
@@ -71,6 +72,7 @@ export const META_ROLE_MODEL_POLICY: Record<AgentRole, RoleRoute> = {
   recon: { provider: META_PROVIDER_ID, model: META_MODELS.spark, reasoningEffort: 'low' },
   exploiter: { provider: META_PROVIDER_ID, model: META_MODELS.spark, reasoningEffort: 'high' },
   reporter: { provider: META_PROVIDER_ID, model: META_MODELS.spark },
+  architect: { provider: META_PROVIDER_ID, model: META_MODELS.spark },
 }
 
 export const ROLE_MODEL_POLICY: Record<AgentRole, RoleRoute> = {
@@ -78,10 +80,11 @@ export const ROLE_MODEL_POLICY: Record<AgentRole, RoleRoute> = {
   recon: { provider: 'deepseek', model: DEEPSEEK_MODELS.flash, reasoningEffort: 'low' },
   exploiter: { provider: 'deepseek', model: DEEPSEEK_MODELS.pro, reasoningEffort: 'high' },
   reporter: { provider: 'deepseek', model: DEEPSEEK_MODELS.flash },
+  architect: { provider: 'deepseek', model: DEEPSEEK_MODELS.flash },
 }
 
 /** Roles in a fixed, dependency-safe order for policy display. */
-export const ROLE_ORDER: AgentRole[] = ['coordinator', 'recon', 'exploiter', 'reporter']
+export const ROLE_ORDER: AgentRole[] = ['coordinator', 'recon', 'exploiter', 'reporter', 'architect']
 
 /**
  * Resolve the role→provider/model map, honouring the offline switch.
@@ -107,5 +110,5 @@ export function roleModelPolicy(env: NodeJS.ProcessEnv = process.env): Record<Ag
     )
   }
   const route: RoleRoute = { provider: LOCAL_PROVIDER_ID, model }
-  return { coordinator: route, recon: route, exploiter: route, reporter: route }
+  return { coordinator: route, recon: route, exploiter: route, reporter: route, architect: route }
 }

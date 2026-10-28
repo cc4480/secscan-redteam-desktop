@@ -59,6 +59,22 @@ describe("apply", () => {
     assert.match(text, /A scan request starts a runner engagement via `mcp__redteam__engagement_launch`/);
   });
 
+  it("rosters four spawned teammates, the architect among them", () => {
+    const { sections } = captureApply();
+    const text = flat(sections[0]!.text);
+    assert.match(text, /lead \+ recon \+ exploiter \+ reporter \+ architect/);
+    assert.match(text, /Spawn all four with `spawn_teammate`/);
+    // The generated roster lists every member except the coordinator (the
+    // Lead's own brief), each with its verbatim execution prompt as Brief.
+    assert.doesNotMatch(text, /- `coordinator` —/);
+    assert.match(text, /- `architect` — Consistency layer/);
+    assert.match(text, /Brief: You are the consistency layer/);
+    // The generated DAG seats the architect's review between the exploiter's
+    // findings and the reporter's final assembly.
+    assert.match(text, /`review` — Architecture and consistency review \(owner: architect; after recon, exploit\)/);
+    assert.match(text, /`report` — Client report \(owner: reporter; after exploit, review\)/);
+  });
+
   it("no longer teaches the service scan as the recon baseline", () => {
     const { sections } = captureApply();
     const text = flat(sections[0]!.text);

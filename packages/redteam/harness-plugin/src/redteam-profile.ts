@@ -55,6 +55,7 @@ export const REDTEAM_PROFILE: RedTeamProfile = {
   description:
     'AI red-team for authorized web-app pentests. Coordinator runs the engagement; ' +
     'recon maps the surface; exploiter reasons over findings and invents dynamic tests; ' +
+    'architect reviews the team\'s work for consistency and coverage; ' +
     'reporter writes the client-ready report. All active testing requires proven domain ownership.',
 
   protocol:
@@ -114,6 +115,20 @@ export const REDTEAM_PROFILE: RedTeamProfile = {
         'receipt that proves it, the negative control, and a concrete fix. PROVEN and DETECTED are never ' +
         'blurred; no claim outruns its evidence by one degree.',
     },
+    {
+      name: 'architect',
+      role: 'Consistency layer. Reviews the team\'s outputs — recon brief, exploiter findings, draft report — for structural mismatch, shared terminology, evidence-format discipline, and coverage gaps. No target contact: reviews plans, consistency, and evidence only.',
+      provider: ROLE_MODEL_POLICY.architect.provider,
+      model: ROLE_MODEL_POLICY.architect.model,
+      reasoning_effort: ROLE_MODEL_POLICY.architect.reasoningEffort,
+      promptFile: 'agents/architect.md',
+      executionPrompt:
+        'You are the consistency layer. Hold the team to one taxonomy, one evidence format, one ' +
+        'shape: recon\'s brief must be usable by the exploiter, the exploiter\'s findings usable by ' +
+        'the reporter, the report faithful to its proof. Flag drift and coverage gaps the moment ' +
+        'you see them and require the correction to propagate. You never touch the target — you ' +
+        'review plans, consistency, and evidence.',
+    },
   ],
 
   tasks: [
@@ -151,13 +166,27 @@ export const REDTEAM_PROFILE: RedTeamProfile = {
       dependencies: ['recon'],
     },
     {
+      id: 'review',
+      subject: 'Architecture and consistency review',
+      description:
+        'Review the recon brief and the exploiter\'s findings as recorded on the board: one ' +
+        'taxonomy, one evidence format, handoffs each receiver can use without re-asking. Flag ' +
+        'structural mismatches and coverage gaps — surfaces nobody owns, battery items nobody ' +
+        'answered, hypotheses that died unrecorded — as corrections to their owners, and clear ' +
+        'the findings for final assembly only when the corrections land. No target contact: ' +
+        'this review reads the team\'s work, never the target.',
+      assignee: 'architect',
+      dependencies: ['recon', 'exploit'],
+    },
+    {
       id: 'report',
       subject: 'Client report',
       description:
         'Assemble the client-ready report: executive summary, posture score, per-finding business ' +
-        'impact + evidence + fix, authorization statement, and retest checklist.',
+        'impact + evidence + fix, authorization statement, and retest checklist. Final assembly ' +
+        'waits on the architect\'s consistency review clearing the findings.',
       assignee: 'reporter',
-      dependencies: ['exploit'],
+      dependencies: ['exploit', 'review'],
     },
   ],
 }
