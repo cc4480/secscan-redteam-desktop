@@ -19,6 +19,7 @@ import { buildItemLedger } from "../coverage/items.js";
 import { fireSlack, reportPhase } from "../report.js";
 import { inTestWindow, scopeHosts } from "../gate.js";
 import { safeEngagementId } from "../util.js";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { authorizePhase } from "./authorize.js";
 import { planPhase } from "./plan.js";
@@ -29,6 +30,14 @@ import { resolveConfig } from "./config.js";
 import { coordinatorSignOff } from "./signoff.js";
 import { resolveVariantCap } from "../variants/index.js";
 import { captureEngagementTrajectory } from "../harness2/trajectory.js";
+import {
+  MemoryError,
+  commitMemoryForRun,
+  deriveEngagementScope,
+  injectExploitMemory,
+  injectStartMemory,
+  openEngagementMemory,
+} from "../memory/index.js";
 
 import { type RunOptions } from "./run-options.js";
 
@@ -105,7 +114,17 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
 
   // The registry: load, or seed with the v0.3.x secscan.us engagement data on first run.
   const registryPath = config.registryPath;
-  const registry: VulnerabilityRegistry = loadRegistryFile(registryPath) ?? seedRegistry();
+  const loadedRegistry = loadRegistryFile(registryPath);
+  // Q-MEMTIER §8 row 1: a registry file that EXISTS but does not load is
+  // corrupt or wrong-version — fail loud naming the path, before seeding
+  // can overwrite the only copy. (Absent file → seed, unchanged.)
+  if (loadedRegistry === null && existsSync(registryPath)) {
+    throw new MemoryError(
+      "REGISTRY_UNREADABLE",
+      `findings registry at ${registryPath} exists but could not be loaded (corrupt or wrong version) — refusing to seed over it`,
+    );
+  }
+  const registry: VulnerabilityRegistry = loadedRegistry ?? seedRegistry();
   saveRegistryFile(registryPath, registry);
 
   const ctx: Ctx = {
@@ -171,6 +190,12 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
     deniedStreak: 0,
   };
 
+  // Q-MEMTIER moment 1 (§7.1): open the engagement memory store right
+  // after the registry load, before any agent acts — a corrupt store
+  // stops the run at the same fail-fast altitude as the checks above.
+  // No scope exists yet, so nothing is recalled here.
+  ctx.memory = openEngagementMemory(ctx, { root: config.memoryRoot, engagementDir: dir, deps: deps.memory });
+
   // v0.30.0: publish this context so the console and the MCP bridge can invoke
   // the executor tools (nuclei_exec, msf_exec, http_probe, …) on demand while
   // the engagement runs. Registered here — before any agent acts — so the tools
@@ -215,19 +240,31 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
   // artifacts from whatever work completed before the halt.
   let brief = "";
   let summary = "";
+  // Hoisted (Q-MEMTIER §2.3): the finally block attaches the memory
+  // commit receipt (result.memory) before the return completes.
+  let result: EngagementResult | undefined;
   try {
     const verdict = await authorizePhase(ctx);
     if (!verdict.allowed) {
-      return { engagementId, status: "blocked", blockedReason: verdict.reason, findings: [] };
+      result = { engagementId, status: "blocked", blockedReason: verdict.reason, findings: [] };
+      return result;
     }
+    // Q-MEMTIER moment 2 (§7.1): derive the verified scope and assemble
+    // the start pack — after authorization, before planning. Throws
+    // MEMORY_SCOPE_UNVERIFIED when the record carries no proof.
+    deriveEngagementScope(ctx);
+    injectStartMemory(ctx);
     await planPhase(ctx);
     await coordinatorSignOff(ctx, "plan→recon", `Operation plan:\n${JSON.stringify(ctx.plan, null, 1)}`);
     void fireSlack(ctx, { kind: "phase", phase: "recon" });
     brief = await reconPhase(ctx);
+    // Q-MEMTIER moment 3 (§7.1): the refresh pack — after recon, with
+    // the fingerprint set, before the recon→exploit sign-off.
+    const refreshPack = injectExploitMemory(ctx);
     await coordinatorSignOff(
       ctx,
       "recon→exploit",
-      `Recon brief:\n${brief.slice(0, 3000)}\n\nShared target map (${ctx.targetMap.length} entries):\n${ctx.targetMap.map((t) => `- ${t.method} ${t.area}${t.authState ? ` [${t.authState}]` : ""}${t.attackId ? ` ${t.attackId}` : ""}`).join("\n") || "(empty)"}\nRegistry hits consulted: ${ctx.registryHits.length}. Fingerprint: ${JSON.stringify(ctx.fingerprint)}`,
+      `Recon brief:\n${brief.slice(0, 3000)}\n\nShared target map (${ctx.targetMap.length} entries):\n${ctx.targetMap.map((t) => `- ${t.method} ${t.area}${t.authState ? ` [${t.authState}]` : ""}${t.attackId ? ` ${t.attackId}` : ""}`).join("\n") || "(empty)"}\nRegistry hits consulted: ${ctx.registryHits.length}. Fingerprint: ${JSON.stringify(ctx.fingerprint)}\nMemory refresh: ${refreshPack.survivors.length} units surfaced (${[...new Set(refreshPack.survivors.map((s) => s.tier))].join(", ") || "none"}), receipt ${refreshPack.receiptId}`,
     );
     summary = await exploitPhase(ctx, brief);
     void fireSlack(ctx, { kind: "phase", phase: "exploit" });
@@ -240,7 +277,8 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
     void fireSlack(ctx, { kind: "phase", phase: "report" });
     events.updateState({ status: "complete", phase: "done" });
     events.append({ phase: "done", actor: "runner", action: "engagement_complete", result: `Complete. ${findings.length} findings.` });
-    return { engagementId, status: "complete", reportPath: join(dir, "report.md"), findings };
+    result = { engagementId, status: "complete", reportPath: join(dir, "report.md"), findings };
+    return result;
   } catch (err) {
     const reason = err instanceof HaltError ? err.message : `unexpected error: ${(err as Error).message}`;
     events.updateState({ status: "halted", phase: "halted", blockedReason: reason });
@@ -259,11 +297,21 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
     } catch (reportErr) {
       events.append({ phase: "halted", actor: "runner", action: "halt_report_failed", result: `Could not write halt artifacts: ${(reportErr as Error).message}` });
     }
-    return { engagementId, status: "halted", blockedReason: reason, reportPath, findings };
+    result = { engagementId, status: "halted", blockedReason: reason, reportPath, findings };
+    return result;
   } finally {
     unregisterLive(engagementId);
     // H2-P1a: additive trajectory/metrics capture for every outcome; guarded so it never throws into the run (tokens: see TOKEN_CAPTURE_STATUS).
     captureEngagementTrajectory({ engagementDir: dir, engagementId, target: input.target, targetIds: input.targets, ctx, events });
+    // Q-MEMTIER §7.2: the two-phase memory commit runs AFTER trajectory
+    // capture (the archive copies the trajectory/metrics/run files). A
+    // Phase-1 archive failure (MemoryArchiveError) replaces the return
+    // by design; Phase-2 failures land on the receipt, never throw.
+    const memoryReceipt = commitMemoryForRun(ctx, {
+      status: result?.status ?? "halted",
+      ...(result?.blockedReason ? { haltReason: result.blockedReason } : {}),
+    });
+    if (memoryReceipt && result) result.memory = memoryReceipt;
     // v0.23.0: no blind save here. Every verdict persists atomically via transactRegistryFile at write time; a whole-file save of this engagement's in-memory copy would clobber verdicts transacted by a concurrent engagement.
   }
 }
