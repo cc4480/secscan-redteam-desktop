@@ -1,8 +1,8 @@
 /**
  * Tool dispatcher: router + safety wrapper (v0.19.0 refactor — extracted from dispatch.ts).
  *
- * dispatchToolInner routes each tool call to its handler module (web, host,
- * msf, bookkeeping) in the original order. dispatchTool wraps it with
+ * dispatchToolInner (dispatch/handlers.ts) routes each tool call to its
+ * handler module in the original order. dispatchTool wraps it with
  * the v0.13.0 safety wrapper: rate limiting + per-target auto-halt +
  * autonomy-tier enforcement, all mechanical.
  */
@@ -17,31 +17,10 @@ import { recordItemAttempt } from "./verdicts.js";
 import { checkVariantCap, recordVariantExecution } from "../variants/index.js";
 import { postDispatchHooks, preDispatchGate } from "./policy-gate.js";
 import { checkScopeGate } from "./scope-gate.js";
-import { handleWebTools } from "./web.js";
-import { handleHostTools } from "./host.js";
-import { handleMsfTools } from "./msf.js";
-import { handleNucleiTools } from "./nuclei.js";
-import { handleNmapTools } from "./nmap.js";
-import { handleXTool } from "./xtool.js";
 import { toolTargetHost } from "./target-host.js";
 export { RATE_LIMITED_TOOLS } from "./target-host.js";
 import { duplicateRefusal, recordCallOutcome } from "./duplicate-guard.js";
-import { handleSecscanTools } from "./secscan.js";
-import { handleSeclayerTools } from "./seclayer.js";
-import { handleSeclayerDastTool } from "./seclayer-dast.js";
-import { handleBookkeepingTools } from "./bookkeeping.js";
-import { handlePcAgentTools } from "./pc-agent.js";
-async function dispatchToolInner(ctx: Ctx, role: ActorRole, phase: EngagementPhase, call: ToolCallRequest): Promise<DispatchResult> {
-  const args = call.arguments ?? {};
-  ctx.actions++;
-
-  const handlers = [handleWebTools, handleHostTools, handleMsfTools, handleNucleiTools, handleNmapTools, handleXTool, handlePcAgentTools, handleSecscanTools, handleSeclayerTools, handleSeclayerDastTool, handleBookkeepingTools];
-  for (const h of handlers) {
-    const r = await h(ctx, role, phase, call, args);
-    if (r) return r;
-  }
-  return { result: `DENIED: unknown tool ${call.name}`, repairable: `unknown tool "${call.name}"` };
-}
+import { dispatchToolInner } from "./handlers.js";
 
 /**
  * v0.24.0: mid-run tier changes. The operator may raise/lower the tier via

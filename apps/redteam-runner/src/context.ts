@@ -23,6 +23,7 @@ import { NmapExecutor } from './nmap/index.js'
 import { type ItemVerdict } from './coverage/items.js'
 import { type MemoryEngagementState } from './memory/types.js'
 import { type MemoryDeps } from './memory/lifecycle.js'
+import { type BridgeClientLike } from './dispatch/bridge-client.js'
 import { type PolicyRules } from './policy/rules.js'
 import { type ScopeGuard } from './safety/scope-guard.js'
 import { type HookRegistry } from './hooks/index.js'
@@ -43,6 +44,13 @@ export interface RunnerDeps {
   nmapExecutor?: NmapExecutor
   /** Injectable for tests (default: real memory store/pack/commit from memory/lifecycle.ts). */
   memory?: MemoryDeps
+  /**
+   * Injectable for tests (Q-BRIDGE-TOOLS; default: Builder A's bridge
+   * client from src/bridge, resolved lazily by
+   * dispatch/bridge-client.ts). The fleet surface's only bridge seam:
+   * offering and dispatch both resolve through it.
+   */
+  bridgeClient?: BridgeClientLike
 }
 
 /** One entry in the shared target map (recon-written, whole-team-read). */

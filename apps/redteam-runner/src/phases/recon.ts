@@ -10,6 +10,7 @@ import { collectLocalInventory, localChannelFromEnv, type LocalChannel } from ".
 import { HOST_INVENTORY_ARTIFACT, writeHostInventoryArtifact } from "../local-host/artifact.js";
 import { type EngagementInput } from "../types.js";
 import { RECON_TOOLS } from "../tools.js";
+import { withBridgeTools } from "../dispatch/bridge-gate.js";
 import { agentLoop, promptCtx } from "../agents.js";
 import { reconPrompt } from "../prompts.js";
 
@@ -106,7 +107,9 @@ export async function reconPhase(ctx: Ctx): Promise<string> {
       ` Write each discovery to the shared target map with update_target_map as you make it — ` +
       `the map is what the coordinator reviews at sign-off, and it is refused while the map is empty. ` +
       `Finish with the attack-surface brief and end it with the FINGERPRINT: line.`,
-    RECON_TOOLS,
+    // Q-BRIDGE-TOOLS: bridge tools join the surface only when the
+    // local-host + bridge-availability gate opens (bridge-gate.ts).
+    await withBridgeTools(ctx, "recon", RECON_TOOLS),
     ctx.config.maxReconTurns,
   );
   ctx.events.append({ phase: "recon", actor: "recon", action: "recon_brief", result: brief.slice(0, 1200) });

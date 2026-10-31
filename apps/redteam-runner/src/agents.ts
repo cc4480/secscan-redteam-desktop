@@ -32,6 +32,7 @@ import { HaltError, type Ctx } from './context.js'
 import { sleep } from './util.js'
 import { partitionToolCalls, executeToolGroup } from './dispatch/parallel-batch.js'
 import { dispatchTool } from './dispatch/router.js'
+import { withBridgeTools } from './dispatch/bridge-gate.js'
 import { type DispatchResult } from './dispatch/types.js'
 import { maybeCompactMessages } from './compaction/compact.js'
 import { toolTargetHost } from './dispatch/target-host.js'
@@ -510,7 +511,7 @@ async function commanderRedirect(ctx: Ctx, reason: string): Promise<string> {
       'Find NEW angles the exploiter has not tried: untested endpoints, parameters, methods, auth flows. ' +
       'Write every discovery to the shared target map with update_target_map as you go. ' +
       'End with a 5-line brief of the new angles.',
-    RECON_TOOLS,
+    await withBridgeTools(ctx, 'recon', RECON_TOOLS), // Q-BRIDGE-TOOLS gate (bridge-gate.ts)
     6,
   )
   ctx.events.append({ phase: 'recon', actor: 'recon', action: 'rerecon_brief', result: intel.slice(0, 800) })

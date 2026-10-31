@@ -7,6 +7,7 @@ import { EXPLOIT_TOOLS, RECON_TOOLS } from "../tools.js";
 import { agentLoop, promptCtx } from "../agents.js";
 import { lookupTechnique } from "../attack.js";
 import { mergeVerdictBlock } from "../dispatch.js";
+import { withBridgeTools } from "../dispatch/bridge-gate.js";
 import { taskPrompt } from "../prompts.js";
 import { techniqueAllowed } from "../gate.js";
 import {
@@ -44,7 +45,9 @@ export interface TaskResult {
  */
 export async function runTask(ctx: Ctx, task: TaskDef): Promise<TaskResult> {
   const role = task.kind === "recon" ? "recon" : "exploiter";
-  const tools = task.kind === "recon" ? RECON_TOOLS : EXPLOIT_TOOLS;
+  // Q-BRIDGE-TOOLS: bridge tools join the surface only when the
+  // local-host + bridge-availability gate opens (bridge-gate.ts).
+  const tools = await withBridgeTools(ctx, "exploit", task.kind === "recon" ? RECON_TOOLS : EXPLOIT_TOOLS);
   const probesBefore = ctx.probesUsed;
   const findingsBefore = ctx.liveFindings.length;
   const killedBefore = ctx.killedLive.length;
