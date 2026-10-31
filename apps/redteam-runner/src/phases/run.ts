@@ -11,7 +11,7 @@ import { McpClient } from "../mcp.js";
 import { MsfExecutor } from "../msf/index.js";
 import { NucleiExecutor } from "../nuclei/index.js";
 import { NmapExecutor } from "../nmap/index.js";
-import { TargetAutoHalt, TargetRateLimiter, describeEnvironment, parseEnvironment, productionConfirmed, requireGraduation, resolveEffectiveRps, resolveLogRotationConfig, assertDistFresh } from "../safety/index.js";
+import { CredentialAttemptGuard, TargetAutoHalt, TargetRateLimiter, describeEnvironment, parseEnvironment, productionConfirmed, requireGraduation, resolveEffectiveRps, resolveLogRotationConfig, assertDistFresh } from "../safety/index.js";
 import { type VulnerabilityRegistry, loadRegistryFile, saveRegistryFile, seedRegistry } from "../registry.js";
 import { WebProber, allHostsPrivateOrLoopback } from "../prober.js";
 import { activeTargets } from "../targets.js";
@@ -119,6 +119,14 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
     safety: {
       limiter: new TargetRateLimiter({ rpsPerHost: rps }),
       autoHalt: new TargetAutoHalt(),
+      // Q-LOCKOUT: the credential-attempt interlock, armed from engagement
+      // start with the operator-declared lockout policy (defaults: threshold
+      // 5, campaign ceiling 25, opaque runs 1/host — see phases/config.ts).
+      lockout: new CredentialAttemptGuard({
+        lockoutThreshold: config.lockoutThreshold,
+        totalFailureCeiling: config.lockoutTotalFailures,
+        opaqueRunsPerHost: config.lockoutOpaqueRuns,
+      }),
       environment,
       productionConfirmed: prodConfirmed,
       rpsPerHost: rps,

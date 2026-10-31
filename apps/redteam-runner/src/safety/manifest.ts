@@ -10,6 +10,8 @@
 
 import { destructiveDenyList } from "../host-exec/common.js";
 import { piiPatternLabels } from "./pii.js";
+import { DEFAULT_LOCKOUT_CONFIG } from "./lockout.js";
+import type { LockoutManifestData } from "./lockout.js";
 import type { TestEnvironment } from "./graduation.js";
 import type { ZeroDisruptionRecord } from "./disruption.js";
 import type { ApprovalEntry, AutonomyTier } from "../accountability/index.js";
@@ -25,6 +27,7 @@ export const PROTECTIONS_IN_FORCE: string[] = [
   "canary-only payload policy (validated exploits execute a runner-built benign marker, nothing else)",
   "per-target rate limiting (token bucket, stated rps/host, mechanically enforced)",
   "per-target auto-halt (distress threshold → target halted, never hammered)",
+  "credential-attempt lockout interlock (per host×protocol failed-validation budget of lockout threshold − 1, enforced in the dispatcher before the rate limiter; lockout signals trip the host; opaque multi-attempt runs call-budgeted; campaign ceiling on total failed validations; resume only via a recorded operator decision)",
   "kill switch (coordinator/operator abort terminates in-flight executions across all parallel tasks; new work refused)",
   "credential hygiene (env/Secure Vault only; redacted from logs, errors, events, reports)",
   "PII redaction (tool outputs scrubbed before the audit log, agent context, evidence, and reports)",
@@ -78,6 +81,12 @@ export interface SafetyManifest {
     haltedTargets: string[];
     haltCount: number;
   };
+  /**
+   * Q-LOCKOUT: the credential-attempt interlock's numbers for this
+   * engagement — declared threshold, per-key failed validations, opaque
+   * runs used, tripped hosts, total failures vs the campaign ceiling.
+   */
+  lockout: LockoutManifestData;
   protectionsInForce: string[];
   zeroDisruption: ZeroDisruptionRecord;
   disruptionVerdict: string;
@@ -108,6 +117,12 @@ export interface ManifestInputs {
   killSwitchAborts: number;
   operator: string;
   autoHalt: { consecutiveThreshold: number; windowSize: number; windowFailureRate: number; haltedTargets: string[]; haltCount: number };
+  /**
+   * Q-LOCKOUT: the guard's manifest data (ctx.safety.lockout.manifestData()).
+   * Optional for backward compatibility — absent means no guard was wired
+   * (partial contexts), and the manifest states the defaults with zero activity.
+   */
+  lockout?: LockoutManifestData;
   zeroDisruption: ZeroDisruptionRecord;
   disruptionVerdict: string;
   generatedAt?: string;
@@ -154,6 +169,17 @@ export function buildSafetyManifest(input: ManifestInputs): SafetyManifest {
     },
     piiRedaction: { enabled: true, patterns: piiPatternLabels() },
     autoHalt: input.autoHalt,
+    lockout: input.lockout ?? {
+      threshold: DEFAULT_LOCKOUT_CONFIG.lockoutThreshold,
+      failureLimit: Math.max(1, DEFAULT_LOCKOUT_CONFIG.lockoutThreshold - 1),
+      totalFailureCeiling: DEFAULT_LOCKOUT_CONFIG.totalFailureCeiling,
+      opaqueRunsPerHost: DEFAULT_LOCKOUT_CONFIG.opaqueRunsPerHost,
+      totalFailures: 0,
+      campaignTripped: false,
+      trippedHosts: [],
+      perKey: [],
+      opaqueRuns: [],
+    },
     protectionsInForce: [...PROTECTIONS_IN_FORCE],
     zeroDisruption: input.zeroDisruption,
     disruptionVerdict: input.disruptionVerdict,
@@ -186,6 +212,7 @@ export function renderSafetyManifestMarkdown(m: SafetyManifest): string {
   L.push(`- Payload policy: ${m.payloadPolicy} · DoS policy: ${m.dosPolicy}`);
   L.push(`- PII redaction: enabled (${m.piiRedaction.patterns.join(", ")})`);
   L.push(`- Auto-halt: ${m.autoHalt.consecutiveThreshold} consecutive distress or ${Math.round(m.autoHalt.windowFailureRate * 100)}% over last ${m.autoHalt.windowSize} → target halted; halted: ${m.autoHalt.haltedTargets.join(", ") || "(none)"}`);
+  L.push(`- Lockout interlock: declared lockout threshold ${m.lockout.threshold} → failed-validation budget ${m.lockout.failureLimit} per host×protocol class; total failed validations ${m.lockout.totalFailures}/${m.lockout.totalFailureCeiling} (campaign ceiling)${m.lockout.campaignTripped ? " — CAMPAIGN TRIPPED" : ""}; tripped hosts: ${m.lockout.trippedHosts.map((t) => t.host).join(", ") || "(none)"}; opaque runs used: ${m.lockout.opaqueRuns.map((o) => `${o.host}×${o.used}`).join(", ") || "(none)"}`);
   L.push(`- Human override: ${m.humanOverride.operator} — ${m.humanOverride.abortPath}`);
   L.push(`- Autonomy tier: Tier ${m.autonomy.tier} (${m.autonomy.tierName}) — ${m.autonomy.tierDescription}`);
   if (m.autonomy.declaredTier !== m.autonomy.tier) {

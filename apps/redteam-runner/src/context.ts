@@ -150,9 +150,12 @@ export interface Ctx {
      * failed-validation budget of lockoutThreshold − 1, enforced in
      * dispatch between the duplicate guard and the rate limiter, with a
      * campaign ceiling and lockout-signal host trips. Resume only via a
-     * recorded operator decision (guard.reset).
+     * recorded operator decision (guard.reset). Constructed from the
+     * resolved config in phases/run.ts; optional here because dispatch
+     * lazily builds one for contexts assembled without it (tests, partial
+     * contexts — the scopeGuard precedent, see lockoutGuardFor).
      */
-    lockout: CredentialAttemptGuard
+    lockout?: CredentialAttemptGuard
     environment: TestEnvironment
     productionConfirmed: boolean
     rpsPerHost: number

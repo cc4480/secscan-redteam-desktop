@@ -10,7 +10,7 @@ import { type ActorRole, type EngagementPhase } from "../types.js";
 import { type Ctx, HaltError } from "../context.js";
 import { type ToolCallRequest } from "@secscan/redteam-llm-router";
 import { checkTierAllows, recordExploitStep, readTierFile, TIER_NAMES } from "../accountability/index.js";
-import { distressEscalationResult, isTargetDistress, readAbortFile, consumeAbortFile } from "../safety/index.js";
+import { distressEscalationResult, isTargetDistress, readAbortFile, consumeAbortFile, classifyCredentialAttempt, classifyAuthOutcome, lockoutGuardFor, type CredentialClassification } from "../safety/index.js";
 import { type DispatchResult } from "./types.js";
 import { recordItemAttempt } from "./verdicts.js";
 import { checkVariantCap, recordVariantExecution } from "../variants/index.js";
@@ -146,6 +146,10 @@ export async function dispatchTool(ctx: Ctx, role: ActorRole, phase: EngagementP
   if (scopeDenial) {
     return scopeDenial;
   }
+  // Q-LOCKOUT: the call's credential classification, computed at the
+  // interlock gate below and consumed by the outcome recording beside
+  // auto-halt (one post-dispatch block owns all per-host safety state).
+  let lockoutCls: CredentialClassification | undefined;
   if (host) {
     // Auto-halt first: a halted target is refused before any packet AND
     // before waiting on the rate limiter — never hammer, never queue.
@@ -161,6 +165,36 @@ export async function dispatchTool(ctx: Ctx, role: ActorRole, phase: EngagementP
     // it consumes no rate token and sends no traffic.
     const dup = duplicateRefusal(ctx, role, phase, call, host);
     if (dup) return dup;
+    // Q-LOCKOUT interlock (spec §5.5): classify → trip check → budget
+    // reservation, after the duplicate guard and BEFORE limiter.acquire —
+    // a refused attempt consumes no rate token and sends no packet, and
+    // out-of-scope / auto-halted hosts refused above never touch the
+    // budget. The refusal is a result string, never a throw.
+    lockoutCls = classifyCredentialAttempt(call);
+    if (lockoutCls.kind !== "none") {
+      const verdict = lockoutGuardFor(ctx).check(host, lockoutCls, call.name);
+      if (!verdict.allowed) {
+        if (verdict.refusalKind === "budget" || verdict.refusalKind === "opaque") {
+          ctx.events.append({
+            phase,
+            actor: "runner",
+            action: "lockout_budget_exhausted",
+            target: host,
+            result: verdict.refusal!,
+          });
+        }
+        return { result: verdict.refusal!, target: host };
+      }
+      if (lockoutCls.kind !== "watch") {
+        ctx.events.append({
+          phase,
+          actor: "runner",
+          action: "credential_attempt",
+          target: host,
+          result: `${call.name} (${lockoutCls.kind}${lockoutCls.protocolClass ? `/${lockoutCls.protocolClass}` : ""}) admitted under the credential lockout budget for ${host}.`,
+        });
+      }
+    }
     await ctx.safety.limiter.acquire(host);
   }
   // v0.20.0 variants: the per-item variant cap is MECHANICAL. A
@@ -189,6 +223,43 @@ export async function dispatchTool(ctx: Ctx, role: ActorRole, phase: EngagementP
       });
       // Spec §6: the halt escalates as a preserved distress record; resume is a recorded decision, never automatic (safety/distress-breaker.ts).
       ctx.events.append({ phase, actor: "runner", action: "distress_escalation", target: host, result: distressEscalationResult(ctx.events.engagementId, host, haltReason) });
+    }
+    // Q-LOCKOUT: the credential outcome is recorded beside auto-halt —
+    // a success resets the key's failed-validation count, a failed
+    // validation spends budget, a lockout signal trips the host (and the
+    // campaign ceiling can trip the engagement). Watch/event-only calls
+    // record signals only; their budgets were settled at admission.
+    if (lockoutCls && lockoutCls.kind !== "none") {
+      const outcome = classifyAuthOutcome(d.result, d.ok);
+      const info = lockoutGuardFor(ctx).recordOutcome(host, lockoutCls, call.name, outcome);
+      ctx.events.append({
+        phase,
+        actor: "runner",
+        action: "credential_attempt_outcome",
+        target: host,
+        result: `${call.name} (${lockoutCls.protocolClass ?? "opaque"}): ${outcome}.`,
+      });
+      if (outcome === "lockout-signal") {
+        ctx.events.append({
+          phase,
+          actor: "runner",
+          action: "lockout_signal_detected",
+          target: host,
+          result: `LOCKOUT SIGNAL: ${call.name} against ${host} reported a locked or locking account — tripping all credential testing on this host.`,
+        });
+      }
+      if (info.trippedNow) {
+        ctx.events.append({
+          phase,
+          actor: "runner",
+          action: "lockout_tripped",
+          target: host,
+          result:
+            info.trippedNow === "campaign"
+              ? `CAMPAIGN LOCKOUT TRIP: ${info.reason}. Credential testing is refused engagement-wide; resume requires a recorded operator decision.`
+              : `LOCKOUT TRIP: ${host} — ${info.reason}. Credential testing against this host is refused; resume requires a recorded operator decision.`,
+        });
+      }
     }
     // v0.17.0 accountability: a successful validated exploit step consumes
     // the Tier 1 per-target chain budget. Denials, halts, and failures don't.

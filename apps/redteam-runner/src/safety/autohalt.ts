@@ -111,6 +111,17 @@ export class TargetAutoHalt {
 }
 
 /**
+ * Lockout-signal phrasings (fleet charter spec §6): a target throttling
+ * or locking accounts. Exported as ONE shared constant because the
+ * credential lockout classifier (safety/lockout.ts) must read exactly
+ * the same set — two classifiers with drifting ideas of what a lockout
+ * reads like would be a fork, and the Q-LOCKOUT spec (§5.3) forbids it.
+ * Tested against lowercased result text.
+ */
+export const LOCKOUT_TEXT_PATTERN =
+  /http 429|status 429|too many requests|account (?:is )?(?:temporarily )?locked|locked out|login locked|too many (?:failed )?(?:login|sign-in|authentication) attempts/;
+
+/**
  * Classify a dispatch result as target distress (true) or a clean outcome
  * (false). Distress = the target may be hurt: transport errors, timeouts,
  * connection refusals, 5xx. Clean = 404s, auth denials, vuln-absent, scope
@@ -123,10 +134,9 @@ export function isTargetDistress(result: string): boolean {
     /probe failed|connection refused|timed out|timeout|econnreset|econnrefused|enotfound|socket hang up/.test(r) ||
     /http 5\d\d/.test(r) ||
     /\b5\d\d\b.*(error|from target)/.test(r) ||
-    // Fleet charter spec §6 signals: a target throttling or locking
-    // accounts is a target under strain exactly like a 5xx storm —
-    // pushing harder against lockouts risks locking out real users.
-    /http 429|status 429|too many requests/.test(r) ||
-    /account (?:is )?(?:temporarily )?locked|locked out|login locked|too many (?:failed )?(?:login|sign-in|authentication) attempts/.test(r)
+    // A target throttling or locking accounts is a target under strain
+    // exactly like a 5xx storm — pushing harder against lockouts risks
+    // locking out real users.
+    LOCKOUT_TEXT_PATTERN.test(r)
   );
 }

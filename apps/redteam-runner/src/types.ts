@@ -172,18 +172,6 @@ export interface Finding {
   fix: string
   retest: string
   status: 'confirmed' | 'killed' | 'deferred'
-  /**
-   * Dual-exploiter cell verdict carried from the live finding at report
-   * time (Q-PROVEN): 'proven' means the cell adjudicated a recorded claim
-   * with both signatures plus a passing negative control. Stamped by the
-   * RUNNER only (report-phase join / halted-path map) — never model-set.
-   * Absent = never adjudicated.
-   */
-  cellState?: 'proven' | 'detected'
-  /** The adjudicated claim's expected marker + target URL, carried with cellState so the report can render the Cell Receipt. The claim's receipt is NOT carried — it lives in the audit trail. */
-  provenClaim?: { expectedMarker: string; targetUrl: string }
-  /** The cell adjudication's one-line detail, carried with the claim. */
-  cellDetail?: string
   /** Named human operator accountable for this finding (v0.17.0). Stamped by the runner at report time. */
   accountableOperator?: string
 }
@@ -281,4 +269,24 @@ export interface ResolvedRunnerConfig {
    * (25 staging, 10 production). Enforced mechanically in dispatch.
    */
   maxVariantsPerItem?: number
+  /**
+   * Q-LOCKOUT: operator-declared expected account-lockout threshold of the
+   * target environment. Env REDTEAM_LOCKOUT_THRESHOLD. Undefined = the
+   * interlock default (5). The credential-attempt guard budgets
+   * lockoutThreshold − 1 FAILED validations per (host, protocol class).
+   */
+  lockoutThreshold?: number
+  /**
+   * Q-LOCKOUT: campaign ceiling — total failed validations across all
+   * keys that trips credential testing engagement-wide. Env
+   * REDTEAM_LOCKOUT_TOTAL. Undefined = the interlock default (25).
+   */
+  lockoutTotalFailures?: number
+  /**
+   * Q-LOCKOUT: per-host call budget for opaque multi-attempt runs (msf
+   * login scanners, nmap auth/brute scripts) whose internal attempts the
+   * runner cannot count. Env REDTEAM_LOCKOUT_OPAQUE_RUNS. Undefined = the
+   * interlock default (1).
+   */
+  lockoutOpaqueRuns?: number
 }

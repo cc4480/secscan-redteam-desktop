@@ -38,6 +38,9 @@ export function writeSafetyArtifacts(ctx: Ctx): ReturnType<typeof buildSafetyMan
         haltedTargets: ah.haltedHosts(),
         haltCount: ah.halts,
       },
+      // Q-LOCKOUT: the interlock's numbers ride the manifest (§5.6 — if
+      // it is not in the manifest, it did not happen).
+      lockout: ctx.safety.lockout?.manifestData(),
       zeroDisruption,
       disruptionVerdict: disruptionVerdict(zeroDisruption),
       // v0.17.0 accountability: the autonomy tier and its approval trail are

@@ -46,6 +46,12 @@ export function resolveConfig(env: NodeJS.ProcessEnv, opts: {
   maxRpsPerHost?: number
   /** v0.20.0: per-item variant cap override. Env REDTEAM_MAX_VARIANTS. Undefined = env default (25 staging, 10 production). */
   maxVariantsPerItem?: number
+  /** Q-LOCKOUT: operator-declared expected account-lockout threshold. Env REDTEAM_LOCKOUT_THRESHOLD. Undefined = interlock default 5. */
+  lockoutThreshold?: number
+  /** Q-LOCKOUT: campaign ceiling on total failed validations. Env REDTEAM_LOCKOUT_TOTAL. Undefined = interlock default 25. */
+  lockoutTotalFailures?: number
+  /** Q-LOCKOUT: per-host call budget for opaque multi-attempt runs. Env REDTEAM_LOCKOUT_OPAQUE_RUNS. Undefined = interlock default 1. */
+  lockoutOpaqueRuns?: number
 } = {}): ResolvedRunnerConfig {
   // The SecScan MCP token is NOT a startup requirement: it is only read
   // when the operator opts into service verification
@@ -108,6 +114,9 @@ export function resolveConfig(env: NodeJS.ProcessEnv, opts: {
     localSandbox: opts.localSandbox ?? env['REDTEAM_LOCAL_SANDBOX'] === '1',
     maxRpsPerHost: opts.maxRpsPerHost ?? parseEnvPositiveNumber(env['REDTEAM_MAX_RPS'], 'REDTEAM_MAX_RPS'),
     maxVariantsPerItem: opts.maxVariantsPerItem ?? parseEnvPositiveNumber(env['REDTEAM_MAX_VARIANTS'], 'REDTEAM_MAX_VARIANTS'),
+    lockoutThreshold: opts.lockoutThreshold ?? parseEnvPositiveNumber(env['REDTEAM_LOCKOUT_THRESHOLD'], 'REDTEAM_LOCKOUT_THRESHOLD'),
+    lockoutTotalFailures: opts.lockoutTotalFailures ?? parseEnvPositiveNumber(env['REDTEAM_LOCKOUT_TOTAL'], 'REDTEAM_LOCKOUT_TOTAL'),
+    lockoutOpaqueRuns: opts.lockoutOpaqueRuns ?? parseEnvPositiveNumber(env['REDTEAM_LOCKOUT_OPAQUE_RUNS'], 'REDTEAM_LOCKOUT_OPAQUE_RUNS'),
   }
 }
 
