@@ -86,6 +86,21 @@ describe('local-PC dispatch gate', () => {
     assert.equal(unknown?.ok, false)
   })
 
+  it('reaches every host-inventory operation through pc_observe (Q-RP-11)', async () => {
+    for (const operation of ['system_info', 'list_processes', 'list_dir', 'read_file']) {
+      const result = await invoke('pc_observe', { operation, path: '.' }, fakeFetch(`${operation} ok`))
+      assert.equal(result?.ok, true, `${operation} must be reachable through pc_observe`)
+      assert.equal(result?.result, `${operation} ok`)
+    }
+  })
+
+  it('keeps the inventory operations out of the action and run families', async () => {
+    for (const name of ['pc_act', 'pc_run']) {
+      const result = await invoke(name, { operation: 'system_info' }, fakeFetch('x'))
+      assert.equal(result?.ok, false, `system_info must not be callable through ${name}`)
+    }
+  })
+
   it('treats changed=false or a failed postcondition as a failed step', async () => {
     const unchanged = await invoke('pc_act', { operation: 'input_click' }, fakeFetch(JSON.stringify({ ok: true, changed: false })))
     assert.equal(unchanged?.ok, false)
