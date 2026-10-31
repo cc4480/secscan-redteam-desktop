@@ -13,6 +13,7 @@ import { describeEscalation, escalateEngagement } from "../accountability/index.
 import { tier2ProductionConfirmed } from "../accountability/index.js";
 import { arg, argAll, buildInput, flag, parseLogRotationArgs, usage } from "./args.js";
 import { printCommandHelp, runCommandCli } from "./command.js";
+import { runArsenalCli } from "./arsenal.js";
 
 async function runReverify(): Promise<void> {
   const bundlePath = arg("--bundle");
@@ -176,6 +177,10 @@ export async function main(): Promise<void> {
     if (flag("--json")) console.log(JSON.stringify(report, null, 2));
     else console.log(formatReadiness(report));
     process.exit(report.ok ? 0 : 1);
+  }
+  if (cmd === "arsenal") {
+    process.exitCode = await runArsenalCli();
+    return;
   }
   if (cmd === "start") {
     const input = buildInput();
