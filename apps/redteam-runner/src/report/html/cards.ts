@@ -3,8 +3,9 @@
  *
  * Tier discipline is the honesty core of the design: the PROVEN badge is
  * keyed to a PoC bundle whose validationTier is "execution" (the runner's
- * replayable, marker-backed proof) — never to a severity, a confidence
- * word, or the scoring seam. A confirmed finding with no bundle says so,
+ * replayable, marker-backed proof) or to the exploit-cell's adjudicated
+ * verdict carried on the finding (Q-PROVEN) — never to a severity, a
+ * confidence word, or the scoring seam. A confirmed finding with no bundle says so,
  * with the reason the runner computed. Nothing is derived or guessed:
  * reference chips render only from fields the record actually carries.
  */
@@ -21,9 +22,10 @@ export interface FindingMeta {
   cvss?: number;
 }
 
-/** The truth tier a finding renders under. PROVEN requires the bundle. */
+/** The truth tier a finding renders under. PROVEN requires a runner
+ * stamp: an execution-tier bundle, or the cell's adjudicated verdict. */
 export function tierOf(f: Finding, bundle?: PocBundle): ReportTier {
-  if (bundle && bundle.validationTier === "execution") return "proven";
+  if (bundle?.validationTier === "execution" || f.cellState === "proven") return "proven";
   if (f.status === "confirmed") return "confirmed";
   if (f.status === "deferred") return "deferred";
   return "ruled-out";
@@ -82,6 +84,25 @@ export function proofBlock(bundle: PocBundle): string {
   );
 }
 
+/** The Cell Receipt (Q-PROVEN): the proof block for a cell-proven finding
+ * with no execution bundle to show. The verdict is the runner's cell stamp
+ * (challenger critique + verification signatures + a passing negative
+ * control); the block shows the record the adjudication retained — the
+ * expected marker, the target it was observed at, and the adjudication
+ * detail line. Every interpolated value passes through esc(): the marker
+ * is agent-chosen free text, never injected raw. */
+export function cellReceiptBlock(f: Finding): string {
+  if (!f.provenClaim) return "";
+  const detail = f.cellDetail ?? "Challenger critique + verification signed, negative control passed.";
+  return (
+    `<div class="proof exec">` +
+    `<div class="proof-head">Cell Receipt — Proven Live</div><div class="proof-body">` +
+    `<p>Exploit-cell adjudication: expected marker <mark>${esc(f.provenClaim.expectedMarker)}</mark> observed at ${esc(f.provenClaim.targetUrl)}.</p>` +
+    `<p>${esc(detail)}</p>` +
+    `</div></div>`
+  );
+}
+
 export interface CardInput {
   finding: Finding;
   bundle?: PocBundle;
@@ -104,7 +125,16 @@ export function findingCard(o: CardInput): string {
   if (typeof o.meta?.cvss === "number") chips.push(refChip(`CVSS ${o.meta.cvss.toFixed(1)}`));
 
   let body = "";
-  if (o.bundle) body += proofBlock(o.bundle);
+  if (o.bundle) {
+    body += proofBlock(o.bundle);
+    // Q-PROVEN refinement: an observation-tier bundle under a cell-PROVEN
+    // stamp would pair the PROVEN badge with a receipt head that says it
+    // is never badged proven — append the Cell Receipt after the bundle
+    // block. An execution bundle already proves the finding; it stands
+    // alone, unchanged.
+    if (o.bundle.validationTier !== "execution" && f.cellState === "proven" && f.provenClaim)
+      body += cellReceiptBlock(f);
+  } else if (f.cellState === "proven" && f.provenClaim) body += cellReceiptBlock(f);
   else if (f.status === "confirmed" && o.noBundleReason)
     body += `<p class="no-bundle">No replayable bundle — ${esc(o.noBundleReason)}</p>`;
   if (f.fix) {
