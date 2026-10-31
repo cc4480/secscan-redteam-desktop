@@ -107,9 +107,10 @@ export async function openWelcomeWindow(locale: DesktopLocale, operations: Welco
     // refused value leaves the shell's failure copy to the renderer and reaches no log.
     if (typeof input !== 'object' || input === null) return { ok: false }
     const fields = input as Record<string, unknown>
-    if (typeof fields.secscan !== 'string' || typeof fields.runner !== 'string' || typeof fields.endpoint !== 'string') return { ok: false }
-    if (fields.secscan.length > 4096 || fields.runner.length > 4096 || fields.endpoint.length > 4096) return { ok: false }
-    return operations.saveMcp({ secscan: fields.secscan, runner: fields.runner, endpoint: fields.endpoint })
+    if (typeof fields.secscan !== 'string' || typeof fields.seclayer !== 'string' || typeof fields.runner !== 'string' || typeof fields.endpoint !== 'string') return { ok: false }
+    if (fields.secscan.length > 4096 || fields.seclayer.length > 4096
+      || fields.runner.length > 4096 || fields.endpoint.length > 4096) return { ok: false }
+    return operations.saveMcp({ secscan: fields.secscan, seclayer: fields.seclayer, runner: fields.runner, endpoint: fields.endpoint })
   })
   ipcMain.handle(WELCOME_IPC.clearMcp, async (event) => { assertSender(event); return operations.clearMcp() })
   ipcMain.handle(WELCOME_IPC.finishMcp, async (event) => { assertSender(event); await operations.finishMcp() })

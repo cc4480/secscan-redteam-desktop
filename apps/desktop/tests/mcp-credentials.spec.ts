@@ -29,6 +29,7 @@ import {
 
 const repository = fileURLToPath(new URL('../../../', import.meta.url))
 const SECSCAN = 'ssk_desktop-test-token-0001'
+const SECLAYER = 'seclayer-desktop-test-token-0003'
 const RUNNER = 'runner-desktop-test-token-0002'
 const rotated = 'ssk_desktop-test-token-0002'
 
@@ -71,7 +72,7 @@ const protectedSecrets: McpSecretProtector = {
 }
 
 const draft = (values: Partial<McpCredentialDraft> = {}): McpCredentialDraft => ({
-  secscan: null, runner: null, endpoint: null, ...values,
+  secscan: null, seclayer: null, runner: null, endpoint: null, ...values,
 })
 
 async function stored(environment: NodeJS.ProcessEnv, file: string, installed = new Set<McpEnvironmentName>()) {
@@ -270,7 +271,10 @@ describe('first-run environment', () => {
     const patch = readFileSync(join(repository, 'packages', 'redteam', 'desktop-bundle', 'cordis.patch.yml'), 'utf8')
     // The patch's `!!js` scalars are evaluated against the Host process environment at composition
     // time, so the names this module persists and the names the rows read have to be the same ones.
-    for (const name of MCP_ENVIRONMENT_NAMES) expect(patch).toContain(`process.env.${name}`)
+    // SECLAYER_API_KEY differs in form, not in ownership: its row names it in a `secretEnv` list
+    // and the MCP client resolves it when the child spawns, so the spawn-time form is asserted
+    // with the row instead of here.
+    for (const name of MCP_ENVIRONMENT_NAMES.filter(name => name !== 'SECLAYER_API_KEY')) expect(patch).toContain(`process.env.${name}`)
   })
 
   it('leaves an inherited environment alone and still loads the missing names', async () => {
@@ -341,6 +345,69 @@ describe('first-run environment', () => {
   })
 })
 
+describe('seclayer credential', () => {
+  it('stores the key under SECLAYER_API_KEY with only its mask beside the protected value', async () => {
+    const { file } = workspace()
+    expect(await writeStoredMcpCredentials(file, protectedSecrets, draft({ seclayer: SECLAYER }))).toBe(true)
+    const stored = await readStoredMcpCredentials(file, protectedSecrets)
+    expect(stored.values).toEqual({ SECLAYER_API_KEY: SECLAYER })
+    expect(stored.fingerprints).toEqual({ SECLAYER_API_KEY: maskMcpCredential(SECLAYER) })
+    const document = JSON.parse(readFileSync(file, 'utf8')) as { credentials: Record<string, { value: string; fingerprint: string }> }
+    expect(document.credentials.SECLAYER_API_KEY!.value).toBe(protectedSecrets.protect(SECLAYER))
+    expect(document.credentials.SECLAYER_API_KEY!.value).not.toBe(SECLAYER)
+    expect(document.credentials.SECLAYER_API_KEY!.fingerprint).toBe(maskMcpCredential(SECLAYER))
+  })
+
+  it('leaves a stored key untouched when the draft leaves the field empty, and removes it with the document', async () => {
+    const { file } = workspace()
+    await writeStoredMcpCredentials(file, plainMcpSecretProtector, draft({ seclayer: SECLAYER }))
+    // An empty field keeps what is stored - the rule the secscan field has always
+    // had; revocation is the document's removal, not an empty save.
+    await writeStoredMcpCredentials(file, plainMcpSecretProtector, draft())
+    expect((await readStoredMcpCredentials(file, plainMcpSecretProtector)).values).toEqual({ SECLAYER_API_KEY: SECLAYER })
+    await clearStoredMcpCredentials(file)
+    expect((await readStoredMcpCredentials(file, plainMcpSecretProtector)).values).toEqual({})
+  })
+
+  it('records a decline without discarding the stored key', async () => {
+    const { file } = workspace()
+    await writeStoredMcpCredentials(file, plainMcpSecretProtector, draft({ seclayer: SECLAYER }))
+    expect(await writeStoredMcpCredentials(file, plainMcpSecretProtector, draft(), true)).toBe(true)
+    expect(await readStoredMcpCredentials(file, plainMcpSecretProtector))
+      .toMatchObject({ declined: true, values: { SECLAYER_API_KEY: SECLAYER } })
+  })
+
+  it('refuses to persist a seclayer-only draft with the plain protector on win32 without the opt-in', async () => {
+    const { file } = workspace()
+    await withPlatform('win32', async () => {
+      vi.stubEnv(MCP_PLAINTEXT_OPT_IN_ENV, undefined)
+      const reason = await writeStoredMcpCredentials(file, plainMcpSecretProtector, draft({ seclayer: SECLAYER }))
+        .catch((thrown: unknown) => thrown)
+      expect(reason).toBeInstanceOf(McpPlaintextRefusedError)
+    })
+    expect(await readStoredMcpCredentials(file, plainMcpSecretProtector)).toMatchObject({ values: {}, exists: false })
+  })
+
+  it('counts a seclayer key alone as a working setup (D1)', async () => {
+    const { file } = workspace()
+    const fresh = await readStoredMcpCredentials(file, plainMcpSecretProtector)
+    expect(mcpSetupRequired({ SECLAYER_API_KEY: SECLAYER }, fresh)).toBe(false)
+    await writeStoredMcpCredentials(file, plainMcpSecretProtector, draft({ seclayer: SECLAYER }))
+    expect(mcpSetupRequired({}, await readStoredMcpCredentials(file, plainMcpSecretProtector))).toBe(false)
+  })
+
+  it('installs the stored key into the Host environment without overwriting an inherited one', async () => {
+    const { file } = workspace()
+    await writeStoredMcpCredentials(file, plainMcpSecretProtector, draft({ seclayer: SECLAYER }))
+    const environment: NodeJS.ProcessEnv = {}
+    await stored(environment, file)
+    expect(environment.SECLAYER_API_KEY).toBe(SECLAYER)
+    const inherited: NodeJS.ProcessEnv = { SECLAYER_API_KEY: 'from-the-launch-environment' }
+    await stored(inherited, file)
+    expect(inherited.SECLAYER_API_KEY).toBe('from-the-launch-environment')
+  })
+})
+
 describe('setup form values', () => {
   it('accepts a real token and rejects the ways one arrives wrong', () => {
     expect(isMcpTokenValue(`  ${SECSCAN}  `)).toBe(true)
@@ -360,11 +427,18 @@ describe('setup form values', () => {
   })
 
   it('normalizes a draft without inventing values', () => {
-    expect(normalizeMcpCredentialDraft({ secscan: ` ${SECSCAN} `, runner: '', endpoint: '' })).toEqual({ secscan: SECSCAN, runner: null, endpoint: null })
-    expect(normalizeMcpCredentialDraft({ secscan: '', runner: RUNNER, endpoint: 'https://console.example.test/mcp' }))
-      .toEqual({ secscan: null, runner: RUNNER, endpoint: 'https://console.example.test/mcp' })
-    expect(normalizeMcpCredentialDraft({ secscan: 'SECSCAN_MCP_TOKEN=ssk_value', runner: '', endpoint: '' })).toBeUndefined()
-    expect(normalizeMcpCredentialDraft({ secscan: '', runner: '', endpoint: 'http://evil.example.test/mcp' })).toBeUndefined()
+    expect(normalizeMcpCredentialDraft({ secscan: ` ${SECSCAN} `, seclayer: '', runner: '', endpoint: '' })).toEqual({ secscan: SECSCAN, seclayer: null, runner: null, endpoint: null })
+    expect(normalizeMcpCredentialDraft({ secscan: '', seclayer: '', runner: RUNNER, endpoint: 'https://console.example.test/mcp' }))
+      .toEqual({ secscan: null, seclayer: null, runner: RUNNER, endpoint: 'https://console.example.test/mcp' })
+    expect(normalizeMcpCredentialDraft({ secscan: 'SECSCAN_MCP_TOKEN=ssk_value', seclayer: '', runner: '', endpoint: '' })).toBeUndefined()
+    expect(normalizeMcpCredentialDraft({ secscan: '', seclayer: '', runner: '', endpoint: 'http://evil.example.test/mcp' })).toBeUndefined()
+    // The seclayer field takes the same paste hygiene as the secscan field: a real
+    // key is accepted and trimmed, a `NAME=value` line or a spaced value refuses
+    // the whole draft.
+    expect(normalizeMcpCredentialDraft({ secscan: '', seclayer: ` ${SECLAYER} `, runner: '', endpoint: '' }))
+      .toEqual({ secscan: null, seclayer: SECLAYER, runner: null, endpoint: null })
+    expect(normalizeMcpCredentialDraft({ secscan: '', seclayer: 'SECLAYER_API_KEY=seclayer_value', runner: '', endpoint: '' })).toBeUndefined()
+    expect(normalizeMcpCredentialDraft({ secscan: '', seclayer: 'has space token', runner: '', endpoint: '' })).toBeUndefined()
   })
 
   it('masks a token down to a fingerprint an operator can recognize', () => {

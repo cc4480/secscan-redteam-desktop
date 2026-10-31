@@ -213,11 +213,17 @@ describe('desktop welcome window', () => {
     expect(await read(own)).toMatchObject({ required: true, stored: false })
     const save = electron.handlers.get(WELCOME_IPC.saveMcp)!
     expect(await save(own, 'ssk-not-an-object')).toEqual({ ok: false })
-    expect(await save(own, { secscan: 42, runner: '', endpoint: '' })).toEqual({ ok: false })
-    expect(await save(own, { secscan: 'x'.repeat(5000), runner: '', endpoint: '' })).toEqual({ ok: false })
+    expect(await save(own, { secscan: 42, seclayer: '', runner: '', endpoint: '' })).toEqual({ ok: false })
+    expect(await save(own, { secscan: 'x'.repeat(5000), seclayer: '', runner: '', endpoint: '' })).toEqual({ ok: false })
+    // The handler rebuilds the draft field by field, so the seclayer field is
+    // shape-checked like the others: absent, non-string, or over-long is refused
+    // here rather than stripped on its way to the store.
+    expect(await save(own, { secscan: '', runner: '', endpoint: '' })).toEqual({ ok: false })
+    expect(await save(own, { secscan: '', seclayer: 42, runner: '', endpoint: '' })).toEqual({ ok: false })
+    expect(await save(own, { secscan: '', seclayer: 'x'.repeat(5000), runner: '', endpoint: '' })).toEqual({ ok: false })
     expect(saveMcp).not.toHaveBeenCalled()
-    expect(await save(own, { secscan: 'ssk_window-test-token', runner: '', endpoint: '' })).toEqual({ ok: true })
-    expect(saveMcp).toHaveBeenCalledExactlyOnceWith({ secscan: 'ssk_window-test-token', runner: '', endpoint: '' })
+    expect(await save(own, { secscan: 'ssk_window-test-token', seclayer: 'seclayer-window-test-token', runner: '', endpoint: '' })).toEqual({ ok: true })
+    expect(saveMcp).toHaveBeenCalledExactlyOnceWith({ secscan: 'ssk_window-test-token', seclayer: 'seclayer-window-test-token', runner: '', endpoint: '' })
     expect(await electron.handlers.get(WELCOME_IPC.clearMcp)!(own)).toEqual({ ok: true })
     expect(clearMcp).toHaveBeenCalledOnce()
     await electron.handlers.get(WELCOME_IPC.finishMcp)!(own)

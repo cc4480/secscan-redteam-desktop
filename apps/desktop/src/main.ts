@@ -1223,7 +1223,8 @@ async function main(): Promise<void> {
           if (!MCP_TOKEN_NAMES.some(name => storedMcpCredentials.values[name] !== undefined)) {
             try {
               const protector = desktopMcpSecretProtector()
-              if (await writeStoredMcpCredentials(mcpCredentialPath, protector, { secscan: null, runner: null, endpoint: null }, true)) {
+              if (await writeStoredMcpCredentials(mcpCredentialPath, protector,
+                { secscan: null, seclayer: null, runner: null, endpoint: null }, true)) {
                 storedMcpCredentials = await readStoredMcpCredentials(mcpCredentialPath, protector)
               }
             } catch (error) {

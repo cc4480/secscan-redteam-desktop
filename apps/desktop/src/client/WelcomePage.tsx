@@ -223,7 +223,7 @@ export function Welcome({ api }: { api: WelcomeReadinessApi }) {
     setBusy(true)
     setMcpError('')
     try {
-      const result = await api.saveMcp({ secscan: secscanDraft, runner: runnerDraft, endpoint: endpointDraft })
+      const result = await api.saveMcp({ secscan: secscanDraft, seclayer: '', runner: runnerDraft, endpoint: endpointDraft })
       if (!mounted.current) return
       if (!result.ok) { setMcpError(m.welcomeMcpFailed); return }
       setSecscanDraft('')

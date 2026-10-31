@@ -322,7 +322,7 @@ describe('desktop welcome MCP access step', () => {
     view.submitMcp()
     view.submitMcp()
     expect(view.api.saveMcp).toHaveBeenCalledExactlyOnceWith({
-      secscan: '  ssk_onetime-test-token  ', runner: 'runner-onetime-test-token', endpoint: 'http://127.0.0.1:8787/mcp',
+      secscan: '  ssk_onetime-test-token  ', seclayer: '', runner: 'runner-onetime-test-token', endpoint: 'http://127.0.0.1:8787/mcp',
     })
     await vi.waitFor(() => { expect(view.document.querySelector<HTMLElement>('#mcp-form')!.hidden).toBe(true) })
     expect(view.document.querySelector<HTMLElement>('#tagline')!.hidden).toBe(false)

@@ -98,6 +98,7 @@ function refuseUnprotectedPlaintextPersistence(protector: McpSecretProtector): v
 /** Accepted draft; `null` means the stored entry is left untouched. */
 export interface McpCredentialDraft {
   readonly secscan: string | null
+  readonly seclayer: string | null
   readonly runner: string | null
   readonly endpoint: string | null
 }
@@ -205,12 +206,13 @@ export function normalizeMcpCredentialDraft(input: McpCredentialDraftInput): Mcp
     return isMcpTokenValue(value) ? value.trim() : undefined
   }
   const secscan = token(input.secscan)
+  const seclayer = token(input.seclayer)
   const runner = token(input.runner)
-  if (secscan === undefined || runner === undefined) return undefined
+  if (secscan === undefined || seclayer === undefined || runner === undefined) return undefined
   const endpoint = input.endpoint.trim()
-  if (endpoint === '') return { secscan, runner, endpoint: null }
+  if (endpoint === '') return { secscan, seclayer, runner, endpoint: null }
   if (!isMcpEndpoint(endpoint)) return undefined
-  return { secscan, runner, endpoint }
+  return { secscan, seclayer, runner, endpoint }
 }
 
 /**
@@ -332,7 +334,7 @@ export async function writeStoredMcpCredentials(
     const fingerprint = storedFingerprint(mergeable, name)
     credentials[name] = { value: kept, ...fingerprint === undefined ? {} : { fingerprint } }
   }
-  for (const [name, value] of [['SECSCAN_MCP_TOKEN', draft.secscan], ['REDTEAM_UI_TOKEN', draft.runner]] as const) {
+  for (const [name, value] of [['SECSCAN_MCP_TOKEN', draft.secscan], ['SECLAYER_API_KEY', draft.seclayer], ['REDTEAM_UI_TOKEN', draft.runner]] as const) {
     if (value === null) continue
     credentials[name] = { value: protector.protect(value), fingerprint: maskMcpCredential(value) }
   }

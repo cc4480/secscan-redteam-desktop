@@ -190,9 +190,13 @@ const mcp = vi.hoisted(() => {
       }
       return { values: { ...stored.values }, fingerprints: { ...stored.fingerprints }, exists: stored.exists, declined: stored.declined }
     }),
-    read: vi.fn(async () => ({ values: { ...stored.values }, fingerprints: { ...stored.fingerprints }, exists: stored.exists, declined: stored.declined })),
-    write: vi.fn(async (_file: string, _protector: unknown, draft: { secscan: string | null; runner: string | null }, declined = false) => {
+    read: vi.fn(async () => ({
+      values: { ...stored.values }, fingerprints: { ...stored.fingerprints }, exists: stored.exists, declined: stored.declined,
+    })),
+    write: vi.fn(async (_file: string, _protector: unknown,
+      draft: { secscan: string | null; seclayer: string | null; runner: string | null }, declined = false) => {
       if (draft.secscan !== null) { stored.values.SECSCAN_MCP_TOKEN = draft.secscan; stored.fingerprints.SECSCAN_MCP_TOKEN = 'ssk_…oken' }
+      if (draft.seclayer !== null) { stored.values.SECLAYER_API_KEY = draft.seclayer; stored.fingerprints.SECLAYER_API_KEY = 'secl…oken' }
       if (draft.runner !== null) stored.values.REDTEAM_UI_TOKEN = draft.runner
       if (declined) stored.declined = true
       stored.exists = true
@@ -319,15 +323,15 @@ it('starts the Host for welcome onboarding and opens the workspace on skip witho
 
   // A refused value reaches neither the document nor the environment, and starts no Host.
   const hostsBefore = state.startHost.mock.calls.length
-  expect(await state.operations!.saveMcp({ secscan: 'SECSCAN_MCP_TOKEN=ssk_pasted-line', runner: '', endpoint: '' })).toEqual({ ok: false })
-  expect(await state.operations!.saveMcp({ secscan: '', runner: '', endpoint: 'http://10.0.0.5:8787/mcp' })).toEqual({ ok: false })
+  expect(await state.operations!.saveMcp({ secscan: 'SECSCAN_MCP_TOKEN=ssk_pasted-line', seclayer: '', runner: '', endpoint: '' })).toEqual({ ok: false })
+  expect(await state.operations!.saveMcp({ secscan: '', seclayer: '', runner: '', endpoint: 'http://10.0.0.5:8787/mcp' })).toEqual({ ok: false })
   expect(mcp.write).not.toHaveBeenCalled()
   expect(state.startHost).toHaveBeenCalledTimes(hostsBefore)
   expect(process.env.SECSCAN_MCP_TOKEN).toBeUndefined()
 
-  expect(await state.operations!.saveMcp({ secscan: 'ssk_first-run-token', runner: 'runner-first-run-token', endpoint: '' })).toEqual({ ok: true })
+  expect(await state.operations!.saveMcp({ secscan: 'ssk_first-run-token', seclayer: '', runner: 'runner-first-run-token', endpoint: '' })).toEqual({ ok: true })
   expect(mcp.write).toHaveBeenCalledExactlyOnceWith(mcpView.storePath, expect.anything(), {
-    secscan: 'ssk_first-run-token', runner: 'runner-first-run-token', endpoint: null,
+    secscan: 'ssk_first-run-token', seclayer: null, runner: 'runner-first-run-token', endpoint: null,
   })
   // The stored values are in the environment the replacement Host is constructed with, which is
   // exactly what its MCP rows read while cordis composes the profile.
@@ -345,5 +349,6 @@ it('starts the Host for welcome onboarding and opens the workspace on skip witho
 
   // Leaving the step records the decision so first run does not ask again.
   await state.operations!.finishMcp()
-  expect(mcp.write).toHaveBeenLastCalledWith(mcpView.storePath, expect.anything(), { secscan: null, runner: null, endpoint: null }, true)
+  expect(mcp.write).toHaveBeenLastCalledWith(mcpView.storePath, expect.anything(),
+    { secscan: null, seclayer: null, runner: null, endpoint: null }, true)
 })
