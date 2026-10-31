@@ -21,6 +21,7 @@
 import { execFileSync } from 'node:child_process'
 import { connect as netConnect } from 'node:net'
 import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 
 import { XTOOLS, type XToolId } from '../xtool/registry.js'
 import { nmapBinaryPresent, resolveNmapCommand } from '../nmap/prereq.js'
@@ -31,12 +32,13 @@ import { describeSource, resolveExternalBinary, toolsDir, TOOLS_DIR_ENV, type Re
 import { resolveWordlist } from '../xtool/wordlist.js'
 import { pcAgentConfigured } from '../host-exec/pc-agent.js'
 import { browserConfigured, BROWSER_SETUP_GUIDANCE } from '../browser/cdp.js'
+import { readEstopState, resolveEstopPaths } from '../safety/estop.js'
 import { poolSnapshots, type PoolSnapshot } from '@secscan/redteam-llm-router'
 import { resolveArsenalConfig } from '../arsenal/config.js'
 import { readArsenalIndexMeta, type ArsenalIndexMeta } from '../arsenal/index-store.js'
 import { ARSENAL_EMPTY_FIX } from '../arsenal/tools.js'
 
-export type ReadinessState = 'ready' | 'missing' | 'unreachable' | 'not-configured'
+export type ReadinessState = 'ready' | 'missing' | 'unreachable' | 'not-configured' | 'paused'
 
 export interface ReadinessItem {
   /** Stable identifier used by the UI / tests. */
@@ -264,6 +266,12 @@ export async function readinessReport(env: NodeJS.ProcessEnv = process.env): Pro
   const poolItem = credentialPoolItem(poolSnapshots(), Date.now())
   if (poolItem !== undefined) items.push(poolItem)
 
+  // --- ESTOP fleet pause sentinel -------------------------------------------
+  // Informational only: an engaged sentinel pauses NEW launches (state
+  // 'paused'), never the report's ok — required items alone decide that,
+  // and a deliberate operator pause is not an installation defect.
+  items.push(estopItem(env))
+
   const requiredItems = items.filter(i => i.required)
   const requiredMissing = requiredItems.filter(i => i.state !== 'ready')
   const ok = requiredMissing.length === 0
@@ -337,6 +345,36 @@ export function arsenalIndexItem(env: NodeJS.ProcessEnv): ReadinessItem {
 }
 
 /** "~12m" / "~3h" for a bench's remaining time. */
+/**
+ * The `estop` readiness item (Q-ESTOP-APP): mirrors resolveConfig's
+ * registry default so the checked paths are the same ones the launch
+ * gate uses (REDTEAM_ESTOP_PATH still wins inside resolveEstopPaths).
+ * Never required: pausing the fleet is an operator decision, and the
+ * item's job is to make the pause — and how to lift it — visible.
+ */
+function estopItem(env: NodeJS.ProcessEnv): ReadinessItem {
+  const home = (env['REDTEAM_HOME'] ?? '').trim()
+  const registryPath = home ? join(home, 'engagements', 'registry.json') : join(process.cwd(), 'engagements', 'registry.json')
+  const state = readEstopState(resolveEstopPaths(env, { registryPath }))
+  if (!state.engaged) {
+    return {
+      id: 'estop',
+      label: 'ESTOP pause sentinel',
+      state: 'ready',
+      detail: 'ESTOP not engaged — new engagements launch normally.',
+      required: false,
+    }
+  }
+  return {
+    id: 'estop',
+    label: 'ESTOP pause sentinel',
+    state: 'paused',
+    detail: `ESTOP engaged at ${state.path} — ${state.reason ?? 'no reason recorded'}; new engagement launches are paused (in-flight engagements are unaffected)`,
+    fix: `Delete ${state.path} to resume.`,
+    required: false,
+  }
+}
+
 function formatBenchRemaining(remainingMs: number): string {
   const minutes = Math.max(1, Math.round(remainingMs / 60_000))
   return minutes < 60 ? `${minutes}m` : `${Math.round(minutes / 60)}h`
@@ -388,7 +426,7 @@ export function credentialPoolItem(snapshots: PoolSnapshot[], nowMs: number): Re
 export function formatReadiness(report: ReadinessReport): string {
   const lines: string[] = [`readiness: ${report.summary}`, '']
   for (const item of report.items) {
-    const mark = item.state === 'ready' ? 'OK  ' : item.state === 'missing' ? 'MISS' : item.state === 'unreachable' ? 'DOWN' : 'CFG '
+    const mark = item.state === 'ready' ? 'OK  ' : item.state === 'paused' ? 'PAUS' : item.state === 'missing' ? 'MISS' : item.state === 'unreachable' ? 'DOWN' : 'CFG '
     lines.push(`${mark} ${item.label.padEnd(48)} ${item.detail ?? ''}`.trimEnd())
     if (item.fix && item.state !== 'ready') lines.push(`     → ${item.fix}`)
   }
