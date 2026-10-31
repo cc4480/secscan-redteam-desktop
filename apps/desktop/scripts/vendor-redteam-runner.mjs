@@ -42,6 +42,20 @@ export const REDTEAM_RUNNER_PAYLOAD = join('resources', 'redteam-runner')
 /** Package name the vendored payload must declare; anything else is the wrong directory. */
 const REDTEAM_RUNNER_PACKAGE = '@secscan/redteam-runner'
 
+/** The llm-router package: the fleet's charter, exemplar pack and SOUL live in it. */
+const LLM_ROUTER_PACKAGE = '@secscan/redteam-llm-router'
+
+/**
+ * The llm-router's prompt assets. The payload exclusions drop every `.md`
+ * file and {@link stripVendoredSources} deletes the vendored `src/` trees,
+ * so a payload assembled by the copy alone contains none of these — and the
+ * fleet's loaders fail loud on a missing asset, which would make every
+ * chartered call throw inside a user's install. {@link placeCharterAssets}
+ * puts them back at the one payload-stable location the loaders resolve
+ * first: `lib/charter/` beside the bundled module.
+ */
+const CHARTER_ASSETS = ['charter.md', 'exemplars.md', 'soul.md']
+
 /** Dependency sections that carry what a shipped payload must contain. */
 const DEPENDENCY_SECTIONS = ['dependencies']
 
@@ -171,7 +185,7 @@ function dependencyClosure(runnerDirectory, manifest, problems) {
  * @param {string} from - Source directory.
  * @param {string} to - Destination directory.
  */
-function copyDereferenced(from, to) {
+export function copyDereferenced(from, to) {
   mkdirSync(to, { recursive: true })
   const source = realpathSync(from)
   const target = realpathSync(to)
@@ -256,6 +270,36 @@ function stripVendoredSources(destination) {
   }
 }
 
+/**
+ * Place the llm-router's prompt assets into the vendored payload.
+ *
+ * The copy exclusions and the `src/` strip leave the payload without a
+ * single charter asset (see {@link CHARTER_ASSETS}); the loaders' first
+ * candidate is `charter/<asset>` beside the bundled module, so the assets
+ * are copied from the source package's `src/charter/` to the payload's
+ * `node_modules/@secscan/redteam-llm-router/lib/charter/`. A missing source
+ * asset fails the vendoring run: shipping without one is not a smaller
+ * payload, it is a broken one.
+ * @param {string} sourcePackageDirectory - The llm-router package directory in the source tree.
+ * @param {string} destination - The vendored payload root.
+ * @returns {string[]} The placed asset paths, relative to the payload root.
+ */
+export function placeCharterAssets(sourcePackageDirectory, destination) {
+  const from = join(sourcePackageDirectory, 'src', 'charter')
+  const target = join(destination, 'node_modules', ...LLM_ROUTER_PACKAGE.split('/'), 'lib', 'charter')
+  mkdirSync(target, { recursive: true })
+  const placed = []
+  for (const name of CHARTER_ASSETS) {
+    const asset = join(from, name)
+    if (!existsSync(asset)) {
+      throw new Error(`vendor-redteam-runner: charter asset ${name} is missing from ${from}; the payload would ship without it and every chartered call would fail inside the install`)
+    }
+    cpSync(asset, join(target, name))
+    placed.push(join('node_modules', ...LLM_ROUTER_PACKAGE.split('/'), 'lib', 'charter', name))
+  }
+  return placed
+}
+
 function vendorRedteamRunner(options) {
   const source = options.from
   const destination = options.to ?? join(APP_ROOT, REDTEAM_RUNNER_PAYLOAD)
@@ -301,6 +345,11 @@ function vendorRedteamRunner(options) {
     copyDereferenced(entry.directory, join(destination, 'node_modules', ...entry.name.split('/')))
   }
   stripVendoredSources(destination)
+  const llmRouter = closure.find(entry => entry.name === LLM_ROUTER_PACKAGE)
+  if (llmRouter === undefined) {
+    throw new Error(`vendor-redteam-runner: ${LLM_ROUTER_PACKAGE} is missing from the dependency closure; its charter assets have nowhere to land`)
+  }
+  const charterAssets = placeCharterAssets(llmRouter.directory, destination)
 
   const provenance = {
     schemaVersion: 1,
@@ -312,6 +361,9 @@ function vendorRedteamRunner(options) {
     lockfile: { source: lockfile.path, sha256: lockfile.sha256 },
     // The list a reviewer (and the payload test) checks the shipped tree against.
     packages: closure.map(entry => ({ name: entry.name, version: entry.version })),
+    // The prompt assets placeCharterAssets put back after the exclusions and
+    // the src/ strip removed them; paths are relative to the payload root.
+    charterAssets,
     // Written so the exclusion is visible rather than looking like an omission.
     excludedOptionalDependencies: [{ name: 'nan', reason: "ssh2's build-time C++ header; an optional dependency by contract" }],
   }

@@ -7,12 +7,20 @@
  * at the moment a tool is called, with no build-time signal otherwise. The runner's
  * own `dist` is the input and cannot be changed, which is why the hole is closed
  * here rather than in the runner.
+ *
+ * The charter-assets block at the end assembles a scratch payload with the
+ * vendoring script's own functions instead of reading the committed tree:
+ * the committed payload is regenerated at packaging time, so what this file
+ * can lock is the pipeline's behavior — above all that the llm-router's
+ * prompt assets survive it, because the copy exclusions and the `src/` strip
+ * remove every one of them and only the placement step puts them back.
  */
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
 import { dirname, join, relative, sep } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { REDTEAM_RUNNER_ENTRY, REDTEAM_RUNNER_RESOURCE_DIRECTORY, redteamRunnerResources } from '../src/redteam-runner.ts'
 
@@ -207,4 +215,65 @@ describe('bundled engagement runner payload', () => {
     expect(REDTEAM_RUNNER_ENTRY.split('/')).toEqual(['dist', 'cli.js'])
     expect(relative(PAYLOAD, inPayload(...REDTEAM_RUNNER_ENTRY.split('/'))).split(sep).join('/')).toBe(REDTEAM_RUNNER_ENTRY)
   })
+})
+
+/** The vendoring script's payload functions, as the payload spec consumes them. */
+interface VendorScript {
+  copyDereferenced: (from: string, to: string) => void
+  stripVendoredSources: (destination: string) => void
+  placeCharterAssets: (sourcePackageDirectory: string, destination: string) => string[]
+}
+
+/** The llm-router surface the payload has to serve: asset resolution and chartered assembly. */
+interface PayloadLlmRouter {
+  defaultCharterPath: () => string
+  defaultExemplarPackPath: () => string
+  defaultSoulPath: () => string
+  defaultSoulText: () => string
+  assembleCharterMessages: (
+    engagement: { engagementId: string; owner: string; proofMethod: string; inScope: string },
+    role: string,
+    taskMessages: { role: string; content: string }[],
+  ) => { messages: { role: string; content: string }[]; soulIncluded: boolean }
+}
+
+describe('vendored charter assets', () => {
+  it('resolves the charter, the exemplar pack and the SOUL from a payload the vendoring pipeline assembled', async () => {
+    const require = createRequire(import.meta.url)
+    const vendor = require('../scripts/vendor-redteam-runner.mjs') as VendorScript
+    const sourcePackage = fileURLToPath(new URL('../../../packages/redteam/llm-router', import.meta.url))
+    const scratch = mkdtempSync(join(tmpdir(), 'redteam-payload-charter-'))
+    try {
+      const packageDir = join(scratch, 'node_modules', '@secscan', 'redteam-llm-router')
+      // The pipeline's own steps, in its own order, for the one package whose
+      // prompt assets the exclusions and the src/ strip would otherwise eat.
+      vendor.copyDereferenced(sourcePackage, packageDir)
+      vendor.stripVendoredSources(scratch)
+      const placed = vendor.placeCharterAssets(sourcePackage, scratch)
+      expect(placed).toEqual([
+        join('node_modules', '@secscan', 'redteam-llm-router', 'lib', 'charter', 'charter.md'),
+        join('node_modules', '@secscan', 'redteam-llm-router', 'lib', 'charter', 'exemplars.md'),
+        join('node_modules', '@secscan', 'redteam-llm-router', 'lib', 'charter', 'soul.md'),
+      ])
+      // The strip really happened: nothing below may resolve through src/.
+      expect(existsSync(join(packageDir, 'src'))).toBe(false)
+
+      const router = (await import(pathToFileURL(join(packageDir, 'lib', 'index.js')).href)) as PayloadLlmRouter
+      expect(router.defaultCharterPath()).toBe(join(packageDir, 'lib', 'charter', 'charter.md'))
+      expect(router.defaultExemplarPackPath()).toBe(join(packageDir, 'lib', 'charter', 'exemplars.md'))
+      expect(router.defaultSoulPath()).toBe(join(packageDir, 'lib', 'charter', 'soul.md'))
+      // The bytes that arrived are the source asset's bytes, trimmed as the loaders serve them.
+      expect(router.defaultSoulText()).toBe(readFileSync(join(sourcePackage, 'src', 'charter', 'soul.md'), 'utf8').trim())
+
+      const assembled = router.assembleCharterMessages(
+        { engagementId: 'eng-payload', owner: 'Payload Owner', proofMethod: 'DNS TXT verified', inScope: 'app.example' },
+        'recon',
+        [{ role: 'user', content: 'Map it.' }],
+      )
+      expect(assembled.soulIncluded).toBe(true)
+      expect(assembled.messages[0]?.content.endsWith(router.defaultSoulText())).toBe(true)
+    } finally {
+      rmSync(scratch, { recursive: true, force: true })
+    }
+  }, 30_000)
 })

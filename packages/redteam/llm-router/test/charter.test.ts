@@ -4,6 +4,7 @@
  * role throws instead of sending an agent out with a blank or wrong charter.
  */
 import assert from 'node:assert/strict'
+import { basename, dirname, join } from 'node:path'
 import { describe, test } from 'node:test'
 import {
   CharterError,
@@ -58,7 +59,11 @@ describe('loadCharterText', () => {
     // below the package root); the original two candidates both missed
     // it, so the first live chartered call from the runner threw.
     for (const candidates of [charterAssetCandidates(), exemplarPackCandidates()]) {
-      assert.equal(candidates.length, 4)
+      assert.equal(candidates.length, 5)
+      // The head candidate is the vendored-payload location: charter/<asset>
+      // under the module directory, one segment deeper than the
+      // beside-the-module candidate that follows it.
+      assert.equal(candidates[0], join(dirname(candidates[1]!), 'charter', basename(candidates[1]!)))
       assert.ok(candidates.some(c => c.includes('/src/charter/')), 'a candidate reaches the source asset')
     }
     assert.ok(loadCharterText().length > 0)

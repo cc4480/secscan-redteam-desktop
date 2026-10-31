@@ -43,11 +43,16 @@ const PLACEHOLDER_FIELDS: ReadonlyArray<readonly [placeholder: string, field: ke
 ]
 
 /**
- * Candidate locations of the charter asset, in resolution order. The first
- * candidate serves runs from the source tree (the module sits beside the
- * asset). The rest serve compiled output at every depth the package is
- * actually built to: the bundled face (module at lib/ or dist/, one level
- * below the package root), per-file output (lib/types/charter or
+ * Candidate locations of the charter asset, in resolution order. The head
+ * candidate serves the vendored desktop payload: the vendoring pipeline
+ * excludes `.md` files and deletes vendored `src/` trees, so it places the
+ * charter assets beside the bundled module at `lib/charter/` (see
+ * apps/desktop/scripts/vendor-redteam-runner.mjs); from the bundle,
+ * `charter/charter.md` under the module directory is that location. The
+ * next candidate serves runs from the source tree (the module sits beside
+ * the asset). The rest serve compiled output at every depth the package
+ * is actually built to: the bundled face (module at lib/ or dist/, one
+ * level below the package root), per-file output (lib/types/charter or
  * dist/charter, two levels), and deeper test layouts (three levels) —
  * while the asset stays at src/charter/charter.md.
  *
@@ -56,6 +61,7 @@ const PLACEHOLDER_FIELDS: ReadonlyArray<readonly [placeholder: string, field: ke
 export function charterAssetCandidates(): string[] {
   const moduleDir = dirname(fileURLToPath(import.meta.url))
   return [
+    join(moduleDir, 'charter', 'charter.md'),
     join(moduleDir, 'charter.md'),
     join(moduleDir, '..', 'src', 'charter', 'charter.md'),
     join(moduleDir, '..', '..', 'src', 'charter', 'charter.md'),
