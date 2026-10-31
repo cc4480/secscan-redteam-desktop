@@ -6,9 +6,18 @@
  * model output, and commanderRedirect / blackout / halt plumbing keeps the
  * loop bounded and safe. HaltError is the loop's stop signal.
  */
-import { type AgentRole, type ChatMessage, type ChatResult, type JsonSchemaTool } from '@secscan/redteam-llm-router'
+import {
+  ResilienceError,
+  describeErrorCause,
+  type AgentRole,
+  type ChatMessage,
+  type ChatResult,
+  type JsonSchemaTool,
+} from '@secscan/redteam-llm-router'
 import { createCharteredComplete } from './charter-completion.js'
 import { TurnIntegrity, type DeliverableSpec, type RoundCaps } from './turn-integrity.js'
+import { Reflector } from './reflector.js'
+import { spillToolResult } from './tool-spill.js'
 import { inBlackout } from './gate.js'
 import { isPrivateOrLoopbackHost } from './prober.js'
 import { reconPrompt } from './prompts.js'
@@ -75,6 +84,11 @@ export async function agentLoop(
      * override of config.softRoundCap / config.hardRoundCap.
      */
     roundCaps?: RoundCaps
+    /**
+     * Bounded-reflection cap override (reflector.ts, RC Item 7). Wins
+     * over config.reflectorCap when set; 0 disables reflection.
+     */
+    reflectorCap?: number
     /** When declared, the turn is not finished until this file exists. */
     deliverable?: DeliverableSpec
   } = {},
@@ -96,6 +110,18 @@ export async function agentLoop(
   // the hard cap is the runaway backstop, and both announce themselves —
   // a capped turn is never indistinguishable from a completed one.
   const integrity = new TurnIntegrity(ctx, phase, maxTurns, opts.roundCaps, opts.deliverable)
+  // Bounded reflection (reflector.ts): a stuck batch may spend one
+  // metered verdict call on steering before the wall redirect is
+  // considered. The reflector keeps its own per-invocation count.
+  const reflector = new Reflector(ctx, phase, opts.reflectorCap ?? ctx.config.reflectorCap)
+  const askReflection = async (prompt: string): Promise<string> => {
+    const res = await complete(role, [
+      { role: 'system', content: system },
+      { role: 'user', content: prompt },
+    ], { tools: [] })
+    tokenMeterFor(ctx).record(res.usage)
+    return res.text
+  }
   for (let turn = 0; turn < integrity.effectiveMaxTurns; turn++) {
     await respectBlackout(ctx, phase)
     const cap = haltedByCaps(ctx)
@@ -106,14 +132,26 @@ export async function agentLoop(
     if (integrity.checkpoint(turn)) break
     // A3 Deep: compact an over-budget history before it is sent, so the
     // steps journal below logs exactly what the model actually saw.
-    await maybeCompactMessages(ctx, role, phase, messages, complete, (usage) => tokenMeterFor(ctx).record(usage))
+    await maybeCompactMessages(ctx, role, phase, messages, complete, usage => tokenMeterFor(ctx).record(usage))
     let res: ChatResult
     try {
       res = await complete(role, messages, { tools })
     } catch (err) {
       // The outgoing prompt did exist; only the response's tokens are unknown.
       steps.prompt(JSON.stringify(messages), null)
-      ctx.events.append({ phase, actor: 'runner', action: 'llm_error', result: `LLM call failed: ${(err as Error).message}` })
+      // Q-HALT Item 1: a ResilienceError's message is only the classifier's
+      // rule name — append the classification and the provider cause (the
+      // ProviderError on err.cause) so the event, and the trajectory that
+      // embeds it verbatim, carry the provider's actual words. The cause
+      // segment is redacted: provider bodies can echo request content.
+      let result = `LLM call failed: ${(err as Error).message}`
+      if (err instanceof ResilienceError) {
+        const c = err.classified
+        result += ` [classified: ${c.reason}/${c.detail}${c.status !== undefined ? `, HTTP ${c.status}` : ''}]`
+      }
+      const cause = describeErrorCause(err)
+      if (cause !== undefined) result += ` Cause: ${redactPii(cause)}`
+      ctx.events.append({ phase, actor: 'runner', action: 'llm_error', result })
       throw err
     }
     // Harness2 P1a: the provider's usage is real; accumulate it per engagement.
@@ -162,7 +200,12 @@ export async function agentLoop(
     // event log, and the shared-state digest read as they did when the
     // calls ran one at a time — the digest is computed after its group
     // completes, so it reflects the group's full state.
-    for (const group of partitionToolCalls(res.toolCalls, (c) => toolTargetHost(c), phase === 'recon')) {
+    // Batch tallies for the reflector: what this turn's tool calls did,
+    // counted in the same per-result pass that feeds the wall streak.
+    let batchCalls = 0
+    let batchSuccesses = 0
+    let batchDenied = 0
+    for (const group of partitionToolCalls(res.toolCalls, c => toolTargetHost(c), phase === 'recon')) {
       // H2-P1 section-5: the full tool-call arguments, then the full result as
       // the observation (redaction happens inside the journal writer).
       for (const call of group.calls) steps.tool(call.name, JSON.stringify(call.arguments ?? {}))
@@ -188,12 +231,42 @@ export async function agentLoop(
           result: safeResult.slice(0, 800),
           opsec: d.opsec,
         })
+        // Output spill (tool-spill.ts): a result past the observation
+        // ceiling is written in full to the engagement's spill dir and the
+        // model gets head + omission notice + tail, readable back via
+        // read_spill — the ceiling never silently destroys content.
+        const spill = spillToolResult({
+          dir: ctx.events.dir,
+          tool: call.name,
+          attackId: d.attackId,
+          target: d.target,
+          text: safeResult,
+        })
+        if (spill.record) {
+          ctx.events.append({
+            phase,
+            actor: role,
+            action: 'tool_output_spilled',
+            attackId: d.attackId,
+            target: d.target,
+            result: `${call.name}: ${spill.record.chars} chars → ${spill.record.file} (sha256 ${spill.record.sha256.slice(0, 12)})`,
+          })
+        } else if (spill.failed) {
+          ctx.events.append({
+            phase,
+            actor: role,
+            action: 'tool_output_spill_failed',
+            attackId: d.attackId,
+            target: d.target,
+            result: `${call.name}: spill failed (${spill.failed}); observation truncated at the 4000-char ceiling`,
+          })
+        }
         messages.push({
           role: 'tool',
           toolCallId: call.id,
           // Every observation carries the current shared state — no agent ever
           // works from a stale or private picture (Megazord protocol).
-          content: safeResult.slice(0, 4000) + '\n' + sharedStateDigest(ctx, phase),
+          content: spill.content + '\n' + sharedStateDigest(ctx, phase),
         })
         // Wall detection: consecutive blocked/cooled-down/OPSEC-signaled probes
         // with no successful observation. The coordinator redirects to re-recon.
@@ -201,6 +274,9 @@ export async function agentLoop(
         // Soft-cap progress verdict: one non-blocked, successful result means
         // the round advanced the work; a round of nothing but those is stuck.
         integrity.noteToolResult(!blocked && d.ok !== false)
+        batchCalls++
+        if (blocked) batchDenied++
+        else if (d.ok !== false) batchSuccesses++
         ctx.deniedStreak = blocked ? ctx.deniedStreak + 1 : 0
         const capAfter = haltedByCaps(ctx)
         if (capAfter) {
@@ -209,7 +285,20 @@ export async function agentLoop(
         }
       }
     }
-    if (phase === 'exploit' && ctx.deniedStreak >= 4 && ctx.redirects < 2) {
+    // Reflect before redirecting (reflector.ts): a stuck batch first
+    // earns a bounded reflection; the wall redirect is considered only
+    // when no reflection was spent on this batch — never both at once.
+    const reflection = await reflector.maybeReflect(
+      role,
+      { calls: batchCalls, successes: batchSuccesses, denied: batchDenied, deniedStreak: ctx.deniedStreak },
+      askReflection,
+    )
+    if (reflection) {
+      messages.push({
+        role: 'user',
+        content: `REFLECTION (${reflection.count}/${reflection.cap}) — verdict: ${reflection.verdict}: ${reflection.steering}`,
+      })
+    } else if (phase === 'exploit' && ctx.deniedStreak >= 4 && ctx.redirects < 2) {
       ctx.deniedStreak = 0
       ctx.redirects++
       const intel = await commanderRedirect(
