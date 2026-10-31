@@ -20,15 +20,22 @@ describe('operator commands', () => {
     assert.deepEqual(names, ['/deepscan', '/metasploit', '/nmap', '/nuclei', '/pcscan', '/report', '/scan'])
   })
 
-  it('parses /pcscan as the workstation full audit', () => {
+  it('parses /pcscan as the LOCAL workstation assessment (Q-RP-11)', () => {
     const parsed = parseCommand('/pcscan full')
     assert.notEqual(typeof parsed, 'string')
     if (typeof parsed === 'string') return
     assert.equal(parsed.command.name, '/pcscan')
     assert.deepEqual(parsed.targets, ['windows'])
-    assert.ok(parsed.command.tools.includes('nmap_exec'))
-    assert.ok(parsed.command.tools.includes('nuclei_exec'))
+    // Local mode collects on-host: the remote battery executors and the
+    // act/run tools are NOT in the local tool family (the pre-RP-11 spec
+    // re-aimed them at the machine's own hostname — the audited defect).
+    assert.equal(parsed.command.local, true)
+    assert.ok(parsed.command.tools.includes('pc_observe'))
+    assert.ok(!parsed.command.tools.includes('nmap_exec'))
+    assert.ok(!parsed.command.tools.includes('nuclei_exec'))
+    assert.ok(!parsed.command.tools.includes('pc_act'))
     assert.ok(parsed.command.artifacts.includes('report.html'))
+    assert.ok(parsed.command.artifacts.includes('host-inventory.json'))
   })
 
   it('resolves target families from arguments and defaults otherwise', () => {

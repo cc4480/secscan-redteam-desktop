@@ -11,7 +11,7 @@
  * the existing engagement engine. Nothing in this module talks to a target.
  */
 import type { TargetId } from "../targets.js";
-import type { EngagementPhase } from "../types.js";
+import type { EngagementInput, EngagementPhase } from "../types.js";
 
 /** One slash command the operator may type. */
 export interface CommandSpec {
@@ -31,6 +31,10 @@ export interface CommandSpec {
   readonly tier: 0 | 1 | 2;
   /** True when the run must stop for operator approval before the exploit phase. */
   readonly requiresApproval: boolean;
+  /** True for a LOCAL-host engagement (Q-RP-11): the target is the
+   * machine the app runs on, collected on-host — never a remote
+   * battery re-aimed at the machine's own hostname. */
+  readonly local?: boolean;
   /** Artifacts the run must leave behind. */
   readonly artifacts: readonly string[];
 }
@@ -47,18 +51,18 @@ export interface CommandInvocation {
 export const COMMANDS: readonly CommandSpec[] = [
   {
     name: "/pcscan",
-    summary: "Full audit of THIS workstation: inventory, misconfigurations, missing patches, exposed services, then an HTML report.",
+    summary: "Local host assessment of THIS workstation: on-host inventory and posture collection, misconfigurations, missing patches, then an HTML report with the host-inventory section.",
     usage: "/pcscan [quick|full]",
     phases: ["recon", "exploit", "report"],
     targets: ["windows"],
     tools: [
-      "pc_observe", "pc_act", "pc_run",
+      "pc_observe",
       "system_info", "list_processes", "list_dir", "read_file",
-      "nmap_exec", "nuclei_exec",
     ],
     tier: 1,
     requiresApproval: false,
-    artifacts: ["report.html", "report.md", "trajectory.json"],
+    artifacts: ["report.html", "report.md", "host-inventory.json", "trajectory.json"],
+    local: true,
   },
   {
     name: "/scan",
@@ -180,7 +184,9 @@ export function planCommand(invocation: CommandInvocation): readonly PlannedPhas
   const objective: Partial<Record<EngagementPhase, string>> = {
     authorize: "Prove ownership and confirm the ROE (the runner enforces this mechanically).",
     plan: "Produce one operation plan; every step carries an ATT&CK ID and an expected observation.",
-    recon: "Map the surface and write every discovery to the shared target map in the same turn.",
+    recon: command.local
+      ? "Collect the host inventory ON-HOST via the pc-agent channel (no network services, no test credentials) and write host-inventory.json to the engagement record."
+      : "Map the surface and write every discovery to the shared target map in the same turn.",
     exploit: "Test hypotheses one tool call at a time; two independent observations per finding.",
     report: "Write findings with evidence, fix, retest, honest limits, and render the HTML report.",
   };
@@ -189,6 +195,37 @@ export function planCommand(invocation: CommandInvocation): readonly PlannedPhas
     objective: objective[phase] ?? "Continue the engagement.",
     tools: command.tools,
   }));
+}
+
+/**
+ * Build the EngagementInput for a LOCAL command invocation (/pcscan):
+ * the target is this machine's hostname, the scope is exactly that
+ * hostname, and localHost is set so the collector runs on-host. The
+ * old shell instead re-aimed the remote battery at the hostname and
+ * stamped the run production + confirmProduction — both gone: a local
+ * assessment is a staging-class run against the operator's own box,
+ * attested by the operator running it.
+ * @param invocation - parsed local command.
+ * @param host - this machine's hostname.
+ * @param mode - engagement mode from the CLI (red|black).
+ * @returns the engagement input for runEngagement.
+ */
+export function buildLocalEngagementInput(
+  invocation: CommandInvocation,
+  host: string,
+  mode: EngagementInput["mode"] = "red",
+): EngagementInput {
+  if (!invocation.command.local) {
+    throw new Error(`${invocation.command.name} is not a local-host command`);
+  }
+  return {
+    target: host,
+    mode,
+    objective: `${invocation.command.summary} (${invocation.command.name})`,
+    roe: { scope: [host] },
+    targets: [...invocation.targets],
+    localHost: true,
+  };
 }
 
 /** The operator-facing help text, generated from the registry. */
