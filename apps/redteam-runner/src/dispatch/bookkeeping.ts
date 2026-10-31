@@ -12,10 +12,25 @@ import { syncLiveFindingsToState, writeFindingToRegistry, writeKilledToRegistry 
 import { adjudicateRecordedClaim } from '../exploit-cell/live.js'
 import { closeVariantExpansion, startVariantExpansion } from '../variants/index.js'
 import { optStr } from './prelude.js'
+import { readSpill } from '../tool-spill.js'
 
 export async function handleBookkeepingTools(ctx: Ctx, role: ActorRole, phase: EngagementPhase,
   call: ToolCallRequest, args: Record<string, unknown>): Promise<DispatchResult | null> {
-  if (!['query_registry','update_target_map','record_finding','record_killed','record_item_verdict','abort_engagement','variant_list'].includes(call.name)) return null
+  if (!['query_registry','update_target_map','record_finding','record_killed','record_item_verdict','abort_engagement','variant_list','read_spill'].includes(call.name)) return null
+  if (call.name === 'read_spill') {
+    // Sandbox lives in tool-spill.ts (mechanical, unit-tested): only this
+    // engagement's own spill/<file>.txt references resolve; everything else
+    // is a plain error result, never a throw into the loop.
+    const path = optStr(args['path'])
+    if (!path) return { result: 'read_spill: a spill path is required — the observation notice names it (e.g. "spill/0007-http_probe.txt").', target: 'spill' }
+    const r = readSpill({
+      dir: ctx.events.dir,
+      path,
+      offsetChars: typeof args['offsetChars'] === 'number' ? args['offsetChars'] : undefined,
+      maxChars: typeof args['maxChars'] === 'number' ? args['maxChars'] : undefined,
+    })
+    return { result: r.ok ? r.text : r.error, target: 'spill' }
+  }
   if (call.name === 'query_registry') {
     const limit = Math.min(Math.max(Number(args['limit'] ?? 5) || 5, 1), 10)
     // Read the file, not the snapshot: a concurrent engagement's write-through

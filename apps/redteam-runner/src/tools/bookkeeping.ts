@@ -121,3 +121,18 @@ export const ABORT_TOOL: JsonSchemaTool = {
     required: ['reason'],
   },
 }
+
+export const READ_SPILL_TOOL: JsonSchemaTool = {
+  name: 'read_spill',
+  description:
+    'Read back a tool result that was too large for the observation window and spilled to a file — the observation notice names the path (e.g. "spill/0007-http_probe.txt"). Returns one window of the FULL text plus a trailer; page with offsetChars until the trailer says end of spill. Only this engagement\'s own spill files can be read. Args: path (required), offsetChars, maxChars (default 4000, max 8000).',
+  parameters: {
+    type: 'object',
+    properties: {
+      path: { type: 'string' },
+      offsetChars: { type: 'number' },
+      maxChars: { type: 'number' },
+    },
+    required: ['path'],
+  },
+}
