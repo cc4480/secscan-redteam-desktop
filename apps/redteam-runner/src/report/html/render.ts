@@ -34,10 +34,12 @@ import {
 } from "./sections.js";
 import { TIER_DEFINITION, TIER_LABEL, TIER_ORDER, esc, type ReportTier, type SeverityName } from "./tokens.js";
 import type { ReportDetail } from "../detail.js";
+import type { HostInventoryArtifact } from "../host-inventory.js";
 import {
   breakdownSection, impactSection, pillarSection, prioritySection,
   riskAreasSection, surfaceSection, whatChangedSection,
 } from "./detail-sections.js";
+import { inventorySection } from "./inventory-sections.js";
 
 export type { ActivityInput, CoverageInput } from "./sections.js";
 export type { FindingMeta } from "./cards.js";
@@ -59,6 +61,10 @@ export interface EngagementReportInput {
   /** The Q-REPORT-DETAIL derivations (report/detail.ts), when the
    * phase assembled them. Absent => the pre-detail anatomy renders. */
   detail?: ReportDetail;
+  /** The Q-RP-11 host inventory (report/host-inventory.ts), when the
+   * engagement dir carries the artifact. Absent => no inventory
+   * sections render (web/remote engagements are unchanged). */
+  inventory?: HostInventoryArtifact;
   coverage: CoverageInput;
   activity: ActivityInput;
   haltedReason?: string;
@@ -181,6 +187,8 @@ export function renderEngagementReportHtml(o: EngagementReportInput): string {
     parts.push(coverageSection(o.coverage));
     parts.push(surfaceSection(d));
   }
+  const inventoryHtml = inventorySection(o.inventory);
+  if (inventoryHtml) parts.push(inventoryHtml);
   parts.push(activitySection(o.activity));
   parts.push(footerSection(o.meta));
 

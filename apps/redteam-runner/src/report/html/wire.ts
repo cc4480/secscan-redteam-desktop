@@ -15,6 +15,7 @@ import { projectApprovals, projectDanglingCauses, projectToolStats } from "../..
 import { type NegativeProof, type PocBundle } from "../../proof/index.js";
 import { gradeBanner, gradeFindings } from "../grading.js";
 import { buildReportDetail, type DetailInput } from "../detail.js";
+import { readHostInventory } from "../host-inventory.js";
 import { type ReportMeta } from "../html.js";
 import {
   type ActivityInput,
@@ -151,6 +152,7 @@ export function buildEngagementReportInput(deps: WireDeps): EngagementReportInpu
     negativeProof: deps.proof.negative,
     findingMeta: buildFindingMeta(deps.bundles),
     detail: deps.detailInput ? buildReportDetail(deps.detailInput) : undefined,
+    inventory: readHostInventory(deps.ctx.events.dir),
     coverage: buildCoverage(deps),
     activity: buildActivity(deps.events),
     haltedReason: deps.haltedReason,

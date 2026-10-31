@@ -100,6 +100,7 @@ a{color:var(--brand)}
 .limits li{margin:3px 0;overflow-wrap:anywhere}
 /* ---- findings ---- */
 .tier-head{margin:34px 0 4px;font-size:16px}
+.sub-title{margin:26px 0 10px;font-size:15px}
 .tier-def{color:var(--faint);font-size:12.5px;margin:0 0 14px;font-family:var(--mono)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:20px;margin:0 0 14px}
 .card.ruled-out{border-style:dashed;color:var(--muted)}
