@@ -31,6 +31,7 @@ import { describeSource, resolveExternalBinary, toolsDir, TOOLS_DIR_ENV, type Re
 import { resolveWordlist } from '../xtool/wordlist.js'
 import { pcAgentConfigured } from '../host-exec/pc-agent.js'
 import { browserConfigured, BROWSER_SETUP_GUIDANCE } from '../browser/cdp.js'
+import { poolSnapshots, type PoolSnapshot } from '@secscan/redteam-llm-router'
 
 export type ReadinessState = 'ready' | 'missing' | 'unreachable' | 'not-configured'
 
@@ -247,6 +248,13 @@ export async function readinessReport(env: NodeJS.ProcessEnv = process.env): Pro
     },
   )
 
+  // --- LLM credential pool ---------------------------------------------------
+  // Optional and conditional: the item exists only when a key is dead or
+  // benched (credentialPoolItem returns undefined for a healthy pool, and
+  // a healthy pool takes no line in the report at all).
+  const poolItem = credentialPoolItem(poolSnapshots(), Date.now())
+  if (poolItem !== undefined) items.push(poolItem)
+
   const requiredItems = items.filter(i => i.required)
   const requiredMissing = requiredItems.filter(i => i.state !== 'ready')
   const ok = requiredMissing.length === 0
@@ -256,6 +264,54 @@ export async function readinessReport(env: NodeJS.ProcessEnv = process.env): Pro
     summary:
       `${items.filter(i => i.state === 'ready').length} of ${items.length} ready — ` +
       (ok ? 'required items satisfied' : `${requiredMissing.length} required missing: ${requiredMissing.map(i => i.id).join(', ')}`),
+  }
+}
+
+/** "~12m" / "~3h" for a bench's remaining time. */
+function formatBenchRemaining(remainingMs: number): string {
+  const minutes = Math.max(1, Math.round(remainingMs / 60_000))
+  return minutes < 60 ? `${minutes}m` : `${Math.round(minutes / 60)}h`
+}
+
+/**
+ * The `llm_credential_pool` readiness item (pool-persistence spec §1.6):
+ * rendered ONLY when some pool entry is dead or benched — a healthy or
+ * empty pool omits the item entirely rather than taking a green line.
+ * The detail names each affected key by fingerprint (never key material):
+ * dead keys with their recorded reason, benched (key, model) pairs with
+ * the time until they are eligible again, or "no automatic return" for
+ * permanent (entitlement) benches. Benches that have already lapsed by
+ * render time are skipped. Pure over the snapshots so tests feed it
+ * fixtures; the report builder passes the router's live poolSnapshots().
+ */
+export function credentialPoolItem(snapshots: PoolSnapshot[], nowMs: number): ReadinessItem | undefined {
+  const segments: string[] = []
+  for (const snap of snapshots) {
+    for (const entry of snap.entries) {
+      if (entry.dead) {
+        segments.push(
+          `${snap.providerId}: key …${entry.fingerprint} dead${entry.deadReason !== undefined ? ` (${entry.deadReason})` : ''}`,
+        )
+      }
+      for (const bench of entry.benchedModels) {
+        if (bench.untilMs === null) {
+          segments.push(`${snap.providerId}: key …${entry.fingerprint} benched for ${bench.model} — no automatic return`)
+        } else if (bench.untilMs > nowMs) {
+          segments.push(
+            `${snap.providerId}: key …${entry.fingerprint} benched for ${bench.model} — eligible again in ~${formatBenchRemaining(bench.untilMs - nowMs)}`,
+          )
+        }
+      }
+    }
+  }
+  if (segments.length === 0) return undefined
+  return {
+    id: 'llm_credential_pool',
+    label: 'LLM credential pool (dead / benched keys)',
+    state: 'missing',
+    detail: segments.join('; '),
+    fix: 'A benched key returns on its own when the bench lapses; a dead key stays dead until the key is replaced (check the provider account, then update the key in the Secure Vault). To reset all pool bookkeeping, delete the pool state file (llm-pool-state.json — see REDTEAM_LLM_POOL_STATE_FILE / REDTEAM_HOME).',
+    required: false,
   }
 }
 

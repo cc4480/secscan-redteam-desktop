@@ -20,7 +20,7 @@ import { join } from 'node:path'
 import { buildXToolArgv, findProfile, findXTool } from '../src/xtool/registry.js'
 import { resolveWordlist, wordlistCandidates } from '../src/xtool/wordlist.js'
 import { connectScanArgv, isNmapPrivilegeFailure } from '../src/nmap/privilege.js'
-import { formatReadiness, readinessReport } from '../src/tools/readiness.js'
+import { credentialPoolItem, formatReadiness, readinessReport } from '../src/tools/readiness.js'
 import { _resetNmapProbeCache } from '../src/nmap/prereq.js'
 
 const ffuf = findXTool('ffuf')
@@ -221,5 +221,69 @@ describe('readiness report', () => {
     const tools = report.items.find(i => i.id === 'tools_dir')
     assert.equal(tools?.state, 'not-configured')
     assert.equal(tools?.required, false)
+  })
+})
+
+describe('readiness report — llm_credential_pool (Q-POOLPERSIST)', () => {
+  const NOW = 1_000_000_000_000
+
+  it('omits the item for healthy or empty pools (no green line)', () => {
+    assert.equal(credentialPoolItem([], NOW), undefined)
+    assert.equal(
+      credentialPoolItem(
+        [{ providerId: 'meta', entries: [{ keyId: 0, fingerprint: 'ab12cd34', dead: false, benchedModels: [] }] }],
+        NOW,
+      ),
+      undefined,
+    )
+  })
+
+  it('renders dead keys and benches with the spec detail format, fingerprints only', () => {
+    const item = credentialPoolItem(
+      [
+        {
+          providerId: 'meta',
+          entries: [
+            { keyId: 0, fingerprint: 'ab12cd34', dead: true, deadReason: 'auth_dead', benchedModels: [] },
+            {
+              keyId: 1,
+              fingerprint: '9f3c77aa',
+              dead: false,
+              benchedModels: [
+                { model: 'muse-spark-1.3', untilMs: NOW + 12 * 60_000 },
+                { model: 'muse-wonder-1.0', untilMs: null },
+              ],
+            },
+          ],
+        },
+      ],
+      NOW,
+    )
+    assert.equal(item?.id, 'llm_credential_pool')
+    assert.equal(item?.required, false)
+    assert.equal(
+      item?.detail,
+      'meta: key …ab12cd34 dead (auth_dead); meta: key …9f3c77aa benched for muse-spark-1.3 — eligible again in ~12m; meta: key …9f3c77aa benched for muse-wonder-1.0 — no automatic return',
+    )
+  })
+
+  it('skips benches that already lapsed by render time', () => {
+    const item = credentialPoolItem(
+      [
+        {
+          providerId: 'meta',
+          entries: [
+            { keyId: 0, fingerprint: 'ab12cd34', dead: false, benchedModels: [{ model: 'm', untilMs: NOW - 1 }] },
+          ],
+        },
+      ],
+      NOW,
+    )
+    assert.equal(item, undefined)
+  })
+
+  it('the live report omits the pool item when no live pool is degraded', async () => {
+    const report = await readinessReport({} as NodeJS.ProcessEnv)
+    assert.equal(report.items.find(i => i.id === 'llm_credential_pool'), undefined)
   })
 })
