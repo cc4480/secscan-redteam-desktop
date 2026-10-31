@@ -22,7 +22,7 @@ import type {
   CompleteOptions,
   LlmProvider,
 } from '../types.js'
-import { fromWireToolCalls, toWireMessages, toWireTools } from './openai-wire.js'
+import { applyResponseFormat, fromWireToolCalls, toWireMessages, toWireTools } from './openai-wire.js'
 import { providerErrorFromResponse, providerTransportError } from '../errors.js'
 import { completionSignal, resolveCompletionTimeoutMs } from '../timeout.js'
 
@@ -95,6 +95,7 @@ export class QwenProvider implements LlmProvider {
     if (options.maxTokens) body['max_tokens'] = options.maxTokens
     const wireTools = toWireTools(options.tools)
     if (wireTools) body['tools'] = wireTools
+    applyResponseFormat(body, this.id, options)
 
     let res: Response
     try {
@@ -140,6 +141,7 @@ export class QwenProvider implements LlmProvider {
         : undefined,
       provider: this.id,
       model: options.model,
+      requestBody: body,
     }
   }
 }

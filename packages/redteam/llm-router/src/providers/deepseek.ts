@@ -26,6 +26,7 @@ import type {
   ToolCallRequest,
 } from '../types.js'
 import { providerErrorFromResponse, providerTransportError } from '../errors.js'
+import { applyResponseFormat } from './openai-wire.js'
 import { completionSignal, resolveCompletionTimeoutMs } from '../timeout.js'
 
 export const DEEPSEEK_API_KEY_ENV = 'DEEPSEEK_API_KEY'
@@ -125,6 +126,7 @@ export class DeepSeekProvider implements LlmProvider {
     if (options.maxTokens) body['max_tokens'] = options.maxTokens
     const wireTools = toWireTools(options.tools)
     if (wireTools) body['tools'] = wireTools
+    applyResponseFormat(body, this.id, options)
 
     let res: Response
     try {
@@ -167,6 +169,7 @@ export class DeepSeekProvider implements LlmProvider {
         : undefined,
       provider: this.id,
       model: options.model,
+      requestBody: body,
     }
   }
 }

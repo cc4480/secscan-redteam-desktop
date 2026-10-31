@@ -21,7 +21,7 @@
  */
 
 import type { ChatResult, CompleteOptions, LlmProvider } from '../types.js'
-import { fromWireToolCalls, toWireMessages, toWireTools } from './openai-wire.js'
+import { applyResponseFormat, fromWireToolCalls, toWireMessages, toWireTools } from './openai-wire.js'
 import { providerErrorFromResponse, providerTransportError } from '../errors.js'
 import { completionSignal, resolveCompletionTimeoutMs } from '../timeout.js'
 
@@ -82,6 +82,7 @@ export class LocalOpenAiProvider implements LlmProvider {
     if (options.maxTokens !== undefined) body['max_tokens'] = options.maxTokens
     const wireTools = toWireTools(options.tools)
     if (wireTools !== undefined) body['tools'] = wireTools
+    applyResponseFormat(body, this.id, options)
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     const key = this.apiKeyOrNull(options)
@@ -128,6 +129,7 @@ export class LocalOpenAiProvider implements LlmProvider {
         : undefined,
       provider: this.id,
       model: options.model,
+      requestBody: body,
     }
   }
 }
