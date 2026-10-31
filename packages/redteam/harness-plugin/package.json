@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@deepseek-ai/dsh-mcp-client": "workspace:*",
     "@secscan/redteam-auth-gate": "workspace:*",
     "@secscan/redteam-foundry-gate": "workspace:*",
     "@secscan/redteam-llm-router": "workspace:*"
