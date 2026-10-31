@@ -14,7 +14,7 @@ import { type Finding } from "../types.js";
 import { BATTERY_CATEGORIES } from "../battery.js";
 import { TARGET_PROFILES, activeTargets, targetCellStatus } from "../targets.js";
 import { ledgerSummary, serializeLedger } from "../coverage/items.js";
-import { type Ctx } from "../context.js";
+import { type Ctx, type LiveFinding } from "../context.js";
 import { agentLoop, promptCtx } from "../agents.js";
 import { extractJsonBlock } from "../util.js";
 import { batteryStatusLine } from "../coverage/cells.js";
@@ -35,6 +35,61 @@ import { buildEngagementReportInput, buildFindingMeta } from "./html/wire.js";
 import { buildDetailInput, recordReportMeta } from "./predecessor.js";
 import { type DetailInput } from "./detail.js";
 import { buildGradeSection, gradeFindings } from "./grading.js";
+
+/**
+ * Q-PROVEN halted path: a report Finding built mechanically from one live
+ * finding, carrying its cell verdict (same F-${i+1} positional indexing as
+ * the state sync in dispatch/verdicts.ts). No join is needed here — the
+ * halted report is built from the same live array it reports on.
+ */
+export function haltedFindingFromLive(lf: LiveFinding, index: number): Finding {
+  return {
+    id: `F-${index + 1}`,
+    severity: (["critical", "high", "medium", "low", "info"].includes(lf.severity)
+      ? lf.severity
+      : "info") as Finding["severity"],
+    title: lf.title,
+    attackIds: lf.attackId ? [lf.attackId] : [],
+    evidence: lf.evidence,
+    fix: "(engagement halted before remediation guidance was written)",
+    retest: "(engagement halted before a retest plan was written)",
+    status: "confirmed",
+    cellState: lf.cellState,
+    provenClaim: lf.provenClaim,
+    cellDetail: lf.cellDetail,
+  };
+}
+
+/**
+ * Q-PROVEN join (normal path): stamp each reporter-parsed finding with the
+ * cell verdict of the live finding it came from. A match requires BOTH
+ * keys — normalized title equality AND the live finding's attackId among
+ * the parsed finding's attackIds (attackIds are shared ATT&CK ids and
+ * titles are model prose; either key alone is not an identifier). Across
+ * multiple live matches 'proven' wins; a live finding stamps only the
+ * first parsed finding that matches it. A miss leaves the finding
+ * completely unstamped — it renders on bundle/status alone, exactly as
+ * before this build; a miss never fabricates a verdict.
+ */
+export function applyCellVerdicts(findings: Finding[], liveFindings: LiveFinding[]): void {
+  const stampedLive = new Set<number>();
+  for (const f of findings) {
+    const title = f.title.trim().toLowerCase();
+    let match: LiveFinding | undefined;
+    liveFindings.forEach((lf, i) => {
+      if (stampedLive.has(i)) return;
+      if (lf.title.trim().toLowerCase() !== title) return;
+      if (!f.attackIds.some((a) => a.toUpperCase() === lf.attackId.toUpperCase())) return;
+      if (!match || (lf.cellState === "proven" && match.cellState !== "proven")) match = lf;
+    });
+    if (match) {
+      f.cellState = match.cellState;
+      f.provenClaim = match.provenClaim;
+      f.cellDetail = match.cellDetail;
+      stampedLive.add(liveFindings.indexOf(match));
+    }
+  }
+}
 
 export async function reportPhase(
   ctx: Ctx,
@@ -124,18 +179,7 @@ export async function reportPhase(
       `This engagement halted before the reporter phase. The findings, coverage, ` +
       `proof bundles, and safety manifest below are the runner-computed record of ` +
       `work completed up to the halt — no reporter-agent narrative was generated.\n`;
-    findings = ctx.liveFindings.map((lf, i) => ({
-      id: `F-${i + 1}`,
-      severity: (["critical", "high", "medium", "low", "info"].includes(lf.severity)
-        ? lf.severity
-        : "info") as Finding["severity"],
-      title: lf.title,
-      attackIds: lf.attackId ? [lf.attackId] : [],
-      evidence: lf.evidence,
-      fix: "(engagement halted before remediation guidance was written)",
-      retest: "(engagement halted before a retest plan was written)",
-      status: "confirmed",
-    }));
+    findings = ctx.liveFindings.map((lf, i) => haltedFindingFromLive(lf, i));
   } else if (ctx.config.dryRunAgents) {
     reportMd = `# Engagement report (dry-run)\n\nTarget: ${ctx.input.target}\nMode: ${ctx.input.mode}\n`;
     findings = [];
@@ -145,12 +189,15 @@ export async function reportPhase(
       "reporter",
       "report",
       reporterPrompt(promptCtx(ctx)),
-      `Write the client report now.\n\nAuthorization: ${ctx.verificationProof}\n\nOperation plan: ${JSON.stringify(ctx.plan)}\n\nShared verdicts this engagement — confirmed (${ctx.liveFindings.length}):\n${ctx.liveFindings.map((f) => `- [${f.severity}] ${f.title} (${f.attackId}${f.vulnClass ? `, ${f.vulnClass}` : ""}): ${f.evidence}`).join("\n") || "(none)"}\nKilled hypotheses (${ctx.killedLive.length}):\n${ctx.killedLive.map((k) => `- ${k.hypothesis} → ${k.killingObservation}`).join("\n") || "(none)"}\nRegistry hits consulted: ${ctx.registryHits.length}. Target fingerprint: ${JSON.stringify(ctx.fingerprint)}.\n\n${batteryLine}\n\nRecon brief:\n${reconBrief.slice(0, 4000)}\n\nExploitation summary:\n${exploitSummary.slice(0, 4000)}\n\nProof of exploitation is appended mechanically by the runner from the audit log — do not invent PoC details, marker values, or reproduction steps in your narrative; describe findings only from the evidence given.\n\nEnd the report with a JSON block: \`\`\`json {"findings": [{"id":"F-1","severity":"low","title":"...","attackIds":["T1190"],"evidence":"...","fix":"...","retest":"...","status":"confirmed"}]} \`\`\``,
+      `Write the client report now.\n\nAuthorization: ${ctx.verificationProof}\n\nOperation plan: ${JSON.stringify(ctx.plan)}\n\nShared verdicts this engagement — confirmed (${ctx.liveFindings.length}):\n${ctx.liveFindings.map((f) => `- [${f.severity}] ${f.title} (${f.attackId}${f.vulnClass ? `, ${f.vulnClass}` : ""}${f.cellState ? `, cell: ${f.cellState.toUpperCase()}` : ""}): ${f.evidence}`).join("\n") || "(none)"}\nKilled hypotheses (${ctx.killedLive.length}):\n${ctx.killedLive.map((k) => `- ${k.hypothesis} → ${k.killingObservation}`).join("\n") || "(none)"}\nRegistry hits consulted: ${ctx.registryHits.length}. Target fingerprint: ${JSON.stringify(ctx.fingerprint)}.\n\n${batteryLine}\n\nRecon brief:\n${reconBrief.slice(0, 4000)}\n\nExploitation summary:\n${exploitSummary.slice(0, 4000)}\n\nProof of exploitation is appended mechanically by the runner from the audit log — do not invent PoC details, marker values, or reproduction steps in your narrative; describe findings only from the evidence given.\n\nEnd the report with a JSON block: \`\`\`json {"findings": [{"id":"F-1","severity":"low","title":"...","attackIds":["T1190"],"evidence":"...","fix":"...","retest":"...","status":"confirmed"}]} \`\`\``,
       [],
       4,
     );
     const parsed = extractJsonBlock(reportMd) as { findings?: Finding[] } | null;
     findings = Array.isArray(parsed?.findings) ? parsed.findings : [];
+    // Q-PROVEN: join the parsed findings back to the live findings so the
+    // cell verdict reaches the report (before the accountable stamp below).
+    applyCellVerdicts(findings, ctx.liveFindings);
   }
   // v0.17.0 accountability: every finding records the named human
   // accountable for it. Stamped mechanically by the runner at report time —
