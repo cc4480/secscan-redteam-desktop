@@ -1,0 +1,136 @@
+/**
+ * FilePoolStateStore — the file-backed PoolStateStore for credential pool
+ * persistence (pool.ts). The document holds fingerprints and bench
+ * bookkeeping only — never key material — so it is safe to log, attach to
+ * a bug report, or sync; it is still written at 0600 inside a 0700
+ * directory, the house discipline for app-data documents (the same
+ * discipline as apps/desktop's mcp-credentials store).
+ *
+ * Write discipline: ensure the directory, write `${path}.tmp` at 0600,
+ * chmod it explicitly, then rename over the target — a crash mid-write
+ * leaves the old document or the new one, never a torn file. Reads never
+ * throw: a missing file is null (normal first run), and any other read
+ * failure warns once per call with the path and reason class — never the
+ * contents — and also reads as null.
+ *
+ * Known limitation (single writer): pools are per-process singletons, and
+ * the packaged app runs one host process owning the router. Two processes
+ * sharing one state file (a CLI run beside the console) race whole-file
+ * replaces: last writer wins, a bench can be lost, none can be corrupted
+ * (atomic rename). Accepted for v1.
+ */
+
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import type { PoolStateStore } from './pool.js'
+
+/** Environment variables governing pool-state persistence. */
+export const POOL_STATE_ENV = {
+  /** Set to off / 0 / false to keep pool state in memory only. */
+  persist: 'REDTEAM_LLM_POOL_PERSIST',
+  /** Explicit state-file path; wins over the REDTEAM_HOME default. */
+  stateFile: 'REDTEAM_LLM_POOL_STATE_FILE',
+} as const
+
+/** The state document's filename under REDTEAM_HOME / the working directory. */
+export const POOL_STATE_FILENAME = 'llm-pool-state.json'
+
+/** Short error class for warnings: an errno code when present, else the error name. */
+function errorClass(err: unknown): string {
+  if (err instanceof Error) {
+    const code = (err as NodeJS.ErrnoException).code
+    return typeof code === 'string' ? code : err.name
+  }
+  return 'unknown'
+}
+
+/**
+ * Resolve where the pool-state document lives, or undefined when
+ * persistence is off. Resolution order: REDTEAM_LLM_POOL_PERSIST=off
+ * (also 0/false) disables; REDTEAM_LLM_POOL_STATE_FILE names the file
+ * explicitly; REDTEAM_HOME (the runner's home convention) roots it;
+ * otherwise it lands in the process working directory.
+ * @param env - The environment to read (defaults to `process.env`).
+ * @returns The state-file path, or undefined when persistence is off.
+ */
+export function resolvePoolStateFilePath(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const persist = env[POOL_STATE_ENV.persist]?.trim().toLowerCase()
+  if (persist === 'off' || persist === '0' || persist === 'false') return undefined
+  const explicit = env[POOL_STATE_ENV.stateFile]?.trim()
+  if (explicit !== undefined && explicit.length > 0) return explicit
+  const home = env['REDTEAM_HOME']?.trim()
+  if (home !== undefined && home.length > 0) return join(home, POOL_STATE_FILENAME)
+  return join(process.cwd(), POOL_STATE_FILENAME)
+}
+
+/** A PoolStateStore backed by one file on disk; see the module header for the discipline. */
+export class FilePoolStateStore implements PoolStateStore {
+  readonly path: string
+
+  /**
+   * @param path - The state document's path.
+   */
+  constructor(path: string) {
+    this.path = path
+  }
+
+  /**
+   * Build the store for an environment, or undefined when persistence is off.
+   * @param env - The environment to read (defaults to `process.env`).
+   * @returns The store, or undefined when REDTEAM_LLM_POOL_PERSIST disables it.
+   */
+  static fromEnv(env: NodeJS.ProcessEnv = process.env): FilePoolStateStore | undefined {
+    const path = resolvePoolStateFilePath(env)
+    return path === undefined ? undefined : new FilePoolStateStore(path)
+  }
+
+  /**
+   * Read the stored document.
+   * @returns The document text, or null when none exists or it cannot be read.
+   */
+  read(): string | null {
+    try {
+      return readFileSync(this.path, 'utf8')
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null
+      // Unreadable (permissions, a directory where a file belongs, ...):
+      // warn with the path and reason class — never contents — and read
+      // as no state, mirroring readStoredMcpCredentials.
+      console.warn(`[llm-router] could not read pool state at ${this.path} (${errorClass(err)}); starting fresh`)
+      return null
+    }
+  }
+
+  /**
+   * Atomically replace the stored document (tmp file at 0600, then rename).
+   * @param text - The full serialized document.
+   */
+  write(text: string): void {
+    const dir = dirname(this.path)
+    mkdirSync(dir, { recursive: true, mode: 0o700 })
+    const tmp = `${this.path}.tmp`
+    writeFileSync(tmp, text, { encoding: 'utf8', mode: 0o600 })
+    // writeFileSync's mode applies only when the tmp file is created; the
+    // explicit chmod also repairs a pre-existing tmp left by a crashed run.
+    chmodSync(tmp, 0o600)
+    renameSync(tmp, this.path)
+  }
+
+  /**
+   * Rename the current document to `<path>.corrupt-<timestamp>` (pool.ts
+   * calls this when the document proves unusable, so the bad bytes survive
+   * for an operator instead of being healed over without a trace).
+   * @returns The quarantine path, or null when there was nothing to move.
+   */
+  quarantine(): string | null {
+    try {
+      if (!existsSync(this.path)) return null
+      const target = `${this.path}.corrupt-${new Date().toISOString().replace(/[:.]/g, '-')}`
+      renameSync(this.path, target)
+      return target
+    } catch {
+      // Best-effort evidence preservation; the reseed proceeds regardless.
+      return null
+    }
+  }
+}
