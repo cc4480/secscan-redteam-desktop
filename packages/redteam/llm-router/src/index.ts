@@ -122,6 +122,13 @@ export {
   loadExemplarPackText,
 } from './charter/exemplars.js'
 export {
+  SOUL_ASSET_SHA256,
+  defaultSoulPath,
+  defaultSoulText,
+  loadSoulText,
+  soulAssetCandidates,
+} from './charter/soul.js'
+export {
   assembleCharterMessages,
   type CharterPrompt,
   type CharterPromptOptions,
