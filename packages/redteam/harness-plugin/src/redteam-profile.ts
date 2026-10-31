@@ -3,7 +3,7 @@
  *
  * Shape mirrors the proven dsh-agent-teams profile format
  * (NanmiCoder/dsh-agent-teams src/profiles.ts): named members with
- * {name, role, provider, model, reasoning_effort, executionPrompt} and seed
+ * {name, role, provider, model, reasoning_effort, promptFile} and seed
  * tasks with dependencies.
  *
  * CONSUMED, not scaffolding: the harness path (index.ts `apply()`) installs the
@@ -31,9 +31,12 @@ export interface TeamMember {
   provider: string
   model: string
   reasoning_effort?: string
-  /** System-prompt file for this role (see ../../agents/). */
+  /**
+   * Doctrine file for this role, package-root-relative (see ../../agents/).
+   * The role-brief loader resolves the agents/ directory itself and reads
+   * only this path's basename — the directory component never joins twice.
+   */
   promptFile: string
-  executionPrompt?: string
 }
 
 export interface TeamTask {
@@ -74,10 +77,6 @@ export const REDTEAM_PROFILE: RedTeamProfile = {
       model: ROLE_MODEL_POLICY.coordinator.model,
       reasoning_effort: ROLE_MODEL_POLICY.coordinator.reasoningEffort,
       promptFile: 'agents/coordinator.md',
-      executionPrompt:
-        'You are the engagement lead. The perimeter is verified ownership and you are its keeper: nothing ' +
-        'active until the gate verifies. Inside it, drive the team at full aggression. You manage proof, ' +
-        'not opinions: promote only what survives demonstration, receipt, negative control, and challenge.',
     },
     {
       name: 'recon',
@@ -86,10 +85,6 @@ export const REDTEAM_PROFILE: RedTeamProfile = {
       model: ROLE_MODEL_POLICY.recon.model,
       reasoning_effort: ROLE_MODEL_POLICY.recon.reasoningEffort,
       promptFile: 'agents/recon.md',
-      executionPrompt:
-        'Map like an attacker choosing the entry point. Passive until ownership is verified — and ' +
-        'exhaustive within it. Inventory the surface, trace identity and state, and hand the exploiter ' +
-        'the seams that matter: ranked hypotheses with the evidence for each.',
     },
     {
       name: 'exploiter',
@@ -98,10 +93,6 @@ export const REDTEAM_PROFILE: RedTeamProfile = {
       model: ROLE_MODEL_POLICY.exploiter.model,
       reasoning_effort: ROLE_MODEL_POLICY.exploiter.reasoningEffort,
       promptFile: 'agents/exploiter.md',
-      executionPrompt:
-        'You are the black hat. One mission: find the vulnerability and prove it end-to-end, or rule it ' +
-        'out with evidence. Invent the attack this target deserves; mutate identity, sequence, encoding, ' +
-        'timing, transport. Never stop at detection, never ship a claim without its negative control.',
     },
     {
       name: 'reporter',
@@ -110,10 +101,6 @@ export const REDTEAM_PROFILE: RedTeamProfile = {
       model: ROLE_MODEL_POLICY.reporter.model,
       reasoning_effort: ROLE_MODEL_POLICY.reporter.reasoningEffort,
       promptFile: 'agents/reporter.md',
-      executionPrompt:
-        "Write for the client's CTO, not for hackers. Every finding: what it is, why it matters, the " +
-        'receipt that proves it, the negative control, and a concrete fix. PROVEN and DETECTED are never ' +
-        'blurred; no claim outruns its evidence by one degree.',
     },
     {
       name: 'architect',
@@ -122,12 +109,6 @@ export const REDTEAM_PROFILE: RedTeamProfile = {
       model: ROLE_MODEL_POLICY.architect.model,
       reasoning_effort: ROLE_MODEL_POLICY.architect.reasoningEffort,
       promptFile: 'agents/architect.md',
-      executionPrompt:
-        'You are the consistency layer. Hold the team to one taxonomy, one evidence format, one ' +
-        'shape: recon\'s brief must be usable by the exploiter, the exploiter\'s findings usable by ' +
-        'the reporter, the report faithful to its proof. Flag drift and coverage gaps the moment ' +
-        'you see them and require the correction to propagate. You never touch the target — you ' +
-        'review plans, consistency, and evidence.',
     },
   ],
 
