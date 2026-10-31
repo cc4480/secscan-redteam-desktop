@@ -16,7 +16,12 @@ import assert from 'node:assert/strict'
 import { mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { ChatMessage } from '@secscan/redteam-llm-router'
+import {
+  ResilienceError,
+  classifyError,
+  providerErrorFromResponse,
+  type ChatMessage,
+} from '@secscan/redteam-llm-router'
 import { SummaryCache, summaryKey } from '../src/compaction/summary-cache.js'
 import {
   compactMessages,
@@ -24,7 +29,7 @@ import {
   SUMMARY_MARKER,
 } from '../src/compaction/compact.js'
 import { agentLoop } from '../src/agents.js'
-import { EventLog } from '../src/events.js'
+import { EventLog, readEvents } from '../src/events.js'
 import { readSteps } from '../src/harness2/steps.js'
 import type { Ctx } from '../src/context.js'
 import type { EngagementPhase } from '../src/types.js'
@@ -317,5 +322,43 @@ describe('compactMessages — tool-call pairing invariant (Q-HALT Item 3)', () =
     assert.equal(result, null)
     assert.equal(counter.calls, 0, 'the summarizer was never invoked')
     assert.deepEqual(messages, before, 'history untouched')
+  })
+})
+
+describe('agentLoop llm_error cause surfacing (Q-HALT Item 1)', () => {
+  it('records the classification and the provider cause on llm_error, and still rethrows', async () => {
+    const dir2 = join(tmpdir(), `llm-error-${process.pid}-${Date.now()}`)
+    mkdirSync(dir2, { recursive: true })
+    try {
+      // The brief §8 fixture: a safety rejection wrapped by the executor.
+      const body =
+        '{"error":{"code":"safety_blocked","message":"Request blocked by the safety system: the submitted content may violate policy."}}'
+      const providerError = await providerErrorFromResponse('meta', 'Meta', new Response(body, { status: 400 }))
+      const failure = new ResilienceError(classifyError(providerError), 1, providerError)
+      const completeForRole = async (): Promise<never> => {
+        throw failure
+      }
+      const ctx = {
+        actions: 0,
+        consecutive5xx: 0,
+        startedAt: Date.now(),
+        config: { maxActions: 60, maxDurationMs: 60_000 },
+        input: { roe: { blackoutWindows: [] } },
+        deps: { completeForRole },
+        events: new EventLog(dir2, 'eng-llm-error', { target: 'shop.example.test', mode: 'red', objective: 'test' }),
+        hostKill: { aborted: false, controllers: new Set<AbortController>() },
+        safety: { killSwitchAborts: 0 },
+      } as unknown as Ctx
+      await assert.rejects(
+        agentLoop(ctx, 'coordinator', 'exploit' as EngagementPhase, 'SYS', 'OBJ', [], 3),
+        (err: unknown) => err === failure,
+      )
+      const errors = readEvents(dir2).filter(e => e.action === 'llm_error')
+      assert.equal(errors.length, 1)
+      assert.match(errors[0]?.result ?? '', /content_policy/, 'the classification is on the event')
+      assert.match(errors[0]?.result ?? '', /safety system/, 'a provider body fragment is on the event')
+    } finally {
+      rmSync(dir2, { recursive: true, force: true })
+    }
   })
 })
