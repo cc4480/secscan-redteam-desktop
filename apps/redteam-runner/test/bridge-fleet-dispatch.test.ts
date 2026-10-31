@@ -27,13 +27,20 @@ import { withBridgeTools } from "../src/dispatch/bridge-gate.js";
 import { handleBridgeTools } from "../src/dispatch/bridge.js";
 import { dispatchTool } from "../src/dispatch/router.js";
 
+/** The live bridge's full registry (supervisor ground truth, ~/workspace/alterego @ 92ab12d): 63 ALL_TOOLS wire names + 4 job ops = 67. */
 const REGISTRY_OPS = [
-  "cdp_launch", "cdp_connect", "cdp_targets", "cdp_navigate", "cdp_snapshot",
-  "cdp_click", "cdp_type", "cdp_evaluate", "cdp_readback", "cdp_close",
-  "submit_job", "job_status", "job_result", "job_cancel",
-  "screenshot", "uia_find",
-  "shell_exec", "shell_pwsh", "fs_read", "fs_write", "fs_delete",
-  "input_type", "input_click", "list_windows", "proc_list", "power",
+  "active_window", "arbitrate", "batch", "browser_click", "browser_eval", "browser_fill",
+  "browser_navigate", "browser_snapshot", "clipboard_get", "clipboard_set", "close_window", "copy_file",
+  "create_dir", "delete_file", "dns_query", "doctor", "edit_file", "exec_background",
+  "exec_cancel", "exec_status", "file_info", "focus_window", "hotkey", "http_headers",
+  "idle_seconds", "kill_process", "list_dir", "list_processes", "list_windows", "maximize_window",
+  "memory_recall", "minimize_window", "mouse_click", "mouse_move", "mouse_scroll", "move_file",
+  "notify", "paste_text", "power", "query_events", "read_file", "read_file_range",
+  "replay_session", "screenshot", "search_filenames", "search_files", "set_volume", "shell_exec",
+  "shell_pwsh", "speak", "system_info", "task_checkpoint", "task_create", "task_status",
+  "tcp_check", "tls_info", "type_text", "uia_click", "uia_find", "uia_set_text",
+  "web_fetch", "web_search", "write_file", "submit_job", "job_status", "job_result",
+  "job_cancel",
 ] as const;
 
 interface FakeClient extends BridgeClientLike {
@@ -100,13 +107,13 @@ describe("bridge handler — availability re-check and full routing", () => {
     assert.deepEqual(
       up.calls.map((c) => c.name),
       [...REGISTRY_OPS],
-      "every op forwarded unprefixed and unfiltered, shell/power included",
+      "every one of the 67 ops forwarded unprefixed and unfiltered — shell_pwsh, type_text, power, delete_file included",
     );
   });
 
   it("a bridge-side consent denial is a clean typed result — never a hang, crash, or silent drop", async () => {
     const consent = fakeClient({ callError: new BridgeCallError("bridge-denied", "denied by local approval") });
-    const r = await handleBridgeTools(handlerCtx(), "exploiter", "exploit", call("bridge_fs_write", { path: "x" }), { path: "x" }, consent);
+    const r = await handleBridgeTools(handlerCtx(), "exploiter", "exploit", call("bridge_write_file", { path: "x" }), { path: "x" }, consent);
     assert.equal(r?.ok, false);
     assert.match(r?.result ?? "", /operator consent denied/u);
     assert.equal(r?.repairable, undefined);

@@ -19,15 +19,24 @@ import type { EngagementEvent } from "../src/types.js";
 import { bridgeToolsForEngagement, withBridgeTools } from "../src/dispatch/bridge-gate.js";
 import type { BridgeClientLike, BridgeToolInfo } from "../src/dispatch/bridge-client.js";
 
-/** A representative slice of the bridge's full registry — browser, job,
- * eyes, AND the direct-control families (shell, files, input, power). */
+/** The live bridge's full registry, ground-truthed by the supervisor
+ * against ~/workspace/alterego @ 92ab12d: 63 ALL_TOOLS wire names + the
+ * 4 job-layer ops = 67 tools. No cdp_* names — the live bridge does not
+ * serve them today (supervisor note D-3); the gate passes through
+ * whatever a bridge offers, so the fixture is the real list. */
 const REGISTRY_OPS = [
-  "cdp_launch", "cdp_connect", "cdp_targets", "cdp_navigate", "cdp_snapshot",
-  "cdp_click", "cdp_type", "cdp_evaluate", "cdp_readback", "cdp_close",
-  "submit_job", "job_status", "job_result", "job_cancel",
-  "screenshot", "uia_find",
-  "shell_exec", "shell_pwsh", "fs_read", "fs_write", "fs_delete",
-  "input_type", "input_click", "list_windows", "proc_list", "power",
+  "active_window", "arbitrate", "batch", "browser_click", "browser_eval", "browser_fill",
+  "browser_navigate", "browser_snapshot", "clipboard_get", "clipboard_set", "close_window", "copy_file",
+  "create_dir", "delete_file", "dns_query", "doctor", "edit_file", "exec_background",
+  "exec_cancel", "exec_status", "file_info", "focus_window", "hotkey", "http_headers",
+  "idle_seconds", "kill_process", "list_dir", "list_processes", "list_windows", "maximize_window",
+  "memory_recall", "minimize_window", "mouse_click", "mouse_move", "mouse_scroll", "move_file",
+  "notify", "paste_text", "power", "query_events", "read_file", "read_file_range",
+  "replay_session", "screenshot", "search_filenames", "search_files", "set_volume", "shell_exec",
+  "shell_pwsh", "speak", "system_info", "task_checkpoint", "task_create", "task_status",
+  "tcp_check", "tls_info", "type_text", "uia_click", "uia_find", "uia_set_text",
+  "web_fetch", "web_search", "write_file", "submit_job", "job_status", "job_result",
+  "job_cancel",
 ] as const;
 
 function toolInfo(name: string): BridgeToolInfo {
@@ -113,7 +122,8 @@ describe("bridge offering gate — availability is the only gate", () => {
       }
       const byName = new Map(bridgeTools.map((t) => [t.name, t.description]));
       assert.match(byName.get("bridge_shell_exec")!, /Direct control of the operator's own machine/u);
-      assert.match(byName.get("bridge_cdp_type")!, /readback/u, "cdp teaching names the readback discipline");
+      assert.match(byName.get("bridge_shell_pwsh")!, /Direct control of the operator's own machine/u);
+      assert.match(byName.get("bridge_power")!, /Direct control of the operator's own machine/u);
       assert.match(byName.get("bridge_submit_job")!, /job_status/u, "job teaching names the polling loop");
       assert.match(byName.get("bridge_screenshot")!, /actually on the operator's machine/u);
     }
@@ -128,7 +138,7 @@ describe("bridge offering gate — availability is the only gate", () => {
     await bridgeToolsForEngagement(ctx, "exploit", client);
     const active = events.filter((e) => e.action === "bridge_tools_active");
     assert.equal(active.length, 1);
-    assert.match(active[0]!.result, /full toolset/u);
+    assert.match(active[0]!.result, /full toolset \(67 tools\)/u);
     assert.match(active[0]!.result, /operator's OWN machine/u);
   });
 
