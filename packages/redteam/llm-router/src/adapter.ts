@@ -47,8 +47,8 @@ export const ADAPTER_PINNED = {
   topP: 1.0,
   maxTokensPlain: 8192,
   maxTokensThinking: 65536,
-  maxRetries: 2,
-  retryBackoffMs: [400, 1200],
+  maxRetries: 3,
+  retryBackoffMs: [400, 1200, 3000],
 } as const
 
 export interface AdapterConfig {
