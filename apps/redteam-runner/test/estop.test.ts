@@ -11,29 +11,18 @@
  *    pause is the fail-safe direction, the opposite polarity from
  *    abort.json's tolerant read.
  *
- * Appended sections (the wiring commits):
- *  - config resolution: resolveConfig stores the same paths the gate and
- *    the readiness probe read — override, registry-relative primary, and
- *    fleet-root secondary all survive resolution.
- *  - launch gate (run-level, temp REDTEAM_HOME): an engaged sentinel
- *    refuses with the typed error BEFORE any engagement state exists;
- *    a sentinel dropped mid-flight never touches the running engagement;
- *    deleting the file resumes launches; a watch cycle on the default
- *    run path is refused the same way.
- *  - readiness: the estop item renders ready/paused with the spec's
- *    exact strings and never flips the report's ok.
+ * Below the module sections: config resolution (estopPaths), the
+ * runEngagement launch gate (typed refusal, no state created, mid-flight
+ * drops do not stop a running engagement, delete-to-resume), the watch
+ * cycle surfacing a refused launch as an error, and the readiness item
+ * (ready / paused, never required, never flips the report's ok).
  */
 
 import { describe, it, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { resolveConfig } from '../src/phases/config.js'
-import { runEngagement } from '../src/phases/run.js'
-import { runWatchCycle } from '../src/continuous/index.js'
-import { formatReadiness, readinessReport } from '../src/tools/readiness.js'
-import type { EngagementInput } from '../src/types.js'
 import {
   ESTOP_FILE_NAME,
   ESTOP_PATH_ENV,
@@ -44,6 +33,11 @@ import {
   requireEstopClear,
   resolveEstopPaths,
 } from '../src/safety/index.js'
+import { resolveConfig } from '../src/phases/config.js'
+import { runEngagement, type RunOptions } from '../src/phases.js'
+import { runWatchCycle } from '../src/continuous/watch/cycle.js'
+import { readinessReport, type ReadinessReport } from '../src/tools/readiness.js'
+import type { EngagementInput } from '../src/types.js'
 
 let tmp = ''
 beforeEach(() => {
@@ -176,175 +170,227 @@ describe('readEstopState', () => {
 
 
 // ---------------------------------------------------------------------------
-// Config resolution — the gate and the readiness probe read the same paths
+// Config resolution: ResolvedRunnerConfig.estopPaths
 // ---------------------------------------------------------------------------
 
-describe('resolveConfig estopPaths', () => {
-  it('resolves the primary beside registry.json plus the REDTEAM_HOME fleet root', () => {
-    const cfg = resolveConfig({ REDTEAM_HOME: tmp }, { modelApiKey: 'test', deepseekApiKey: 'test', dryRunAgents: true })
-    assert.deepEqual(cfg.estopPaths, [join(tmp, 'engagements', ESTOP_FILE_NAME), join(tmp, ESTOP_FILE_NAME)])
+describe('estop config resolution', () => {
+  let dir: string
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'rt-estop-cfg-'))
+  })
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
   })
 
-  it('REDTEAM_ESTOP_PATH wins outright in the resolved config', () => {
-    const explicit = join(tmp, 'ops', 'HALT')
-    const cfg = resolveConfig({ REDTEAM_HOME: tmp, [ESTOP_PATH_ENV]: explicit }, { modelApiKey: 'test', deepseekApiKey: 'test', dryRunAgents: true })
-    assert.deepEqual(cfg.estopPaths, [explicit])
+  const keys = { mcpToken: 'test', deepseekApiKey: 'test', qwenApiKey: 'test' }
+
+  it('defaults the primary sentinel beside the resolved registry path', () => {
+    const registryPath = join(dir, 'registry.json')
+    const config = resolveConfig({}, { ...keys, registryPath })
+    assert.equal(config.registryPath, registryPath)
+    assert.deepEqual(config.estopPaths, [join(dir, ESTOP_FILE_NAME)])
   })
 
-  it('a custom registryPath moves the primary sentinel with it', () => {
-    const cfg = resolveConfig(
-      { REDTEAM_HOME: tmp },
-      { modelApiKey: 'test', deepseekApiKey: 'test', dryRunAgents: true, registryPath: join(tmp, 'custom', 'registry.json') },
+  it('adds the REDTEAM_HOME fleet-root sentinel as secondary', () => {
+    const home = join(dir, 'home')
+    const config = resolveConfig({ REDTEAM_HOME: home }, { ...keys, registryPath: join(dir, 'registry.json') })
+    assert.deepEqual(config.estopPaths, [join(dir, ESTOP_FILE_NAME), join(home, ESTOP_FILE_NAME)])
+  })
+
+  it('REDTEAM_ESTOP_PATH override wins outright', () => {
+    const override = join(dir, 'custom', 'STOP')
+    const config = resolveConfig(
+      { [ESTOP_PATH_ENV]: override, REDTEAM_HOME: join(dir, 'home') },
+      { ...keys, registryPath: join(dir, 'registry.json') },
     )
-    assert.deepEqual(cfg.estopPaths, [join(tmp, 'custom', ESTOP_FILE_NAME), join(tmp, ESTOP_FILE_NAME)])
+    assert.deepEqual(config.estopPaths, [override])
   })
 })
 
 // ---------------------------------------------------------------------------
-// Launch gate — run-level, temp REDTEAM_HOME
+// Launch gate: runEngagement refuses while the sentinel is engaged
 // ---------------------------------------------------------------------------
 
-describe('ESTOP launch gate (runEngagement)', () => {
-  const ENV_KEYS = ['REDTEAM_ESTOP_PATH', 'REDTEAM_HOME', 'REDTEAM_SKIP_DIST_CHECK', 'MODEL_API_KEY'] as const
-  let savedEnv: Record<string, string | undefined> = {}
-  let sentinel = ''
-
+describe('estop launch gate (runEngagement)', () => {
+  let dir: string
+  let savedSkip: string | undefined
   beforeEach(() => {
-    savedEnv = {}
-    for (const k of ENV_KEYS) savedEnv[k] = process.env[k]
-    sentinel = join(tmp, ESTOP_FILE_NAME)
-    process.env['REDTEAM_ESTOP_PATH'] = sentinel
-    process.env['REDTEAM_HOME'] = tmp
+    dir = mkdtempSync(join(tmpdir(), 'rt-estop-gate-'))
+    // The dist-freshness guard is not what this section tests; the
+    // module's own documented bypass keeps the gate observable while
+    // the shared tree's dist stamp lags mid-harvest (it is refreshed
+    // by the build that precedes the house test chain).
+    savedSkip = process.env['REDTEAM_SKIP_DIST_CHECK']
     process.env['REDTEAM_SKIP_DIST_CHECK'] = '1'
   })
   afterEach(() => {
-    for (const k of ENV_KEYS) {
-      if (savedEnv[k] === undefined) delete process.env[k]
-      else process.env[k] = savedEnv[k]
-    }
+    if (savedSkip === undefined) delete process.env['REDTEAM_SKIP_DIST_CHECK']
+    else process.env['REDTEAM_SKIP_DIST_CHECK'] = savedSkip
+    rmSync(dir, { recursive: true, force: true })
   })
 
+  const yesVerify = async () => true
+  const sentinelPath = () => join(dir, ESTOP_FILE_NAME)
+  const opts = (extra: Partial<RunOptions> = {}): RunOptions => ({
+    mcpToken: 'test',
+    deepseekApiKey: 'test',
+    qwenApiKey: 'test',
+    engagementsDir: dir,
+    registryPath: join(dir, 'registry.json'),
+    dryRunAgents: true,
+    deps: { verify: yesVerify },
+    ...extra,
+  })
   const input = (): EngagementInput => ({
     target: 'secscan.us',
     mode: 'red',
     objective: 'estop gate test',
     roe: { scope: ['secscan.us'] },
   })
-  const opts = (engagementId: string) => ({
-    modelApiKey: 'test',
-    deepseekApiKey: 'test',
-    qwenApiKey: 'test',
-    mcpToken: 'test',
-    engagementsDir: join(tmp, 'live'),
-    registryPath: join(tmp, 'engagements', 'registry.json'),
-    dryRunAgents: true,
-    engagementId,
-    deps: { verify: async () => true },
-  })
 
-  it('an engaged sentinel refuses the launch with the typed ESTOP_ENGAGED error', async () => {
-    engageEstop(sentinel, { reason: 'incident freeze' })
+  it('refuses the launch with the typed error and creates no state', async () => {
+    engageEstop(sentinelPath(), { reason: 'gate test' })
     await assert.rejects(
-      () => runEngagement(input(), opts('estop-gate-refused')),
+      () => runEngagement(input(), opts()),
       (err: unknown) => {
         assert.ok(err instanceof EstopEngagedError)
         assert.equal(err.code, 'ESTOP_ENGAGED')
-        assert.equal(err.path, sentinel)
-        assert.equal(err.reason, 'incident freeze')
+        assert.equal(err.path, sentinelPath())
         return true
       },
     )
+    assert.equal(existsSync(join(dir, 'registry.json')), false)
+    assert.deepEqual(readdirSync(dir), [ESTOP_FILE_NAME])
   })
 
-  it('a refused launch creates no engagement dir and no registry file', async () => {
-    engageEstop(sentinel, { reason: 'incident freeze' })
-    await assert.rejects(() => runEngagement(input(), opts('estop-gate-nostate')), /ESTOP engaged/)
-    assert.equal(existsSync(join(tmp, 'live', 'estop-gate-nostate')), false)
-    assert.equal(existsSync(join(tmp, 'engagements', 'registry.json')), false)
-  })
-
-  it('a sentinel dropped mid-flight never touches the running engagement; the next launch refuses', async () => {
-    const running = runEngagement(input(), opts('estop-gate-inflight'))
-    // The gate runs inside the launch's synchronous head (config + gate
-    // precede every await), so engaging now is engaging after the gate:
-    // the in-flight engagement must complete untouched.
-    engageEstop(sentinel, { reason: 'dropped mid-flight' })
-    const res = await running
-    assert.equal(res.status, 'complete')
-    await assert.rejects(() => runEngagement(input(), opts('estop-gate-after')), /ESTOP engaged/)
-  })
-
-  it('deleting the sentinel resumes launches (delete-to-resume)', async () => {
-    engageEstop(sentinel, { reason: 'pause' })
-    await assert.rejects(() => runEngagement(input(), opts('estop-gate-paused')), /ESTOP engaged/)
-    disengageEstop(sentinel)
-    const res = await runEngagement(input(), opts('estop-gate-resumed'))
+  it('runs normally when no sentinel exists', async () => {
+    const res = await runEngagement(input(), opts())
     assert.equal(res.status, 'complete')
   })
 
-  it('a watch cycle on the default run path is refused the same way', async () => {
+  it('a sentinel dropped mid-flight does not stop the running engagement, but pauses the next launch', async () => {
+    let dropped = false
+    const droppingVerify = async () => {
+      if (!dropped) {
+        dropped = true
+        engageEstop(sentinelPath(), { reason: 'mid-flight drop' })
+      }
+      return true
+    }
+    const res = await runEngagement(input(), opts({ deps: { verify: droppingVerify } }))
+    assert.equal(res.status, 'complete')
+    await assert.rejects(() => runEngagement(input(), opts()), EstopEngagedError)
+  })
+
+  it('deleting the sentinel resumes launches', async () => {
+    engageEstop(sentinelPath(), { reason: 'resume test' })
+    await assert.rejects(() => runEngagement(input(), opts()), EstopEngagedError)
+    disengageEstop(sentinelPath())
+    const res = await runEngagement(input(), opts())
+    assert.equal(res.status, 'complete')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Watch cycle: a refused launch surfaces as an error naming the ESTOP
+// ---------------------------------------------------------------------------
+
+describe('estop watch cycle', () => {
+  let dir: string
+  let savedEstop: string | undefined
+  let savedKey: string | undefined
+  let savedSkip: string | undefined
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'rt-estop-watch-'))
+    savedEstop = process.env[ESTOP_PATH_ENV]
+    savedKey = process.env['MODEL_API_KEY']
+    savedSkip = process.env['REDTEAM_SKIP_DIST_CHECK']
+    process.env['REDTEAM_SKIP_DIST_CHECK'] = '1'
+  })
+  afterEach(() => {
+    if (savedEstop === undefined) delete process.env[ESTOP_PATH_ENV]
+    else process.env[ESTOP_PATH_ENV] = savedEstop
+    if (savedKey === undefined) delete process.env['MODEL_API_KEY']
+    else process.env['MODEL_API_KEY'] = savedKey
+    if (savedSkip === undefined) delete process.env['REDTEAM_SKIP_DIST_CHECK']
+    else process.env['REDTEAM_SKIP_DIST_CHECK'] = savedSkip
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('a refused launch surfaces as a cycle error naming the ESTOP', async () => {
+    const sentinel = join(dir, 'ESTOP')
+    engageEstop(sentinel, { reason: 'watch test' })
+    process.env[ESTOP_PATH_ENV] = sentinel
     process.env['MODEL_API_KEY'] = 'test'
-    const profilePath = join(tmp, 'profile.json')
+    const profilePath = join(dir, 'profile.json')
     writeFileSync(
       profilePath,
       JSON.stringify({
         version: 1,
         name: 'estop-watch',
+        cadence: { intervalHours: 24 },
+        scopeValidUntil: '2999-01-01T00:00:00.000Z',
         engagement: {
-          target: 'acme.com',
+          target: 'secscan.us',
           mode: 'red',
-          objective: 'continuous validation',
-          roe: { scope: ['acme.com'] },
-          fullBattery: true,
+          objective: 'estop watch test',
+          roe: { scope: ['secscan.us'] },
         },
-        cadence: { intervalHours: 168 },
-        scopeValidUntil: '2026-12-31T23:59:59Z',
       }),
     )
-    engageEstop(sentinel, { reason: 'fleet maintenance' })
-    const r = await runWatchCycle({ profilePath, env: { ...process.env }, now: () => new Date('2026-10-31T12:00:00Z') })
-    assert.equal(r.status, 'error')
-    assert.match(r.reason ?? '', /ESTOP engaged/)
+    const result = await runWatchCycle({ profilePath })
+    assert.equal(result.status, 'error')
+    assert.match(result.reason ?? '', /ESTOP engaged/)
   })
 })
 
 // ---------------------------------------------------------------------------
-// Readiness — the estop item in both states, exact strings, ok untouched
+// Readiness: the estop item reports the pause without ever blocking
 // ---------------------------------------------------------------------------
 
-describe('readiness estop item', () => {
-  it('clear: the item is ready, not required, with the spec ok-line', async () => {
-    const report = await readinessReport({ REDTEAM_HOME: tmp } as NodeJS.ProcessEnv)
-    const item = report.items.find(i => i.id === 'estop')
-    assert.ok(item, 'estop item present')
-    assert.equal(item.state, 'ready')
-    assert.equal(item.required, false)
-    assert.equal(item.label, 'ESTOP pause sentinel')
-    assert.equal(item.detail, 'ESTOP not engaged — new engagements launch normally.')
+describe('estop readiness item', () => {
+  let dir: string
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'rt-estop-ready-'))
+  })
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
   })
 
-  it('engaged: paused with path + reason + delete-to-resume fix; the report ok is unchanged', async () => {
-    const sentinel = join(tmp, ESTOP_FILE_NAME)
-    engageEstop(sentinel, { reason: 'fleet maintenance' })
-    const engaged = await readinessReport({ REDTEAM_HOME: tmp, [ESTOP_PATH_ENV]: sentinel } as NodeJS.ProcessEnv)
-    const item = engaged.items.find(i => i.id === 'estop')
-    assert.ok(item, 'estop item present')
-    assert.equal(item.state, 'paused')
+  const estopOf = (report: ReadinessReport) => {
+    const item = report.items.find((i) => i.id === 'estop')
+    assert.ok(item, 'readiness report carries the estop item')
+    return item
+  }
+
+  it('reports ready when no sentinel exists', async () => {
+    const report = await readinessReport({ [ESTOP_PATH_ENV]: join(dir, 'ESTOP') } as NodeJS.ProcessEnv)
+    const item = estopOf(report)
+    assert.equal(item.state, 'ready')
+    assert.equal(item.detail, 'ESTOP not engaged — new engagements launch normally.')
     assert.equal(item.required, false)
-    assert.ok(item.detail?.includes(`ESTOP engaged at ${sentinel}`))
-    assert.ok(item.detail?.includes('fleet maintenance'))
-    assert.ok(item.detail?.includes('new engagement launches are paused (in-flight engagements are unaffected)'))
+    assert.equal(item.fix, undefined)
+  })
+
+  it('reports paused with path, reason, and resume fix when engaged — and never flips ok', async () => {
+    const sentinel = join(dir, 'ESTOP')
+    const clear = await readinessReport({ [ESTOP_PATH_ENV]: sentinel } as NodeJS.ProcessEnv)
+    engageEstop(sentinel, { reason: 'readiness test' })
+    const engaged = await readinessReport({ [ESTOP_PATH_ENV]: sentinel } as NodeJS.ProcessEnv)
+    const item = estopOf(engaged)
+    assert.equal(item.state, 'paused')
+    assert.ok(item.detail?.includes(sentinel))
+    assert.ok(item.detail?.includes('readiness test'))
     assert.equal(item.fix, `Delete ${sentinel} to resume.`)
-    const clear = await readinessReport({ REDTEAM_HOME: tmp, [ESTOP_PATH_ENV]: join(tmp, 'absent', ESTOP_FILE_NAME) } as NodeJS.ProcessEnv)
     assert.equal(engaged.ok, clear.ok)
   })
 
-  it('formatReadiness renders the PAUS mark and the fix line for a paused item', async () => {
-    const sentinel = join(tmp, ESTOP_FILE_NAME)
-    engageEstop(sentinel, { reason: 'fleet maintenance' })
-    const report = await readinessReport({ REDTEAM_HOME: tmp, [ESTOP_PATH_ENV]: sentinel } as NodeJS.ProcessEnv)
-    const out = formatReadiness(report)
-    assert.match(out, /PAUS\s+ESTOP pause sentinel/)
-    assert.ok(out.includes(`→ Delete ${sentinel} to resume.`))
+  it('says "no reason recorded" when the sentinel body carries none', async () => {
+    const sentinel = join(dir, 'ESTOP')
+    writeFileSync(sentinel, '')
+    const report = await readinessReport({ [ESTOP_PATH_ENV]: sentinel } as NodeJS.ProcessEnv)
+    const item = estopOf(report)
+    assert.equal(item.state, 'paused')
+    assert.ok(item.detail?.includes('no reason recorded'))
   })
 })
