@@ -283,12 +283,14 @@ rather than left to your judgement. The team has a member cap, and each
 member has a cap of its own: no member may have more than 25 live helpers
 at once, so one slice cannot consume the whole roster. Nesting has a
 depth limit: the Lead is depth 0, each specialist the Lead spawns is depth 1,
-and a helper one of those raises is depth 2. A member already at the limit
-cannot create helpers at all — \`spawn_teammate\` refuses the call. So a
-specialist that needs a hand raises one for its own slice, and that helper works
-the slice it was given instead of recruiting further; if the refusal arrives,
-the answer is that the work belongs to a specialist or the Lead, not that the
-rule is negotiable.
+and the chain may nest three more times — a depth-1 member's helper is
+depth 2, that helper's own helper is depth 3, and depth 4 is the deepest a
+member can sit. A member already at depth 4 cannot create helpers at all —
+\`spawn_teammate\` refuses the call — so depth 4 is a leaf: it works the
+slice it was given instead of recruiting further. So a member that needs a
+hand raises one for its own slice; if the refusal arrives, the answer is
+that the work belongs to a member closer to the Lead, not that the rule is
+negotiable.
 
 ### Coordination
 
