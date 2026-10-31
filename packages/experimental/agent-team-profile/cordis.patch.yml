@@ -1,0 +1,53 @@
+# Experimental Agent Teams profile layer. Apply after dsh-base so these replacements
+# keep direct delegation and coordination on the Team tools.
+#
+# Fork-local divergence from upstream: the agent-team row below carries the same
+# fleet bounds as the RedTeam desktop bundle's agent-team row (maxMembers 100,
+# maxMemberDepth 4, maxTasks 4096), not upstream's 8 / 256 sizing, and it sets
+# maxMemberDepth explicitly - without it, the service default of 2 applies.
+# Patch composition resolves a repeated plugin id to the LAST layer that
+# inserts it, so a profile that enables this bundle after the desktop bundle
+# would silently narrow that product's team to the values here; identical
+# values make the effective bounds independent of layer order. A profile that
+# wants a narrower team sets its own values in a later patch layer, which
+# still wins.
+
+- id: tool-subagent-control
+  disabled: true
+
+- id: tool-subagent-list-agents
+  disabled: true
+
+- id: tool-subagent
+  disabled: true
+
+- id: tool-subagent-fork
+  disabled: true
+
+# Aligned with the desktop bundle for the same reason as the agent-team row:
+# without this override the subagent service default (maxActiveSubagents 8)
+# refuses every spawn past 8 concurrently running members.
+- id: subagent
+  config:
+    maxActiveSubagents: 100
+
+- insert:
+    - id: agent-team
+      name: '@deepseek-ai/dsh-experimental-agent-team'
+      config:
+        maxMembers: 100
+        maxMemberDepth: 4
+        maxChildrenPerMember: 25
+        maxTasks: 4096
+        maxPendingMessagesPerMember: 64
+        maxMessageBytes: 65536
+        disposalTimeoutMs: 5000
+
+    - id: tool-agent-team
+      name: '@deepseek-ai/dsh-experimental-tool-agent-team'
+      config:
+        freshProvider: spawn
+        forkProvider: fork
+
+    - id: ui-agent-team
+      name: '@deepseek-ai/dsh-experimental-client-ui-agent-team'

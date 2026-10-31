@@ -1,0 +1,78 @@
+CLAUDE.local.md
+.env
+apps/desktop/.env.windows
+apps/desktop/.env.macos
+apps/desktop/*.p12
+# External-tool payload: build output materialized from the pinned
+# apps/desktop/resources/tools-manifest.json by scripts/vendor-tools.mjs.
+# The manifest and the script are committed; the binaries are not.
+apps/desktop/resources/tools/
+apps/desktop/.tools-cache/
+# Bundled llama.cpp runtime: build output materialized from the pinned
+# apps/desktop/resources/llama-manifest.json by scripts/vendor-llama.mjs.
+# The manifest and the script are committed; llama-server.exe and its DLLs are not.
+apps/desktop/resources/llama/
+apps/desktop/.llama-cache/
+node_modules/
+lib/
+*.tsbuildinfo
+pnpm-debug.log
+.pnpm-store/
+.cache/
+examples/*/*.jsonl
+.storages/
+.sessions/
+examples/*/.sessions/
+coverage/
+.coverage-times.json
+.doc-typecheck-*/
+.node-next-types-*/
+.oxlint-contract-*/
+.oxlintrc.contract-*.json
+oxlint-contract-*.ts
+.humanize/
+tmp/
+.claude/commands/
+.claude/launch.json
+.claude/settings.json
+.vscode/
+.DS_Store
+.idea
+mise.toml
+dist-exe/
+/dist/
+apps/desktop/.desktop-build/
+python/sdk-runtime/src/deepseek_harness_runtime/runtime/
+python/**/__pycache__/
+python/**/.pytest_cache/
+packages/**/__pycache__/
+apps/web/dist/
+.artifacts/
+.dsh-build/
+.playwright-mcp/
+.orig
+.worktrees/
+worktrees/
+.agents/worktrees/
+.typert-*/
+native/system/test/bin/
+# The engagement runner's payload is shipped bytes, not an install artifact: a
+# packaged app executes these files from its own resources, so they have to be in
+# the tree even where a repository-wide rule would drop them — `node_modules/`
+# for the dependency closure, and `coverage/`, which is a runner MODULE under
+# dist/ here. Regenerated with `node apps/desktop/scripts/vendor-redteam-runner.mjs`.
+!apps/desktop/resources/redteam-runner/
+!apps/desktop/resources/redteam-runner/**
+
+# Oct-23 incident: the bare `coverage/` rule above also swallowed a real source
+# module — apps/redteam-runner/src/coverage/ (items.ts, cells.ts) — so it was
+# never committed and the branch was unbuildable from a clean checkout. Keep
+# the SOURCE coverage dir tracked, same as the payload above.
+!apps/redteam-runner/src/coverage/
+!apps/redteam-runner/src/coverage/**
+
+# pc-agent bridge runtime audit log
+apps/pc-agent-bridge/pc-agent-audit.jsonl
+
+# desktop test-run logs (written by the lifecycle specs)
+desktop-test-logs/

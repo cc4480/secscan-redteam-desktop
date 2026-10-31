@@ -1,0 +1,1269 @@
+{
+  "snapshot": "foundry-snapshot-2026-10-24-v1",
+  "generated_at": "2026-10-24T16:13:12+00:00",
+  "source": {
+    "datasets": 36,
+    "gold": 2,
+    "silver": 34,
+    "live_cases": 59
+  },
+  "consumption": {
+    "rule": "family-level splits: a family consumed as gate held-outs must not be used as generation parents for that gate",
+    "receipt_required": true
+  },
+  "bundles": [
+    {
+      "slug": "sqli-product-search",
+      "family_id": "sqli-product-search",
+      "family_split": "dev",
+      "vuln_class": "sql-injection",
+      "cwe": "CWE-89",
+      "tier": 1,
+      "loop_tier": "GOLD",
+      "status": "validated",
+      "bundle_hash": "711ab85eb421c3377be73a0cd7357eab0a1d8b8ff8cac7917858e30800795fc3",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.1-live",
+        "fitness": 0.5864,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0,
+          "live_similarity": 0.6663,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.9431
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "sqli-product-search-m1",
+      "family_id": "sqli-product-search",
+      "family_split": "dev",
+      "vuln_class": "sql-injection",
+      "cwe": "CWE-89",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "75a2cbae7f005f0c1e0d578abcab7b37643de603126074bb0a6e63b387c9a532",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.5734,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0058,
+          "live_similarity": null,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.9393
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "sqli-product-search-m2",
+      "family_id": "sqli-product-search",
+      "family_split": "dev",
+      "vuln_class": "sql-injection",
+      "cwe": "CWE-89",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "be80bee4b010c7aeab7a5be673746bc21049e65eabb22ece83754693415ce6ee",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.5725,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0,
+          "live_similarity": null,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.9472
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "sqli-product-search-m3",
+      "family_id": "sqli-product-search",
+      "family_split": "dev",
+      "vuln_class": "sql-injection",
+      "cwe": "CWE-89",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "6a3807a5159bb73ad190938fea820aa35cdd78feef6ee07c498a2dad688bb853",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.5725,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0,
+          "live_similarity": null,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.946
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "sqli-product-search-m4",
+      "family_id": "sqli-product-search",
+      "family_split": "dev",
+      "vuln_class": "sql-injection",
+      "cwe": "CWE-89",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "46237ff83bdd6b9de5cfa3ad9fa4cae344b8134792b416fb8bbe324ee27c53aa",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.5738,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0058,
+          "live_similarity": null,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.9461
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "sqli-product-search-m5",
+      "family_id": "sqli-product-search",
+      "family_split": "dev",
+      "vuln_class": "sql-injection",
+      "cwe": "CWE-89",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "256b665d1b690fda1ef8cda1493b07b1bf25f36ab9a446f69180afa58a719465",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.5725,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0,
+          "live_similarity": null,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.9466
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "sqli-product-search-m6",
+      "family_id": "sqli-product-search",
+      "family_split": "dev",
+      "vuln_class": "sql-injection",
+      "cwe": "CWE-89",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "ed3e4629fffd415f53ff18f715425e0f443b521ad4a675204934c2c41d2b883e",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.5738,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0058,
+          "live_similarity": null,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.9454
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "sqli-product-search-m7",
+      "family_id": "sqli-product-search",
+      "family_split": "dev",
+      "vuln_class": "sql-injection",
+      "cwe": "CWE-89",
+      "tier": 2,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "b42809610d078fd8b53105a1bf1a52c0e2a81573703335ecf4d274a2295c54f5",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.7019,
+        "components": {
+          "discrimination": 1.0,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0,
+          "live_similarity": null,
+          "coverage_gain": 0.5,
+          "cost_efficiency": 0.9324
+        }
+      },
+      "panel": {
+        "pass_rate": 0.5,
+        "observed_tier": 2,
+        "vector": [
+          0,
+          0,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "sqli-product-search-m8",
+      "family_id": "sqli-product-search",
+      "family_split": "dev",
+      "vuln_class": "sql-injection",
+      "cwe": "CWE-89",
+      "tier": 2,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "c54e50f97037b0a8a21091beb17e002c655be250e5ef6e836c49efb6b3e6906b",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.7027,
+        "components": {
+          "discrimination": 1.0,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0,
+          "live_similarity": null,
+          "coverage_gain": 0.5,
+          "cost_efficiency": 0.9453
+        }
+      },
+      "panel": {
+        "pass_rate": 0.5,
+        "observed_tier": 2,
+        "vector": [
+          0,
+          0,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "ssrf-url-preview",
+      "family_id": "ssrf-url-preview",
+      "family_split": "dev",
+      "vuln_class": "ssrf",
+      "cwe": "CWE-918",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "297623d367e071775767550914cf866b13fc8a3355a9faf098f233252fe3c94a",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.1-live",
+        "fitness": 0.5137,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0,
+          "live_similarity": 0.2,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.8891
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "ssrf-url-preview-m1",
+      "family_id": "ssrf-url-preview",
+      "family_split": "dev",
+      "vuln_class": "ssrf",
+      "cwe": "CWE-918",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "af1a014aa912a2370a6540a4db492d4109e0b9aac8ea9a8ec55326a7f75a15e7",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.5715,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0069,
+          "live_similarity": null,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.9017
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "ssrf-url-preview-m2",
+      "family_id": "ssrf-url-preview",
+      "family_split": "dev",
+      "vuln_class": "ssrf",
+      "cwe": "CWE-918",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "edd558faca4ff3fcdecc2ff9b85b5bd128d5ca119132fc1f8c34fee6c5ef0e6d",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.5691,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0,
+          "live_similarity": null,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.8883
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "ssrf-url-preview-m3",
+      "family_id": "ssrf-url-preview",
+      "family_split": "dev",
+      "vuln_class": "ssrf",
+      "cwe": "CWE-918",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "91f35182fae951a1f65e539f49279a16e41380bcce162f2654e38888a0064faa",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.5698,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0,
+          "live_similarity": null,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.901
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "ssrf-url-preview-m4",
+      "family_id": "ssrf-url-preview",
+      "family_split": "dev",
+      "vuln_class": "ssrf",
+      "cwe": "CWE-918",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "a32b5dff8c26a69eb63838d4deeaf81357492125a2ba8bc0a86afd8ce53f5d5e",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.5714,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0069,
+          "live_similarity": null,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.9001
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "ssrf-url-preview-m5",
+      "family_id": "ssrf-url-preview",
+      "family_split": "dev",
+      "vuln_class": "ssrf",
+      "cwe": "CWE-918",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "13bc1c79caa45d27ead6c652b53c5a364b4bd41e5b2d3e8062ca244b49809a71",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.5699,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0,
+          "live_similarity": null,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.9017
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "ssrf-url-preview-m6",
+      "family_id": "ssrf-url-preview",
+      "family_split": "dev",
+      "vuln_class": "ssrf",
+      "cwe": "CWE-918",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "e155c1dc02fc0d846aced3ddf832949bd2e3e67d0dcbfd7ba468965d79148913",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.5713,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0069,
+          "live_similarity": null,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.8981
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "ssrf-url-preview-m7",
+      "family_id": "ssrf-url-preview",
+      "family_split": "dev",
+      "vuln_class": "ssrf",
+      "cwe": "CWE-918",
+      "tier": 2,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "0567f63edc88c52f650e4449a77f7edd435764e0586197ecb09316c8718bbaec",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.7001,
+        "components": {
+          "discrimination": 1.0,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0,
+          "live_similarity": null,
+          "coverage_gain": 0.5,
+          "cost_efficiency": 0.9018
+        }
+      },
+      "panel": {
+        "pass_rate": 0.5,
+        "observed_tier": 2,
+        "vector": [
+          0,
+          0,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "ssrf-url-preview-m8",
+      "family_id": "ssrf-url-preview",
+      "family_split": "dev",
+      "vuln_class": "ssrf",
+      "cwe": "CWE-918",
+      "tier": 2,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "ed9509e0f2f1fb8f6adeb8d742604cfc9a947162157e77343c90926189e7db43",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.7001,
+        "components": {
+          "discrimination": 1.0,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0,
+          "live_similarity": null,
+          "coverage_gain": 0.5,
+          "cost_efficiency": 0.9019
+        }
+      },
+      "panel": {
+        "pass_rate": 0.5,
+        "observed_tier": 2,
+        "vector": [
+          0,
+          0,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "traversal-file-download",
+      "family_id": "traversal-file-download",
+      "family_split": "dev",
+      "vuln_class": "path-traversal",
+      "cwe": "CWE-22",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "76a93d396efe5fab05480fb24dd1722bbb0b689bb22fe95e523c565ab822dd56",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.1-live",
+        "fitness": 0.5162,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0,
+          "live_similarity": 0.2,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.9379
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "traversal-file-download-m1",
+      "family_id": "traversal-file-download",
+      "family_split": "dev",
+      "vuln_class": "path-traversal",
+      "cwe": "CWE-22",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "c337ac5d3b74e783b19685d41abd77a771e91b07bae62db87d05ef9bd3a5b30a",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.5743,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0081,
+          "live_similarity": null,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.9456
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "traversal-file-download-m2",
+      "family_id": "traversal-file-download",
+      "family_split": "dev",
+      "vuln_class": "path-traversal",
+      "cwe": "CWE-22",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "fa3d6f4bbbab488970fdbc7eaaae4bfb885fc17e4b45427ddd4b78aef00712c9",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.5725,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0,
+          "live_similarity": null,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.9466
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "traversal-file-download-m3",
+      "family_id": "traversal-file-download",
+      "family_split": "dev",
+      "vuln_class": "path-traversal",
+      "cwe": "CWE-22",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "ba6d5152b99f10845f04808082a6d2c1cb1f91f91cc3980613c8540ddb1d5103",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.5725,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0,
+          "live_similarity": null,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.9471
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "traversal-file-download-m4",
+      "family_id": "traversal-file-download",
+      "family_split": "dev",
+      "vuln_class": "path-traversal",
+      "cwe": "CWE-22",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "dc4606fb1ed8c9356cbdab0d34c0943f34f1d4fe1b10bc43a64f11c0d64e760e",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.5744,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0081,
+          "live_similarity": null,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.9469
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "traversal-file-download-m5",
+      "family_id": "traversal-file-download",
+      "family_split": "dev",
+      "vuln_class": "path-traversal",
+      "cwe": "CWE-22",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "8d370fa9c37a3b535e8e9cd9e0d6778cf8ada1ead5c9d99d5d0a61cbc6fc795f",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.5725,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0,
+          "live_similarity": null,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.9471
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "traversal-file-download-m6",
+      "family_id": "traversal-file-download",
+      "family_split": "dev",
+      "vuln_class": "path-traversal",
+      "cwe": "CWE-22",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "6d03188da7163df42ba6669b8dc41046e2ed84ec7f1f711805db621070893cd8",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.5743,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0081,
+          "live_similarity": null,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.945
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "traversal-file-download-m7",
+      "family_id": "traversal-file-download",
+      "family_split": "dev",
+      "vuln_class": "path-traversal",
+      "cwe": "CWE-22",
+      "tier": 2,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "293d111859573f0fdde8925066ccecc4a452f0789d6a504cef43070d4e6b6c48",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.7027,
+        "components": {
+          "discrimination": 1.0,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0,
+          "live_similarity": null,
+          "coverage_gain": 0.5,
+          "cost_efficiency": 0.9466
+        }
+      },
+      "panel": {
+        "pass_rate": 0.5,
+        "observed_tier": 2,
+        "vector": [
+          0,
+          0,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "traversal-file-download-m8",
+      "family_id": "traversal-file-download",
+      "family_split": "dev",
+      "vuln_class": "path-traversal",
+      "cwe": "CWE-22",
+      "tier": 2,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "4dcd9e159db27056a792ab517f51c4ee2c0dd7c540e12663c318fb7a928e3ed5",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.7028,
+        "components": {
+          "discrimination": 1.0,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0,
+          "live_similarity": null,
+          "coverage_gain": 0.5,
+          "cost_efficiency": 0.9477
+        }
+      },
+      "panel": {
+        "pass_rate": 0.5,
+        "observed_tier": 2,
+        "vector": [
+          0,
+          0,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "xss-reflected-search",
+      "family_id": "xss-reflected-search",
+      "family_split": "dev",
+      "vuln_class": "cross-site-scripting",
+      "cwe": "CWE-79",
+      "tier": 1,
+      "loop_tier": "GOLD",
+      "status": "validated",
+      "bundle_hash": "b0814f36e5b1fa9b565e7a47d332b8f5edc5cce4b96b3bf22d9203df17a9e6ad",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.1-live",
+        "fitness": 0.5875,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0043,
+          "live_similarity": 0.6679,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.9423
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "xss-reflected-search-m1",
+      "family_id": "xss-reflected-search",
+      "family_split": "dev",
+      "vuln_class": "cross-site-scripting",
+      "cwe": "CWE-79",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "275644e9f491a4902def4e95a5981002cfdb38fcfd056eddda513e51bfd7e274",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.5745,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0087,
+          "live_similarity": null,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.9457
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "xss-reflected-search-m2",
+      "family_id": "xss-reflected-search",
+      "family_split": "dev",
+      "vuln_class": "cross-site-scripting",
+      "cwe": "CWE-79",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "30dc02040b0d36f41cd8cc542adcb925e2cc91a8eaeeabc5be1b36a149b52e9f",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.5735,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0043,
+          "live_similarity": null,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.9463
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "xss-reflected-search-m3",
+      "family_id": "xss-reflected-search",
+      "family_split": "dev",
+      "vuln_class": "cross-site-scripting",
+      "cwe": "CWE-79",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "83e2a2d6a206772b79ae2ac298455d20773d69174aa28fbb3a8a6445987b570b",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.5734,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0043,
+          "live_similarity": null,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.9455
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "xss-reflected-search-m4",
+      "family_id": "xss-reflected-search",
+      "family_split": "dev",
+      "vuln_class": "cross-site-scripting",
+      "cwe": "CWE-79",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "af491b514435856dc808878cee075959b5a0c265b3499f602752e060f2765926",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.5745,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0087,
+          "live_similarity": null,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.9461
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "xss-reflected-search-m5",
+      "family_id": "xss-reflected-search",
+      "family_split": "dev",
+      "vuln_class": "cross-site-scripting",
+      "cwe": "CWE-79",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "753a079c76948dc04cf4bd03058a1273324d8b51f016b29bafca3ef1a1ae6259",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.5736,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0043,
+          "live_similarity": null,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.9478
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "xss-reflected-search-m6",
+      "family_id": "xss-reflected-search",
+      "family_split": "dev",
+      "vuln_class": "cross-site-scripting",
+      "cwe": "CWE-79",
+      "tier": 1,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "b2feb37af35c14498447bc11a0cc581aa29d53b91973867c506efa905e0db1a3",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.5745,
+        "components": {
+          "discrimination": 0.75,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0087,
+          "live_similarity": null,
+          "coverage_gain": 0.1429,
+          "cost_efficiency": 0.9463
+        }
+      },
+      "panel": {
+        "pass_rate": 0.75,
+        "observed_tier": 1,
+        "vector": [
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "xss-reflected-search-m7",
+      "family_id": "xss-reflected-search",
+      "family_split": "dev",
+      "vuln_class": "cross-site-scripting",
+      "cwe": "CWE-79",
+      "tier": 2,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "36615a98bd3eb29e07b81a7ef8a69316e1c24dcf9ffa96eea2992d033e16780c",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.7037,
+        "components": {
+          "discrimination": 1.0,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0042,
+          "live_similarity": null,
+          "coverage_gain": 0.5,
+          "cost_efficiency": 0.9454
+        }
+      },
+      "panel": {
+        "pass_rate": 0.5,
+        "observed_tier": 2,
+        "vector": [
+          0,
+          0,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "slug": "xss-reflected-search-m8",
+      "family_id": "xss-reflected-search",
+      "family_split": "dev",
+      "vuln_class": "cross-site-scripting",
+      "cwe": "CWE-79",
+      "tier": 2,
+      "loop_tier": "SILVER",
+      "status": "validated",
+      "bundle_hash": "acd2406f21c44ed6a17b960458402681905dd3f7f779975124ffb74aea824f94",
+      "marker_class": null,
+      "fitness": {
+        "model": "fitness-v1.0-nolive",
+        "fitness": 0.7035,
+        "components": {
+          "discrimination": 1.0,
+          "difficulty_fit": 1.0,
+          "novelty": 0.0042,
+          "live_similarity": null,
+          "coverage_gain": 0.5,
+          "cost_efficiency": 0.942
+        }
+      },
+      "panel": {
+        "pass_rate": 0.5,
+        "observed_tier": 2,
+        "vector": [
+          0,
+          0,
+          1,
+          1
+        ]
+      }
+    }
+  ],
+  "verification": {
+    "hash_check": "36/36 exported hashes match source",
+    "gold_reprove": {
+      "sqli-product-search": {
+        "controls": {
+          "structure": true,
+          "dedup": true,
+          "positive": true,
+          "negative": true,
+          "loopback": true,
+          "determinism": true
+        },
+        "dedup_self_collision_only": true,
+        "verdict": "PASS"
+      },
+      "xss-reflected-search": {
+        "controls": {
+          "structure": true,
+          "dedup": true,
+          "positive": true,
+          "negative": true,
+          "loopback": true,
+          "determinism": true
+        },
+        "dedup_self_collision_only": true,
+        "verdict": "PASS"
+      }
+    }
+  }
+}

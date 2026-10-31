@@ -1,0 +1,22 @@
+{
+  "description": "Unified, provider-pluggable LLM interface for the red-team. Fleet seats resolve to Meta Muse Spark by default (REDTEAM_LLM_PROVIDER unset or =meta); the DeepSeek seat table in src/policy.ts is reached only by explicitly naming REDTEAM_LLM_PROVIDER=deepseek; Qwen (qwen3.8-max) registered, not routed.",
+  "license": "UNLICENSED",
+  "main": "lib/index.js",
+  "name": "@secscan/redteam-llm-router",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node ../scripts/dist-hash.mjs write . lib",
+    "test": "tsc -p tsconfig.test.json && node --test dist-test/test/*.test.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json"
+  },
+  "type": "module",
+  "version": "0.2.0",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  }
+}

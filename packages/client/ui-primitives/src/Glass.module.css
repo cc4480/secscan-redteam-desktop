@@ -1,0 +1,67 @@
+/* The one glass recipe (html-report-design skill): translucent white fill,
+   backdrop blur 14px + saturate 140%, 1px hairline, top inner highlight.
+   Values consume the shell's --glass-* tokens; each var() fallback restates
+   the token's dark value so the primitive renders correctly even where the
+   shell scope is absent. Feature surfaces consume the same tokens through
+   their own sheets — this module is the only component-shaped owner. */
+
+.glass {
+  position: relative;
+  background: var(--glass, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--glass-line, rgba(255, 255, 255, 0.09));
+  border-radius: var(--glass-radius, 16px);
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge, rgba(255, 255, 255, 0.05)),
+    var(--shadow, 0 16px 40px rgba(0, 0, 0, 0.45));
+  backdrop-filter: var(--glass-blur, blur(14px) saturate(140%));
+  -webkit-backdrop-filter: var(--glass-blur, blur(14px) saturate(140%));
+}
+
+.panel {
+  background: var(--glass, rgba(255, 255, 255, 0.04));
+  border-radius: var(--glass-radius, 18px);
+}
+
+.card {
+  background: var(--glass-hi, rgba(255, 255, 255, 0.055));
+  border-radius: var(--glass-radius, 16px);
+}
+
+.well {
+  background: var(--well, rgba(0, 0, 0, 0.34));
+  border-color: var(--glass-line, rgba(255, 255, 255, 0.07));
+  border-radius: var(--glass-radius, 10px);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* One sheen pass across the surface on mount; settles, never loops. The
+   token collapse under prefers-reduced-motion (shell scope) shortens it to
+   ~1ms; the local media rule removes it outright. */
+.sheen {
+  overflow: hidden;
+}
+
+.sheen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, 0.055) 50%, transparent 58%);
+  transform: translateX(-110%);
+  animation: glass-sheen var(--dur-hero, 720ms) var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1)) var(--stagger, 60ms) forwards;
+}
+
+@keyframes glass-sheen {
+  to {
+    transform: translateX(110%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheen::before {
+    animation: none;
+  }
+}

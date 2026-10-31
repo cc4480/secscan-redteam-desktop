@@ -1,0 +1,239 @@
+/**
+ * Autonomy tiers (v0.17.0) — graduated, MECHANICALLY enforced agent autonomy.
+ *
+ * Buyers demand OWASP-style autonomy tiers per environment: agents own
+ * frequency/retest, humans own critical assets and accountability. These
+ * tiers are enforced in the tool dispatcher (phases.ts), never by prompt:
+ *
+ *  - Tier 0 (observe): read-only recon/enumeration only. No exploitation
+ *    tool fires — the dispatcher refuses them before any packet.
+ *  - Tier 1 (validate): Tier 0 + single-step validated exploitation with
+ *    canary markers only. One validated exploit step per target per
+ *    engagement; a second step against the same target is refused as
+ *    chaining — it needs Tier 2 (operator-approved).
+ *  - Tier 2 (chain): Tier 1 + multi-step attack chains toward critical
+ *    assets (msf_exec run), still non-destructive, still no-DoS.
+ *
+ * Tiers describe what the agents MAY do. They are a control boundary, never
+ * a safety guarantee, and never imply the human did the work — the
+ * methodology doc states the agent-driven approach truthfully; the
+ * accountability record adds who supervised and approved.
+ */
+
+// The nmap tier depends on the SELECTED PROFILE, not just the tool name.
+import { findProfile } from "../nmap/policy.js";
+import { XTOOLS_BY_ID } from "../xtool/registry.js";
+
+export type AutonomyTier = 0 | 1 | 2;
+
+export const TIER_NAMES: Record<AutonomyTier, string> = {
+  0: "observe",
+  1: "validate",
+  2: "chain",
+};
+
+export const TIER_DESCRIPTIONS: Record<AutonomyTier, string> = {
+  0: "Read-only recon/enumeration. No exploitation tool fires.",
+  1: "Single-step validated exploitation with canary markers only — one validated step per target; chaining needs Tier 2.",
+  2: "Multi-step attack chains toward critical assets (still non-destructive, still no-DoS).",
+};
+
+/** Default tier per environment: staging runs the full battery, production validates carefully. */
+export function defaultTier(environment: "staging" | "production"): AutonomyTier {
+  return environment === "production" ? 1 : 2;
+}
+
+export const TIER_ENV = "REDTEAM_TIER";
+export const TIER2_PROD_CONFIRM_ENV = "REDTEAM_TIER2_PROD_CONFIRM";
+
+/**
+ * Parse a tier from CLI/env. undefined/empty → undefined (caller applies the
+ * environment default). Anything else unrecognized fails LOUD — refusing to
+ * guess about autonomy.
+ */
+export function parseTier(raw: string | undefined): AutonomyTier | undefined {
+  const v = (raw ?? "").trim();
+  if (!v) return undefined;
+  if (v === "0" || v.toLowerCase() === "observe") return 0;
+  if (v === "1" || v.toLowerCase() === "validate") return 1;
+  if (v === "2" || v.toLowerCase() === "chain") return 2;
+  throw new Error(`[accountability] bad autonomy tier ${JSON.stringify(raw)} — want 0|1|2 (observe|validate|chain). Refusing to guess.`);
+}
+
+/** True when the operator explicitly approved Tier 2 on production. */
+export function tier2ProductionConfirmed(env: NodeJS.ProcessEnv = process.env): boolean {
+  const v = (env[TIER2_PROD_CONFIRM_ENV] ?? "").trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
+/**
+ * Mechanical gate for Tier 2 on production. Tier 2 chains toward critical
+ * assets — on production that needs an explicit operator decision, exactly
+ * like the staging→production graduation itself. Fail fast, before the
+ * engagement directory is even created.
+ */
+export function requireTier2ProductionApproval(tier: AutonomyTier, environment: "staging" | "production", confirmed: boolean): void {
+  if (tier === 2 && environment === "production" && !confirmed) {
+    throw new Error(
+      `[accountability] Tier 2 (chain) on PRODUCTION requires explicit operator approval. ` +
+        `Set ${TIER2_PROD_CONFIRM_ENV}=1 (or pass --confirm-tier2-production) to approve multi-step attack chains against production infrastructure. ` +
+        `Without it the runner refuses to start.`,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tool classification — the minimum tier that may fire each tool.
+// Evaluated in dispatchTool (phases.ts) BEFORE any packet, rate-limiter
+// slot, or executor involvement. Unknown tools fail closed to Tier 2.
+// ---------------------------------------------------------------------------
+
+/** Tool names that never touch a target: pure bookkeeping / control. */
+const TIER0_TOOLS = new Set([
+  "query_registry",
+  "update_target_map",
+  "record_finding",
+  "record_killed",
+  "record_item_verdict", // v0.18.0: pure bookkeeping — declares na verdicts, never touches a target
+  "variant_list", // v0.20.0: pure bookkeeping — returns curated payloads, never fires
+  "http_probe",
+  "burst_probe",
+  // abort_engagement is always allowed — the kill switch must work at every tier.
+  "abort_engagement",
+]);
+
+/** Single validated exploit steps (one command, canary marker). Never chains by itself. */
+const TIER1_TOOLS = new Set([
+  "ssh_exec",
+  "smb_exec",
+  "winrm_exec",
+  "winrm_probe",
+  "rdp_auth",
+  "rdp_shadow_prep",
+  "smb_pth",
+  "ad_enum",
+  "krb_ptt",
+  "ssh_agent_audit",
+  "nfs_enum",
+  // Native Seclayer modules: active single-target web app tests (exploit
+  // attempts, authenticated probes) — validated steps, and every call is
+  // additionally refused without owner verification on the record.
+  "seclayer_redteam",
+  "seclayer_bola",
+  "seclayer_api",
+  "seclayer_webhook",
+  "seclayer_dast",
+  "seclayer_aggressive",
+]);
+
+/**
+ * Minimum tier for a tool call. Three tools are argument-sensitive:
+ *  - secscan_exec: depth=passive is Tier 0; depth=deep runs the embedded
+ *    engine's verification-gated active web app tests → Tier 1 (the ladder
+ *    the retired scan_url wrapper used; the verification-record refusal
+ *    itself lives in the dispatch handler, which can name what is missing).
+ *  - msf_exec: search/suggest never fire → Tier 1; run fires exploits → Tier 2.
+ *  - nuclei_exec: templates never fires (local template listing) → Tier 1;
+ *    run executes templates against the target → Tier 2.
+ *  - nmap_exec: profiles touches no target (it runs `nmap --version`) → Tier 0;
+ *    scan fires packets, and the tier is the SELECTED PROFILE's own minTier.
+ *    All six profiles share one tool name, so without this a 65535-port sweep
+ *    would be as reachable at Tier 0 as a top-100 sweep. The same gate is
+ *    enforced again in the nmap dispatch handler, which is where the refusal
+ *    can name the tier that would allow it.
+ */
+export function toolMinTier(toolName: string, args: Record<string, unknown> = {}): AutonomyTier {
+  if (toolName === "secscan_exec") {
+    return args["depth"] === "deep" ? 1 : 0;
+  }
+  if (toolName === "msf_exec") {
+    return args["action"] === "run" ? 2 : 1;
+  }
+  if (toolName === "nuclei_exec") {
+    return args["action"] === "run" ? 2 : 1;
+  }
+  if (toolName === "nmap_exec") {
+    if (args["action"] !== "scan") return 0;
+    const id = typeof args["profile"] === "string" ? args["profile"] : "quick";
+    return (findProfile(id)?.minTier ?? 0) as AutonomyTier;
+  }
+  // v0.32.0 external-tool bridge: probe runs nothing -> Tier 0; a run takes the
+  // SELECTED PROFILE's tier, same reasoning as nmap_exec — all profiles of one
+  // tool share a name, so the tool name alone cannot classify the risk.
+  if (toolName.endsWith("_exec") && XTOOLS_BY_ID.has(toolName.slice(0, -5) as never)) {
+    if (args["action"] !== "run") return 0;
+    const spec = XTOOLS_BY_ID.get(toolName.slice(0, -5) as never)!;
+    const id = typeof args["profile"] === "string" ? args["profile"] : spec.profiles[0]!.id;
+    return (spec.profiles.find((p) => p.id === id)?.minTier ?? 0) as AutonomyTier;
+  }
+  if (TIER0_TOOLS.has(toolName)) return 0;
+  if (TIER1_TOOLS.has(toolName)) return 1;
+  // Unknown tool: fail closed to the highest tier — a tool the classifier
+  // doesn't know is never fired at a low tier.
+  return 2;
+}
+
+/**
+ * Tools whose successful execution counts as a "validated exploit step" for
+ * the Tier 1 chain budget. Enumeration-flavored Tier 1 tools (winrm_probe,
+ * ad_enum, nfs_enum, ssh_agent_audit, rdp_shadow_prep) observe; they don't
+ * execute against the target, so they don't consume the budget.
+ */
+const EXPLOIT_STEP_TOOLS = new Set(["ssh_exec", "smb_exec", "winrm_exec", "smb_pth", "krb_ptt", "rdp_auth", "seclayer_redteam", "seclayer_bola", "seclayer_api", "seclayer_webhook", "seclayer_dast", "seclayer_aggressive"]);
+
+export function isExploitStepTool(toolName: string, args: Record<string, unknown> = {}): boolean {
+  if (toolName === "secscan_exec") return args["depth"] === "deep";
+  return EXPLOIT_STEP_TOOLS.has(toolName);
+}
+
+/** Tier 1 chain budget: validated exploit steps allowed per target per engagement. */
+export const TIER1_CHAIN_BUDGET_PER_TARGET = 1;
+
+export interface TierState {
+  /** The tier currently in force (may rise via recorded escalation). */
+  current: AutonomyTier;
+  /** The tier declared at engagement start. */
+  declared: AutonomyTier;
+  /** Target → validated exploit steps used (Tier 1 chain budget). */
+  chainSteps: Map<string, number>;
+}
+
+/**
+ * Pure tier check, called by the dispatcher before any packet. Returns the
+ * denial text, or undefined when the call is allowed. Chain-budget denials
+ * name the re-approval path (Tier 2, operator-approved) — never silent.
+ */
+export function checkTierAllows(state: TierState, toolName: string, args: Record<string, unknown>, host?: string): string | undefined {
+  const need = toolMinTier(toolName, args);
+  if (state.current < need) {
+    return (
+      `DENIED by autonomy tier: ${toolName} requires Tier ${need} (${TIER_NAMES[need]}), ` +
+      `engagement is Tier ${state.current} (${TIER_NAMES[state.current]}). ` +
+      `Tier 0 allows read-only recon only; Tier 1 adds single-step validated exploitation; ` +
+      `Tier 2 allows multi-step chains. Escalation needs recorded operator approval — no silent escalation.`
+    );
+  }
+  if (state.current === 1 && isExploitStepTool(toolName, args) && host) {
+    const used = state.chainSteps.get(host) ?? 0;
+    if (used >= TIER1_CHAIN_BUDGET_PER_TARGET) {
+      return (
+        `DENIED by autonomy tier: Tier 1 (validate) permits a single validated exploit step per target ` +
+        `(${used} already used on ${host}). Chaining beyond one step needs Tier 2 — declare --tier 2 at ` +
+        `engagement start with operator approval (plus --confirm-tier2-production for production). ` +
+        `No chaining without re-approval.`
+      );
+    }
+  }
+  return undefined;
+}
+
+/** Record a successful validated exploit step against the chain budget. */
+export function recordExploitStep(state: TierState, toolName: string, args: Record<string, unknown>, host: string): void {
+  if (state.current === 1 && isExploitStepTool(toolName, args)) {
+    state.chainSteps.set(host, (state.chainSteps.get(host) ?? 0) + 1);
+  }
+}
+
+export function describeTier(tier: AutonomyTier): string {
+  return `Tier ${tier} (${TIER_NAMES[tier]}) — ${TIER_DESCRIPTIONS[tier]}`;
+}

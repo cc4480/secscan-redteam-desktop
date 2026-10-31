@@ -1,0 +1,18 @@
+[
+  {
+    "role": "hide",
+    "label": "Hide SecScan RedTeam"
+  },
+  {
+    "role": "hideOthers",
+    "label": "Hide Others"
+  },
+  {
+    "role": "unhide",
+    "label": "Show All"
+  },
+  {
+    "role": "quit",
+    "label": "Quit SecScan RedTeam"
+  }
+]

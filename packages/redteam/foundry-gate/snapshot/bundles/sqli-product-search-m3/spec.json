@@ -1,0 +1,34 @@
+{
+  "controls": {
+    "negative": "Probe against patched/app.py exits 1 (marker NOT observed).",
+    "positive": "Probe against vuln/app.py exits 0 (marker observed)."
+  },
+  "cwe": "CWE-89",
+  "description": "Northwind Pantry is a small storefront whose /search endpoint builds its SQLite query by string interpolation. A hidden QA prototype product is flagged invisible (visible=0), so it never appears in storefront results, but a SQL injection in the q parameter comments out the visibility filter and returns every row, exposing the hidden product and its marker. The patched variant binds q as a query parameter.",
+  "endpoints": [
+    "GET /find?q="
+  ],
+  "expected_finding": {
+    "detector": "probe",
+    "evidence": "Probe injects a tautology payload (' OR '1'='1') -- ) into /find?q= and observes the hidden product row (marker FNDRY-SQLI-7Q2X9) in the results, a row no ordinary search term can return."
+  },
+  "lineage": {
+    "cell": "sql-injection x T1",
+    "generation_run_id": "phase3-2026-10-24-001",
+    "operators": [
+      "rename-route"
+    ],
+    "parent": "sqli-product-search"
+  },
+  "marker": "FNDRY-SQLI-7Q2X9",
+  "provenance": {
+    "created_at": "2026-10-24T13:25:04+00:00",
+    "generated_by": "evolution-engine",
+    "model": "deterministic-operators",
+    "prompt_version": "foundry-evolution-1"
+  },
+  "slug": "sqli-product-search-m3",
+  "tier": 1,
+  "title": "SQL injection in product search",
+  "vuln_class": "sql-injection"
+}

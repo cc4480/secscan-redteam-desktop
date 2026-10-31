@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.base.client.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src/client",
+    "src/welcome-api.ts",
+    "src/llama-api.ts",
+    "src/mcp-credential-contract.ts",
+    "src/locale.ts"
+  ],
+  "references": [
+    {
+      "path": "../../packages/client/ui-primitives"
+    },
+    {
+      "path": "../../packages/credentials/deepseek-account"
+    }
+  ]
+}

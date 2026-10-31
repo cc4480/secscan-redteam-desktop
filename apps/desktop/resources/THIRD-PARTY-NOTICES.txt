@@ -1,0 +1,29 @@
+SecScan RedTeam - third-party notices
+=====================================
+
+This product bundles the following third-party components. Their licenses apply
+to those components; the full texts are shipped alongside them where required.
+
+llama.cpp (b11669, win-cpu-x64)
+  Copyright (c) 2023-2026 ggml-org and contributors.
+  License: MIT. https://github.com/ggml-org/llama.cpp
+  Bundled: llama-server.exe and the ggml/llama shared libraries.
+  Includes libomp (LLVM OpenMP runtime) under the Apache License 2.0 with LLVM
+  exceptions; see LICENSE-LLVM-OpenMP in the runtime directory.
+
+nmap 7.92 (win32 ZIP tree)
+  License: Nmap Public Source License (GPLv2-based).
+  https://nmap.org/book/man-legal.html
+  Npcap is NOT bundled; SYN scans and OS detection require it.
+
+ffuf 2.3.0
+  License: MIT. https://github.com/ffuf/ffuf
+
+gobuster 3.8.2
+  License: Apache-2.0. https://github.com/OJ/gobuster
+
+Electron, Chromium and Node.js are distributed under their respective licenses.
+DeepSeek Harness packages are MIT-licensed; the desktop shell and the red-team
+engine are proprietary.
+
+If you redistribute this installer, keep this file with it.

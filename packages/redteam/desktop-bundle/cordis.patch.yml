@@ -1,0 +1,266 @@
+# The @secscan/redteam-desktop-bundle patch: the whole SecScan red team as ONE
+# insert over whatever profile root it is composed into.
+#
+# Applied after dsh-base and dsh-web-app (bundle order in `dsh.profile.bundles`),
+# and before the profile's own cordis.patch.yml - so a person can still override
+# or disable any row by id in their own patch layer.
+#
+# Seven rows:
+#   1. mcp-secscan      - the harness-NATIVE MCP client
+#                         (@deepseek-ai/dsh-mcp-client) over Streamable HTTP.
+#                         Tools appear namespaced mcp__secscan__scan_url,
+#                         mcp__secscan__get_report, ...
+#   2. mcp-seclayer     - the Seclayer MCP server (@seclayer/mcp) over stdio,
+#                         keyed by the operator's own Seclayer API key.
+#                         Tools appear namespaced mcp__seclayer__seclayer_scan,
+#                         mcp__seclayer__seclayer_list_scans, ...
+#   3. secscan-redteam  - @secscan/redteam-harness-plugin: the authorization
+#                         gate as a `tools/pre-execute` hook, plus the
+#                         engagement-protocol system-prompt section.
+#   4. mcp-redteam-runner - the engagement ENGINE (battery, safety core, proof
+#                         bundles, compliance packs) as a second MCP client, over
+#                         the console's POST /mcp. Tools appear namespaced
+#                         mcp__redteam__*.
+#   5. agent-team       - the Agent Teams roster, durable peer mailbox and
+#                         shared task DAG. This is what makes the engagement a
+#                         TEAM: the session agent is the Lead and creates named
+#                         teammates (recon, exploiter, reporter) that persist
+#                         across crashes and restarts.
+#   6. tool-agent-team  - the model-facing Team tools: spawn_teammate,
+#                         send_message, list_agents, wait_agent,
+#                         interrupt_agent, team_task_{create,list,get,update}.
+#   7. ui-agent-team    - the Web UI for viewing the roster and task board.
+#
+# Secrets are cordis-native: schemastery Config with env fallbacks.
+# NEVER put a raw key in this file.
+
+# Direct subagent delegation is disabled so that ALL delegation goes through the
+# Team tools. A plain subagent is invisible to the roster, is not durable, and
+# takes no part in the shared task board - so using it would fragment an
+# engagement into untracked work. This mirrors the upstream Agent Teams profile
+# (@deepseek-ai/dsh-experimental-agent-team-profile), which disables the same
+# four rows for the same reason.
+#
+# To get fire-and-forget delegation back, set `disabled: false` on these rows in
+# your own profile patch layer - but a red-team engagement wants the trail.
+- id: tool-subagent-control
+  disabled: true
+
+- id: tool-subagent-list-agents
+  disabled: true
+
+- id: tool-subagent
+  disabled: true
+
+- id: tool-subagent-fork
+  disabled: true
+
+# The same reasoning applies one layer out. `workflow`'s agent() starts fresh
+# child runs that never appear on the roster and take no part in the board, so
+# it is a second door to exactly the untracked work the four rows above close.
+# It also has its own concurrency and total-agent caps and can fan out far wider
+# than the team, which makes it the greater exposure of the two.
+#
+# Both rows go together: `tool-workflow` is the tool the model calls and
+# `workflow-ptc` is the engine behind it. Disabling only the tool leaves a live
+# backend, and only the engine leaves the tool present but broken.
+#
+# This is a real capability given up, not just a hole plugged: scripted
+# mass-parallelism over many files or targets is gone. The engagement's own
+# delegation covers the same ground and keeps the trail, which is the point.
+- id: tool-workflow
+  disabled: true
+
+- id: workflow-ptc
+  disabled: true
+
+# The roster cap below is not the only fleet bound: the subagent service
+# (inserted bare by dsh-base) defaults maxActiveSubagents to 8, and its
+# activation pool refuses - does not queue - a spawn that would exceed it
+# (ACTIVATION_LIMIT_REACHED; the roster row lands as failed). A 100-member
+# roster would fail every spawn past 8 concurrently running members. Raise
+# the active cap to the roster width so the whole fleet can work
+# concurrently; the bounds that then bite first are the model provider's
+# rate and token limits and the host's CPU and memory. The setting is
+# volatile: an operator can still lower it live in Settings.
+- id: subagent
+  config:
+    maxActiveSubagents: 100
+
+- insert:
+    - id: mcp-secscan
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: secscan
+        transport: streamable-http
+        url: https://secscan.us/api/mcp
+        headers:
+          # MCP-scope token - create at https://secscan.us/settings (AI editors).
+          # Verified 2026-10-15: the settings page issues an ssk_-prefixed token FOR
+          # MCP and the endpoint accepts it (initialize and get_account both HTTP 200).
+          # Earlier revisions warned that ssk_ would be rejected - that is no longer
+          # true. If a token is refused, suspect revocation or the wrong account, not
+          # the prefix. If the token is UNSET the harness still starts and the
+          # mcp__secscan__* tools simply do not appear - and the auth gate fails
+          # closed anyway, so nothing aggressive can run without it.
+          Authorization: !!js "'Bearer ' + (process.env.SECSCAN_MCP_TOKEN || '')"
+
+    # The Seclayer service, over stdio. @seclayer/mcp serves stdio only, so
+    # this row spawns it with npx; the version is pinned so an upstream
+    # release can never silently change the tool surface under a saved
+    # profile. Tools arrive namespaced mcp__seclayer__*: seclayer_scan,
+    # seclayer_list_scans, seclayer_get_report - the operator's own service
+    # scans against their own Seclayer account (a scan call spends a credit
+    # there). This row adds reach, not authority: an engagement still scans
+    # with the runner, never with this service.
+    #
+    # The key arrives by NAME only, through the mcp-client's secretEnv seam:
+    # the credential vault writes SECLAYER_API_KEY into the app's process
+    # env at startup, and the client resolves the named value into the
+    # child's spawn env. The value never appears in this file or in any
+    # composed config dump. If the key is UNSET the server exits at startup,
+    # the harness still starts, and no mcp__seclayer__* tools appear - the
+    # same failure shape as an unset SECSCAN_MCP_TOKEN above. If the key is
+    # set but invalid, the tools appear and the server answers its scan
+    # tools with an authentication error.
+    - id: mcp-seclayer
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: seclayer
+        transport: stdio
+        command: !!js "process.platform === 'win32' ? 'npx.cmd' : 'npx'"
+        args: ['-y', '@seclayer/mcp@1.0.0']
+        secretEnv: ['SECLAYER_API_KEY']
+
+    - id: secscan-redteam
+      name: '@secscan/redteam-harness-plugin'
+      config:
+        # No plugin config needed. Verified domains come from the SecScan server
+        # alone (list_verified_domains over MCP) - there is no allowlist env var,
+        # deliberately: an env-var allowlist would be a way to assert ownership
+        # locally instead of proving it with the server. The MCP token lives in
+        # env SECSCAN_MCP_TOKEN.
+
+    # The ENGAGEMENT ENGINE, over MCP. This is the row that actually combines the
+    # product with the harness.
+    #
+    # secscan-redteam is two different things and it is worth keeping them
+    # straight:
+    #   - the SecScan scan service (row mcp-secscan above) is an MCP SERVER the
+    #     harness calls for scan_url / get_report / domain verification;
+    #   - the runner (@secscan/redteam-runner) is the engagement engine - the
+    #     418-intent battery, the safety core, proof bundles, compliance packs -
+    #     and it was an MCP CLIENT only, so there was nothing to connect to.
+    #     runner/src/ui/mcp-endpoint.ts now serves POST /mcp on the console, so
+    #     the engine is addressable the same way the scan service is.
+    #
+    # Tools arrive namespaced mcp__redteam__*: start_engagement, get_engagement,
+    # get_feed, get_findings, get_proof, get_coverage, get_compliance,
+    # escalate, reverify, abort_engagement, watch_profiles, watch_trigger.
+    #
+    # In the desktop application this console is BUNDLED and supervised, so an
+    # operator installs nothing: apps/desktop/src/redteam-runner.ts starts the
+    # packaged runner with the application's own Node runtime before the Host
+    # composes this profile, waits for its MCP `initialize` reply, publishes the
+    # loopback endpoint and a generated token into process.env (which is exactly
+    # what the two `!!js` scalars below read), and stops it with the app. A
+    # console that cannot start is a visible startup failure, not the silence
+    # described next.
+    #
+    # An operator-set value always wins and suppresses the bundled console - that
+    # person is driving a shared or remote one:
+    #     REDTEAM_MCP_URL=https://console.example.test/mcp REDTEAM_UI_TOKEN=... \
+    #       npx redteam-runner ui        # or their own console, 127.0.0.1:8787
+    # If no console is reachable at all, the harness still starts and the
+    # mcp__redteam__* tools are simply unavailable - the same failure mode as an
+    # unset SECSCAN_MCP_TOKEN. That is why the bundled console failing to start
+    # is reported instead of ignored.
+    #
+    # Safety: every tool delegates to the same handler the console UI calls, so
+    # the safety core, launch validation, tier rules and approval logging all
+    # still apply. This row adds reach, not authority.
+    - id: mcp-redteam-runner
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: redteam
+        transport: streamable-http
+        # Loopback by default. The console binds 127.0.0.1 unless explicitly
+        # overridden, and it drives live pentest tooling - keep it there. The
+        # bundled supervisor never listens on anything else, and picks a free
+        # loopback port when this one is taken.
+        url: !!js "process.env.REDTEAM_MCP_URL || 'http://127.0.0.1:8787/mcp'"
+        headers:
+          # The console's startup token. Stable across restarts if you set
+          # REDTEAM_UI_TOKEN when launching the console; otherwise copy the
+          # random token it prints. It must be >= the strength floor.
+          Authorization: !!js "'Bearer ' + (process.env.REDTEAM_UI_TOKEN || '')"
+
+    # The team itself. Durable session storage is the activation requirement and
+    # is already mounted by dsh-base (row `session-persistence-jsonl`), so the
+    # roster, mailbox and task board survive a crash, reload or restart.
+    - id: agent-team
+      name: '@deepseek-ai/dsh-experimental-agent-team'
+      config:
+        # The starter roster is lead + recon + exploiter + reporter, but an
+        # engagement is NOT capped at four: every member may spawn helpers for its
+        # own slice, so a large surface can legitimately grow into a swarm - a
+        # second and third exploiter per host, dedicated verifiers re-testing a
+        # peer's findings, parallel report authors.
+        #
+        # These bounds are mirrored in the experimental agent-team-profile
+        # bundle's agent-team row. Patch composition resolves a repeated plugin
+        # id to the LAST layer that inserts it, so two different values would
+        # make the effective ceiling depend on bundle order; identical values
+        # keep the fleet bounds the same in every order.
+        #
+        # 100 is the widest fleet the operator runs: one member per host, shard
+        # or source on a large surface, with seats left for verifiers and report
+        # authors. It is a runaway guard, not the working limit - at 100 wide,
+        # the bounds that bite first are the model provider's rate and token
+        # limits and the host's CPU and memory, both outside this file. Raise it
+        # in this row to go wider. The audit trail does not depend on this
+        # number: every member, however spawned, is still an entry on the one
+        # roster. (A teammate whose creation FAILED still consumes a name
+        # permanently, which is part of why the guard exists at all.)
+        maxMembers: 100
+        # Depth is the other half of the bound: maxMembers caps how WIDE the team
+        # grows, maxMemberDepth caps how DEEP. The Lead is depth 0, each specialist
+        # the Lead spawns is depth 1, and a helper one of those raises is depth 2.
+        # At the limit spawn_teammate is refused, so the recursion cannot run away.
+        #
+        # 4, not 2, deliberately. Two levels is enough for a specialist to raise a
+        # helper but forbids that helper from delegating again, which is the wrong
+        # ceiling for a large surface where a helper may itself need to split work.
+        # Four keeps delegation genuinely recursive while still bounding the chain,
+        # and the wide cap above is the real limit on engagement size: a failure
+        # inside a very long chain would consume names and seats for nothing.
+        maxMemberDepth: 4
+        # The per-member bound sits inside those two: no member - Lead included -
+        # may have more than 25 live helpers of its own at once, so one wide
+        # slice cannot consume the whole roster width on its own. A creation
+        # that failed never produced a helper and does not count against its
+        # creator. A member that genuinely needs more than its share raises it
+        # with the Lead instead of routing spawns through a peer.
+        maxChildrenPerMember: 25
+        # Board sized for the 100-member fleet: 1024 was the 64-member sizing
+        # (16 tasks per member). 4096 keeps that headroom per member and more
+        # (~41 per member), so the board refuses work (TEAM_TASK_LIMIT) only
+        # after the roster itself is full - the member cap stays the single
+        # width bound an operator reasons about.
+        maxTasks: 4096
+        maxPendingMessagesPerMember: 64
+        maxMessageBytes: 65536
+        disposalTimeoutMs: 5000
+
+    - id: tool-agent-team
+      name: '@deepseek-ai/dsh-experimental-tool-agent-team'
+      config:
+        # `fresh` gives a specialist with no memory of the Lead's conversation,
+        # which is right for a red-team role: each specialist gets its role
+        # brief and its task, not the Lead's whole reasoning. `fork` is
+        # available to the Lead for a specialist that needs the Lead's context.
+        freshProvider: spawn
+        forkProvider: fork
+
+    - id: ui-agent-team
+      name: '@deepseek-ai/dsh-experimental-client-ui-agent-team'

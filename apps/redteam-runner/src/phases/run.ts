@@ -1,0 +1,255 @@
+/**
+ * runEngagement entry point + RunOptions (v0.19.0 refactor — extracted from phases.ts).
+ */
+import { ApprovalLog, TIER_ENV, defaultTier, describeTier, parseTier, requireNamedOperator, requireTier2ProductionApproval, resolveOperatorName, tier2ProductionConfirmed, writeTierFile } from "../accountability/index.js";
+import { type BatteryCategory } from "../battery.js";
+import { type Ctx, HaltError } from "../context.js";
+import { type EngagementInput, type EngagementResult } from "../types.js";
+import { EventLog } from "../events.js";
+import { HostExecutor } from "../host-exec/index.js";
+import { McpClient } from "../mcp.js";
+import { MsfExecutor } from "../msf/index.js";
+import { NucleiExecutor } from "../nuclei/index.js";
+import { NmapExecutor } from "../nmap/index.js";
+import { TargetAutoHalt, TargetRateLimiter, describeEnvironment, parseEnvironment, productionConfirmed, requireGraduation, resolveEffectiveRps, resolveLogRotationConfig, assertDistFresh } from "../safety/index.js";
+import { type VulnerabilityRegistry, loadRegistryFile, saveRegistryFile, seedRegistry } from "../registry.js";
+import { WebProber, allHostsPrivateOrLoopback } from "../prober.js";
+import { activeTargets } from "../targets.js";
+import { buildItemLedger } from "../coverage/items.js";
+import { fireSlack, reportPhase } from "../report.js";
+import { inTestWindow, scopeHosts } from "../gate.js";
+import { safeEngagementId } from "../util.js";
+import { join } from "node:path";
+import { authorizePhase } from "./authorize.js";
+import { planPhase } from "./plan.js";
+import { reconPhase } from "./recon.js";
+import { exploitPhase } from "./exploit.js";
+import { registerLive, unregisterLive } from "../live.js";
+import { resolveConfig } from "./config.js";
+import { coordinatorSignOff } from "./signoff.js";
+import { resolveVariantCap } from "../variants/index.js";
+import { captureEngagementTrajectory } from "../harness2/trajectory.js";
+
+import { type RunOptions } from "./run-options.js";
+
+export type { RunOptions, OperatorAbortHandle } from "./run-options.js";
+
+export async function runEngagement(input: EngagementInput, opts: RunOptions = {}): Promise<EngagementResult> {
+  // Stale compiled dist/ is a silent-safety bug (an old model policy running after a src-only change). Fail fast — before any target touch.
+  assertDistFresh();
+  const config = resolveConfig(process.env, opts);
+  const deps = opts.deps ?? {};
+
+  if (!input.target) throw new Error("[runner] target is required");
+  if (!["red", "black"].includes(input.mode)) throw new Error(`[runner] mode must be red|black, got ${input.mode}`);
+  if (!input.roe?.scope?.length) throw new Error("[runner] ROE scope is required (exact hosts).");
+  if (!inTestWindow(new Date(), input.roe)) {
+    throw new Error("[runner] current time is outside the ROE test window — refusing to run.");
+  }
+
+  // v0.13.0 safety case: staging→production graduation is MECHANICAL.
+  // Production without explicit operator confirmation refuses to start —
+  // fail fast, before the engagement directory is even created.
+  const environment = input.environment ?? parseEnvironment(process.env["REDTEAM_ENV"]);
+  const prodConfirmed = input.confirmProduction ?? productionConfirmed(process.env);
+  requireGraduation(environment, prodConfirmed);
+  const { rps, productionCapApplied } = resolveEffectiveRps(environment, config.maxRpsPerHost);
+
+  // v0.17.0 accountability: autonomy tiers + named human operator.
+  // Tier resolves: explicit input → REDTEAM_TIER → environment default
+  // (staging: Tier 2 chain, production: Tier 1 validate). Tier 2 on
+  // production needs its own explicit operator approval. Production always
+  // needs a NAMED human operator — someone must own the findings.
+  // All fail fast, before the engagement directory is even created.
+  const tier = input.tier ?? parseTier(process.env[TIER_ENV]) ?? defaultTier(environment);
+  const tier2ProdConfirmed = input.confirmTier2Production ?? tier2ProductionConfirmed(process.env);
+  requireTier2ProductionApproval(tier, environment, tier2ProdConfirmed);
+  const operator = resolveOperatorName(input.operatorName, process.env);
+  requireNamedOperator(environment, operator);
+
+  const hosts = scopeHosts(input.roe);
+  if (hosts.length === 0) throw new Error("[runner] ROE scope produced no parseable hosts — refusing to run.");
+
+  const engagementId = safeEngagementId(opts.engagementId);
+  const dir = join(config.engagementsDir, engagementId);
+  // v0.26.0: log rotation — CLI/env overrides, then env defaults. events.jsonl
+  // and engagement.md rotate together when the cap is hit (see EventLog).
+  const rotation = resolveLogRotationConfig(process.env, {
+    maxLogBytes: opts.maxLogBytes,
+    maxLogArchives: opts.maxLogArchives,
+  });
+  const events = new EventLog(dir, engagementId, { target: input.target, mode: input.mode, objective: input.objective }, rotation);
+
+  // v0.17.0 accountability: the append-only approval log. Tier declared and
+  // production confirmation are recorded here FIRST — before any agent acts.
+  const approvals = new ApprovalLog(dir, engagementId);
+  const operatorLabel = operator ?? "(operator name not supplied — set REDTEAM_OPERATOR)";
+  approvals.append("tier-declared", operatorLabel, `Autonomy ${describeTier(tier)} declared for ${environment} engagement`, undefined, tier);
+  if (environment === "production") {
+    approvals.append("production-confirm", operatorLabel, "Production engagement explicitly confirmed by operator");
+    if (tier === 2) {
+      approvals.append("tier-escalation", operatorLabel, "Tier 2 (chain) on production explicitly approved by operator", 1, 2);
+    }
+  }
+
+  // v0.24.0: tier.json — the mid-run tier signal. The dispatcher re-reads it
+  // before every tier check; `redteam-runner escalate` and the UI rewrite it
+  // (atomically) when the operator changes the tier. No new network surface.
+  writeTierFile(dir, { tier, declared: tier, environment, updatedAt: new Date().toISOString() });
+
+  // The registry: load, or seed with the v0.3.x secscan.us engagement data on first run.
+  const registryPath = config.registryPath;
+  const registry: VulnerabilityRegistry = loadRegistryFile(registryPath) ?? seedRegistry();
+  saveRegistryFile(registryPath, registry);
+
+  const ctx: Ctx = {
+    input,
+    config,
+    deps,
+    events,
+    mcp: deps.mcp ?? new McpClient({ endpoint: config.mcpEndpoint, token: config.mcpToken }),
+    prober: deps.prober ?? new WebProber({ scopeHosts: hosts, minDelayMs: config.probeDelayMs, allowPrivateHosts: config.localSandbox && allHostsPrivateOrLoopback(hosts) }),
+    hostExecutor: deps.hostExecutor ?? new HostExecutor(),
+    msfExecutor: deps.msfExecutor ?? new MsfExecutor(),
+    nucleiExecutor: deps.nucleiExecutor ?? new NucleiExecutor(),
+    nmapExecutor: deps.nmapExecutor ?? new NmapExecutor(),
+    nuclei: { templateExecutions: 0, templatesRun: 0, findings: 0 },
+    hostKill: { aborted: false, controllers: new Set() },
+    // v0.13.0 safety case: mechanical protections, armed from engagement start.
+    safety: {
+      limiter: new TargetRateLimiter({ rpsPerHost: rps }),
+      autoHalt: new TargetAutoHalt(),
+      environment,
+      productionConfirmed: prodConfirmed,
+      rpsPerHost: rps,
+      productionCapApplied,
+      killSwitchAborts: 0,
+    },
+    // v0.17.0 accountability: graduated autonomy, mechanically enforced.
+    tier: { current: tier, declared: tier, chainSteps: new Map() },
+    approvals,
+    hosts,
+    domain: hosts[0]!,
+    excludedNote: "",
+    startedAt: Date.now(),
+    actions: 0,
+    plan: null,
+    opsecCooldown: new Set(),
+    consecutive5xx: 0,
+    coverage: new Set(),
+    targetCoverage: new Map(),
+    // v0.18.0 per-item verdicts: every selected battery item opens pending
+    // (or blocked when its prerequisite is unmet); the report gate refuses
+    // "complete" while any item is still pending.
+    itemLedger: input.fullBattery ? buildItemLedger(activeTargets(input)) : new Map(),
+    probesUsed: 0,
+    // v0.20.0 payload-variant expansion: per-item cap resolved mechanically
+    // (env default 25 staging / 10 production; --max-variants / REDTEAM_MAX_VARIANTS).
+    variantCap: resolveVariantCap(environment, config.maxVariantsPerItem),
+    fingerprint: { host: hosts[0]!, stack: [], appType: "unknown" },
+    registry,
+    registryPath,
+    registryHits: [],
+    targetMap: [],
+    liveFindings: [],
+    killedLive: [],
+    redirects: 0,
+    deniedStreak: 0,
+  };
+
+  // v0.30.0: publish this context so the console and the MCP bridge can invoke
+  // the executor tools (nuclei_exec, msf_exec, http_probe, …) on demand while
+  // the engagement runs. Registered here — before any agent acts — so the tools
+  // are reachable for the whole live window, and withdrawn in the finally below
+  // so a finished engagement reports "not running" rather than serving a stale
+  // context whose executors and kill switch no longer belong to anything.
+  registerLive(engagementId, ctx);
+
+  events.append({ phase: "authorize", actor: "runner", action: "engagement_start", target: input.target, result: `Mode=${input.mode.toUpperCase()} env=${describeEnvironment(environment, prodConfirmed)} tier=${describeTier(tier)} rate_limit=${rps}rps/host objective="${input.objective}" scope=[${hosts.join(", ")}] registry=${registry.confirmed.length} confirmed / ${registry.killed.length} killed entries loaded` });
+  // v0.22.0 UI kill switch: hand the operator abort handle to whoever is
+  // driving this engagement (the UI server registers it for the kill-switch
+  // button). Fires synchronously here — before any agent acts — so the
+  // handle is always available while the engagement is live.
+  if (opts.onCtxReady) {
+    opts.onCtxReady({
+      abort: (reason: string) => {
+        ctx.hostKill.aborted = true;
+        for (const c of ctx.hostKill.controllers) {
+          try {
+            c.abort();
+          } catch {
+            /* best effort */
+          }
+        }
+        ctx.hostKill.controllers.clear();
+        ctx.safety.killSwitchAborts++;
+        ctx.events.append({
+          phase: ctx.events.snapshot.phase,
+          // Actor "coordinator": the kill-switch abort carries coordinator-level
+          // authority; the result records that it came from the operator console.
+          actor: "coordinator",
+          action: "abort_engagement",
+          result: `ABORTED by operator: ${reason.slice(0, 500)}`,
+        });
+      },
+    });
+  }
+  // v0.15.0: Slack lifecycle — engagement started (best-effort, never blocking).
+  void fireSlack(ctx, { kind: "started" });
+
+  // Hoisted so the halt path (catch) can still assemble the report/safety
+  // artifacts from whatever work completed before the halt.
+  let brief = "";
+  let summary = "";
+  try {
+    const verdict = await authorizePhase(ctx);
+    if (!verdict.allowed) {
+      return { engagementId, status: "blocked", blockedReason: verdict.reason, findings: [] };
+    }
+    await planPhase(ctx);
+    await coordinatorSignOff(ctx, "plan→recon", `Operation plan:\n${JSON.stringify(ctx.plan, null, 1)}`);
+    void fireSlack(ctx, { kind: "phase", phase: "recon" });
+    brief = await reconPhase(ctx);
+    await coordinatorSignOff(
+      ctx,
+      "recon→exploit",
+      `Recon brief:\n${brief.slice(0, 3000)}\n\nShared target map (${ctx.targetMap.length} entries):\n${ctx.targetMap.map((t) => `- ${t.method} ${t.area}${t.authState ? ` [${t.authState}]` : ""}${t.attackId ? ` ${t.attackId}` : ""}`).join("\n") || "(empty)"}\nRegistry hits consulted: ${ctx.registryHits.length}. Fingerprint: ${JSON.stringify(ctx.fingerprint)}`,
+    );
+    summary = await exploitPhase(ctx, brief);
+    void fireSlack(ctx, { kind: "phase", phase: "exploit" });
+    await coordinatorSignOff(
+      ctx,
+      "exploit→report",
+      `Exploitation summary:\n${summary.slice(0, 3000)}\n\nVerdicts — confirmed: ${ctx.liveFindings.length}, killed: ${ctx.killedLive.length}.\nBattery: ${["logic", "functionality", "validation"].map((c) => `${c}:${ctx.coverage.has(c as BatteryCategory) ? "yes" : "no"}`).join(", ")}.`,
+    );
+    const findings = await reportPhase(ctx, brief, summary);
+    void fireSlack(ctx, { kind: "phase", phase: "report" });
+    events.updateState({ status: "complete", phase: "done" });
+    events.append({ phase: "done", actor: "runner", action: "engagement_complete", result: `Complete. ${findings.length} findings.` });
+    return { engagementId, status: "complete", reportPath: join(dir, "report.md"), findings };
+  } catch (err) {
+    const reason = err instanceof HaltError ? err.message : `unexpected error: ${(err as Error).message}`;
+    events.updateState({ status: "halted", phase: "halted", blockedReason: reason });
+    events.append({ phase: "halted", actor: "runner", action: "engagement_halted", result: reason });
+    void fireSlack(ctx, { kind: "halted", reason });
+    // A halt is exactly when the zero-disruption record matters most (5xx
+    // auto-halt, kill switch, aborted sign-off). Still emit the mechanical
+    // accountability artifacts — safety manifest, item verdicts, proof
+    // bundles, partial report — WITHOUT re-running the reporter LLM (it could
+    // re-hit the same cap). Defensive: a failure here must never mask the halt.
+    let findings = events.snapshot.findings;
+    let reportPath: string | undefined;
+    try {
+      findings = await reportPhase(ctx, brief, summary, { haltedReason: reason });
+      reportPath = join(dir, "report.md");
+    } catch (reportErr) {
+      events.append({ phase: "halted", actor: "runner", action: "halt_report_failed", result: `Could not write halt artifacts: ${(reportErr as Error).message}` });
+    }
+    return { engagementId, status: "halted", blockedReason: reason, reportPath, findings };
+  } finally {
+    unregisterLive(engagementId);
+    // H2-P1a: additive trajectory/metrics capture for every outcome; guarded so it never throws into the run (tokens: see TOKEN_CAPTURE_STATUS).
+    captureEngagementTrajectory({ engagementDir: dir, engagementId, target: input.target, targetIds: input.targets, ctx, events });
+    // v0.23.0: no blind save here. Every verdict persists atomically via transactRegistryFile at write time; a whole-file save of this engagement's in-memory copy would clobber verdicts transacted by a concurrent engagement.
+  }
+}
