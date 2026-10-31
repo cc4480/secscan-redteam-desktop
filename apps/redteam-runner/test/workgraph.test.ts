@@ -9,12 +9,13 @@
  */
 import { describe, it, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
   addSubtask,
   buildFlowFromPlan,
+  compareReadyTasks,
   completeSubtask,
   flowNodeCount,
   flowProgress,
@@ -359,5 +360,133 @@ describe('wiring — plan builds the graph, relaunch resumes it', () => {
     assert.equal(resumed.revision, 1, 'the refined graph is what resumes')
     const settled = resumed.tasks.flatMap(t => t.subtasks).filter(s => s.status === 'done')
     assert.equal(settled.length, 1, 'the completed subtask stayed settled across the relaunch')
+  })
+})
+
+describe('graph — deadline/cost fields (Item 8)', () => {
+  const PAST = '2020-01-01T00:00:00.000Z'
+  const FUTURE = '2999-01-01T00:00:00.000Z'
+  const LATER = '2999-06-01T00:00:00.000Z'
+
+  it('buildFlowFromPlan passes deadline/cost through; omitted fields stay absent in persisted JSON', () => {
+    const dir = join(tmpdir(), `wg-fields-${process.pid}-${Date.now()}`)
+    mkdirSync(dir, { recursive: true })
+    try {
+      const flow = buildFlowFromPlan({
+        engagementId: 'eng-fields',
+        objective: 'obj',
+        target: 't',
+        steps: [
+          { phase: 'recon', description: 'with fields', deadline: FUTURE, cost: 7 },
+          { phase: 'recon', description: 'without fields' },
+        ],
+      })
+      assert.equal(flow.tasks[0]!.deadline, FUTURE)
+      assert.equal(flow.tasks[0]!.cost, 7)
+      saveFlow(dir, flow)
+      const persisted = JSON.parse(readFileSync(join(dir, 'workgraph.json'), 'utf8')) as {
+        tasks: Array<Record<string, unknown>>
+      }
+      assert.equal(persisted.tasks[0]!['deadline'], FUTURE)
+      assert.equal(persisted.tasks[0]!['cost'], 7)
+      assert.ok(!('deadline' in persisted.tasks[1]!), 'no deadline key when unset')
+      assert.ok(!('cost' in persisted.tasks[1]!), 'no cost key when unset')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('deadline/cost never enter the task id: same step, same id, with or without them', () => {
+    const bare = buildFlowFromPlan({
+      engagementId: 'eng-id', objective: 'obj', target: 't',
+      steps: [{ phase: 'recon', attackId: 'T1595', description: 'same step' }],
+    })
+    const dressed = buildFlowFromPlan({
+      engagementId: 'eng-id', objective: 'obj', target: 't',
+      steps: [{ phase: 'recon', attackId: 'T1595', description: 'same step', deadline: FUTURE, cost: 3 }],
+    })
+    assert.equal(dressed.tasks[0]!.id, bare.tasks[0]!.id)
+  })
+
+  it('ready order: earliest deadline first, no-deadline last, priority breaks ties — in nextReady and the executor', async () => {
+    const flow = buildFlowFromPlan({
+      engagementId: 'eng-order',
+      objective: 'obj',
+      target: 't',
+      steps: [
+        { phase: 'recon', description: 'no deadline, priority 0' },
+        { phase: 'recon', description: 'later deadline, priority 1', deadline: LATER },
+        { phase: 'recon', description: 'future deadline, priority 2', deadline: FUTURE },
+        { phase: 'recon', description: 'future deadline, priority 3', deadline: FUTURE },
+      ],
+    })
+    const expected = [
+      'future deadline, priority 2',
+      'future deadline, priority 3',
+      'later deadline, priority 1',
+      'no deadline, priority 0',
+    ]
+    assert.deepEqual(nextReady(flow).map(t => t.title), expected)
+    const plain = sampleFlow()
+    assert.deepEqual(
+      [...plain.tasks].sort(compareReadyTasks).map(t => t.id),
+      [...plain.tasks].sort((a, b) => a.priority - b.priority).map(t => t.id),
+    )
+    for (const t of flow.tasks) assert.ok(addSubtask(flow, t.id, { title: `run ${t.title}`, kind: 'probe' }).ok)
+    const ranTitles: string[] = []
+    await executeFlow(flow, {
+      runSubtask: async (_id, title) => { ranTitles.push(title); return 'ok' },
+    })
+    assert.deepEqual(ranTitles, expected.map(t => `run ${t}`))
+  })
+
+  it('flowProgress: overdue counts only pending/running past-deadline tasks; estimatedCost sums set costs only', () => {
+    const flow = buildFlowFromPlan({
+      engagementId: 'eng-prog',
+      objective: 'obj',
+      target: 't',
+      steps: [
+        { phase: 'recon', description: 'overdue pending', deadline: PAST, cost: 5 },
+        { phase: 'recon', description: 'future deadline', deadline: FUTURE, cost: 7 },
+        { phase: 'recon', description: 'no fields' },
+        { phase: 'recon', description: 'overdue but done', deadline: PAST },
+      ],
+    })
+    flow.tasks[3]!.status = 'done'
+    const p = flowProgress(flow)
+    assert.equal(p.overdue, 1)
+    assert.equal(p.estimatedCost, 12)
+  })
+
+  it("store round-trip keeps the fields, and a fixture in today's format loads and schedules identically", () => {
+    const dir = join(tmpdir(), `wg-roundtrip-${process.pid}-${Date.now()}`)
+    mkdirSync(dir, { recursive: true })
+    try {
+      const flow = buildFlowFromPlan({
+        engagementId: 'eng-rt',
+        objective: 'obj',
+        target: 't',
+        steps: [
+          { phase: 'recon', description: 'a', deadline: FUTURE, cost: 2 },
+          { phase: 'recon', description: 'b' },
+        ],
+      })
+      saveFlow(dir, flow)
+      const loaded = loadFlow(dir)
+      assert.ok(loaded)
+      assert.equal(loaded.tasks[0]!.deadline, FUTURE)
+      assert.equal(loaded.tasks[0]!.cost, 2)
+
+      const raw = JSON.parse(readFileSync(join(dir, 'workgraph.json'), 'utf8')) as {
+        tasks: Array<Record<string, unknown>>
+      }
+      for (const t of raw.tasks) { delete t['deadline']; delete t['cost'] }
+      writeFileSync(join(dir, 'workgraph.json'), JSON.stringify(raw))
+      const legacy = loadFlow(dir)
+      assert.ok(legacy)
+      assert.deepEqual(nextReady(legacy).map(t => t.id), nextReady(flow).map(t => t.id))
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

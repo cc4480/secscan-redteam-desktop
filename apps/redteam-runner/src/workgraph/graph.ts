@@ -55,6 +55,14 @@ export interface GraphTask {
   phase: string
   attackId?: string
   priority: number
+  /** ISO 8601 time the task should be settled by (same convention as
+   * GraphSubtask.startedAt). Absent = never overdue. Reporting and
+   * ready-order only — a past deadline never gates or fails a task. */
+  deadline?: string
+  /** Estimated cost in dispatched-action units — the same unit as
+   * GraphSubtask.actions, so estimates and actuals compare directly.
+   * Absent = contributes 0 to estimate roll-ups. Never reorders, never gates. */
+  cost?: number
   dependsOn: string[]
   status: GraphStatus
   subtasks: GraphSubtask[]
@@ -98,6 +106,12 @@ export function buildFlowFromPlan(input: {
     phase: step.phase,
     attackId: step.attackId,
     priority: i,
+    // Plan-carried estimate fields pass through verbatim. They are NOT
+    // part of the task id inputs above: ids stay a function of the
+    // step's identity, so editing an estimate on resume never mints a
+    // new task or repeats settled work.
+    deadline: step.deadline,
+    cost: step.cost,
     dependsOn: [],
     status: 'pending',
     subtasks: [],
@@ -195,7 +209,22 @@ export function findSubtask(
   return null
 }
 
-/** Tasks whose dependencies are all done/skipped, in priority order. */
+/**
+ * The one ready-order comparator, exported so both sort sites use it and
+ * can never drift: earliest deadline first, no-deadline tasks last, then
+ * priority ascending. With no deadlines anywhere it degenerates to
+ * exactly the historical priority sort.
+ */
+export function compareReadyTasks(a: GraphTask, b: GraphTask): number {
+  if (a.deadline !== undefined && b.deadline !== undefined && a.deadline !== b.deadline) {
+    return a.deadline < b.deadline ? -1 : 1
+  }
+  if (a.deadline !== undefined && b.deadline === undefined) return -1
+  if (a.deadline === undefined && b.deadline !== undefined) return 1
+  return a.priority - b.priority
+}
+
+/** Tasks whose dependencies are all done/skipped, in ready order. */
 export function nextReady(flow: WorkFlow): GraphTask[] {
   const settled = (id: string): boolean => {
     const t = flow.tasks.find(x => x.id === id)
@@ -203,7 +232,7 @@ export function nextReady(flow: WorkFlow): GraphTask[] {
   }
   return flow.tasks
     .filter(t => t.status === 'pending' && t.dependsOn.every(settled))
-    .sort((a, b) => a.priority - b.priority)
+    .sort(compareReadyTasks)
 }
 
 function touch(flow: WorkFlow): void {
@@ -295,12 +324,27 @@ export function flowProgress(flow: WorkFlow): {
   subtasks: number
   subtasksDone: number
   actions: number
+  /** Pending/running tasks whose deadline is past — surfaced, never auto-failed. */
+  overdue: number
+  /** Sum of set task costs, beside the actual `actions` for estimate-vs-actual reporting. */
+  estimatedCost: number
   complete: boolean
 } {
   let subtasks = 0
   let subtasksDone = 0
   let actions = 0
+  let overdue = 0
+  let estimatedCost = 0
+  const nowIso = now()
   for (const task of flow.tasks) {
+    if (task.cost !== undefined) estimatedCost += task.cost
+    if (
+      task.deadline !== undefined &&
+      task.deadline < nowIso &&
+      (task.status === 'pending' || task.status === 'running')
+    ) {
+      overdue++
+    }
     for (const s of task.subtasks) {
       subtasks++
       if (s.status === 'done' || s.status === 'skipped') subtasksDone++
@@ -316,6 +360,8 @@ export function flowProgress(flow: WorkFlow): {
     subtasks,
     subtasksDone,
     actions,
+    overdue,
+    estimatedCost,
     complete: flow.tasks.length > 0 && subtasks === subtasksDone && flow.tasks.every(t => t.status !== 'running'),
   }
 }

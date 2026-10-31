@@ -17,6 +17,7 @@
  * is the driver for graph-first runs and the acceptance proof.
  */
 import {
+  compareReadyTasks,
   completeSubtask,
   failSubtask,
   findSubtask,
@@ -61,7 +62,7 @@ export async function executeFlow(flow: WorkFlow, opts: ExecuteOptions): Promise
     const readyTasks = flow.tasks
       .filter((t) => t.status === "pending" || t.status === "running")
       .filter((t) => t.dependsOn.every((d) => settledIds.has(d)))
-      .sort((a, b) => a.priority - b.priority);
+      .sort(compareReadyTasks);
     for (const task of readyTasks) {
       for (const s of task.subtasks) {
         if (s.status === "pending") pending.push({ taskId: task.id, subtaskId: s.id, title: s.title });

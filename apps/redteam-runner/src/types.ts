@@ -154,6 +154,11 @@ export interface PlanStep {
   attackId?: string
   description: string
   stealthNote?: string
+  /** ISO 8601 time this step's task should be settled by. Carried onto
+   * the work-graph task verbatim; reporting/ready-order only. */
+  deadline?: string
+  /** Estimated cost in dispatched-action units (GraphSubtask.actions unit). */
+  cost?: number
 }
 
 export interface OperationPlan {
