@@ -2,7 +2,7 @@
  * How to add a provider later (Claude / ChatGPT / Gemini / GLM / Qwen):
  *
  *   1. Create src/providers/<id>.ts exporting a class that implements
- *      LlmProvider from ../types.js (see deepseek.ts for the reference).
+ *      LlmProvider from ../types.js (see meta.ts and deepseek.ts for references).
  *   2. Read its key from a dedicated env var (e.g. ANTHROPIC_API_KEY) —
  *      never from a file, never hardcoded.
  *   3. Register it in src/router.ts via registerProvider(new MyProvider()).

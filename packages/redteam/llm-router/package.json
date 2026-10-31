@@ -1,5 +1,5 @@
 {
-  "description": "Unified, provider-pluggable LLM interface for the red-team. Fleet seats resolve to Meta Muse Spark whenever a Meta key is configured (or REDTEAM_LLM_PROVIDER=meta); the v0.6 DeepSeek seat table is the keyless fallback; Qwen (qwen3.8-max) registered, not routed.",
+  "description": "Unified, provider-pluggable LLM interface for the red-team. Fleet seats resolve to Meta Muse Spark whenever a Meta key is configured (or REDTEAM_LLM_PROVIDER=meta); absent a Meta key, seats follow the DeepSeek seat table in src/policy.ts; Qwen (qwen3.8-max) registered, not routed.",
   "license": "UNLICENSED",
   "main": "lib/index.js",
   "name": "@secscan/redteam-llm-router",
