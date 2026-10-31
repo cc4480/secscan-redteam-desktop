@@ -1,8 +1,9 @@
 SecScan RedTeam
 SecScan RedTeam
 Connect SecScan MCP access
-Paste the tokens this machine uses for SecScan scanning and the engagement engine. They are saved on this computer, never in the installer.
+Paste the tokens this machine uses for SecScan scanning, Seclayer scanning, and the engagement engine. They are saved on this computer, never in the installer.
 SecScan MCP token (ssk_…) [password]
+Seclayer API key [password]
 Engagement runner token [password]
 Runner console address [url]
 Saved in /profile/engagement-credentials.json

@@ -55,6 +55,7 @@ export function Welcome({ api }: { api: WelcomeReadinessApi }) {
   const focusEntry = useRef(false)
   const [mcp, setMcp] = useState<WelcomeMcpState | null>(null)
   const [secscanDraft, setSecscanDraft] = useState('')
+  const [seclayerDraft, setSeclayerDraft] = useState('')
   const [runnerDraft, setRunnerDraft] = useState('')
   const [endpointDraft, setEndpointDraft] = useState('')
   const [mcpError, setMcpError] = useState('')
@@ -211,7 +212,7 @@ export function Welcome({ api }: { api: WelcomeReadinessApi }) {
   async function saveMcp(event: FormEvent) {
     event.preventDefault()
     if (busyRef.current || mcp === null) return
-    if (!plausibleToken(secscanDraft) || !plausibleToken(runnerDraft)) {
+    if (!plausibleToken(secscanDraft) || !plausibleToken(seclayerDraft) || !plausibleToken(runnerDraft)) {
       setMcpError(m.welcomeMcpInvalid)
       return
     }
@@ -223,10 +224,11 @@ export function Welcome({ api }: { api: WelcomeReadinessApi }) {
     setBusy(true)
     setMcpError('')
     try {
-      const result = await api.saveMcp({ secscan: secscanDraft, seclayer: '', runner: runnerDraft, endpoint: endpointDraft })
+      const result = await api.saveMcp({ secscan: secscanDraft, seclayer: seclayerDraft, runner: runnerDraft, endpoint: endpointDraft })
       if (!mounted.current) return
       if (!result.ok) { setMcpError(m.welcomeMcpFailed); return }
       setSecscanDraft('')
+      setSeclayerDraft('')
       setRunnerDraft('')
       // The account step still has to run on a fresh machine; otherwise the step's completion ends first run.
       if (mcp.entryRequired) navigate('entry')
@@ -292,7 +294,8 @@ export function Welcome({ api }: { api: WelcomeReadinessApi }) {
       : phase === 'failed' ? m.welcomeAuthFailed : m.welcomeAuthExchanging
   const heading = page === 'entry' ? 'welcome-heading' : page === 'key' ? 'key-title' : page === 'mcp' ? 'mcp-title' : 'auth-status'
   const fingerprints = mcp === null ? [] : Object.values(mcp.fingerprints)
-  const mcpChanged = secscanDraft.trim() !== '' || runnerDraft.trim() !== ''
+  const mcpChanged = secscanDraft.trim() !== '' || seclayerDraft.trim() !== ''
+    || runnerDraft.trim() !== ''
     || (mcp !== null && endpointDraft.trim() !== mcp.endpoint)
 
   return <>
@@ -311,6 +314,12 @@ export function Welcome({ api }: { api: WelcomeReadinessApi }) {
             <input ref={secscanInput} id="mcp-secscan" type="password" autoComplete="off" autoCapitalize="off" spellCheck={false}
               placeholder={m.welcomeMcpSecscanPlaceholder} value={secscanDraft} disabled={busy}
               aria-describedby="mcp-description mcp-error" onChange={(event) => { setSecscanDraft(event.target.value); setMcpError('') }} />
+          </div>
+          <div className="key-field">
+            <label className="visually-hidden" htmlFor="mcp-seclayer">{m.mcpAccess}</label>
+            <input id="mcp-seclayer" type="password" autoComplete="off" autoCapitalize="off" spellCheck={false}
+              placeholder={m.welcomeMcpSeclayerPlaceholder} value={seclayerDraft} disabled={busy}
+              onChange={(event) => { setSeclayerDraft(event.target.value); setMcpError('') }} />
           </div>
           <div className="key-field">
             <label className="visually-hidden" htmlFor="mcp-runner">{m.welcomeMcpRunnerPlaceholder}</label>

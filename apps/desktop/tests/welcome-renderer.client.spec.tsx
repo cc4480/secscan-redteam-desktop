@@ -64,6 +64,7 @@ function mount(language = 'zh-CN', options: { page?: 'entry' | 'mcp'; mcp?: Part
       ...heading === 'mcp-title' ? [
         document.querySelector('#mcp-description')!.textContent,
         `${field('#mcp-secscan').placeholder} [password]`,
+        `${field('#mcp-seclayer').placeholder} [password]`,
         `${field('#mcp-runner').placeholder} [password]`,
         `${field('#mcp-endpoint').placeholder} [url]`,
         ...note('#mcp-store'), ...note('#mcp-stored'), ...note('#mcp-environment'),
@@ -305,6 +306,7 @@ describe('desktop welcome MCP access step', () => {
     expect(view.document.querySelector<HTMLElement>('#key-form')!.hidden).toBe(true)
     expect(view.document.querySelector<HTMLElement>('#tagline')!.hidden).toBe(true)
     expect(view.field('#mcp-secscan').type).toBe('password')
+    expect(view.field('#mcp-seclayer').type).toBe('password')
     expect(view.field('#mcp-runner').type).toBe('password')
     expect(view.field('#mcp-endpoint').value).toBe('http://127.0.0.1:8787/mcp')
     expect(view.document.activeElement).toBe(view.field('#mcp-secscan'))
@@ -331,6 +333,41 @@ describe('desktop welcome MCP access step', () => {
     expect(view.document.body.textContent).not.toContain('ssk_onetime-test-token')
     expect(view.document.body.textContent).not.toContain('runner-onetime-test-token')
     expect(view.field('#mcp-secscan').value).toBe('')
+  })
+
+  it('enables Save for a Seclayer-only edit and stores the key (GATE B)', async () => {
+    const view = mount('en', { page: 'mcp' })
+    await loaded(view)
+    expect(view.field('#mcp-seclayer').type).toBe('password')
+    expect(view.button('#mcp-save').disabled).toBe(true)
+    fireEvent.change(view.field('#mcp-seclayer'), { target: { value: 'seclayer-test-key-0003' } })
+    expect(view.button('#mcp-save').disabled).toBe(false)
+    view.submitMcp()
+    expect(view.api.saveMcp).toHaveBeenCalledExactlyOnceWith({
+      secscan: '', seclayer: 'seclayer-test-key-0003', runner: '', endpoint: 'http://127.0.0.1:8787/mcp',
+    })
+    await vi.waitFor(() => { expect(view.document.querySelector<HTMLElement>('#mcp-form')!.hidden).toBe(true) })
+    // The stored key must not survive in the rendered document or the field.
+    expect(view.field('#mcp-seclayer').value).toBe('')
+    expect(view.document.body.textContent).not.toContain('seclayer-test-key-0003')
+  })
+
+  it('shows all three stored fingerprints and the environment note for an inherited Seclayer key', async () => {
+    const view = mount('en', {
+      page: 'mcp',
+      mcp: {
+        required: false, entryRequired: false, stored: true,
+        fingerprints: { SECSCAN_MCP_TOKEN: 'ssk_…0001', SECLAYER_API_KEY: 'secl…0003', REDTEAM_UI_TOKEN: 'rtr_…0002' },
+        fromEnvironment: ['SECLAYER_API_KEY'],
+      },
+    })
+    await loaded(view)
+    const stored = view.document.querySelector('#mcp-stored')!.textContent
+    expect(stored).toContain('ssk_…0001')
+    expect(stored).toContain('secl…0003')
+    expect(stored).toContain('rtr_…0002')
+    expect(view.document.querySelector<HTMLElement>('#mcp-environment')!.hidden).toBe(false)
+    expect(view.document.querySelector('#mcp-environment')!.textContent).toBe(view.api.messages.welcomeMcpEnvironment)
   })
 
   it('finishes first run directly when the account step has nothing to ask', async () => {
