@@ -5,9 +5,11 @@ export type {
   CompleteOptions,
   JsonSchemaTool,
   LlmProvider,
+  ResponseFormat,
   RoleRoute,
   ToolCallRequest,
 } from './types.js'
+export { validateJsonSchema, validateResponseFormat } from './adapter.js'
 export {
   complete,
   completeForRole,
@@ -39,8 +41,18 @@ export {
   COOLDOWN_BASE_MS,
   COOLDOWN_MAX_MS,
   type AcquiredCredential,
+  type CredentialPoolOptions,
   type PoolEntrySnapshot,
+  type PoolRestoreReport,
+  type PoolStateStore,
 } from './pool.js'
+export {
+  FilePoolStateStore,
+  resolvePoolStateFilePath,
+  POOL_STATE_ENV,
+  POOL_STATE_FILENAME,
+} from './pool-store.js'
+export { poolSnapshots, type PoolSnapshot } from './router.js'
 export {
   ResilienceError,
   abortableSleep,

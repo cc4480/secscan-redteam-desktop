@@ -56,8 +56,11 @@ export interface JsonSchemaTool {
 }
 
 /**
- * Structured-output constraint for one call. Selection order when several constraints
- * coexist: tool calls > json_schema > regex > json_object.
+ * Structured-output constraint for one call. Selection (deepseek-recipe): when a
+ * call carries tools, the tool block is the constraint; otherwise the caller's
+ * chosen responseFormat is. The format variants are caller choices, not a ranked
+ * cascade — per-provider support for each variant is recorded in
+ * providers/openai-wire.ts (RESPONSE_FORMAT_SUPPORT).
  */
 export type ResponseFormat =
   | { type: 'json_schema'; name: string; schema: Record<string, unknown>; strict?: boolean }
