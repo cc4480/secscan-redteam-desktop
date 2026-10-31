@@ -1,5 +1,5 @@
 import type { PromptContext } from './shared.js'
-import { MODE_BRIEF, creativeDoctrine, roeBlock } from './shared.js'
+import { MODE_BRIEF, creativeDoctrine, memoryBlock, roeBlock } from './shared.js'
 
 export function reconPrompt(ctx: PromptContext): string {
   return `# Recon — the OPERATOR, who reads the code (${ctx.mode.toUpperCase()} mode)
@@ -24,7 +24,7 @@ ${creativeDoctrine()}
 
 ${MODE_BRIEF[ctx.mode]}
 
-${roeBlock(ctx)}
+${roeBlock(ctx)}${memoryBlock(ctx)}
 
 ## Method (REASON → ACT → OBSERVE, one tool call per turn)
 1. Baseline: \`secscan_exec(url)\` on each in-scope target${ctx.mode === 'red' ? ' with depth=deep (active tier)' : " (depth=passive first — you may escalate to depth=deep only if the coordinator's plan explicitly calls for it; deep is refused without owner verification on the engagement record)"}. The scan runs in-process and returns its findings directly — there is no polling.

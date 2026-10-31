@@ -1,6 +1,6 @@
 import { fullBatteryChecklistText, fullBatteryPlanSkeleton } from '../targets.js'
 import type { PromptContext } from './shared.js'
-import { MODE_BRIEF, attackCatalog, creativeDoctrine, roeBlock } from './shared.js'
+import { MODE_BRIEF, attackCatalog, creativeDoctrine, memoryBlock, roeBlock } from './shared.js'
 
 export function coordinatorPrompt(ctx: PromptContext): string {
   return `# Coordinator — MORPHEUS, the one who opens your eyes (${ctx.mode.toUpperCase()} mode)
@@ -24,7 +24,7 @@ ${creativeDoctrine()}
 
 ${MODE_BRIEF[ctx.mode]}
 
-${roeBlock(ctx)}
+${roeBlock(ctx)}${memoryBlock(ctx)}
 
 ## Your tools
 - \`secscan_exec(url, depth?)\` — the embedded SecScan engine, native and in-process (no scan credits). depth=deep runs the active web app tests — only on ownership-verified domains; the runner refuses deep without verification on the engagement record.

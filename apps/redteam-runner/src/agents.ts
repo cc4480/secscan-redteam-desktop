@@ -33,6 +33,7 @@ import { partitionToolCalls, executeToolGroup } from './dispatch/parallel-batch.
 import { maybeCompactMessages } from './compaction/compact.js'
 import { toolTargetHost } from './dispatch/target-host.js'
 import { sharedStateDigest } from './coverage/cells.js'
+import { memoryStateFor } from './memory/lifecycle.js'
 import { RECON_TOOLS } from './tools.js'
 
 // ---------------------------------------------------------------------------
@@ -337,6 +338,7 @@ export function promptCtx(ctx: Ctx): {
   fullBattery?: boolean
   targets?: TargetId[]
   localSandbox?: boolean
+  memoryBrief?: string
 } {
   return {
     mode: ctx.input.mode,
@@ -350,6 +352,10 @@ export function promptCtx(ctx: Ctx): {
     // loopback/private — matches the gate's invariant exactly. Leaving
     // --local-sandbox on does nothing against a real domain.
     localSandbox: ctx.config.localSandbox && ctx.hosts.every(h => isPrivateOrLoopbackHost(h)),
+    // Q-MEMTIER (§7.1): the recall start pack, when memory was opened
+    // and the pack assembled (post-authorize). It reaches the system
+    // prompts through memoryBlock and is journaled with them.
+    memoryBrief: memoryStateFor(ctx)?.startPack?.text,
   }
 }
 
