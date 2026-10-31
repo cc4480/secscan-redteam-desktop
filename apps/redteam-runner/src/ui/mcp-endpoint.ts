@@ -23,6 +23,8 @@ import type { UiStore } from './store.js'
 import { json, readJsonBody } from './routes/http.js'
 import { TOOLS, TOOLS_BY_NAME } from './mcp-tools.js'
 import { EXEC_TOOLS, EXEC_TOOLS_BY_NAME, LIST_LIVE_TOOL } from './mcp-exec.js'
+import { resolveArsenalConfig } from '../arsenal/config.js'
+import { ARSENAL_TOOLS, ARSENAL_TOOLS_BY_NAME, bindArsenalConfig } from '../arsenal/tools.js'
 
 const PROTOCOL_VERSION = '2025-03-26'
 const SERVER_INFO = { name: 'secscan-redteam-runner', version: '0.22.0' }
@@ -43,7 +45,11 @@ function rpcErr(id: unknown, code: number, message: string): Record<string, unkn
 }
 
 /** One JSON-RPC message in, one reply out (null for notifications). */
-async function dispatch(store: UiStore, r: RpcRequest): Promise<Record<string, unknown> | null> {
+async function dispatch(
+  store: UiStore,
+  r: RpcRequest,
+  arsenalEnabled: boolean,
+): Promise<Record<string, unknown> | null> {
   switch (r.method) {
     case 'initialize':
       return rpcOk(r.id, {
@@ -57,10 +63,12 @@ async function dispatch(store: UiStore, r: RpcRequest): Promise<Record<string, u
     case 'ping':
       return rpcOk(r.id, {})
     case 'tools/list':
-      // Two surfaces, deliberately in one list. The cockpit tools drive
+      // Three surfaces, deliberately in one list. The cockpit tools drive
       // ENGAGEMENTS (start one, read its feed, escalate, abort); the executor
       // tools drive the tooling INSIDE a running one (nuclei_exec, msf_exec,
-      // http_probe, ssh_exec, …), each requiring an engagementId.
+      // http_probe, ssh_exec, …), each requiring an engagementId; the arsenal
+      // tools (arsenal_search/browse/recommend) read the local Arsenal index
+      // and are present only when the arsenal is enabled.
       return rpcOk(r.id, {
         tools: [
           ...TOOLS.map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
@@ -70,6 +78,9 @@ async function dispatch(store: UiStore, r: RpcRequest): Promise<Record<string, u
             inputSchema: LIST_LIVE_TOOL.inputSchema,
           },
           ...EXEC_TOOLS.map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
+          ...(arsenalEnabled
+            ? ARSENAL_TOOLS.map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }))
+            : []),
         ],
       })
     case 'tools/call': {
@@ -93,6 +104,17 @@ async function dispatch(store: UiStore, r: RpcRequest): Promise<Record<string, u
           // Refusals arrive here as text, not as transport errors: a tier
           // denial or a halted target is a RESULT the model must reason about.
           // A genuine failure (unknown engagement, transport) is isError.
+          return rpcOk(r.id, {
+            content: [{ type: 'text', text: `tool failed: ${(err as Error).message}` }],
+            isError: true,
+          })
+        }
+      }
+      const arsenal = arsenalEnabled ? ARSENAL_TOOLS_BY_NAME.get(name) : undefined
+      if (arsenal) {
+        try {
+          return rpcOk(r.id, { content: [{ type: 'text', text: await arsenal.run(args) }] })
+        } catch (err) {
           return rpcOk(r.id, {
             content: [{ type: 'text', text: `tool failed: ${(err as Error).message}` }],
             isError: true,
@@ -143,18 +165,26 @@ export async function handleMcp(
     return
   }
 
+  // Arsenal surface: resolve the config for THIS server's engagements dir
+  // and bind it for the tool handlers, so the index path follows the
+  // console's real data home. Resolution throws on a misconfigured
+  // REDTEAM_ARSENAL_* variable — fail loud rather than serve a misbound
+  // index (the server's route catch turns the throw into a 500).
+  const arsenalConfig = resolveArsenalConfig(process.env, { engagementsDir: store.engagementsDir })
+  bindArsenalConfig(arsenalConfig)
+
   // Batch: an array of requests gets an array of responses.
   if (Array.isArray(parsed)) {
     const out: Record<string, unknown>[] = []
     for (const one of parsed) {
-      const reply = await dispatch(store, one as RpcRequest)
+      const reply = await dispatch(store, one as RpcRequest, arsenalConfig.enabled)
       if (reply) out.push(reply)
     }
     json(res, 200, out)
     return
   }
 
-  const reply = await dispatch(store, parsed as RpcRequest)
+  const reply = await dispatch(store, parsed as RpcRequest, arsenalConfig.enabled)
   if (reply === null) {
     // A notification still needs a transport-level acknowledgement.
     res.writeHead(202, { 'Content-Type': 'application/json', 'Content-Length': 0 })
