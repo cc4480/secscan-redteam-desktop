@@ -28,8 +28,10 @@ import type {
   CompleteOptions,
   JsonSchemaTool,
   LlmProvider,
+  ResponseFormat,
   RoleRoute,
 } from './types.js'
+import { validateResponseFormat } from './adapter.js'
 import { roleModelPolicy } from './policy.js'
 import type { CharterEngagement, CharterRole } from './charter/loader.js'
 import { assembleCharterMessages } from './charter/prompt.js'
@@ -93,6 +95,11 @@ export async function complete(
   providerId: string,
   options: CompleteOptions,
 ): Promise<ChatResult> {
+  // Client-side structured-output validation (deepseek-recipe discipline):
+  // a malformed response_format fails here, at home — never as a paid API
+  // round-trip. Both higher entry points funnel through complete(), so this
+  // one hook covers completeForRole and completeWithCharter too.
+  if (options.responseFormat) validateResponseFormat(options.responseFormat)
   try {
     return await getProvider(providerId).complete(options)
   } catch (err) {
@@ -119,6 +126,7 @@ export async function completeForRole(
     signal?: AbortSignal
     maxTokens?: number
     temperature?: number
+    responseFormat?: ResponseFormat
   } = {},
 ): Promise<ChatResult> {
   const route = roleModelPolicy()[role]
@@ -130,6 +138,7 @@ export async function completeForRole(
     signal: opts.signal,
     maxTokens: opts.maxTokens,
     temperature: opts.temperature,
+    responseFormat: opts.responseFormat,
   })
 }
 
@@ -153,6 +162,8 @@ export interface CharterCompleteOptions {
   signal?: AbortSignal
   maxTokens?: number
   temperature?: number
+  /** Structured-output constraint for this call (see ResponseFormat); validated at home in complete(). */
+  responseFormat?: ResponseFormat
 }
 
 /**
@@ -182,6 +193,7 @@ export async function completeWithCharter(opts: CharterCompleteOptions): Promise
     signal: opts.signal,
     maxTokens: opts.maxTokens,
     temperature: opts.temperature,
+    responseFormat: opts.responseFormat,
   })
 }
 
