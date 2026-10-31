@@ -18,67 +18,67 @@
  * (one version spawn per binary, one 1s TCP connect for the RPC daemon).
  */
 
-import { execFileSync } from "node:child_process";
-import { connect as netConnect } from "node:net";
-import { existsSync } from "node:fs";
+import { execFileSync } from 'node:child_process'
+import { connect as netConnect } from 'node:net'
+import { existsSync } from 'node:fs'
 
-import { XTOOLS, type XToolId } from "../xtool/registry.js";
-import { nmapBinaryPresent, resolveNmapCommand } from "../nmap/prereq.js";
-import { NUCLEI_SETUP_INSTRUCTIONS } from "../nuclei/policy.js";
-import { nucleiBinaryPresent, resolveNucleiCommand } from "../nuclei/prereq.js";
-import { binPresent } from "../xtool/executor.js";
-import { describeSource, resolveExternalBinary, toolsDir, TOOLS_DIR_ENV, type ResolvedBinary } from "../toolchain.js";
-import { resolveWordlist } from "../xtool/wordlist.js";
-import { pcAgentConfigured } from "../host-exec/pc-agent.js";
-import { browserConfigured, BROWSER_SETUP_GUIDANCE } from "../browser/cdp.js";
+import { XTOOLS, type XToolId } from '../xtool/registry.js'
+import { nmapBinaryPresent, resolveNmapCommand } from '../nmap/prereq.js'
+import { NUCLEI_SETUP_INSTRUCTIONS } from '../nuclei/policy.js'
+import { nucleiBinaryPresent, resolveNucleiCommand } from '../nuclei/prereq.js'
+import { binPresent } from '../xtool/executor.js'
+import { describeSource, resolveExternalBinary, toolsDir, TOOLS_DIR_ENV, type ResolvedBinary } from '../toolchain.js'
+import { resolveWordlist } from '../xtool/wordlist.js'
+import { pcAgentConfigured } from '../host-exec/pc-agent.js'
+import { browserConfigured, BROWSER_SETUP_GUIDANCE } from '../browser/cdp.js'
 
-export type ReadinessState = "ready" | "missing" | "unreachable" | "not-configured";
+export type ReadinessState = 'ready' | 'missing' | 'unreachable' | 'not-configured'
 
 export interface ReadinessItem {
   /** Stable identifier used by the UI / tests. */
-  id: string;
+  id: string
   /** Human label. */
-  label: string;
-  state: ReadinessState;
+  label: string
+  state: ReadinessState
   /** What was found, when relevant (path, version, endpoint). */
-  detail?: string;
+  detail?: string
   /** What to do when the state is not `ready`. */
-  fix?: string;
+  fix?: string
   /** Required items block an engagement; optional ones only degrade it. */
-  required: boolean;
+  required: boolean
 }
 
 export interface ReadinessReport {
   /** True when every required item is ready. */
-  ok: boolean;
-  items: ReadinessItem[];
+  ok: boolean
+  items: ReadinessItem[]
   /** Short human summary, e.g. "3 of 9 ready — 2 required missing". */
-  summary: string;
+  summary: string
 }
 
 /** One version probe. Returns the first output line, or undefined when not runnable. */
 export function probeBinary(bin: string, args: readonly string[]): string | undefined {
   try {
-    const out = execFileSync(bin, [...args], { stdio: "pipe", timeout: 8000, encoding: "utf8" });
-    return String(out).split("\n")[0]?.trim() || "present";
+    const out = execFileSync(bin, [...args], { stdio: 'pipe', timeout: 8000, encoding: 'utf8' })
+    return String(out).split('\n')[0]?.trim() || 'present'
   } catch {
-    return undefined;
+    return undefined
   }
 }
 
 /** TCP reachability for the Metasploit RPC daemon (1s, no target traffic). */
 export function probeTcp(host: string, port: number, timeoutMs = 1000): Promise<boolean> {
   return new Promise((resolve) => {
-    const socket = netConnect({ host, port });
+    const socket = netConnect({ host, port })
     const done = (reachable: boolean): void => {
-      socket.destroy();
-      resolve(reachable);
-    };
-    socket.setTimeout(timeoutMs);
-    socket.once("connect", () => done(true));
-    socket.once("timeout", () => done(false));
-    socket.once("error", () => done(false));
-  });
+      socket.destroy()
+      resolve(reachable)
+    }
+    socket.setTimeout(timeoutMs)
+    socket.once('connect', () => done(true))
+    socket.once('timeout', () => done(false))
+    socket.once('error', () => done(false))
+  })
 }
 
 /**
@@ -87,7 +87,7 @@ export function probeTcp(host: string, port: number, timeoutMs = 1000): Promise<
  * env, the bundled tools directory or PATH was tried.
  */
 function resolvedDetail(resolved: ResolvedBinary, present: boolean): string {
-  return `${resolved.path} [from ${describeSource(resolved)}]${present ? "" : " -- not found"}`;
+  return `${resolved.path} [from ${describeSource(resolved)}]${present ? '' : ' -- not found'}`
 }
 
 /**
@@ -97,177 +97,177 @@ function resolvedDetail(resolved: ResolvedBinary, present: boolean): string {
  * socket, so the whole report is async.
  */
 export async function readinessReport(env: NodeJS.ProcessEnv = process.env): Promise<ReadinessReport> {
-  const items: ReadinessItem[] = [];
+  const items: ReadinessItem[] = []
 
   // --- bundled tools directory --------------------------------------------
   // The desktop app exports REDTEAM_TOOLS_DIR pointing at its shipped payloads.
   // Optional: without it the bridges fall back to PATH, so a partially
   // provisioned install still runs with whatever the operator already has.
-  const bundledDir = toolsDir(env);
-  const bundledDirExists = Boolean(bundledDir && existsSync(bundledDir));
+  const bundledDir = toolsDir(env)
+  const bundledDirExists = Boolean(bundledDir && existsSync(bundledDir))
   items.push({
-    id: "tools_dir",
+    id: 'tools_dir',
     label: `bundled tools directory (${TOOLS_DIR_ENV})`,
-    state: bundledDirExists ? "ready" : bundledDir ? "missing" : "not-configured",
-    detail: bundledDir ?? "(unset -- external tools resolve from PATH)",
+    state: bundledDirExists ? 'ready' : bundledDir ? 'missing' : 'not-configured',
+    detail: bundledDir ?? '(unset -- external tools resolve from PATH)',
     fix: bundledDirExists
       ? undefined
       : `Optional: set ${TOOLS_DIR_ENV} to the directory laid out as <tool>/<exe> (the desktop app points it at its bundled resources/tools). Without it the bridges resolve binaries from PATH.`,
     required: false,
-  });
+  })
 
   // --- bridge binaries -----------------------------------------------------
   // nmap uses its own honest probe (it runs --version, so a present-but-broken
   // binary — missing Npcap or VC++ runtime — is reported as missing). The
   // resolved path and source are reported even when missing.
-  const nmapResolved = resolveNmapCommand(env);
-  const nmapReady = nmapBinaryPresent(env);
+  const nmapResolved = resolveNmapCommand(env)
+  const nmapReady = nmapBinaryPresent(env)
   items.push({
-    id: "nmap",
-    label: "nmap (port/service discovery)",
-    state: nmapReady ? "ready" : "missing",
+    id: 'nmap',
+    label: 'nmap (port/service discovery)',
+    state: nmapReady ? 'ready' : 'missing',
     detail: resolvedDetail(nmapResolved, nmapReady),
     fix: nmapReady
       ? undefined
-      : "Install nmap and put it on PATH (or set REDTEAM_NMAP_BIN), or ship it in the bundled tools directory. Windows: the official build needs the VC++ 2015-2022 x86 runtime; SYN scans additionally need Npcap + elevation (the runner falls back to connect scans without them).",
+      : 'Install nmap and put it on PATH (or set REDTEAM_NMAP_BIN), or ship it in the bundled tools directory. Windows: the official build needs the VC++ 2015-2022 x86 runtime; SYN scans additionally need Npcap + elevation (the runner falls back to connect scans without them).',
     required: true,
-  });
+  })
 
-  const nucleiResolved = resolveNucleiCommand(env);
-  const nucleiReady = nucleiBinaryPresent(env);
+  const nucleiResolved = resolveNucleiCommand(env)
+  const nucleiReady = nucleiBinaryPresent(env)
   items.push({
-    id: "nuclei",
-    label: "nuclei (template-based checks)",
-    state: nucleiReady ? "ready" : "missing",
+    id: 'nuclei',
+    label: 'nuclei (template-based checks)',
+    state: nucleiReady ? 'ready' : 'missing',
     detail: resolvedDetail(nucleiResolved, nucleiReady),
     fix: nucleiReady ? undefined : NUCLEI_SETUP_INSTRUCTIONS,
     required: false,
-  });
+  })
 
   for (const spec of XTOOLS) {
-    const resolved = resolveExternalBinary(spec.id, { env, envBin: spec.envBin, envDir: spec.envDir });
+    const resolved = resolveExternalBinary(spec.id, { env, envBin: spec.envBin, envDir: spec.envDir })
     // Use the dispatcher's own presence test so doctor and probe never disagree.
-    const present = binPresent(spec, env);
+    const present = binPresent(spec, env)
     // The content-discovery tools are optional: the web battery degrades but the
     // host battery still runs. john is offline-only and never required.
-    const required = false;
+    const required = false
     items.push({
       id: spec.id,
       label: `${spec.id} (${spec.purpose})`,
-      state: present ? "ready" : "missing",
+      state: present ? 'ready' : 'missing',
       detail: resolvedDetail(resolved, present),
-      fix: present ? undefined : spec.setup.join(" "),
+      fix: present ? undefined : spec.setup.join(' '),
       required,
-    });
+    })
   }
 
   // --- wordlist ------------------------------------------------------------
-  const wordlist = resolveWordlist(undefined, env);
+  const wordlist = resolveWordlist(undefined, env)
   items.push({
-    id: "wordlist",
-    label: "content-discovery wordlist",
-    state: wordlist ? "ready" : "missing",
+    id: 'wordlist',
+    label: 'content-discovery wordlist',
+    state: wordlist ? 'ready' : 'missing',
     detail: wordlist,
     fix: wordlist
       ? undefined
-      : "The runner ships assets/wordlists/common.txt; if that file is absent set REDTEAM_WORDLIST to a wordlist path, or pass `wordlist` on the tool call.",
+      : 'The runner ships assets/wordlists/common.txt; if that file is absent set REDTEAM_WORDLIST to a wordlist path, or pass `wordlist` on the tool call.',
     required: true,
-  });
+  })
 
   // --- Metasploit RPC daemon ----------------------------------------------
-  const rpcHost = (env["REDTEAM_MSFRPC_HOST"] ?? "127.0.0.1").trim() || "127.0.0.1";
-  const rpcPort = Number((env["REDTEAM_MSFRPC_PORT"] ?? "55553").trim() || 55553);
-  const rpcConfigured = Boolean((env["REDTEAM_MSFRPC_USER"] ?? "").trim() && (env["REDTEAM_MSFRPC_PASS"] ?? "").trim());
+  const rpcHost = (env['REDTEAM_MSFRPC_HOST'] ?? '127.0.0.1').trim() || '127.0.0.1'
+  const rpcPort = Number((env['REDTEAM_MSFRPC_PORT'] ?? '55553').trim() || 55553)
+  const rpcConfigured = Boolean((env['REDTEAM_MSFRPC_USER'] ?? '').trim() && (env['REDTEAM_MSFRPC_PASS'] ?? '').trim())
   if (!rpcConfigured) {
     items.push({
-      id: "msfrpcd",
-      label: "Metasploit RPC bridge (msfrpcd)",
-      state: "not-configured",
-      fix: "Start msfrpcd on loopback and set REDTEAM_MSFRPC_USER / REDTEAM_MSFRPC_PASS (plus HOST/PORT/TLS as needed). The MSF exploit arm is then available; without it the battery still runs.",
+      id: 'msfrpcd',
+      label: 'Metasploit RPC bridge (msfrpcd)',
+      state: 'not-configured',
+      fix: 'Start msfrpcd on loopback and set REDTEAM_MSFRPC_USER / REDTEAM_MSFRPC_PASS (plus HOST/PORT/TLS as needed). The MSF exploit arm is then available; without it the battery still runs.',
       required: false,
-    });
+    })
   } else {
-    const reachable = await probeTcp(rpcHost, rpcPort);
+    const reachable = await probeTcp(rpcHost, rpcPort)
     items.push({
-      id: "msfrpcd",
-      label: "Metasploit RPC bridge (msfrpcd)",
-      state: reachable ? "ready" : "unreachable",
+      id: 'msfrpcd',
+      label: 'Metasploit RPC bridge (msfrpcd)',
+      state: reachable ? 'ready' : 'unreachable',
       detail: `${rpcHost}:${rpcPort}`,
       fix: reachable
         ? undefined
         : `Credentials are set but nothing is listening on ${rpcHost}:${rpcPort} — start msfrpcd (msfrpcd -P <pass> -U <user> -a ${rpcHost} -p ${rpcPort} -S).`,
       required: false,
-    });
+    })
   }
 
   // --- credentials the engine reads from the environment -------------------
   const secrets: ReadinessItem[] = [
     {
-      id: "secscan_token",
-      label: "SecScan MCP token (service verification opt-in only)",
-      state: (env["SECSCAN_MCP_TOKEN"] ?? "").trim() ? "ready" : "missing",
-      fix: "Only needed with REDTEAM_VERIFY_VIA_SERVICE=1: ownership verification otherwise comes from the engagement record, in-house. Set SECSCAN_MCP_TOKEN (Secure Vault → lands in the environment) to use the service check.",
-      required: (env["REDTEAM_VERIFY_VIA_SERVICE"] ?? "").trim() === "1",
+      id: 'secscan_token',
+      label: 'SecScan MCP token (service verification opt-in only)',
+      state: (env['SECSCAN_MCP_TOKEN'] ?? '').trim() ? 'ready' : 'missing',
+      fix: 'Only needed with REDTEAM_VERIFY_VIA_SERVICE=1: ownership verification otherwise comes from the engagement record, in-house. Set SECSCAN_MCP_TOKEN (Secure Vault → lands in the environment) to use the service check.',
+      required: (env['REDTEAM_VERIFY_VIA_SERVICE'] ?? '').trim() === '1',
     },
     {
-      id: "deepseek_key",
-      label: "Model provider key (agent loops)",
+      id: 'deepseek_key',
+      label: 'Model provider key (agent loops)',
       state:
-        (env["MODEL_API_KEY"] ?? "").trim() || (env["META_API_KEY"] ?? "").trim() || (env["DEEPSEEK_API_KEY"] ?? "").trim()
-          ? "ready"
-          : "missing",
-      fix: "Set MODEL_API_KEY (Meta Model API, Secure Vault). No live engagement can run without a model provider key.",
+        (env['MODEL_API_KEY'] ?? '').trim() || (env['META_API_KEY'] ?? '').trim() || (env['DEEPSEEK_API_KEY'] ?? '').trim()
+          ? 'ready'
+          : 'missing',
+      fix: 'Set MODEL_API_KEY (Meta Model API, Secure Vault). No live engagement can run without a model provider key.',
       required: true,
     },
     {
-      id: "seclayer_key",
-      label: "Seclayer API key (Seclayer MCP / scans)",
-      state: (env["SECLAYER_API_KEY"] ?? "").trim() ? "ready" : "missing",
-      fix: "Optional: set SECLAYER_API_KEY to use the Seclayer MCP server and its scan tools.",
+      id: 'seclayer_key',
+      label: 'Seclayer API key (Seclayer MCP / scans)',
+      state: (env['SECLAYER_API_KEY'] ?? '').trim() ? 'ready' : 'missing',
+      fix: 'Optional: add the Seclayer API key in the MCP setup step, or set SECLAYER_API_KEY, to use the Seclayer MCP server and its scan tools.',
       required: false,
     },
-  ];
-  items.push(...secrets);
+  ]
+  items.push(...secrets)
 
   // Optional channels: their absence degrades coverage but never blocks a run.
   items.push(
     {
-      id: "pc_agent",
-      label: "Windows PC-agent channel (optional)",
-      state: pcAgentConfigured(env) ? "ready" : "not-configured",
-      fix: "Optional: set REDTEAM_PC_AGENT_URL / REDTEAM_PC_AGENT_TOKEN to enable the PC-agent host-exec backend (a Windows target with no SMB/WinRM/SSH available).",
+      id: 'pc_agent',
+      label: 'Windows PC-agent channel (optional)',
+      state: pcAgentConfigured(env) ? 'ready' : 'not-configured',
+      fix: 'Optional: set REDTEAM_PC_AGENT_URL / REDTEAM_PC_AGENT_TOKEN to enable the PC-agent host-exec backend (a Windows target with no SMB/WinRM/SSH available).',
       required: false,
     },
     {
-      id: "browser",
-      label: "Browser / CDP driver (optional)",
-      state: browserConfigured(env) ? "ready" : "not-configured",
+      id: 'browser',
+      label: 'Browser / CDP driver (optional)',
+      state: browserConfigured(env) ? 'ready' : 'not-configured',
       fix: BROWSER_SETUP_GUIDANCE,
       required: false,
     },
-  );
+  )
 
-  const requiredItems = items.filter((i) => i.required);
-  const requiredMissing = requiredItems.filter((i) => i.state !== "ready");
-  const ok = requiredMissing.length === 0;
+  const requiredItems = items.filter(i => i.required)
+  const requiredMissing = requiredItems.filter(i => i.state !== 'ready')
+  const ok = requiredMissing.length === 0
   return {
     ok,
     items,
     summary:
-      `${items.filter((i) => i.state === "ready").length} of ${items.length} ready — ` +
-      (ok ? "required items satisfied" : `${requiredMissing.length} required missing: ${requiredMissing.map((i) => i.id).join(", ")}`),
-  };
+      `${items.filter(i => i.state === 'ready').length} of ${items.length} ready — ` +
+      (ok ? 'required items satisfied' : `${requiredMissing.length} required missing: ${requiredMissing.map(i => i.id).join(', ')}`),
+  }
 }
 
 /** Render a report as a plain-text table for the CLI. */
 export function formatReadiness(report: ReadinessReport): string {
-  const lines: string[] = [`readiness: ${report.summary}`, ""];
+  const lines: string[] = [`readiness: ${report.summary}`, '']
   for (const item of report.items) {
-    const mark = item.state === "ready" ? "OK  " : item.state === "missing" ? "MISS" : item.state === "unreachable" ? "DOWN" : "CFG ";
-    lines.push(`${mark} ${item.label.padEnd(48)} ${item.detail ?? ""}`.trimEnd());
-    if (item.fix && item.state !== "ready") lines.push(`     → ${item.fix}`);
+    const mark = item.state === 'ready' ? 'OK  ' : item.state === 'missing' ? 'MISS' : item.state === 'unreachable' ? 'DOWN' : 'CFG '
+    lines.push(`${mark} ${item.label.padEnd(48)} ${item.detail ?? ''}`.trimEnd())
+    if (item.fix && item.state !== 'ready') lines.push(`     → ${item.fix}`)
   }
-  return lines.join("\n");
+  return lines.join('\n')
 }
 
-export type { XToolId };
+export type { XToolId }
