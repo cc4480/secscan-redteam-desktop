@@ -316,7 +316,7 @@ export function Welcome({ api }: { api: WelcomeReadinessApi }) {
               aria-describedby="mcp-description mcp-error" onChange={(event) => { setSecscanDraft(event.target.value); setMcpError('') }} />
           </div>
           <div className="key-field">
-            <label className="visually-hidden" htmlFor="mcp-seclayer">{m.mcpAccess}</label>
+            <label className="visually-hidden" htmlFor="mcp-seclayer">{m.welcomeMcpSeclayerPlaceholder}</label>
             <input id="mcp-seclayer" type="password" autoComplete="off" autoCapitalize="off" spellCheck={false}
               placeholder={m.welcomeMcpSeclayerPlaceholder} value={seclayerDraft} disabled={busy}
               onChange={(event) => { setSeclayerDraft(event.target.value); setMcpError('') }} />
