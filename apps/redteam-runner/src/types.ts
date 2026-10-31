@@ -258,6 +258,14 @@ export interface ResolvedRunnerConfig {
    * 0 disables reflection. Env REDTEAM_REFLECTOR_CAP.
    */
   reflectorCap: number
+  /**
+   * Q-ESTOP-APP: candidate paths for the ESTOP fleet pause sentinel
+   * (safety/estop.ts), in priority order — the REDTEAM_ESTOP_PATH override
+   * when set, else the sentinel beside registryPath, plus the REDTEAM_HOME
+   * location when it differs. Resolved once here; the launch gate in
+   * phases/run.ts checks them via requireEstopClear before any state.
+   */
+  estopPaths: string[]
   maxActions: number
   maxDurationMs: number
   probeDelayMs: number
