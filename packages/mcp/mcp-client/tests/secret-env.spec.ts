@@ -108,6 +108,7 @@ async function reportFromChild(partial: Partial<Config>, probe: string, warns?: 
   }
   const config: Config = {
     transport: 'stdio',
+    serverName: 'envprobe',
     command: process.execPath,
     args: [envServerPath],
     env: {},
@@ -115,9 +116,8 @@ async function reportFromChild(partial: Partial<Config>, probe: string, warns?: 
     cwd: packageDir,
     toolCallTimeoutMs: 15_000,
     failOnStartupError: true,
-    ...partial,
   }
-  if (config.transport !== 'stdio') throw new Error('expected a stdio config')
+  Object.assign(config, partial)
   try {
     await apply(ctx, config)
     const result = await ctx.tools.execute({
