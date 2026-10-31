@@ -19,60 +19,65 @@
  * isolated: any error leaves the history untouched and the loop runs
  * on uncompacted, exactly as it did before A3.
  */
-import type { AgentRole, ChatMessage } from "@secscan/redteam-llm-router";
-import type { Ctx } from "../context.js";
-import type { LlmTokenUsage } from "../harness2/trajectory-normalize.js";
-import type { EngagementPhase } from "../types.js";
-import { SummaryCache, summaryCacheFor, summaryKey } from "./summary-cache.js";
+import type { AgentRole, ChatMessage } from '@secscan/redteam-llm-router'
+import type { Ctx } from '../context.js'
+import type { LlmTokenUsage } from '../harness2/trajectory-normalize.js'
+import type { EngagementPhase } from '../types.js'
+import { SummaryCache, summaryCacheFor, summaryKey } from './summary-cache.js'
 
-export const DEFAULT_BUDGET_CHARS = 96_000;
-export const DEFAULT_PRESERVE_LAST = 6;
-export const SUMMARY_MARKER = "[COMPACTED HISTORY";
+export const DEFAULT_BUDGET_CHARS = 96_000
+export const DEFAULT_PRESERVE_LAST = 6
+export const SUMMARY_MARKER = '[COMPACTED HISTORY'
 
 /** Summarize one rendered transcript slice; returns the summary text. */
-export type Summarizer = (sliceText: string) => Promise<string>;
+export type Summarizer = (sliceText: string) => Promise<string>
 
 export interface CompactionResult {
-  readonly beforeChars: number;
-  readonly afterChars: number;
+  readonly beforeChars: number
+  readonly afterChars: number
   /** Messages replaced by the summary message. */
-  readonly compactedCount: number;
+  readonly compactedCount: number
   /** Compaction passes run (a deep history can need more than one). */
-  readonly passes: number;
-  readonly cacheHits: number;
-  readonly cacheMisses: number;
+  readonly passes: number
+  readonly cacheHits: number
+  readonly cacheMisses: number
 }
 
 /** Approximate chain size: content bytes plus any tool-call payloads. */
 export function estimateChars(messages: readonly ChatMessage[]): number {
-  let total = 0;
+  let total = 0
   for (const m of messages) {
-    total += m.content.length;
-    if (m.toolCalls) total += JSON.stringify(m.toolCalls).length;
+    total += m.content.length
+    if (m.toolCalls) total += JSON.stringify(m.toolCalls).length
   }
-  return total;
+  return total
+}
+
+/** True when `message` opens a tool group whose results must stay beside it. */
+function opensToolGroup(message: ChatMessage | undefined): boolean {
+  return message?.role === 'assistant' && (message.toolCalls?.length ?? 0) > 0
 }
 
 function renderSlice(slice: readonly ChatMessage[]): string {
   return slice
     .map((m) => {
       const calls = m.toolCalls
-        ? `\n[tool calls: ${m.toolCalls.map((c) => `${c.name} ${JSON.stringify(c.arguments)}`).join("; ")}]`
-        : "";
-      return `${m.role.toUpperCase()}: ${m.content}${calls}`;
+        ? `\n[tool calls: ${m.toolCalls.map(c => `${c.name} ${JSON.stringify(c.arguments)}`).join('; ')}]`
+        : ''
+      return `${m.role.toUpperCase()}: ${m.content}${calls}`
     })
-    .join("\n\n");
+    .join('\n\n')
 }
 
 const SUMMARY_SYSTEM =
-  "You are the compaction summarizer for a penetration-testing agent. " +
-  "Summarize the transcript slice you are given so the agent can continue " +
-  "working without it. Preserve VERBATIM: every target host and URL; every " +
-  "finding id, title, and status (PROVEN, DETECTED, confirmed, killed); " +
-  "evidence digests and quoted bytes; tool calls that were DENIED, REFUSED, " +
-  "or failed, with the reason; open leads and untested hypotheses; numbers, " +
-  "ports, and parameter names. Drop conversational filler and duplicated " +
-  "observations. Keep the summary under 4000 characters, as a dense fact list.";
+  'You are the compaction summarizer for a penetration-testing agent. ' +
+  'Summarize the transcript slice you are given so the agent can continue ' +
+  'working without it. Preserve VERBATIM: every target host and URL; every ' +
+  'finding id, title, and status (PROVEN, DETECTED, confirmed, killed); ' +
+  'evidence digests and quoted bytes; tool calls that were DENIED, REFUSED, ' +
+  'or failed, with the reason; open leads and untested hypotheses; numbers, ' +
+  'ports, and parameter names. Drop conversational filler and duplicated ' +
+  'observations. Keep the summary under 4000 characters, as a dense fact list.'
 
 /** Build the production summarizer over the engagement's completion seam. */
 export function makeSummarizer(
@@ -88,20 +93,20 @@ export function makeSummarizer(
     const res = await complete(
       role,
       [
-        { role: "system", content: SUMMARY_SYSTEM },
-        { role: "user", content: sliceText },
+        { role: 'system', content: SUMMARY_SYSTEM },
+        { role: 'user', content: sliceText },
       ],
       { tools: [] },
-    );
-    if (onUsage && res.usage !== undefined) onUsage(res.usage);
-    return res.text.trim();
-  };
+    )
+    if (onUsage && res.usage !== undefined) onUsage(res.usage)
+    return res.text.trim()
+  }
 }
 
 export interface CompactOptions {
-  readonly budgetChars?: number;
-  readonly preserveLast?: number;
-  readonly cache?: SummaryCache;
+  readonly budgetChars?: number
+  readonly preserveLast?: number
+  readonly cache?: SummaryCache
 }
 
 /**
@@ -114,43 +119,59 @@ export async function compactMessages(
   summarize: Summarizer,
   opts: CompactOptions = {},
 ): Promise<CompactionResult | null> {
-  const budget = opts.budgetChars ?? DEFAULT_BUDGET_CHARS;
-  const preserveLast = opts.preserveLast ?? DEFAULT_PRESERVE_LAST;
-  const cache = opts.cache ?? new SummaryCache();
-  const beforeChars = estimateChars(messages);
-  if (beforeChars <= budget) return null;
-  let passes = 0;
-  let compactedCount = 0;
-  let cacheHits = 0;
-  let cacheMisses = 0;
+  const budget = opts.budgetChars ?? DEFAULT_BUDGET_CHARS
+  const preserveLast = opts.preserveLast ?? DEFAULT_PRESERVE_LAST
+  const cache = opts.cache ?? new SummaryCache()
+  const beforeChars = estimateChars(messages)
+  if (beforeChars <= budget) return null
+  let passes = 0
+  let compactedCount = 0
+  let cacheHits = 0
+  let cacheMisses = 0
   // Head = system + objective (indices 0..1); tail = last preserveLast raw
   // messages. Everything between is one compactable slice per pass.
   while (passes < 4) {
-    if (estimateChars(messages) <= budget) break;
-    const head = Math.min(2, messages.length);
-    const tailStart = messages.length - preserveLast;
-    if (tailStart <= head) break; // nothing between head and tail to compact
-    const slice = messages.slice(head, tailStart);
-    if (slice.length < 2) break; // a single message is not worth summarizing
-    const sliceText = renderSlice(slice);
-    const key = summaryKey(sliceText);
-    let summary = cache.get(key);
-    if (summary !== null) cacheHits++;
+    if (estimateChars(messages) <= budget) break
+    const head = Math.min(2, messages.length)
+    let tailStart = messages.length - preserveLast
+    if (tailStart <= head) break // nothing between head and tail to compact
+    // Start guard: a slice may not OPEN with a tool message — its owning
+    // assistant sits inside the pinned head, so splicing would strand the
+    // result in the summary while its call survives (or vice versa), and no
+    // boundary move can repair that from here. Production cannot produce
+    // this shape — agentLoop seeds [system, user] and only ever appends an
+    // assistant message before its tool results — so a tool message at the
+    // head means malformed input; skip compaction (failure-isolated, as
+    // this module is by design) rather than emit a wire-invalid chain.
+    if (messages[head]?.role === 'tool') return passes > 0 ? finish() : null
+    // End-boundary pullback: the slice may not CLOSE on an assistant message
+    // carrying tool calls — its results are the tail's first messages and
+    // would be orphaned, serializing with a tool_call_id that points at a
+    // compacted-away call (a wire-invalid sequence; a 400 class of its own).
+    // Pull the boundary back so the whole pending group — call and results —
+    // stays together in the preserved tail; the slice shrinks from the end.
+    while (tailStart - 1 >= head && opensToolGroup(messages[tailStart - 1])) tailStart--
+    const slice = messages.slice(head, tailStart)
+    if (slice.length < 2) break // a single message is not worth summarizing
+    const sliceText = renderSlice(slice)
+    const key = summaryKey(sliceText)
+    let summary = cache.get(key)
+    if (summary !== null) cacheHits++
     else {
-      cacheMisses++;
-      summary = await summarize(sliceText);
-      if (!summary) return passes > 0 ? finish() : null;
-      cache.set(key, summary);
+      cacheMisses++
+      summary = await summarize(sliceText)
+      if (!summary) return passes > 0 ? finish() : null
+      cache.set(key, summary)
     }
     const summaryMessage: ChatMessage = {
-      role: "user",
+      role: 'user',
       content: `${SUMMARY_MARKER} — summary of ${slice.length} earlier messages, digest ${key.slice(0, 12)}]\n${summary}`,
-    };
-    messages.splice(head, slice.length, summaryMessage);
-    compactedCount += slice.length;
-    passes++;
+    }
+    messages.splice(head, slice.length, summaryMessage)
+    compactedCount += slice.length
+    passes++
   }
-  return finish();
+  return finish()
 
   function finish(): CompactionResult {
     return {
@@ -160,15 +181,15 @@ export async function compactMessages(
       passes,
       cacheHits,
       cacheMisses,
-    };
+    }
   }
 }
 
 function envInt(name: string): number | null {
-  const raw = process.env[name];
-  if (!raw) return null;
-  const n = Number.parseInt(raw, 10);
-  return Number.isFinite(n) && n > 0 ? n : null;
+  const raw = process.env[name]
+  if (!raw) return null
+  const n = Number.parseInt(raw, 10)
+  return Number.isFinite(n) && n > 0 ? n : null
 }
 
 /**
@@ -185,32 +206,32 @@ export async function maybeCompactMessages(
   complete: Parameters<typeof makeSummarizer>[0],
   onUsage?: (usage: LlmTokenUsage | undefined) => void,
 ): Promise<CompactionResult | null> {
-  if (process.env["REDTEAM_COMPACTION"] === "0") return null;
+  if (process.env['REDTEAM_COMPACTION'] === '0') return null
   try {
     const result = await compactMessages(messages, makeSummarizer(complete, role, onUsage), {
-      budgetChars: envInt("REDTEAM_COMPACTION_BUDGET_CHARS") ?? DEFAULT_BUDGET_CHARS,
-      preserveLast: envInt("REDTEAM_COMPACTION_PRESERVE_LAST") ?? DEFAULT_PRESERVE_LAST,
+      budgetChars: envInt('REDTEAM_COMPACTION_BUDGET_CHARS') ?? DEFAULT_BUDGET_CHARS,
+      preserveLast: envInt('REDTEAM_COMPACTION_PRESERVE_LAST') ?? DEFAULT_PRESERVE_LAST,
       cache: summaryCacheFor(ctx),
-    });
+    })
     if (result) {
       ctx.events.append({
         phase,
-        actor: "runner",
-        action: "compaction",
+        actor: 'runner',
+        action: 'compaction',
         result:
           `Compacted ${result.compactedCount} message(s) in ${result.passes} pass(es): ` +
           `${result.beforeChars} → ${result.afterChars} chars ` +
           `(summary cache ${result.cacheHits} hit(s), ${result.cacheMisses} miss(es)).`,
-      });
+      })
     }
-    return result;
+    return result
   } catch (err) {
     ctx.events.append({
       phase,
-      actor: "runner",
-      action: "compaction_failed",
+      actor: 'runner',
+      action: 'compaction_failed',
       result: `Compaction failed (failure-isolated; loop continues uncompacted): ${(err as Error).message}`,
-    });
-    return null;
+    })
+    return null
   }
 }
