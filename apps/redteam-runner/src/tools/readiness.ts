@@ -32,6 +32,9 @@ import { resolveWordlist } from '../xtool/wordlist.js'
 import { pcAgentConfigured } from '../host-exec/pc-agent.js'
 import { browserConfigured, BROWSER_SETUP_GUIDANCE } from '../browser/cdp.js'
 import { poolSnapshots, type PoolSnapshot } from '@secscan/redteam-llm-router'
+import { resolveArsenalConfig } from '../arsenal/config.js'
+import { readArsenalIndexMeta, type ArsenalIndexMeta } from '../arsenal/index-store.js'
+import { ARSENAL_EMPTY_FIX } from '../arsenal/tools.js'
 
 export type ReadinessState = 'ready' | 'missing' | 'unreachable' | 'not-configured'
 
@@ -248,6 +251,12 @@ export async function readinessReport(env: NodeJS.ProcessEnv = process.env): Pro
     },
   )
 
+  // --- Arsenal knowledge index ----------------------------------------------
+  // Always present (arsenalIndexItem never throws): ready with the serving
+  // generation's stamp, missing with the §7.1 fix text until the operator's
+  // first `redteam-runner arsenal refresh` builds a generation.
+  items.push(arsenalIndexItem(env))
+
   // --- LLM credential pool ---------------------------------------------------
   // Optional and conditional: the item exists only when a key is dead or
   // benched (credentialPoolItem returns undefined for a healthy pool, and
@@ -264,6 +273,66 @@ export async function readinessReport(env: NodeJS.ProcessEnv = process.env): Pro
     summary:
       `${items.filter(i => i.state === 'ready').length} of ${items.length} ready — ` +
       (ok ? 'required items satisfied' : `${requiredMissing.length} required missing: ${requiredMissing.map(i => i.id).join(', ')}`),
+  }
+}
+
+/**
+ * The `arsenal_index` readiness item (arsenal spec §11): `ready` when a
+ * generation is serving, with the serving generation's stamp as the
+ * detail — `generation N · M entries · built <date>`; `missing` with
+ * the §7.1 fix text when no generation has been built yet. The state
+ * reflects the SERVING generation, so a failed refresh that kept the
+ * old index still reads `ready` with the old build date visible.
+ *
+ * Never throws (the report's standing rule): a misconfigured
+ * REDTEAM_ARSENAL_* variable or an unreadable index file degrades to
+ * `missing` with the error named in the detail — the /mcp endpoint
+ * still fails loud on the same misconfiguration per request. Pure over
+ * `env` + the index file, so tests point it at fixture homes.
+ */
+export function arsenalIndexItem(env: NodeJS.ProcessEnv): ReadinessItem {
+  let dbPath: string
+  try {
+    dbPath = resolveArsenalConfig(env).dbPath
+  } catch (err) {
+    return {
+      id: 'arsenal_index',
+      label: 'Arsenal knowledge index',
+      state: 'missing',
+      detail: (err as Error).message,
+      fix: 'Correct the REDTEAM_ARSENAL_* variable named in the detail and re-run doctor.',
+      required: false,
+    }
+  }
+  let meta: ArsenalIndexMeta | null
+  try {
+    meta = readArsenalIndexMeta(dbPath)
+  } catch (err) {
+    return {
+      id: 'arsenal_index',
+      label: 'Arsenal knowledge index',
+      state: 'missing',
+      detail: `${dbPath} — ${(err as Error).message}`,
+      fix: `${ARSENAL_EMPTY_FIX} — a successful refresh replaces the unreadable file on swap.`,
+      required: false,
+    }
+  }
+  if (meta === null) {
+    return {
+      id: 'arsenal_index',
+      label: 'Arsenal knowledge index',
+      state: 'missing',
+      detail: `${dbPath} (no generation built yet)`,
+      fix: ARSENAL_EMPTY_FIX,
+      required: false,
+    }
+  }
+  return {
+    id: 'arsenal_index',
+    label: 'Arsenal knowledge index',
+    state: 'ready',
+    detail: `generation ${meta.generation} · ${meta.entryCount} entries · built ${meta.builtAt}`,
+    required: false,
   }
 }
 

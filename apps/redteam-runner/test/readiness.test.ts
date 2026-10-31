@@ -20,7 +20,9 @@ import { join } from 'node:path'
 import { buildXToolArgv, findProfile, findXTool } from '../src/xtool/registry.js'
 import { resolveWordlist, wordlistCandidates } from '../src/xtool/wordlist.js'
 import { connectScanArgv, isNmapPrivilegeFailure } from '../src/nmap/privilege.js'
-import { credentialPoolItem, formatReadiness, readinessReport } from '../src/tools/readiness.js'
+import { arsenalIndexItem, credentialPoolItem, formatReadiness, readinessReport } from '../src/tools/readiness.js'
+import { buildAndSwapArsenalIndex, type ArsenalBuildData } from '../src/arsenal/index-store.js'
+import { ARSENAL_EMPTY_FIX } from '../src/arsenal/tools.js'
 import { _resetNmapProbeCache } from '../src/nmap/prereq.js'
 
 const ffuf = findXTool('ffuf')
@@ -285,5 +287,130 @@ describe('readiness report — llm_credential_pool (Q-POOLPERSIST)', () => {
   it('the live report omits the pool item when no live pool is degraded', async () => {
     const report = await readinessReport({} as NodeJS.ProcessEnv)
     assert.equal(report.items.find(i => i.id === 'llm_credential_pool'), undefined)
+  })
+})
+
+describe('readiness report — arsenal_index (ARS-8)', () => {
+  function fixtureData(over: Partial<ArsenalBuildData> = {}): ArsenalBuildData {
+    return {
+      sourceRepo: 'https://github.com/hack-with-github/awesome-hacking.git',
+      sourceCommit: '440486fd08b0a0d9ad9a041a0bb234dcdf65dee2',
+      builtAt: '2026-10-31T00:00:00.000Z',
+      collections: [
+        {
+          slug: 'seclists',
+          name: 'SecLists',
+          url: 'https://github.com/danielmiessler/SecLists',
+          description: "The security tester's companion.",
+          topic: 'Lists',
+          fetchedAt: '2026-10-31T00:00:00.000Z',
+          entryCount: 2,
+          fetchError: null,
+        },
+        {
+          slug: 'web-hacking',
+          name: 'Web Hacking',
+          url: 'https://example.test/web-hacking',
+          description: '',
+          topic: 'Web',
+          fetchedAt: null,
+          entryCount: 1,
+          fetchError: null,
+        },
+      ],
+      entries: [
+        {
+          name: 'Common Passwords',
+          url: 'https://example.test/seclists/common-passwords',
+          description: 'Password wordlists.',
+          collectionSlug: 'seclists',
+          tags: ['password'],
+          targets: ['WA'],
+          battery: [],
+        },
+        {
+          name: 'DNS Subdomains',
+          url: 'https://example.test/seclists/dns-subdomains',
+          description: '',
+          collectionSlug: 'seclists',
+          tags: [],
+          targets: [],
+          battery: [],
+        },
+        {
+          name: 'JWT Tool',
+          url: 'https://example.test/web-hacking/jwt-tool',
+          description: 'JSON Web Token attack toolkit.',
+          collectionSlug: 'web-hacking',
+          tags: ['jwt'],
+          targets: ['WA'],
+          battery: ['F-10'],
+        },
+      ],
+      unparsedCount: 1,
+      dupeCount: 2,
+      prioritySlugs: ['seclists'],
+      ...over,
+    }
+  }
+
+  it('a fresh home (no generation built) reads missing with the §7.1 fix text verbatim', () => {
+    const home = mkdtempSync(join(tmpdir(), 'readiness-arsenal-'))
+    try {
+      const item = arsenalIndexItem({ REDTEAM_HOME: home } as NodeJS.ProcessEnv)
+      assert.equal(item.id, 'arsenal_index')
+      assert.equal(item.label, 'Arsenal knowledge index')
+      assert.equal(item.state, 'missing')
+      assert.equal(item.fix, ARSENAL_EMPTY_FIX)
+      assert.equal(item.fix, 'Run: redteam-runner arsenal refresh')
+      assert.equal(item.required, false)
+    } finally {
+      rmSync(home, { recursive: true, force: true })
+    }
+  })
+
+  it('a serving generation reads ready with its stamp as the detail, and follows a swap', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'readiness-arsenal-'))
+    const dbPath = join(dir, 'arsenal', 'arsenal.db')
+    try {
+      buildAndSwapArsenalIndex(dbPath, fixtureData())
+      const env = { REDTEAM_ARSENAL_DB_PATH: dbPath } as NodeJS.ProcessEnv
+      const item = arsenalIndexItem(env)
+      assert.equal(item.state, 'ready')
+      assert.equal(item.detail, 'generation 1 · 3 entries · built 2026-10-31T00:00:00.000Z')
+      assert.equal(item.fix, undefined)
+      // The state reflects the SERVING generation: a second build moves
+      // the stamp, and the item reports the new generation + build date.
+      buildAndSwapArsenalIndex(dbPath, fixtureData({ builtAt: '2026-11-01T00:00:00.000Z' }))
+      const next = arsenalIndexItem(env)
+      assert.equal(next.state, 'ready')
+      assert.equal(next.detail, 'generation 2 · 3 entries · built 2026-11-01T00:00:00.000Z')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('a misconfigured variable degrades to missing with the variable named — never a throw', async () => {
+    const env = { REDTEAM_ARSENAL_ENABLED: 'yes' } as NodeJS.ProcessEnv
+    const item = arsenalIndexItem(env)
+    assert.equal(item.state, 'missing')
+    assert.match(item.detail ?? '', /REDTEAM_ARSENAL_ENABLED/)
+    const report = await readinessReport(env)
+    assert.equal(report.items.filter(i => i.id === 'arsenal_index').length, 1)
+    assert.equal(report.items.find(i => i.id === 'arsenal_index')?.state, 'missing')
+  })
+
+  it('the live report carries exactly one arsenal_index item', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'readiness-arsenal-'))
+    const dbPath = join(dir, 'arsenal', 'arsenal.db')
+    try {
+      buildAndSwapArsenalIndex(dbPath, fixtureData())
+      const report = await readinessReport({ REDTEAM_ARSENAL_DB_PATH: dbPath } as NodeJS.ProcessEnv)
+      const items = report.items.filter(i => i.id === 'arsenal_index')
+      assert.equal(items.length, 1)
+      assert.equal(items[0]?.state, 'ready')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
