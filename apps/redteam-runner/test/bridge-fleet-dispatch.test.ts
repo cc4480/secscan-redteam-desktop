@@ -43,12 +43,25 @@ const REGISTRY_OPS = [
   "job_cancel",
 ] as const;
 
+/** The cdp_* family: wire names copied exactly from AlterEgo's seams
+ * definitions (~/workspace/alterego pc-agent/seams/definitions/browser.py
+ * — CDP_LAUNCH … CDP_CLOSE), registered bridge-side on 2026-10-31. The
+ * full registry is then 67 + 10 = 77; the fleet passes through whatever
+ * a bridge offers, so all 77 must route — proven below. */
+const CDP_OPS = [
+  "cdp_launch", "cdp_connect", "cdp_targets", "cdp_navigate", "cdp_snapshot",
+  "cdp_click", "cdp_type", "cdp_evaluate", "cdp_readback", "cdp_close",
+] as const;
+
+/** The full registry once the bridge serves the CDP family: 67 + 10 = 77. */
+const REGISTRY_OPS_77 = [...REGISTRY_OPS, ...CDP_OPS] as const;
+
 interface FakeClient extends BridgeClientLike {
   calls: Array<{ name: string; args: Record<string, unknown> }>;
   setAvailable(v: boolean): void;
 }
 
-function fakeClient(opts?: { available?: boolean; callError?: Error }): FakeClient {
+function fakeClient(opts?: { available?: boolean; callError?: Error; ops?: readonly string[] }): FakeClient {
   let available = opts?.available ?? true;
   const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
   return {
@@ -60,7 +73,7 @@ function fakeClient(opts?: { available?: boolean; callError?: Error }): FakeClie
       return available;
     },
     async listTools(): Promise<BridgeToolInfo[]> {
-      return REGISTRY_OPS.map((name) => ({ name, description: `bridge description for ${name}`, inputSchema: { type: "object", properties: {} } }));
+      return (opts?.ops ?? REGISTRY_OPS).map((name) => ({ name, description: `bridge description for ${name}`, inputSchema: { type: "object", properties: {} } }));
     },
     async call(name, args) {
       calls.push({ name, args });
@@ -225,6 +238,65 @@ describe("bridge dispatch through dispatchTool", () => {
     assert.match(second.result, /not available on this machine/u);
     assert.equal(second.repairable, undefined);
     assert.equal(client.calls.length, 1, "the flipped call never reached the bridge");
+  });
+
+  it("round-trips a cdp_* call through the full wrapper via the deps seam", async () => {
+    const client = fakeClient({ available: true, ops: REGISTRY_OPS_77 });
+    const ctx = dispatchCtx(client);
+    const r = await dispatchTool(ctx, "exploiter", "exploit", call("bridge_cdp_snapshot"));
+    assert.equal(r.ok, true);
+    assert.equal(r.result, "result of cdp_snapshot");
+    assert.deepEqual(client.calls, [{ name: "cdp_snapshot", args: {} }]);
+  });
+});
+
+describe("bridge handler — the CDP family (77-tool registry)", () => {
+  it("routes every cdp_* op in a REMOTE engagement", async () => {
+    const up = fakeClient({ available: true, ops: REGISTRY_OPS_77 });
+    for (const op of CDP_OPS) {
+      const r = await handleBridgeTools(handlerCtx(), "exploiter", "exploit", call(`bridge_${op}`, { probe: op }), { probe: op }, up);
+      assert.equal(r?.ok, true, `bridge_${op} routes in a remote engagement`);
+      assert.equal(r?.result, `result of ${op}`);
+    }
+    assert.deepEqual(
+      up.calls.map((c) => c.name),
+      [...CDP_OPS],
+      "every cdp_* op forwarded unprefixed and unfiltered in a remote engagement",
+    );
+  });
+
+  it("routes every cdp_* op in a LOCAL engagement", async () => {
+    const up = fakeClient({ available: true, ops: REGISTRY_OPS_77 });
+    for (const op of CDP_OPS) {
+      const r = await handleBridgeTools(handlerCtxLocal(), "exploiter", "exploit", call(`bridge_${op}`, { probe: op }), { probe: op }, up);
+      assert.equal(r?.ok, true, `bridge_${op} routes in a local engagement`);
+      assert.equal(r?.result, `result of ${op}`);
+    }
+    assert.deepEqual(
+      up.calls.map((c) => c.name),
+      [...CDP_OPS],
+      "every cdp_* op forwarded unprefixed and unfiltered in a local engagement",
+    );
+  });
+
+  it("the wrapper passes the full 77-name registry through unfiltered", async () => {
+    const raw = {
+      async available() {
+        return true;
+      },
+      async listTools(): Promise<BridgeToolInfo[]> {
+        return REGISTRY_OPS_77.map((name) => ({ name, description: `d ${name}`, inputSchema: { type: "object", properties: {} } }));
+      },
+      async call(name: string, _args: Record<string, unknown>) {
+        return { content: [{ type: "text", text: `raw result of ${name}` }], text: `raw result of ${name}` };
+      },
+    };
+    const wrapped = wrapBridgeClient(raw);
+    const listed = await wrapped.listTools();
+    assert.deepEqual(listed.map((t) => t.name), [...REGISTRY_OPS_77], "all 77 names pass through — cdp_* included, nothing filtered");
+    const r = await handleBridgeTools(handlerCtx(), "exploiter", "exploit", call("bridge_cdp_navigate", { url: "https://shop.example.test" }), { url: "https://shop.example.test" }, wrapped);
+    assert.equal(r?.ok, true);
+    assert.equal(r?.result, "raw result of cdp_navigate");
   });
 });
 

@@ -39,6 +39,20 @@ const REGISTRY_OPS = [
   "job_cancel",
 ] as const;
 
+/** The cdp_* family: wire names copied exactly from AlterEgo's seams
+ * definitions (~/workspace/alterego pc-agent/seams/definitions/browser.py
+ * — CDP_LAUNCH … CDP_CLOSE). The bridge-side fix (2026-10-31) registers
+ * them in AlterEgo's server, taking the real registry to 77. The gate
+ * passes through whatever a bridge offers, so a bridge offering all 77
+ * must surface all 77 — with the CDP teaching text — proven below. */
+const CDP_OPS = [
+  "cdp_launch", "cdp_connect", "cdp_targets", "cdp_navigate", "cdp_snapshot",
+  "cdp_click", "cdp_type", "cdp_evaluate", "cdp_readback", "cdp_close",
+] as const;
+
+/** The full registry once the bridge serves the CDP family: 67 + 10 = 77. */
+const REGISTRY_OPS_77 = [...REGISTRY_OPS, ...CDP_OPS] as const;
+
 function toolInfo(name: string): BridgeToolInfo {
   return {
     name,
@@ -52,7 +66,7 @@ interface FakeClient extends BridgeClientLike {
   calls: Array<{ name: string; args: Record<string, unknown> }>;
 }
 
-function fakeClient(opts?: { available?: boolean; listError?: Error }): FakeClient {
+function fakeClient(opts?: { available?: boolean; listError?: Error; ops?: readonly string[] }): FakeClient {
   const state = { probes: 0, calls: [] as Array<{ name: string; args: Record<string, unknown> }> };
   return {
     probes: state.probes,
@@ -63,7 +77,7 @@ function fakeClient(opts?: { available?: boolean; listError?: Error }): FakeClie
     },
     async listTools() {
       if (opts?.listError) throw opts.listError;
-      return REGISTRY_OPS.map(toolInfo);
+      return (opts?.ops ?? REGISTRY_OPS).map(toolInfo);
     },
     async call(name, args) {
       state.calls.push({ name, args });
@@ -148,5 +162,49 @@ describe("bridge offering gate — availability is the only gate", () => {
     const offered = await withBridgeTools(gateCtx(true, events), "recon", BASE, client);
     assert.deepEqual(offered.map((t) => t.name), ["http_probe"]);
     assert.equal(events.filter((e) => e.action === "bridge_tools_active").length, 0);
+  });
+});
+
+describe("bridge offering gate — the CDP family (77-tool registry)", () => {
+  it("a bridge offering all 77 surfaces all 77 in local and remote engagements alike", async () => {
+    for (const localHost of [undefined, true]) {
+      const events: EngagementEvent[] = [];
+      const client = fakeClient({ available: true, ops: REGISTRY_OPS_77 });
+      const offered = await withBridgeTools(gateCtx(localHost, events), "exploit", BASE, client);
+      const bridgeTools = offered.filter((t) => t.name.startsWith("bridge_"));
+      assert.deepEqual(
+        bridgeTools.map((t) => t.name),
+        REGISTRY_OPS_77.map((op) => `bridge_${op}`),
+        `localHost=${String(localHost)}: the full 77 offered, unfiltered`,
+      );
+      const active = events.filter((e) => e.action === "bridge_tools_active");
+      assert.equal(active.length, 1);
+      assert.match(active[0]!.result, /full toolset \(77 tools\)/u);
+    }
+  });
+
+  it("cdp_* tools carry the CDP teaching text; a 67-only offering carries none of it", async () => {
+    const events77: EngagementEvent[] = [];
+    const offered77 = await withBridgeTools(
+      gateCtx(undefined, events77), "exploit", BASE, fakeClient({ available: true, ops: REGISTRY_OPS_77 }),
+    );
+    const byName = new Map(offered77.map((t) => [t.name, t.description]));
+    for (const op of CDP_OPS) {
+      const d = byName.get(`bridge_${op}`)!;
+      assert.match(d, /Authenticated browser work in a real Chrome/u, `${op}: CDP teaching present`);
+      assert.match(d, /OPERATOR'S OWN machine/u, `${op}: own-machine truth still carried`);
+    }
+    assert.match(byName.get("bridge_cdp_snapshot")!, /Address elements from cdp_snapshot output, never by coordinates/u);
+    assert.match(byName.get("bridge_cdp_type")!, /verifies by readback/u);
+    assert.doesNotMatch(byName.get("bridge_shell_exec")!, /Authenticated browser work/u, "non-CDP tools do not carry the CDP teaching");
+
+    const events67: EngagementEvent[] = [];
+    const offered67 = await withBridgeTools(
+      gateCtx(undefined, events67), "exploit", BASE, fakeClient({ available: true }),
+    );
+    assert.equal(offered67.filter((t) => t.name.startsWith("bridge_cdp_")).length, 0, "no cdp tools in a 67-only offering");
+    for (const t of offered67) {
+      assert.doesNotMatch(t.description, /Authenticated browser work/u, `${t.name}: no CDP teaching when no cdp_* is offered`);
+    }
   });
 });
