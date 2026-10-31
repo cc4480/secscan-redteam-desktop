@@ -4,6 +4,7 @@
  */
 
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { describe, test } from 'node:test'
 import type { ClassifiedFailure, FailoverReason } from '../src/classifier.js'
 import {
@@ -11,6 +12,7 @@ import {
   collectCredentialEnv,
   cooldownMsForFailure,
   COOLDOWN_MAX_MS,
+  type PoolStateStore,
 } from '../src/pool.js'
 
 const HINTS_OFF = {
@@ -181,5 +183,168 @@ describe('CredentialPool', () => {
     const json = JSON.stringify(pool.snapshot())
     assert.equal(json.includes('super-secret'), false)
     assert.equal(pool.snapshot()[0]?.fingerprint.length, 8)
+  })
+})
+
+/** In-memory PoolStateStore: the document is a string, quarantine moves it aside. */
+class MemoryPoolStore implements PoolStateStore {
+  text: string | null = null
+  quarantinedText: string | null = null
+  read(): string | null {
+    return this.text
+  }
+  write(text: string): void {
+    this.text = text
+  }
+  quarantine(): string | null {
+    if (this.text === null) return null
+    this.quarantinedText = this.text
+    this.text = null
+    return 'memory.corrupt'
+  }
+}
+
+function fingerprint(apiKey: string): string {
+  return createHash('sha256').update(apiKey, 'utf8').digest('hex').slice(0, 8)
+}
+
+describe('CredentialPool persistence (PoolStateStore)', () => {
+  test('T-P1 round-trip: benches, permanent bench, dead entry, and pool-wide bench survive a restart', () => {
+    const clock = fakeClock()
+    const store = new MemoryPoolStore()
+    const a = new CredentialPool('fake', ['key-a', 'key-b'], { now: clock.now, store })
+    a.reportFailure(0, MODEL, failure('rate_limit'))
+    a.reportFailure(0, OTHER, failure('entitlement'))
+    a.reportFailure(1, MODEL, failure('auth_dead'))
+    a.benchModel(OTHER, 30_000)
+    const b = new CredentialPool('fake', ['key-a', 'key-b'], { now: clock.now, store })
+    assert.deepEqual(b.snapshot(), a.snapshot())
+    assert.equal(b.modelBenchedForMs(OTHER), a.modelBenchedForMs(OTHER))
+    assert.equal(b.acquire(MODEL), null, 'key-a benched, key-b dead: nobody serves MODEL')
+    assert.equal(b.restoreReport?.restoredEntries, 2)
+    assert.equal(b.restoreReport?.prunedEntries, 0)
+    assert.equal(b.restoreReport?.quarantined, false)
+    clock.advance(60_000)
+    assert.equal(b.acquire(MODEL)?.apiKey, 'key-a', 'rate bench lifts on schedule after restore')
+    assert.equal(b.acquire(OTHER), null, 'key-a permanently benched for OTHER and key-b dead: nobody serves it')
+  })
+
+  test('T-P2 lapse on restore: lapsed benches drop, permanent benches and failure counts survive', () => {
+    const clock = fakeClock()
+    const store = new MemoryPoolStore()
+    const a = new CredentialPool('fake', ['key-a', 'key-b'], { now: clock.now, store })
+    a.reportFailure(0, MODEL, failure('rate_limit', { retryAfterMs: 5_000 }))
+    a.reportFailure(0, OTHER, failure('entitlement'))
+    a.reportFailure(1, MODEL, failure('rate_limit'))
+    clock.advance(6_000)
+    const b = new CredentialPool('fake', ['key-a', 'key-b'], { now: clock.now, store })
+    assert.equal(b.restoreReport?.droppedLapsed, 1)
+    assert.equal(b.acquire(MODEL)?.apiKey, 'key-a', 'lapsed pair serves immediately')
+    assert.equal(b.acquire(OTHER)?.apiKey, 'key-b', 'permanent bench on (key-a, OTHER) survives')
+    b.reportFailure(1, MODEL, failure('rate_limit'))
+    const keyBBench = b.snapshot()[1]?.benchedModels.find(bench => bench.model === MODEL)
+    assert.equal(keyBBench?.untilMs, 1_126_000, 'restored failure count escalates the ladder (2nd failure = 120s)')
+  })
+
+  test('T-P3 identity by fingerprint: a replaced key starts clean; unmatched state prunes', () => {
+    const clock = fakeClock()
+    const store = new MemoryPoolStore()
+    const a = new CredentialPool('fake', ['key-a'], { now: clock.now, store })
+    a.reportFailure(0, MODEL, failure('auth_dead'))
+    const b = new CredentialPool('fake', ['key-a-replaced'], { now: clock.now, store })
+    assert.equal(b.acquire(MODEL)?.apiKey, 'key-a-replaced', 'new value is not punished for its predecessor')
+    assert.equal(b.restoreReport?.prunedEntries, 1)
+    assert.equal(b.restoreReport?.restoredEntries, 0)
+  })
+
+  test('T-P4 penalty isolation: a restored bench touches only its own (key, model) pair', () => {
+    const clock = fakeClock()
+    const store = new MemoryPoolStore()
+    const a = new CredentialPool('fake', ['key-a', 'key-b'], { now: clock.now, store })
+    a.reportFailure(0, MODEL, failure('rate_limit'))
+    const b = new CredentialPool('fake', ['key-a', 'key-b'], { now: clock.now, store })
+    assert.equal(b.acquire(MODEL)?.apiKey, 'key-b', '(key-a, MODEL) is benched')
+    assert.equal(b.acquire(OTHER)?.apiKey, 'key-a', '(key-a, OTHER) is untouched')
+    assert.equal(b.nextAvailableInMs(OTHER), 0)
+    const primaryBenchUntil = () =>
+      b.snapshot()[0]?.benchedModels.find(bench => bench.model === MODEL)?.untilMs
+    assert.equal(primaryBenchUntil(), 1_060_000)
+    b.reportFailure(0, 'fallback-model', failure('rate_limit'))
+    assert.equal(primaryBenchUntil(), 1_060_000, "a fallback model's failure never extends the primary's bench")
+    clock.advance(60_000)
+    assert.equal(b.acquire(MODEL)?.apiKey, 'key-a', 'the primary bench lifts on its original schedule')
+  })
+
+  test('T-P5 corruption: garbage, truncated, and wrong-version documents reseed without throwing', () => {
+    const badDocuments = [
+      'not json at all {{{',
+      '{"version":1,"updatedAt":"x","providers":{"fake":{"entries":[',
+      '{"version":99,"updatedAt":"x","providers":{}}',
+      '{"version":1,"updatedAt":"x","providers":{"fake":{"entries":"nope","modelBenches":[]}}}',
+    ]
+    for (const bad of badDocuments) {
+      const store = new MemoryPoolStore()
+      store.text = bad
+      const pool = new CredentialPool('fake', ['key-a'], { store })
+      assert.equal(pool.restoreReport?.quarantined, true)
+      assert.equal(store.quarantinedText, bad, 'the bad document is preserved aside, not overwritten')
+      assert.equal(pool.acquire(MODEL)?.apiKey, 'key-a', 'pool reseeds empty and serves')
+      pool.reportFailure(0, MODEL, failure('auth_dead'))
+      const doc = JSON.parse(store.text ?? 'null') as {
+        version: number
+        providers: { fake: { entries: Array<{ dead: boolean }> } }
+      }
+      assert.equal(doc.version, 1)
+      assert.equal(doc.providers.fake.entries[0]?.dead, true, 'the next mutation writes a fresh valid document')
+    }
+  })
+
+  test('malformed entries drop one by one; valid siblings restore', () => {
+    const store = new MemoryPoolStore()
+    store.text = JSON.stringify({
+      version: 1,
+      updatedAt: 'x',
+      providers: {
+        fake: {
+          entries: [
+            { fingerprint: fingerprint('key-a'), dead: 'yes', benches: [] },
+            { fingerprint: fingerprint('key-b'), dead: true, deadReason: 'auth_dead', benches: [] },
+            { fingerprint: fingerprint('key-b'), dead: false, benches: [{ model: 7, untilMs: null, failures: 1 }] },
+          ],
+          modelBenches: [{ model: MODEL, untilMs: 'soon' }],
+        },
+      },
+    })
+    const pool = new CredentialPool('fake', ['key-a', 'key-b'], { store })
+    assert.equal(pool.restoreReport?.quarantined, false)
+    assert.equal(pool.acquire(MODEL)?.apiKey, 'key-a', 'the wrong-typed entry dropped; key-b is dead by its valid entry')
+    const snap = pool.snapshot()
+    assert.equal(snap[0]?.dead, false)
+    assert.equal(snap[1]?.dead, true)
+    assert.equal(snap[1]?.deadReason, 'auth_dead')
+  })
+
+  test('save failure never breaks a call: mutations continue in memory', () => {
+    const store: PoolStateStore = {
+      read: () => null,
+      write: () => {
+        throw Object.assign(new Error('disk full'), { code: 'ENOSPC' })
+      },
+    }
+    const pool = new CredentialPool('fake', ['key-a', 'key-b'], { store })
+    pool.reportFailure(0, MODEL, failure('auth_dead'))
+    assert.equal(pool.acquire(MODEL)?.apiKey, 'key-b')
+    pool.benchModel(MODEL, 1_000)
+    assert.equal(pool.acquire(MODEL), null)
+  })
+
+  test('non-state-changing failures write nothing', () => {
+    const store = new MemoryPoolStore()
+    const pool = new CredentialPool('fake', ['key-a', 'key-b'], { store })
+    pool.reportFailure(0, MODEL, failure('server_error'))
+    pool.reportFailure(0, MODEL, failure('timeout'))
+    pool.reportFailure(0, MODEL, failure('upstream_rate_limit'))
+    pool.reportSuccess(0, MODEL)
+    assert.equal(store.text, null)
   })
 })

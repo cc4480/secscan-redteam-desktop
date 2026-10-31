@@ -24,6 +24,16 @@
  * Raw keys live only in memory and in the AcquiredCredential handed to the
  * provider for one call. Snapshots expose a SHA-256 fingerprint prefix —
  * never the key — so state can be logged and tested safely.
+ *
+ * Persistence is optional and injected (PoolStateStore): with a store, the
+ * failure bookkeeping — dead marks and benches, keyed by fingerprint —
+ * survives process restarts in a versioned JSON document, so a key the
+ * provider already pronounced dead is not retried cold on the next launch.
+ * The document holds fingerprints and bench bookkeeping only, never key
+ * material. A corrupt document never wedges startup: it is quarantined
+ * when the store supports it, the pool reseeds empty, and a warning names
+ * what happened. Without a store the pool is exactly the in-memory pool
+ * it has always been.
  */
 
 import { createHash } from 'node:crypto'
@@ -89,6 +99,54 @@ export interface PoolEntrySnapshot {
   benchedModels: Array<{ model: string; untilMs: number | null }>
 }
 
+/**
+ * The persistence seam for pool state: a dumb text store for ONE versioned
+ * JSON document shared by every provider's pool (sections keyed by
+ * provider id). Implementations write atomically (see FilePoolStateStore).
+ * The document contains fingerprints and bench bookkeeping only — an
+ * implementation never receives key material.
+ */
+export interface PoolStateStore {
+  /** Stored document text, or null when no state exists. I/O absence is null; a throw is a programmer error. */
+  read(): string | null
+  /**
+   * Replace the stored document with this text.
+   * @param text - The full serialized document.
+   */
+  write(text: string): void
+  /** The stored document's location, for diagnostics only; warnings name it, never the contents. */
+  path?: string
+  /**
+   * Optional: move the current stored document aside (corruption
+   * quarantine) so the next write starts clean and the bad bytes survive
+   * for an operator to inspect.
+   * @returns The quarantine location, or null when nothing was moved.
+   */
+  quarantine?(): string | null
+}
+
+/** What a pool's constructor restore did, exposed for logs and tests. */
+export interface PoolRestoreReport {
+  /** Stored entries matched to a current key by fingerprint. */
+  restoredEntries: number
+  /** Benches (per-key and pool-wide) restored still in force. */
+  restoredBenches: number
+  /** Stored entries whose fingerprint matches no current key (dropped). */
+  prunedEntries: number
+  /** Benches already lapsed at restore time (dropped). */
+  droppedLapsed: number
+  /** The stored document was unusable and the pool reseeded empty. */
+  quarantined: boolean
+}
+
+/** Options for CredentialPool construction. */
+export interface CredentialPoolOptions {
+  /** Clock override (tests use a fake clock). */
+  now?: () => number
+  /** Persistence store; absent means the in-memory behavior the pool has always had. */
+  store?: PoolStateStore
+}
+
 interface ModelBench {
   /** Epoch-ms when the bench lifts; Infinity for permanent (entitlement). */
   untilMs: number
@@ -108,14 +166,147 @@ function fingerprintOf(apiKey: string): string {
   return createHash('sha256').update(apiKey, 'utf8').digest('hex').slice(0, 8)
 }
 
+/** Version of the persisted pool-state document this build reads and writes. */
+const POOL_STATE_VERSION = 1
+
+/** One persisted bench: `untilMs: null` is a permanent (entitlement) bench. */
+interface StoredBench {
+  model: string
+  untilMs: number | null
+  failures: number
+}
+
+/** One persisted pool entry, keyed by the credential's fingerprint. */
+interface StoredPoolEntry {
+  fingerprint: string
+  dead: boolean
+  deadReason?: string
+  benches: StoredBench[]
+}
+
+/** One persisted pool-wide model bench. */
+interface StoredModelBench {
+  model: string
+  untilMs: number
+}
+
+/** One provider's section of the pool-state document. */
+interface StoredProviderPoolState {
+  entries: StoredPoolEntry[]
+  modelBenches: StoredModelBench[]
+}
+
+/** The persisted document: one section per provider id. */
+interface PoolStateDocument {
+  version: number
+  updatedAt: string
+  providers: Record<string, StoredProviderPoolState>
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** Short error class for warnings: an errno code when present, else the error name. Never the message (never contents). */
+function errorClass(err: unknown): string {
+  if (err instanceof Error) {
+    const code = (err as NodeJS.ErrnoException).code
+    return typeof code === 'string' ? code : err.name
+  }
+  return 'unknown'
+}
+
+/**
+ * Validate one stored bench; undefined when any field is wrong-typed.
+ * Malformed pieces drop one by one (the storedDocument() convention from
+ * mcp-credentials): a bad bench never condemns its siblings.
+ */
+function parseStoredBench(raw: unknown): StoredBench | undefined {
+  if (!isRecord(raw)) return undefined
+  const model = raw.model
+  const untilMs = raw.untilMs
+  const failures = raw.failures
+  if (typeof model !== 'string') return undefined
+  if (untilMs !== null && (typeof untilMs !== 'number' || !Number.isFinite(untilMs))) return undefined
+  if (typeof failures !== 'number' || !Number.isFinite(failures) || failures < 0) return undefined
+  return { model, untilMs, failures: Math.floor(failures) }
+}
+
+/** Validate one stored pool entry; undefined when its identity fields are wrong-typed. */
+function parseStoredPoolEntry(raw: unknown): StoredPoolEntry | undefined {
+  if (!isRecord(raw)) return undefined
+  if (typeof raw.fingerprint !== 'string' || typeof raw.dead !== 'boolean') return undefined
+  if (!Array.isArray(raw.benches)) return undefined
+  const benches: StoredBench[] = []
+  for (const item of raw.benches) {
+    const bench = parseStoredBench(item)
+    if (bench !== undefined) benches.push(bench)
+  }
+  const entry: StoredPoolEntry = { fingerprint: raw.fingerprint, dead: raw.dead, benches }
+  if (typeof raw.deadReason === 'string') entry.deadReason = raw.deadReason
+  return entry
+}
+
+/** Validate one provider section; undefined when its containers are malformed (entries inside still drop one by one). */
+function parseProviderPoolState(raw: unknown): StoredProviderPoolState | undefined {
+  if (!isRecord(raw) || !Array.isArray(raw.entries) || !Array.isArray(raw.modelBenches)) return undefined
+  const entries: StoredPoolEntry[] = []
+  for (const item of raw.entries) {
+    const entry = parseStoredPoolEntry(item)
+    if (entry !== undefined) entries.push(entry)
+  }
+  const modelBenches: StoredModelBench[] = []
+  for (const item of raw.modelBenches) {
+    if (!isRecord(item)) continue
+    const model = item.model
+    const untilMs = item.untilMs
+    if (typeof model === 'string' && typeof untilMs === 'number' && Number.isFinite(untilMs)) {
+      modelBenches.push({ model, untilMs })
+    }
+  }
+  return { entries, modelBenches }
+}
+
+/**
+ * Parse a whole pool-state document leniently (used on the save path):
+ * undefined when the envelope is unusable; sections that fail validation
+ * drop, valid sibling sections survive.
+ */
+function parsePoolStateDocument(text: string): PoolStateDocument | undefined {
+  let raw: unknown
+  try {
+    raw = JSON.parse(text)
+  } catch {
+    // Not JSON at all: the envelope is unusable; the caller treats it as empty.
+    return undefined
+  }
+  if (!isRecord(raw) || raw.version !== POOL_STATE_VERSION || !isRecord(raw.providers)) return undefined
+  const providers: Record<string, StoredProviderPoolState> = {}
+  for (const [id, section] of Object.entries(raw.providers)) {
+    const parsed = parseProviderPoolState(section)
+    if (parsed !== undefined) providers[id] = parsed
+  }
+  return {
+    version: POOL_STATE_VERSION,
+    updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : '',
+    providers,
+  }
+}
+
+/** Stores whose save failure was already warned about (the router shares one store per process). */
+const saveWarnedStores = new WeakSet<object>()
+
 export class CredentialPool {
   readonly providerId: string
   private readonly entries: PoolEntry[] = []
   /** Provider-wide model benches (upstream rate limits): model -> until epoch-ms. */
   private readonly modelBenches = new Map<string, number>()
   private readonly now: () => number
+  private readonly store?: PoolStateStore
+  /** Outcome of the constructor's restore; null when this pool has no store. */
+  readonly restoreReport: PoolRestoreReport | null
 
-  constructor(providerId: string, keys: string[], opts: { now?: () => number } = {}) {
+  constructor(providerId: string, keys: string[], opts: CredentialPoolOptions = {}) {
     this.providerId = providerId
     this.now = opts.now ?? Date.now
     keys.forEach((apiKey, keyId) => {
@@ -127,6 +318,8 @@ export class CredentialPool {
         benches: new Map(),
       })
     })
+    this.store = opts.store
+    this.restoreReport = this.store !== undefined ? this.restore(this.store) : null
   }
 
   /**
@@ -134,16 +327,185 @@ export class CredentialPool {
    * @param providerId - Router provider id, e.g. "deepseek".
    * @param primaryEnvName - The primary key variable, e.g. "DEEPSEEK_API_KEY".
    * @param env - Environment to read (defaults to `process.env`).
-   * @param opts - Clock override for tests.
+   * @param opts - Clock override and persistence store.
    * @returns The pool (possibly empty when no key variable is set).
    */
   static fromEnv(
     providerId: string,
     primaryEnvName: string,
     env: NodeJS.ProcessEnv = process.env,
-    opts: { now?: () => number } = {},
+    opts: CredentialPoolOptions = {},
   ): CredentialPool {
     return new CredentialPool(providerId, collectCredentialEnv(env, primaryEnvName), opts)
+  }
+
+  /**
+   * Restore persisted bookkeeping onto the freshly built entries, matched
+   * by fingerprint (a replaced or reordered key is never punished for its
+   * predecessor; unmatched stored entries prune). Restore NEVER throws:
+   * pool state is advisory bookkeeping the system re-derives by observing
+   * providers, so a corrupt, truncated, or wrong-version document is
+   * quarantined when the store supports it and the pool reseeds empty —
+   * the alternative would let a damaged cache file take down every LLM
+   * call in the app. Benches already lapsed at restore drop; permanent
+   * benches and failure counts survive with their benches.
+   * @param store - The store the constructor was given.
+   * @returns The restore report (also exposed as `restoreReport`).
+   */
+  private restore(store: PoolStateStore): PoolRestoreReport {
+    const report: PoolRestoreReport = {
+      restoredEntries: 0,
+      restoredBenches: 0,
+      prunedEntries: 0,
+      droppedLapsed: 0,
+      quarantined: false,
+    }
+    let text: string | null = null
+    try {
+      text = store.read()
+    } catch (err) {
+      // The seam reserves throws for programmer error; restore still must
+      // not take the pool down, so a throwing read is warned and treated
+      // as "no state".
+      console.warn(
+        `[llm-router] credential pool state read failed for '${this.providerId}' (${errorClass(err)}); starting fresh`,
+      )
+    }
+    if (text === null) return report
+    let raw: unknown
+    try {
+      raw = JSON.parse(text)
+    } catch {
+      // Unparseable bytes: the document is unusable; the quarantine path below handles it.
+      raw = undefined
+    }
+    const sectionRaw = isRecord(raw) && isRecord(raw.providers) ? raw.providers[this.providerId] : undefined
+    const section = sectionRaw !== undefined ? parseProviderPoolState(sectionRaw) : undefined
+    const envelopeBad =
+      !isRecord(raw) || raw.version !== POOL_STATE_VERSION || !isRecord(raw.providers)
+    if (envelopeBad || (sectionRaw !== undefined && section === undefined)) {
+      report.quarantined = true
+      let quarantinedTo: string | null = null
+      try {
+        quarantinedTo = store.quarantine?.() ?? null
+      } catch {
+        // Quarantine is best-effort evidence preservation; a store that
+        // cannot move the file aside must not block the reseed.
+        quarantinedTo = null
+      }
+      console.warn(
+        `[llm-router] credential pool state for '${this.providerId}' is corrupt or an unsupported version; reseeded empty` +
+          (store.path !== undefined ? ` (file: ${store.path})` : '') +
+          (quarantinedTo !== null ? `; quarantined to ${quarantinedTo}` : ''),
+      )
+      return report
+    }
+    if (section === undefined) return report
+    const nowMs = this.now()
+    const byFingerprint = new Map(this.entries.map(entry => [entry.fingerprint, entry]))
+    for (const stored of section.entries) {
+      const entry = byFingerprint.get(stored.fingerprint)
+      if (entry === undefined) {
+        report.prunedEntries += 1
+        continue
+      }
+      if (stored.dead) {
+        entry.dead = true
+        if (stored.deadReason !== undefined) entry.deadReason = stored.deadReason
+      }
+      for (const bench of stored.benches) {
+        if (bench.untilMs !== null && bench.untilMs <= nowMs) {
+          report.droppedLapsed += 1
+          continue
+        }
+        entry.benches.set(bench.model, {
+          untilMs: bench.untilMs === null ? Infinity : bench.untilMs,
+          failures: bench.failures,
+        })
+        report.restoredBenches += 1
+      }
+      report.restoredEntries += 1
+    }
+    for (const stored of section.modelBenches) {
+      if (stored.untilMs <= nowMs) {
+        report.droppedLapsed += 1
+        continue
+      }
+      const existing = this.modelBenches.get(stored.model)
+      if (existing === undefined || stored.untilMs > existing) {
+        this.modelBenches.set(stored.model, stored.untilMs)
+      }
+      report.restoredBenches += 1
+    }
+    // Converge the file: what restore dropped (pruned fingerprints, lapsed
+    // benches) should not be re-read on every launch.
+    if (report.prunedEntries > 0 || report.droppedLapsed > 0) this.save()
+    return report
+  }
+
+  /**
+   * This provider's section of the state document, derived from live
+   * internal state: failure counts are kept (unlike snapshot(), which is
+   * a display projection) and benches are written verbatim, with Infinity
+   * mapped to null. Entries carrying no state are omitted.
+   * @returns The serializable section.
+   */
+  private serializeSection(): StoredProviderPoolState {
+    const nowMs = this.now()
+    const entries: StoredPoolEntry[] = []
+    for (const entry of this.entries) {
+      const benches: StoredBench[] = []
+      for (const [model, bench] of entry.benches) {
+        if (bench.untilMs !== Infinity && bench.untilMs <= nowMs) continue
+        benches.push({
+          model,
+          untilMs: bench.untilMs === Infinity ? null : bench.untilMs,
+          failures: bench.failures,
+        })
+      }
+      if (!entry.dead && benches.length === 0) continue
+      const stored: StoredPoolEntry = { fingerprint: entry.fingerprint, dead: entry.dead, benches }
+      if (entry.deadReason !== undefined) stored.deadReason = entry.deadReason
+      entries.push(stored)
+    }
+    const modelBenches: StoredModelBench[] = []
+    for (const [model, untilMs] of this.modelBenches) {
+      if (untilMs <= nowMs) continue
+      modelBenches.push({ model, untilMs })
+    }
+    return { entries, modelBenches }
+  }
+
+  /**
+   * Write-through save: re-read the shared document, replace only this
+   * provider's section, write the whole document back. A failed save
+   * never breaks a call — it warns once per store and the pool continues
+   * in memory (durability is best-effort; the engagement outranks the
+   * cache). No store, no-op.
+   */
+  private save(): void {
+    const store = this.store
+    if (store === undefined) return
+    try {
+      let doc: PoolStateDocument = { version: POOL_STATE_VERSION, updatedAt: '', providers: {} }
+      const text = store.read()
+      if (text !== null) {
+        const parsed = parsePoolStateDocument(text)
+        if (parsed !== undefined) doc = parsed
+      }
+      doc.providers[this.providerId] = this.serializeSection()
+      doc.updatedAt = new Date(this.now()).toISOString()
+      store.write(`${JSON.stringify(doc, null, 2)}\n`)
+    } catch (err) {
+      if (!saveWarnedStores.has(store)) {
+        saveWarnedStores.add(store)
+        console.warn(
+          '[llm-router] could not persist credential pool state' +
+            (store.path !== undefined ? ` to ${store.path}` : '') +
+            ` (${errorClass(err)}); continuing in memory`,
+        )
+      }
+    }
   }
 
   /** Number of distinct keys in the pool. */
@@ -229,7 +591,7 @@ export class CredentialPool {
    */
   reportSuccess(keyId: number, model: string): void {
     const entry = this.entry(keyId)
-    if (entry) entry.benches.delete(model)
+    if (entry && entry.benches.delete(model)) this.save()
   }
 
   /**
@@ -247,10 +609,12 @@ export class CredentialPool {
       case 'billing':
         entry.dead = true
         entry.deadReason = failure.reason
+        this.save()
         return
       case 'entitlement': {
         const prev = entry.benches.get(model)
         entry.benches.set(model, { untilMs: Infinity, failures: (prev?.failures ?? 0) + 1 })
+        this.save()
         return
       }
       case 'rate_limit': {
@@ -262,6 +626,7 @@ export class CredentialPool {
           (failure.resetAtMs !== undefined ? Math.max(0, failure.resetAtMs - nowMs) : undefined)
         const cooldown = providerDelay ?? cooldownMsForFailure(failures)
         entry.benches.set(model, { untilMs: nowMs + cooldown, failures })
+        this.save()
         return
       }
       default:
@@ -280,7 +645,10 @@ export class CredentialPool {
   benchModel(model: string, durationMs: number): void {
     const until = this.now() + Math.max(0, durationMs)
     const existing = this.modelBenches.get(model)
-    if (existing === undefined || until > existing) this.modelBenches.set(model, until)
+    if (existing === undefined || until > existing) {
+      this.modelBenches.set(model, until)
+      this.save()
+    }
   }
 
   /** Milliseconds remaining on a pool-wide model bench (0 when none). */
