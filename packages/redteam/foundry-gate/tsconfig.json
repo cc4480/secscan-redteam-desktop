@@ -1,1 +1,0 @@
-{"compilerOptions":{"exactOptionalPropertyTypes":false,"noUncheckedIndexedAccess":false,"noUnusedLocals":false,"noUnusedParameters":false,"outDir":"lib/types","rootDir":"src"},"extends":"../../../tsconfig.base.json","include":["src"]}

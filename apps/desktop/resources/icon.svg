@@ -1,8 +1,0 @@
-<svg width="1104" height="1104" viewBox="0 0 1104 1104" fill="none" xmlns="http://www.w3.org/2000/svg">
-<g transform="translate(40 32)">
-<rect x="56" y="56" width="912" height="912" rx="225" fill="#0B1120"/>
-<path fill="#CF2B4D" fill-rule="evenodd" d="M512 117L917 210L917 483L512 927L107 483L107 210Z M512 242L787 295L787 480L512 795L237 480L237 295Z"/>
-<circle cx="512" cy="481" r="101" fill="none" stroke="#38BDF8" stroke-width="22"/>
-<g fill="#38BDF8"><rect x="501" y="342" width="22" height="103"/><rect x="501" y="517" width="22" height="103"/><rect x="373" y="470" width="103" height="22"/><rect x="548" y="470" width="103" height="22"/><circle cx="512" cy="481" r="18"/></g>
-</g>
-</svg>

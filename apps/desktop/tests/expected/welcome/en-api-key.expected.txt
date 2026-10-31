@@ -1,8 +1,0 @@
-SecScan RedTeam
-SecScan RedTeam
-Add an API key to get started
-Configure your model provider to start using SecScan RedTeam
-Enter API key [password]
-Save and continue [disabled]
-Set up later
-Back to sign in

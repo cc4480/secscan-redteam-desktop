@@ -13,10 +13,10 @@ export {
   DEFAULT_STAGING_RPS,
   DEFAULT_PRODUCTION_RPS,
   PRODUCTION_RPS_CAP,
-} from "./ratelimit.js";
-export type { RateLimitConfig } from "./ratelimit.js";
+} from './ratelimit.js'
+export type { RateLimitConfig } from './ratelimit.js'
 
-export { redactPii, piiPatternLabels, likelyContainsPii } from "./pii.js";
+export { redactPii, piiPatternLabels, likelyContainsPii } from './pii.js'
 
 export {
   parseEnvironment,
@@ -25,15 +25,37 @@ export {
   describeEnvironment,
   PROD_CONFIRM_ENV,
   ENV_SELECT_ENV,
-} from "./graduation.js";
-export type { TestEnvironment } from "./graduation.js";
+} from './graduation.js'
+export type { TestEnvironment } from './graduation.js'
 
 export {
   TargetAutoHalt,
   isTargetDistress,
+  LOCKOUT_TEXT_PATTERN,
   DEFAULT_AUTOHALT_CONFIG,
-} from "./autohalt.js";
-export type { AutoHaltConfig } from "./autohalt.js";
+} from './autohalt.js'
+export type { AutoHaltConfig } from './autohalt.js'
+
+export {
+  CredentialAttemptGuard,
+  classifyCredentialAttempt,
+  classifyAuthOutcome,
+  lockoutGuardFor,
+  DEFAULT_LOCKOUT_CONFIG,
+  LOCKOUT_LEDGER_CAP,
+  LOCKOUT_ACCOUNT_LABEL,
+} from './lockout.js'
+export type {
+  ProtocolClass,
+  CredentialClassKind,
+  CredentialClassification,
+  AuthOutcome,
+  LockoutConfig,
+  AttemptLedgerEntry,
+  LockoutCheckVerdict,
+  LockoutOutcomeInfo,
+  LockoutManifestData,
+} from './lockout.js'
 
 export {
   ENGAGEMENT_DISTRESS_TARGET_THRESHOLD,
@@ -45,14 +67,14 @@ export {
   registerDistressHalt,
   resumeDecisionFor,
   resumeTarget,
-} from "./distress-breaker.js";
-export type { DistressHaltRecord, ResumeDecision } from "./distress-breaker.js";
+} from './distress-breaker.js'
+export type { DistressHaltRecord, ResumeDecision } from './distress-breaker.js'
 
 export {
   buildZeroDisruptionRecord,
   disruptionVerdict,
-} from "./disruption.js";
-export type { ZeroDisruptionRecord } from "./disruption.js";
+} from './disruption.js'
+export type { ZeroDisruptionRecord } from './disruption.js'
 
 export {
   buildSafetyManifest,
@@ -60,16 +82,28 @@ export {
   PROTECTIONS_IN_FORCE,
   RESIDUAL_RISKS,
   SAFETY_MANIFEST_VERSION,
-} from "./manifest.js";
-export type { SafetyManifest, ManifestInputs } from "./manifest.js";
+} from './manifest.js'
+export type { SafetyManifest, ManifestInputs } from './manifest.js'
 
 export {
   ABORT_FILE_NAME,
   readAbortFile,
   writeAbortFile,
   consumeAbortFile,
-} from "./abortfile.js";
-export type { AbortSignal } from "./abortfile.js";
+} from './abortfile.js'
+export type { AbortSignal } from './abortfile.js'
+
+export {
+  ESTOP_FILE_NAME,
+  ESTOP_PATH_ENV,
+  EstopEngagedError,
+  readEstopState,
+  resolveEstopPaths,
+  requireEstopClear,
+  engageEstop,
+  disengageEstop,
+} from './estop.js'
+export type { EstopState, EstopPathOptions } from './estop.js'
 
 export {
   LOG_ROTATION_VERSION,
@@ -79,11 +113,11 @@ export {
   LOG_MAX_ARCHIVES_ENV,
   resolveLogRotationConfig,
   maybeRotateLog,
-} from "./rotation.js";
-export type { LogRotationConfig, RotationOutcome, SeqRange } from "./rotation.js";
+} from './rotation.js'
+export type { LogRotationConfig, RotationOutcome, SeqRange } from './rotation.js'
 
-export { assertDistFresh, distIsFresh, findWorkspaceRoot, hashSrcDir } from "./distfresh.js";
-export type { FreshnessResult } from "./distfresh.js";
+export { assertDistFresh, distIsFresh, findWorkspaceRoot, hashSrcDir } from './distfresh.js'
+export type { FreshnessResult } from './distfresh.js'
 
 export {
   ScopeGuard,
@@ -100,5 +134,5 @@ export {
   LOCAL_HOSTS,
   NETWORK_TOOLS,
   NEVER_FILE_EXT_TLDS,
-} from "./scope-guard.js";
-export type { HostMembership, ScopeVerdict, ScopeViolation, ScopeGuardSets } from "./scope-guard.js";
+} from './scope-guard.js'
+export type { HostMembership, ScopeVerdict, ScopeViolation, ScopeGuardSets } from './scope-guard.js'

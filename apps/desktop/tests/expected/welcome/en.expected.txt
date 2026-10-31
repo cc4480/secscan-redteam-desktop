@@ -1,6 +1,0 @@
-SecScan RedTeam
-SecScan RedTeam
-Welcome to SecScan RedTeam
-Build potential. Explore intelligence.
-Sign in
-Add API Key
