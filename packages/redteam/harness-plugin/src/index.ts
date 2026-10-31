@@ -26,6 +26,13 @@
  *      role definition - previously REDTEAM_PROFILE was `void`-referenced
  *      scaffolding that nothing read.
  *
+ *   4. Registers the fleet SOUL as its own system-prompt section
+ *      ('secscan-redteam-soul', order 118, immediately after the doctrine):
+ *      the same asset the llm-router appends as the final section of every
+ *      chartered fleet call, loaded through the same loader, so the
+ *      harness-side agent works under the identical standing character.
+ *      A missing asset throws here, at plugin load - no SOUL, no run.
+ *
  * The roster itself is spawned by the MODEL through the Agent Teams tools
  * (`spawn_teammate`, `team_task_*`), not by this plugin: they are model-facing
  * tools. This plugin's job is to make the Lead know exactly what team to build.
@@ -39,7 +46,7 @@
  * server alone (no allowlist env var). Secrets via env, never in files.
  */
 
-import { ROLE_MODEL_POLICY } from '@secscan/redteam-llm-router'
+import { ROLE_MODEL_POLICY, defaultSoulText } from '@secscan/redteam-llm-router'
 import type { Context, PluginModule } from './harness-types.js'
 import { installAuthGate } from './auth-gate.js'
 import { REDTEAM_PROFILE } from './redteam-profile.js'
@@ -532,6 +539,15 @@ export function apply(ctx: Context): void {
     // 10200 regardless.
     order: 117,
     text: usageSection(),
+  })
+
+  ctx.systemPrompt.section({
+    name: 'secscan-redteam-soul',
+    // 118: immediately after the doctrine, under the same reasoning - the
+    // SOUL is deployment configuration, ahead of the harness's own
+    // PLAN_POLICY (500) and TEAM_POLICY (600) sections.
+    order: 118,
+    text: defaultSoulText(),
   })
 }
 
