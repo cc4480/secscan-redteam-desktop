@@ -7,6 +7,14 @@
  * design spawned a legacy `@seclayer/mcp` stdio server against the retired
  * seclayer.io X-API-Key backend). That is unchanged.
  *
+ * v0.4: the `@seclayer/mcp` stdio row returns — as part of the MCP keys
+ * surface only. The operator seats a Seclayer API key in the credential
+ * vault; the mcp-seclayer row names it in `secretEnv` and the MCP client
+ * resolves it into the child's spawn env, so its tools are available to the
+ * operator's session like the SecScan MCP tools. This changes nothing about
+ * how scans are run: the engagement doctrine below is untouched, and a scan
+ * is still never a service scan.
+ *
  * What v0.3 adds: the plugin now drives the harness Agent Teams layer so a
  * single session becomes an engagement team. On apply it:
  *
@@ -447,6 +455,14 @@ get_scan_status (progress; wait_seconds up to 60 returns the finished report),
 get_report (findings with evidence, fixes, and fix prompts, paginated),
 list_recent_scans, list_verified_domains, start_domain_verification,
 check_domain_verification, get_account.
+
+### Seclayer tools (native MCP, namespaced mcp__seclayer__*)
+
+seclayer_scan (start a scan on the operator's Seclayer account),
+seclayer_list_scans, seclayer_get_report. Present only when the operator has
+seated a Seclayer API key; a seclayer_scan call spends a credit on the
+operator's Seclayer account. These tools are a surface the operator keyed
+in — they are not how an engagement scans; the HARD RULE governs that.
 
 ### Engagement engine (native MCP, namespaced mcp__redteam__*)
 

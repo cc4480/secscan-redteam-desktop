@@ -70,6 +70,25 @@ describe('apply', () => {
     assert.match(text, /A scan request starts a runner engagement via `mcp__redteam__engagement_launch`/)
   })
 
+  it('inventories the Seclayer tools as an operator-keyed surface, not an engagement path', () => {
+    const { sections } = captureApply()
+    const text = flat(sections[0]!.text)
+    assert.match(text, /### Seclayer tools \(native MCP, namespaced mcp__seclayer__\*\)/)
+    assert.match(text, /seclayer_scan/)
+    assert.match(text, /seclayer_list_scans/)
+    assert.match(text, /seclayer_get_report/)
+    assert.match(text, /Present only when the operator has seated a Seclayer API key/)
+    assert.match(text, /spends a credit on the operator's Seclayer account/)
+    assert.match(text, /not how an engagement scans; the HARD RULE governs that/)
+    // The Seclayer inventory sits between the SecScan inventory and the
+    // engagement-engine inventory, mirroring the bundle's row order.
+    const secscanAt = text.indexOf('### SecScan tools')
+    const seclayerAt = text.indexOf('### Seclayer tools')
+    const engineAt = text.indexOf('### Engagement engine')
+    assert.ok(secscanAt !== -1 && seclayerAt > secscanAt && engineAt > seclayerAt,
+      'the Seclayer inventory follows the SecScan inventory and precedes the engine inventory')
+  })
+
   it('rosters four spawned teammates, the architect among them', () => {
     const { sections } = captureApply()
     const text = flat(sections[0]!.text)
