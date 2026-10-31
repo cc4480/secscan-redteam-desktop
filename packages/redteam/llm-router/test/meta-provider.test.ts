@@ -12,7 +12,9 @@ import {
   META_MODELS,
   MetaProvider,
 } from '../src/providers/meta.js'
-import { roleModelPolicy } from '../src/policy.js'
+import { META_ROLE_MODEL_POLICY, ROLE_ORDER, roleModelPolicy } from '../src/policy.js'
+import { DEEPSEEK_MODELS } from '../src/providers/deepseek.js'
+import { completeForRole } from '../src/router.js'
 
 const realFetch = globalThis.fetch
 const savedEnv = { ...process.env }
@@ -66,7 +68,7 @@ describe('MetaProvider configuration', () => {
     })
     await assert.rejects(
       new MetaProvider().complete({ model: META_MODELS.spark, messages: [{ role: 'user', content: 'hi' }] }),
-      new RegExp(META_API_KEY_ENV),
+      /neither MODEL_API_KEY nor META_API_KEY is set/,
     )
     assert.equal(fetched, false)
   })
@@ -131,10 +133,41 @@ describe('MetaProvider wire translation', () => {
   })
 })
 
+describe('Meta model registry', () => {
+  test('registers spark-1.2 under its evidenced wire ID', () => {
+    assert.equal(META_MODELS.spark12, 'muse-spark-1.2')
+  })
+
+  test('holds exactly the three evidenced models, in registration order', () => {
+    // The exact-key assertion is also the guard that muse-spark-1.1 is NOT
+    // silently registered: it is key-gated and joins only after the Wave-4
+    // live probe settles its wire ID (07:18 addendum to the G7/G8 brief).
+    assert.deepEqual(Object.keys(META_MODELS), ['wonder', 'spark', 'spark12'])
+    assert.deepEqual(Object.values(META_MODELS), ['muse-wonder-1.0', 'muse-spark-1.3', 'muse-spark-1.2'])
+  })
+
+  test('registers no contributor variant, no catalog-only ID, and no key-gated ID', () => {
+    for (const id of Object.values(META_MODELS)) {
+      assert.doesNotMatch(id, /contributor/i)
+      assert.notEqual(id, 'muse-wonder-full-1.0')
+      assert.notEqual(id, 'muse-spark-1.1')
+    }
+  })
+
+  test('spark-1.2 and wonder are registered but never seated on the fleet', () => {
+    for (const role of ROLE_ORDER) {
+      assert.equal(META_ROLE_MODEL_POLICY[role].model, META_MODELS.spark)
+    }
+    const seated = new Set(ROLE_ORDER.map(role => META_ROLE_MODEL_POLICY[role].model))
+    assert.equal(seated.has(META_MODELS.spark12), false)
+    assert.equal(seated.has(META_MODELS.wonder), false)
+  })
+})
+
 describe('Meta seat policy', () => {
-  test('REDTEAM_LLM_PROVIDER=meta seats Spark on all four roles, exploiter at high effort', () => {
+  test('REDTEAM_LLM_PROVIDER=meta seats Spark on all five roles, exploiter at high effort', () => {
     const policy = roleModelPolicy({ REDTEAM_LLM_PROVIDER: 'meta' })
-    for (const role of ['coordinator', 'recon', 'exploiter', 'reporter'] as const) {
+    for (const role of ROLE_ORDER) {
       assert.equal(policy[role].provider, 'meta')
       assert.equal(policy[role].model, META_MODELS.spark)
     }
@@ -142,15 +175,24 @@ describe('Meta seat policy', () => {
     assert.equal(policy.recon.reasoningEffort, 'low')
   })
 
-  test('the default policy still routes to DeepSeek when meta is not selected', () => {
+  test('an unset selector with an empty env seats Meta on all five roles (G8 default)', () => {
     const policy = roleModelPolicy({})
-    assert.equal(policy.coordinator.provider, 'deepseek')
-    assert.equal(policy.exploiter.provider, 'deepseek')
+    for (const role of ROLE_ORDER) {
+      assert.equal(policy[role].provider, 'meta')
+      assert.equal(policy[role].model, META_MODELS.spark)
+    }
+    assert.equal(policy.exploiter.reasoningEffort, 'high')
+    assert.equal(policy.recon.reasoningEffort, 'low')
+  })
+
+  test('key presence no longer changes policy selection', () => {
+    assert.deepEqual(roleModelPolicy({}), roleModelPolicy({ MODEL_API_KEY: 'test-key' }))
+    assert.deepEqual(roleModelPolicy({}), roleModelPolicy({ META_API_KEY: 'test-key' }))
   })
 
   test('a configured MODEL_API_KEY seats the fleet on Meta with no selector set', () => {
     const policy = roleModelPolicy({ MODEL_API_KEY: 'test-key' })
-    for (const role of ['coordinator', 'recon', 'exploiter', 'reporter'] as const) {
+    for (const role of ROLE_ORDER) {
       assert.equal(policy[role].provider, 'meta')
       assert.equal(policy[role].model, META_MODELS.spark)
     }
@@ -171,8 +213,36 @@ describe('Meta seat policy', () => {
     assert.equal(policy.exploiter.provider, 'deepseek')
   })
 
-  test('a blank MODEL_API_KEY does not seat Meta', () => {
+  test('an explicit deepseek selector seats DeepSeek on all five roles with no key set', () => {
+    const policy = roleModelPolicy({ REDTEAM_LLM_PROVIDER: 'deepseek' })
+    for (const role of ROLE_ORDER) {
+      assert.equal(policy[role].provider, 'deepseek')
+    }
+    assert.equal(policy.exploiter.model, DEEPSEEK_MODELS.pro)
+    assert.equal(policy.coordinator.model, DEEPSEEK_MODELS.flash)
+  })
+
+  test('a blank MODEL_API_KEY still seats Meta (the policy layer does not inspect the key)', () => {
     const policy = roleModelPolicy({ MODEL_API_KEY: '   ' })
-    assert.equal(policy.coordinator.provider, 'deepseek')
+    assert.equal(policy.coordinator.provider, 'meta')
+    assert.equal(policy.exploiter.provider, 'meta')
+  })
+})
+
+describe('Keyless fleet dispatch (G8)', () => {
+  test('completeForRole with no selector and no key fails at the router gate, never seating DeepSeek', async () => {
+    const savedSelector = process.env['REDTEAM_LLM_PROVIDER']
+    delete process.env['REDTEAM_LLM_PROVIDER']
+    delete process.env[META_API_KEY_ENV]
+    delete process.env[META_API_KEY_FALLBACK_ENV]
+    try {
+      await assert.rejects(
+        completeForRole('coordinator', [{ role: 'user', content: 'hi' }]),
+        /provider 'meta' is registered but not configured/,
+      )
+    } finally {
+      if (savedSelector === undefined) delete process.env['REDTEAM_LLM_PROVIDER']
+      else process.env['REDTEAM_LLM_PROVIDER'] = savedSelector
+    }
   })
 })

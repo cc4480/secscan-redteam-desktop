@@ -1,10 +1,14 @@
 /**
  * Per-role model policy — the cost/latency brain of the router.
  *
- * ROLE_MODEL_POLICY below is the keyless fallback (v0.6 seat table; Qwen
- * stays registered for later reinstatement). The fleet's live seats are
- * the Meta seats: roleModelPolicy() resolves them whenever Meta is
- * selected explicitly or a Meta key is configured (see LLM_PROVIDER_ENV).
+ * Meta is the fleet's default provider: roleModelPolicy() resolves the
+ * Meta seats whenever Meta is selected explicitly AND whenever the
+ * selector is unset, key or no key (see LLM_PROVIDER_ENV). A missing
+ * Meta key fails honestly at dispatch — it never silently seats another
+ * provider. ROLE_MODEL_POLICY below is the explicit-DeepSeek table
+ * (v0.6 seat table), resolved only when the selector names DeepSeek or
+ * another explicit non-Meta, non-local provider; Qwen stays registered
+ * for later reinstatement.
  *   coordinator → deepseek / deepseek-flash   (fast orchestration, tool use)
  *   recon       → deepseek / deepseek-flash   (cheap recon loops)
  *   exploiter   → deepseek / deepseek-v4-pro  (strongest reasoning: hypotheses,
@@ -27,12 +31,7 @@
 import type { AgentRole, RoleRoute } from './types.js'
 import { DEEPSEEK_MODELS } from './providers/deepseek.js'
 import { LOCAL_MODEL_ENV, LOCAL_PROVIDER_ID } from './providers/local.js'
-import {
-  META_API_KEY_ENV,
-  META_API_KEY_FALLBACK_ENV,
-  META_MODELS,
-  META_PROVIDER_ID,
-} from './providers/meta.js'
+import { META_MODELS, META_PROVIDER_ID } from './providers/meta.js'
 
 /**
  * Selects the provider family for every agent role.
@@ -41,21 +40,16 @@ import {
  * OpenAI-compatible endpoint (llama.cpp / Ollama) so an engagement can run with
  * no cloud API at all; `REDTEAM_LOCAL_MODEL` names the model that server
  * exposes. `REDTEAM_LLM_PROVIDER=meta` routes all five roles to the Meta
- * Model API (META_ROLE_MODEL_POLICY). With the selector unset, a configured
- * Meta key (MODEL_API_KEY / META_API_KEY) seats the fleet on Meta — the
- * fleet's provider since 2026-10-26 — and only a keyless environment falls
- * back to the default policy below. An explicit selector always wins over
- * key presence.
+ * Model API (META_ROLE_MODEL_POLICY). With the selector unset, the fleet
+ * seats Meta as well — the fleet's provider since 2026-10-26 — whether or
+ * not a Meta key (MODEL_API_KEY / META_API_KEY) is configured; a missing
+ * key surfaces at dispatch as the router's not-configured error, never as
+ * a silent seat change. DeepSeek is reached only by naming it:
+ * `REDTEAM_LLM_PROVIDER=deepseek` (or any other explicit non-meta,
+ * non-local selector) resolves the default policy below. An explicit
+ * selector always wins.
  */
 export const LLM_PROVIDER_ENV = 'REDTEAM_LLM_PROVIDER'
-
-/** True when either Meta key env var carries a non-blank value. */
-function metaKeyConfigured(env: NodeJS.ProcessEnv): boolean {
-  return (
-    (env[META_API_KEY_ENV]?.trim() ?? '') !== '' ||
-    (env[META_API_KEY_FALLBACK_ENV]?.trim() ?? '') !== ''
-  )
-}
 
 /**
  * Meta Model API seats (operator decisions, 2026-10-26: Meta models from
@@ -97,9 +91,13 @@ export function roleModelPolicy(env: NodeJS.ProcessEnv = process.env): Record<Ag
   const selected = env[LLM_PROVIDER_ENV]?.trim().toLowerCase()
   if (selected === META_PROVIDER_ID) return META_ROLE_MODEL_POLICY
   if (selected !== LOCAL_PROVIDER_ID) {
-    // Unset selector + a configured Meta key → the Meta seats. Any other
-    // explicit selector (e.g. "deepseek") keeps the default policy.
-    if (!selected && metaKeyConfigured(env)) return META_ROLE_MODEL_POLICY
+    // Meta is the fleet's default provider: an unset selector seats Meta
+    // whether or not a key is configured. A missing key fails honestly at
+    // dispatch (the router's configuration gate) — it never silently
+    // seats DeepSeek. DeepSeek is reached only by naming it:
+    // REDTEAM_LLM_PROVIDER=deepseek. Any other explicit selector keeps
+    // resolving to the explicit-selector table below.
+    if (!selected) return META_ROLE_MODEL_POLICY
     return ROLE_MODEL_POLICY
   }
   const model = env[LOCAL_MODEL_ENV]?.trim()
