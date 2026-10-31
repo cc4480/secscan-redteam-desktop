@@ -25,6 +25,8 @@ export interface RunOptions {
   engagementsDir?: string;
   /** Registry path override (tests). Defaults to <REDTEAM_HOME>/engagements/registry.json. */
   registryPath?: string;
+  /** Memory root override (tests + CLI). Defaults to REDTEAM_MEMORY_ROOT, then <registry dir>/memory. */
+  memoryRoot?: string;
   /** Per-host rate limit override (requests/sec). Env REDTEAM_MAX_RPS. Production caps at 2 mechanically. */
   maxRpsPerHost?: number;
   /** v0.20.0: per-item variant cap override. Env REDTEAM_MAX_VARIANTS. Undefined = env default (25 staging, 10 production). */

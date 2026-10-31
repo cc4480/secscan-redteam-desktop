@@ -3,7 +3,8 @@
  */
 import { type ResolvedRunnerConfig } from '../types.js'
 import { resolveEstopPaths } from '../safety/estop.js'
-import { join } from 'node:path'
+import { MemoryError } from '../memory/errors.js'
+import { dirname, join } from 'node:path'
 
 /**
  * Parse an env-provided positive number at config-parse time (v0.28.0).
@@ -41,6 +42,8 @@ export function resolveConfig(env: NodeJS.ProcessEnv, opts: {
   probeDelayMs?: number
   engagementsDir?: string
   registryPath?: string
+  /** Q-MEMTIER memory root override. Env REDTEAM_MEMORY_ROOT, then <registry dir>/memory. */
+  memoryRoot?: string
   dryRunAgents?: boolean
   localSandbox?: boolean
   /** Per-host rate limit override (requests/sec). Env REDTEAM_MAX_RPS. Production caps at 2 mechanically. */
@@ -92,6 +95,15 @@ export function resolveConfig(env: NodeJS.ProcessEnv, opts: {
   const registryPath =
     opts.registryPath ??
     (env['REDTEAM_HOME'] ? join(env['REDTEAM_HOME'], 'engagements', 'registry.json') : join(process.cwd(), 'engagements', 'registry.json'))
+  // Q-MEMTIER memory root (§3.1): explicit override → REDTEAM_MEMORY_ROOT
+  // → sibling of the registry file. An empty-string env value is a
+  // misconfiguration and fails loud, naming the variable (the same rule
+  // memory/cli.ts and memory/lifecycle.ts enforce).
+  const memoryRootEnv = env['REDTEAM_MEMORY_ROOT']
+  if (memoryRootEnv !== undefined && memoryRootEnv.trim() === '') {
+    throw new MemoryError('SCHEMA_INVALID', 'REDTEAM_MEMORY_ROOT is set but empty — misconfiguration fails loud')
+  }
+  const memoryRoot = opts.memoryRoot ?? memoryRootEnv ?? join(dirname(registryPath), 'memory')
   return {
     // Blank-but-present SECSCAN_MCP_URL (the .env.example convention for
     // "unset, use the default") must fall through too — "" ?? x is "",
@@ -114,6 +126,7 @@ export function resolveConfig(env: NodeJS.ProcessEnv, opts: {
       opts.engagementsDir ??
       (env['REDTEAM_HOME'] ? join(env['REDTEAM_HOME'], 'engagements', 'live') : join(process.cwd(), 'engagements', 'live')),
     registryPath,
+    memoryRoot,
     estopPaths: resolveEstopPaths(env, { registryPath }),
     dryRunAgents: opts.dryRunAgents ?? false,
     localSandbox: opts.localSandbox ?? env['REDTEAM_LOCAL_SANDBOX'] === '1',

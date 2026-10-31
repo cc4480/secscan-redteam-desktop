@@ -14,6 +14,7 @@ export type EngagementMode = 'red' | 'black'
 
 import type { TargetId } from './targets/types.js'
 import type { AutonomyTier } from './accountability/tiers.js'
+import type { MemoryEngagementReceipt } from './memory/types.js'
 
 export type EngagementPhase =
   | 'authorize'
@@ -209,6 +210,12 @@ export interface EngagementResult {
   blockedReason?: string
   reportPath?: string
   findings: Finding[]
+  /**
+   * Q-MEMTIER two-phase commit receipt (brief §7.2): archive + diff
+   * outcome for this engagement's memory commit. Attached by the run
+   * wiring in the finally block; absent when memory never opened.
+   */
+  memory?: MemoryEngagementReceipt
 }
 
 /** Knobs for the runner. All have safe defaults. */
@@ -281,6 +288,8 @@ export interface ResolvedRunnerConfig {
   engagementsDir: string
   /** Persistent vulnerability registry path. Seeded on first run. */
   registryPath: string
+  /** Q-MEMTIER memory root. Resolved in phases/config.ts: RunOptions.memoryRoot → REDTEAM_MEMORY_ROOT → <registry dir>/memory. */
+  memoryRoot: string
   dryRunAgents: boolean
   /**
    * LOCAL SANDBOX MODE ONLY — explicit opt-in (CLI --local-sandbox or
