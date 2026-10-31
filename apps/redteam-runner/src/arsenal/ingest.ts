@@ -5,7 +5,10 @@
  * inert text. It never executes, fetches, or follows anything in a document —
  * parsing is pure string work over a README handed in as a string (or read
  * from a local file by the two thin wrappers at the bottom). Fetching is
- * Step 4's seam (fetch-guard.ts) and lives elsewhere.
+ * Step 4's seam (fetch-guard.ts): the parsers never fetch, and the one
+ * assembly entry at the bottom ({@link buildArsenalData}) pulls Level 2
+ * READMEs through the guard — the only network path this module may use
+ * (spec §6.2).
  *
  * The ladder, per list item (spec §4.2: strict pattern → loose link
  * extraction → record-and-report the remainder):
@@ -44,6 +47,21 @@
  * merge rows the census counts separately (e.g. an anchored section link).
  */
 import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+
+import {
+  collectionBySlug,
+  inheritedFacetsForCollection,
+  PRIORITY_COLLECTION_SLUGS,
+} from './collections-map.js'
+import type { ArsenalConfig } from './config.js'
+import { fetchTextChecked, type FetchTextResult } from './fetch-guard.js'
+import type {
+  ArsenalBuildData,
+  ArsenalCollectionRow as ArsenalStoreCollectionRow,
+  ArsenalEntryRow,
+} from './index-store.js'
+import { deriveEntryFacets } from './tag-rules.js'
 
 /** One Level 1 collection row (spec §4.2), in the store's column shape. */
 export interface ArsenalCollectionRow {
@@ -298,6 +316,62 @@ export function parseLevel1(markdown: string): Level1Parse {
   return { collections, ...counts }
 }
 
+const ANCHOR_RE = /<a\b([^>]*)>([^<]*)<\/a>/gi
+const HREF_RE = /\bhref="([^"]*)"/
+const CLASS_RE = /\bclass="([^"]*)"/
+
+/**
+ * HTML-index rung (coordinator-ruled addition, 2026-10-31): a priority
+ * collection whose canonical URL is a project SITE (GTFOBins) serves an
+ * HTML index, not a README — the markdown ladder parses zero entries from
+ * it and priority validation would block every generation. This rung is
+ * the minimal site-index counterpart of {@link parseLinkedList}: it reads
+ * the index's per-item anchors (the `bin-name` anchors of the GTFOBins
+ * index table), resolves each href against the index URL, and returns the
+ * same parse shape. Anchors without the `bin-name` class (function
+ * sub-links, navigation) are not items. Dedupes by normalized URL, first
+ * wins; counts reconcile as entries + dupes = anchors seen.
+ */
+export function parseHtmlIndexEntries(html: string, baseUrl: string): LinkedListParse {
+  const counts = emptyCounts()
+  const entries: ArsenalEntry[] = []
+  const seenUrls = new Set<string>()
+  ANCHOR_RE.lastIndex = 0
+  let match: RegExpExecArray | null
+  while ((match = ANCHOR_RE.exec(html)) !== null) {
+    const attrs = match[1]
+    const classes = CLASS_RE.exec(attrs)?.[1] ?? ''
+    if (!classes.split(/\s+/).includes('bin-name')) continue
+    counts.itemCount += 1
+    const href = HREF_RE.exec(attrs)?.[1] ?? ''
+    let resolved: string
+    try {
+      resolved = new URL(href, baseUrl).href
+    } catch {
+      counts.unparsedCount += 1
+      continue
+    }
+    const url = normalizeArsenalUrl(resolved.split('#')[0])
+    const name = cleanInlineText(match[2])
+    if (url === null || name === '') {
+      counts.unparsedCount += 1
+      continue
+    }
+    if (seenUrls.has(url)) {
+      counts.dupeCount += 1
+      continue
+    }
+    seenUrls.add(url)
+    entries.push({ name, url, description: '' })
+  }
+  return { entries, ...counts }
+}
+
+/** True when a fetched Level 2 document is an HTML page, not markdown. */
+function looksLikeHtml(text: string): boolean {
+  return /^\s*<(?:!doctype|html)/i.test(text.slice(0, 256)) || text.includes('class="bin-name"')
+}
+
 /** Read a README file (UTF-8) and run the Level 1 census over it. */
 export async function parseLevel1File(path: string): Promise<Level1Parse> {
   return parseLevel1(await readFile(path, 'utf8'))
@@ -306,4 +380,169 @@ export async function parseLevel1File(path: string): Promise<Level1Parse> {
 /** Read a README file (UTF-8) and parse its linked entries. */
 export async function parseLinkedListFile(path: string): Promise<LinkedListParse> {
   return parseLinkedList(await readFile(path, 'utf8'))
+}
+
+// ---------------------------------------------------------------------------
+// Generation assembly (brief Step 6): census + Level 2 → ArsenalBuildData
+// ---------------------------------------------------------------------------
+
+/** The Level 2 fetch seam: fetch-guard's one function, injectable for tests. */
+export type ArsenalFetchText = (url: string) => Promise<FetchTextResult>
+
+export interface BuildArsenalDataDeps {
+  /** Defaults to {@link fetchTextChecked} — the guard is the only network path. */
+  fetchText?: ArsenalFetchText
+  /** Build clock; the reading is stamped on every fetched collection. */
+  now?: () => Date
+}
+
+const defaultFetchText: ArsenalFetchText = async url => fetchTextChecked(url)
+
+/**
+ * The raw-markdown source URL for one collection (spec §4.1): a GitHub repo
+ * serves its README from the raw host at the default-branch HEAD; any other
+ * canonical URL (a project site — GTFOBins) is itself the Level 2 source,
+ * the site index at that URL (ARS-1's FLAG 3 ruling).
+ */
+export function arsenalReadmeUrl(collectionUrl: string): string {
+  const normalized = normalizeArsenalUrl(collectionUrl) ?? collectionUrl
+  let parsed: URL
+  try {
+    parsed = new URL(normalized)
+  } catch {
+    return normalized
+  }
+  if (parsed.hostname === 'github.com') {
+    const segments = parsed.pathname.split('/').filter(s => s !== '')
+    if (segments.length >= 2) {
+      return `https://raw.githubusercontent.com/${segments[0]}/${segments[1]}/HEAD/README.md`
+    }
+  }
+  return normalized
+}
+
+/**
+ * Assemble one generation's build data (the refresh pipeline's single build
+ * entry — refresh.ts imports this by name and fails loud while it is absent).
+ *
+ * Level 1 is the census parsed from the cached Awesome Hacking README at
+ * `cacheDir/README.md`; a missing census is a hard failure (throw), because
+ * a generation without its census is not a generation. Level 2 runs for the
+ * canonical priority set (collections-map.ts), joined to census rows by
+ * slug; a priority slug the census does not carry falls back to its curated
+ * map row, so the priority set is never silently short. Each priority
+ * README comes through fetch-guard and only fetch-guard; a fetch failure or
+ * a zero-entry parse is recorded on the collection row (`fetchError`), never
+ * thrown — the store's validation decides whether the swap may proceed
+ * (spec §4.3).
+ *
+ * Entries are facet-enriched at assembly (spec §4.4: the map's inherited
+ * facets unioned with the tag rules) and deduped across the whole
+ * generation by normalized URL, first occurrence in priority order wins.
+ * Count folding at this seam (the store's meta carries two counters):
+ * URL-less items and per-collection cap overflow fold into `unparsedCount`
+ * alongside true unparsed items, so stored + dupes + unparsed reconciles
+ * against items seen at every level.
+ */
+export async function buildArsenalData(
+  input: { config: ArsenalConfig; cacheDir: string; sourceCommit: string },
+  deps?: BuildArsenalDataDeps,
+): Promise<ArsenalBuildData> {
+  const fetchText = deps?.fetchText ?? defaultFetchText
+  const builtAt = (deps?.now?.() ?? new Date()).toISOString()
+  const censusPath = join(input.cacheDir, 'README.md')
+  let censusMarkdown: string
+  try {
+    censusMarkdown = await readFile(censusPath, 'utf8')
+  } catch (err) {
+    throw new Error(
+      `arsenal build: cannot read the cached Awesome Hacking README at ${censusPath}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    )
+  }
+  const census = parseLevel1(censusMarkdown)
+  let unparsedCount = census.unparsedCount + census.urllessCount
+  let dupeCount = census.dupeCount
+
+  const rows = new Map<string, ArsenalStoreCollectionRow>()
+  for (const row of census.collections) {
+    rows.set(row.slug, { ...row, fetchedAt: null, entryCount: 0, fetchError: null })
+  }
+
+  const entries: ArsenalEntryRow[] = []
+  const seenEntryUrls = new Set<string>()
+  const cap = input.config.maxEntriesPerCollection
+
+  for (const slug of PRIORITY_COLLECTION_SLUGS) {
+    let row = rows.get(slug)
+    if (row === undefined) {
+      const mapRow = collectionBySlug(slug)
+      if (mapRow === undefined) continue // unreachable: the slugs come from the map
+      row = {
+        slug: mapRow.slug,
+        name: mapRow.name,
+        url: normalizeArsenalUrl(mapRow.url) ?? mapRow.url,
+        description: '',
+        topic: mapRow.topic,
+        fetchedAt: null,
+        entryCount: 0,
+        fetchError: null,
+      }
+      rows.set(slug, row)
+    }
+    const sourceUrl = arsenalReadmeUrl(row.url)
+    let markdown: string
+    try {
+      markdown = (await fetchText(sourceUrl)).text
+    } catch (err) {
+      row.fetchError = err instanceof Error ? err.message : String(err)
+      continue
+    }
+    row.fetchedAt = builtAt
+    const parsed = looksLikeHtml(markdown)
+      ? parseHtmlIndexEntries(markdown, sourceUrl)
+      : parseLinkedList(markdown)
+    unparsedCount += parsed.unparsedCount + parsed.urllessCount
+    dupeCount += parsed.dupeCount
+    const inherited = inheritedFacetsForCollection(slug)
+    let kept = 0
+    for (const entry of parsed.entries) {
+      if (seenEntryUrls.has(entry.url)) {
+        dupeCount += 1 // generation-wide dedupe (spec §4.3), first wins
+        continue
+      }
+      if (kept >= cap) {
+        unparsedCount += 1 // cap overflow is counted in build meta, never silent
+        continue
+      }
+      seenEntryUrls.add(entry.url)
+      const facets = deriveEntryFacets(entry, inherited)
+      entries.push({
+        name: entry.name,
+        url: entry.url,
+        description: entry.description,
+        collectionSlug: slug,
+        tags: facets.tags,
+        targets: facets.targets,
+        battery: facets.battery,
+      })
+      kept += 1
+    }
+    row.entryCount = kept
+    if (kept === 0 && row.fetchError === null) {
+      row.fetchError = `zero entries parsed from ${sourceUrl}`
+    }
+  }
+
+  return {
+    sourceRepo: input.config.sourceRepo,
+    sourceCommit: input.sourceCommit,
+    builtAt,
+    collections: [...rows.values()],
+    entries,
+    unparsedCount,
+    dupeCount,
+    prioritySlugs: PRIORITY_COLLECTION_SLUGS,
+  }
 }
