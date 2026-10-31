@@ -1,10 +1,10 @@
-# DeepSeek Harness 桌面端
+# SecScan RedTeam 桌面端
 
 [English](README.md) | 中文
 
 桌面应用是完整 dsh Web 应用外的一层 Electron 壳。Electron RunAsNode 子进程启动共享 profile runner，Electron 立即从 `dsh-app://app/` 加载打包内的 Web 入口。共享加载页等待 Host 启动注入，然后在同一文档中启动客户端。Electron 将应用 HTTP 请求转发给已认证的 Web Host，转发时丢弃描述 Node fetch 连接而非资源本身的响应头（`transfer-encoding`、`connection`、`keep-alive`），并把插件 bundle 响应标记为 `no-store`，因为其每次启动都变化的 revision 只会在 Chromium 磁盘缓存中累积；WebSocket 流连接到该 Host，仅为归属的应用窗口附加凭据。Node IPC 承载启动注入、就绪与关闭。Desktop 默认使用端口 `19387`，与 Web 的 `3080` 分开；可通过 `webserver.config.port` patch 覆盖。
 
-应用菜单第一项“**关于 DeepSeek Harness**”打开 Electron 原生关于面板，展示应用图标、产品名称和当前安装的发布版本。菜单文案跟随桌面壳的语言。macOS 的隐藏、隐藏其他、显示全部和退出条目使用本地化文案，隐藏和退出条目包含 DeepSeek Harness 产品名称。这些条目保留原生动作和快捷键。macOS 从应用包读取图标，因此未打包的开发启动会显示 Electron 图标；Windows 使用随包分发的 PNG。
+应用菜单第一项“**关于 SecScan RedTeam**”打开 Electron 原生关于面板，展示应用图标、产品名称和当前安装的发布版本。菜单文案跟随桌面壳的语言。macOS 的隐藏、隐藏其他、显示全部和退出条目使用本地化文案，隐藏和退出条目包含 SecScan RedTeam 产品名称。这些条目保留原生动作和快捷键。macOS 从应用包读取图标，因此未打包的开发启动会显示 Electron 图标；Windows 使用随包分发的 PNG。
 
 Desktop 的本地原生目录流程打开绑定应用窗口的 Electron 文件夹对话框，并先恢复、显示和聚焦该窗口。并发请求共用一个对话框；取消不返回路径，失败后可以重试。普通 Web 使用 Host 选择器。浏览模式列出 Host 目录。Linux 缺少 zenity 或 kdialog 时，自动选择使用浏览模式，不使用 Electron 对话框。
 
@@ -20,7 +20,7 @@ Desktop Host 的 Platform API 请求与更新策略请求使用相同的 `x-clie
 
 ## 关键技术决策
 
-设计师原稿位于 `resources/icon.png` 和 `resources/icon.svg`；平台适配保留鲸鱼与渐变，分别位于 `resources/icon-windows.*` 和 `resources/icon-macos.*`。将各平台 SVG 导出为透明的 1024×1024 PNG。electron-builder 为 Windows 应用、安装程序和卸载程序生成多尺寸 ICO（[Windows 图标要求](https://learn.microsoft.com/en-us/windows/apps/design/iconography/app-icon-construction)）。安装页面在两种主题下使用匹配的图案；卸载程序的欢迎和完成页共用 `installer/assets/uninstaller-sidebar.png`，准备阶段将其转换为 164×314 BMP。
+设计师原稿位于 `resources/icon.png` 和 `resources/icon.svg`；平台适配保留同一 SecScan RedTeam 菱形标志，分别位于 `resources/icon-windows.*` 和 `resources/icon-macos.*`。将各平台 SVG 导出为透明的 1024×1024 PNG。electron-builder 为 Windows 应用、安装程序和卸载程序生成多尺寸 ICO（[Windows 图标要求](https://learn.microsoft.com/en-us/windows/apps/design/iconography/app-icon-construction)）。安装页面在两种主题下使用匹配的图案；卸载程序的欢迎和完成页共用 `installer/assets/uninstaller-sidebar.png`，准备阶段将其转换为 164×314 BMP。
 
 macOS PNG 使用带留白的圆角底板，供传统 ICNS 打包使用，包含最高 1024 像素的表示。它是扁平图标，并非 Icon Composer 文档。Apple 的[应用图标指南](https://developer.apple.com/design/human-interface-guidelines/app-icons)要求向 Icon Composer 提供未遮罩的图层；这些输入需要在 macOS 上单独导出，不能复用已做圆角的 ICNS 图案。发布前须在支持的 macOS 版本中验收 Finder 和 Dock 的显示效果。
 
@@ -84,7 +84,7 @@ macOS 上自定义应用菜单还会声明标准的 File、Window 和应用菜�
 
 原生弹窗详情最多包含 1,200 个 UTF-16 代码单元和八行诊断，若已写入下述崩溃报告则附上其路径。Host 错误诊断仅保留 stderr 输出的最后 64 Ki 个字符。更早的输出会被丢弃，避免长期运行的 Host 使壳的诊断缓冲区无限增长。
 
-首个致命弹窗打开前，Electron 会向平台日志目录（`app.getPath('logs')`：macOS 为 `~/Library/Logs/DeepSeek Harness`，Windows 与 Linux 为应用 `userData` 目录下的 `logs`）写入一份崩溃报告，最多等待写入一秒；写入缓慢或失败时弹窗不带路径。文件 `crash-<UTC 时间>-<source>.log` 记录来源（`host` 为 Host 退出、`web-boot` 为渲染进程启动失败、`renderer` 为渲染进程或文档失败、`main` 为壳自身错误）、后端是否已就绪、应用与运行时版本、包含可枚举属性与 cause 链的错误（截至 256 KiB）、Host 在退出前通过 IPC 报告启动失败时自己的 inspect 错误（最多 64 KiB），以及主窗口最近的 error 级 console 输出（最多 64 KiB）。因此 Host 退出报告包含保留的 stderr 尾部，其中可能含有插件输出。关闭过程中的致命失败只写报告、不弹窗。平台支持时文件仅所有者可读；启动时保留最新十份报告并删除更早的，不触碰目录中的其他文件。
+首个致命弹窗打开前，Electron 会向平台日志目录（`app.getPath('logs')`：macOS 为 `~/Library/Logs/SecScan RedTeam`，Windows 与 Linux 为应用 `userData` 目录下的 `logs`）写入一份崩溃报告，最多等待写入一秒；写入缓慢或失败时弹窗不带路径。文件 `crash-<UTC 时间>-<source>.log` 记录来源（`host` 为 Host 退出、`web-boot` 为渲染进程启动失败、`renderer` 为渲染进程或文档失败、`main` 为壳自身错误）、后端是否已就绪、应用与运行时版本、包含可枚举属性与 cause 链的错误（截至 256 KiB）、Host 在退出前通过 IPC 报告启动失败时自己的 inspect 错误（最多 64 KiB），以及主窗口最近的 error 级 console 输出（最多 64 KiB）。因此 Host 退出报告包含保留的 stderr 尾部，其中可能含有插件输出。关闭过程中的致命失败只写报告、不弹窗。平台支持时文件仅所有者可读；启动时保留最新十份报告并删除更早的，不触碰目录中的其他文件。
 
 恢复操作等待 Host 关闭后才修改插件启用状态。原生恢复操作在 profile 事务锁内调用共享 app-boot 恢复函数。它禁用第三方 bundle，并将 profile 的 `cordis.patch.yml` 重命名为 `cordis.patch.yml.bak-<timestamp>`（重名时追加序号），无需解析；下次启动创建空 patch。已安装包和已有备份保留。home 级 patch 不变。Electron 控制台记录备份路径（或原文件不存在）以及 home 级 patch 未修改。profile 数据无效、重命名失败或写入失败会作为恢复操作错误报告；已完成的修改保留，Desktop 不会假装恢复成功后重启。Desktop 不提供 profile 重置操作或应急 HTML 文档。
 
@@ -423,3 +423,25 @@ node apps/desktop/node_modules/pnpm/bin/pnpm.mjs --dir apps/desktop run test:upd
 ## 开发备注
 
 上线前 CDN 与容量决策见[桌面更新提案](../../.agents/notes/proposed/feature/2026-09-08-desktop-update-policy-and-installation.zh.md#cdn-and-capacity-qualification)。
+
+## 本地模型（内置 llama.cpp）
+
+Desktop 自带 llama.cpp CPU 运行时，下载的 GGUF 模型无需单独安装 llama.cpp 或 Ollama 即可为 engagement runner 提供服务。该载荷属于构建产物：`resources/llama/llama-server.exe` 只是一个瘦启动器，它加载的每个 `*.dll`（`llama-server-impl`、llama、GGML、OpenMP 以及各 ISA 的 CPU 后端库）都随它一同分发，并附带其 LLVM OpenMP 许可证声明。`node apps/desktop/scripts/vendor-llama.mjs` 依据 `resources/llama-manifest.json` 中固定的 URL 与 SHA-256 物化该目录；目前仅固定了 Windows x64 CPU 构建，清单未覆盖的平台会报告运行时缺失。vendor 的 `--check` 模式是针对已物化目录树的打包门禁，`scripts/electron-builder-config.mjs` 将其作为 `llama` extraResource 加入安装程序，Windows x64 的 `beforePack` 会拒绝载荷缺少启动器或共享库的安装程序构建。没有该 gitignore 载荷的纯源码检出仍可打包，但那样的安装程序无法启动本地模型。
+
+下载的模型存放在模型目录中，`registry.json` 与之同在，运行时设置则存放在旁边的 `settings.json` 中：Windows 上为 `%LOCALAPPDATA%\SecScan Red Team\models`，其他平台为 `~/.secscan-redteam/models`，或由 `DSH_LOCAL_MODELS_DIR` 命名的目录。设置包含当前模型 id、作为 `-c` 传入的上下文窗口（默认 32768）、作为 `-t` 与 `-tb` 传入的线程数（默认：逻辑 CPU 数）、是否在应用启动时启动服务器，以及用于受限仓库的可选 Hugging Face token。该 token 只写入设置文档，文档在平台支持时以仅所有者可读的方式创建；它从不记入日志、从不出现在错误消息中，也从不被 IPC 参数校验回显。
+
+本地模型窗口列出仓库的文件并提供 `.gguf` 条目。下载以流式方式写入 `<model>.part`，重试时从保留的字节处续传，校验收到的字节数，将 part 文件重命名到位，之后才添加注册表条目。取消会保留 part 文件以便续传；其他任何失败都会将其删除，因此失败的下载既不留下最终文件，也不留下注册表条目。删除模型时会先停止正在运行的服务器，因为 Windows 无法删除服务器正打开的文件；保存选择了其他模型的设置同样会停止服务器，使其不会继续为操作者已替换掉的模型应答。
+
+本地模型窗口是一个独立的管理文档，拥有自己隔离的 preload。它通过该功能私有的 IPC 通道执行全部操作，这些通道只接受来自管理文档顶层框架的调用；它不获得文件系统访问、不获得原始 Electron IPC，也不获得 Hugging Face token 的副本。
+
+设置在每次启动前持久化，因此更改后的上下文窗口或线程数会在服务器下次启动时生效；运行中的服务器保持其启动时的限制。启用 `startOnLaunch` 时，壳在应用启动时于后台启动所选模型，且从不因它阻塞启动，因为从磁盘读取大模型需要数十秒；失败会在管理窗口的服务器状态中报告并记录一次日志，下一次显式启动即是重试。
+
+手动文件管理保持一致：列表读取注册表并丢弃文件已不存在的条目，因此在窗口外删除模型文件后，它会在下次刷新时从列表中消失；全新的检出或 profile 始终可以通过 `DSH_LOCAL_MODELS_DIR` 指向另一棵目录树（这也会隔离设置文档）。
+
+同一时刻只监督一个子进程：对正在加载的同一模型再次启动会加入进行中的启动，对另一个模型的启动会被拒绝，直到运行中的模型停止；崩溃会在管理窗口中连同子进程的退出码与最后输出一并报告，而不是在操作者背后重启。停止先优雅执行、到截止时强制执行，退出应用会杀掉子进程，而不是留下一个占用模型文件与环回端口的孤儿进程。
+
+模型服务期间，壳将其端点镜像到 engagement runner 的环境中，使其 agent 角色使用本地模型：`REDTEAM_LLM_PROVIDER=local`、`REDTEAM_LOCAL_BASE_URL=http://127.0.0.1:<port>/v1` 与 `REDTEAM_LOCAL_MODEL=<model id>`。恰好这三个名称在服务器运行期间写入，在其停止或失败时再次移除。操作者已导出的 `REDTEAM_LLM_PROVIDER` 始终优先：此时壳不触碰 runner 环境，也从不将工作重定向到内置服务器。
+
+该端点兼容 OpenAI，因此本地诊断客户端可以调用 runner 所用的同一服务器：`GET /v1/models` 列出配置的 `--alias` 模型 id，`/v1/chat/completions` 为之提供服务，且不依赖该功能的 IPC 表面。
+
+安全性：llama-server 只绑定 `127.0.0.1` 上的临时端口，就绪判定使用其自身的 `/health` 路由，对没有该路由的构建以 `/v1/models` 作为后备。环回跳转不跨越任何凭据；只有模型 id 与基础 URL 进入 runner 环境，Hugging Face token 则保留在下载请求的 `Authorization` 头内，失败消息既不引用 token，也不引用 URL 的查询字符串。集成与打包行为由 `apps/desktop/tests/llama-integration.spec.ts` 与 `apps/desktop/tests/llama-packaging.spec.ts` 固定，各个模块由其旁边的 `llama-*.spec.ts` 套件固定。
