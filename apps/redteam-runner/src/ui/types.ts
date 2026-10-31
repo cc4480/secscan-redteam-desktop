@@ -14,6 +14,9 @@ export interface UiLaunchRequest {
   client?: string;
   operatorName?: string;
   fullBattery?: boolean;
+  /** Q-RP-11 local-host engagement: target/scope are the app's own
+   * machine; carried into EngagementInput.localHost at launch. */
+  localHost?: boolean;
   /** Cap on agent actions; default 60. Raise for full-battery work. */
   maxActions?: number;
   targets?: string[];

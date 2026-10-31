@@ -17,6 +17,7 @@ import { handleCoverage, handleCompliance } from "./routes/coverage.js";
 import { handleAbort, handleEscalate, handleReverify, handleWatchProfiles, handleWatchTrigger } from "./routes/actions.js";
 import { engagementDir, type UiStore } from "./store.js";
 import { ENGAGEMENT_TOOLS } from "./engagement-tools.js";
+import { LOCAL_TOOLS } from "./local-tools.js";
 import { readEvents } from "../events.js";
 
 /** What a handler produced, instead of writing it to a socket. */
@@ -291,6 +292,6 @@ const COCKPIT_TOOLS: ToolDef[] = [
  * console chat and the desktop host's chat — both fed by mcp-endpoint.ts —
  * see the same registry.
  */
-export const TOOLS: ToolDef[] = [...COCKPIT_TOOLS, ...ENGAGEMENT_TOOLS];
+export const TOOLS: ToolDef[] = [...COCKPIT_TOOLS, ...ENGAGEMENT_TOOLS, ...LOCAL_TOOLS];
 
 export const TOOLS_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));

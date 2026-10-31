@@ -113,6 +113,7 @@ export function buildLaunchBody(a: Record<string, unknown>): { body: UiLaunchReq
   else if (!client) body.operatorName = "the desktop user";
   if (client) body.client = client;
   if (typeof a["fullBattery"] === "boolean") body.fullBattery = a["fullBattery"];
+  if (a["localHost"] === true) body.localHost = true;
   if (a["tier"] === 0 || a["tier"] === 1 || a["tier"] === 2) body.tier = a["tier"];
   if (a["environment"] === "staging" || a["environment"] === "production") body.environment = a["environment"];
   if (typeof a["confirmProduction"] === "boolean") body.confirmProduction = a["confirmProduction"];

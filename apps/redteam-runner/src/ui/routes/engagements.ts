@@ -54,6 +54,7 @@ function toEngagementInput(b: UiLaunchRequest): EngagementInput {
     client: b.client,
     operatorName: b.operatorName,
     fullBattery: b.fullBattery ?? true,
+    ...(b.localHost ? { localHost: true } : {}),
     targets,
     environment,
     confirmProduction: b.confirmProduction ?? false,
