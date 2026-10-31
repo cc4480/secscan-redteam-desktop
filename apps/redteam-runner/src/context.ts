@@ -21,6 +21,8 @@ import { MsfExecutor } from './msf/index.js'
 import { NucleiExecutor } from './nuclei/index.js'
 import { NmapExecutor } from './nmap/index.js'
 import { type ItemVerdict } from './coverage/items.js'
+import { type MemoryEngagementState } from './memory/types.js'
+import { type MemoryDeps } from './memory/lifecycle.js'
 import { type PolicyRules } from './policy/rules.js'
 import { type ScopeGuard } from './safety/scope-guard.js'
 import { type HookRegistry } from './hooks/index.js'
@@ -39,6 +41,8 @@ export interface RunnerDeps {
   nucleiExecutor?: NucleiExecutor
   /** Injectable for tests (default: real NmapExecutor against the operator's nmap binary). */
   nmapExecutor?: NmapExecutor
+  /** Injectable for tests (default: real memory store/pack/commit from memory/lifecycle.ts). */
+  memory?: MemoryDeps
 }
 
 /** One entry in the shared target map (recon-written, whole-team-read). */
@@ -93,6 +97,13 @@ export interface Ctx {
   config: ResolvedRunnerConfig
   deps: RunnerDeps
   events: EventLog
+  /**
+   * Q-MEMTIER engagement memory state, opened by the run wiring
+   * (memory/lifecycle.ts openEngagementMemory) after the registry
+   * loads. Absent when memory never opened (blocked runs, tests,
+   * partial contexts); lifecycle reads it through its session map.
+   */
+  memory?: MemoryEngagementState
   /** Optional operator policy (allow/deny rules), enforced before every dispatch. */
   policy?: PolicyRules
   /**
