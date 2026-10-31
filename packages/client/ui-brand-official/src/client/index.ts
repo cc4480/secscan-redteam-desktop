@@ -2,15 +2,16 @@
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
-import { OfficialBrandMark, OfficialBrandName } from './Brand.tsx'
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { OfficialBrandMark, OfficialBrandName, OfficialHeroBrandMark } from './Brand.tsx'
 
 /** Required service: the UI slot registry. */
 export const inject = ['slots']
 
 /**
- * Fill the sidebar brand slots as one declaration-aware registration set. The
- * conversation hero stays on its declaring package's animated fish fallback,
- * so the official build registers nothing there.
+ * Fill the sidebar brand slots as one declaration-aware registration set, and
+ * seat the diamond in the conversation hero as well; only non-official
+ * builds leave the hero on its declaring package's shield fallback.
  * @param ctx - Client root context.
  */
 export function apply(ctx: ClientContext): void {
@@ -20,4 +21,7 @@ export function apply(ctx: ClientContext): void {
       yield ctx.slots.register({ name: 'sidebar.brand.mark' }, OfficialBrandMark)
       yield ctx.slots.register({ name: 'sidebar.brand.name' }, OfficialBrandName)
     }))
+  ctx.slots.inject('conversation.hero.brand.mark', function* () {
+    yield ctx.slots.register({ name: 'conversation.hero.brand.mark' }, OfficialHeroBrandMark)
+  })
 }

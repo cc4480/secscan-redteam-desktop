@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { apply, inject } from '../src/client/index.ts'
-import { OfficialBrandMark, OfficialBrandName } from '../src/client/Brand.tsx'
+import { OfficialBrandMark, OfficialBrandName, OfficialHeroBrandMark } from '../src/client/Brand.tsx'
 import { apply as hostApply } from '../src/index.ts'
 
 afterEach(() => {
@@ -18,6 +18,8 @@ const HOLES = [
 ] as const
 
 const HERO_HOLE = 'conversation.hero.brand.mark'
+
+const ALL_HOLES = [...HOLES, HERO_HOLE] as const
 
 async function bench(declare = true) {
   const ctx = new Context()
@@ -44,7 +46,7 @@ describe('official browser-brand plugin', () => {
     vi.stubEnv('DSH_CLIENT_BUILD_PROFILE', 'local')
     const subject = await bench()
     await subject.ctx.plugin({ inject: [...inject], apply }).await()
-    for (const hole of HOLES) expect(subject.slots.entries(hole)).toHaveLength(0)
+    for (const hole of ALL_HOLES) expect(subject.slots.entries(hole)).toHaveLength(0)
   })
 
   it('fills declarations before or after apply and removes every occupant on teardown', async () => {
@@ -52,30 +54,36 @@ describe('official browser-brand plugin', () => {
     const before = await bench()
     const fiber = before.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
-    for (const hole of HOLES) expect(before.slots.entries(hole)).toHaveLength(1)
+    for (const hole of ALL_HOLES) expect(before.slots.entries(hole)).toHaveLength(1)
 
     before.disposeHoles?.()
-    for (const hole of HOLES) expect(before.slots.entries(hole)).toHaveLength(0)
+    for (const hole of ALL_HOLES) expect(before.slots.entries(hole)).toHaveLength(0)
     before.declareHoles()
     await Promise.resolve()
-    for (const hole of HOLES) expect(before.slots.entries(hole)).toHaveLength(1)
+    for (const hole of ALL_HOLES) expect(before.slots.entries(hole)).toHaveLength(1)
 
     await fiber.dispose()
-    for (const hole of HOLES) expect(before.slots.entries(hole)).toHaveLength(0)
+    for (const hole of ALL_HOLES) expect(before.slots.entries(hole)).toHaveLength(0)
 
     const after = await bench(false)
     await after.ctx.plugin({ inject: [...inject], apply }).await()
-    for (const hole of HOLES) expect(after.slots.entries(hole)).toHaveLength(0)
+    for (const hole of ALL_HOLES) expect(after.slots.entries(hole)).toHaveLength(0)
     after.declareHoles()
     await Promise.resolve()
-    for (const hole of HOLES) expect(after.slots.entries(hole)).toHaveLength(1)
+    for (const hole of ALL_HOLES) expect(after.slots.entries(hole)).toHaveLength(1)
   })
 
-  it('leaves the conversation hero on its declaring fallback even in official builds', async () => {
+  it('seats the diamond in the conversation hero in official builds', async () => {
     vi.stubEnv('DSH_CLIENT_BUILD_PROFILE', 'official')
     const subject = await bench()
     await subject.ctx.plugin({ inject: [...inject], apply }).await()
-    expect(subject.slots.entries(HERO_HOLE)).toHaveLength(0)
+    expect(subject.slots.entries(HERO_HOLE)).toHaveLength(1)
+
+    const hero = render(<OfficialHeroBrandMark size={34} className="seat" />)
+    const svg = hero.container.querySelector('svg')
+    expect(svg?.getAttribute('viewBox')).toBe('0 0 100 100')
+    expect(svg?.getAttribute('width')).toBe('34')
+    expect(svg?.getAttribute('class')).toBe('seat')
   })
 
   it('renders the official name independently from both requested mark sizes', () => {
@@ -84,6 +92,7 @@ describe('official browser-brand plugin', () => {
     name.unmount()
 
     const mark = render(<OfficialBrandMark size={34} />)
+    expect(mark.container.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 100 100')
     expect(mark.container.querySelector('svg')?.getAttribute('width')).toBe('34')
     mark.rerender(<OfficialBrandMark size={24} />)
     expect(mark.container.querySelector('svg')?.getAttribute('width')).toBe('24')
