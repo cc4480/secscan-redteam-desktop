@@ -135,6 +135,31 @@ describe('FishLogo', () => {
   })
 })
 
+describe('DiamondLogo', () => {
+  it('renders the multi-color diamond at the requested square size', () => {
+    const { container } = render(<primitives.DiamondLogo />)
+    const svg = container.querySelector('svg')!
+    expect(svg.getAttribute('width')).toBe('24')
+    expect(svg.getAttribute('height')).toBe('24')
+    expect(svg.getAttribute('viewBox')).toBe('0 0 100 100')
+    // Fixed fills (tile, red frame, blue crosshair) — never currentColor.
+    expect(container.innerHTML).not.toContain('currentColor')
+    expect(container.innerHTML).toContain('#d92344')
+    expect(container.innerHTML).toContain('#38b2e8')
+    expect(container.innerHTML).toContain('#0e1628')
+  })
+
+  it('renders at the sidebar (24) and hero (34) seat sizes', () => {
+    const view = render(<primitives.DiamondLogo size={34} />)
+    const svg = view.container.querySelector('svg')!
+    expect(svg.getAttribute('width')).toBe('34')
+    expect(svg.getAttribute('height')).toBe('34')
+    view.rerender(<primitives.DiamondLogo size={24} />)
+    expect(svg.getAttribute('width')).toBe('24')
+    expect(svg.getAttribute('height')).toBe('24')
+  })
+})
+
 describe('BrandWordmark', () => {
   it('can render the name artwork with or without its leading mark', () => {
     const view = render(<primitives.BrandWordmark />)
