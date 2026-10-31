@@ -14,6 +14,7 @@ import {
   type ChatResult,
   type JsonSchemaTool,
   type ResponseFormat,
+  type ToolCallRequest,
 } from '@secscan/redteam-llm-router'
 import { createCharteredComplete } from './charter-completion.js'
 import { TurnIntegrity, type DeliverableSpec, type RoundCaps } from './turn-integrity.js'
@@ -30,6 +31,8 @@ import { type TargetId } from './targets.js'
 import { HaltError, type Ctx } from './context.js'
 import { sleep } from './util.js'
 import { partitionToolCalls, executeToolGroup } from './dispatch/parallel-batch.js'
+import { dispatchTool } from './dispatch/router.js'
+import { type DispatchResult } from './dispatch/types.js'
 import { maybeCompactMessages } from './compaction/compact.js'
 import { toolTargetHost } from './dispatch/target-host.js'
 import { sharedStateDigest } from './coverage/cells.js'
@@ -69,6 +72,48 @@ function haltedByCaps(ctx: Ctx): string | null {
 
 export type { DeliverableSpec, RoundCaps } from './turn-integrity.js'
 
+/** Default tool-call repair budget per agentLoop invocation (RC Item 6). */
+export const DEFAULT_REPAIR_CAP = 3
+
+/**
+ * The repair steering for one tagged result: the defect, the tool's
+ * schema, and the original arguments, per the Item 6 design. The model
+ * answers with exactly one corrected call; the name may change only for
+ * an unknown-tool defect, and then only to an offered tool.
+ */
+function buildRepairPrompt(
+  call: ToolCallRequest,
+  d: DispatchResult,
+  tools: JsonSchemaTool[],
+  spent: number,
+  cap: number,
+): string {
+  const defect = d.repairable ?? ''
+  const unknownTool = defect.startsWith('unknown tool')
+  const lines: string[] = [
+    `TOOL-CALL REPAIR (${spent}/${cap}) — a tool call was refused before it executed because the call itself was malformed. ` +
+      'This is a call-shape defect, not a policy denial: fix the call and it runs again through every gate.',
+    `Tool called: ${call.name}`,
+    `Defect: ${defect}`,
+    `Original arguments: ${JSON.stringify(call.arguments ?? {})}`,
+    `The tool answered: ${d.result}`,
+  ]
+  if (unknownTool) {
+    lines.push('The tool name itself is not one of the offered tools. Answer with the offered tool you actually meant, with corrected arguments.')
+    for (const t of tools) lines.push(`Offered tool ${t.name}: ${t.description} Parameters: ${JSON.stringify(t.parameters)}`)
+  } else {
+    const tool = tools.find(t => t.name === call.name)
+    if (tool) lines.push(`Schema for ${tool.name}: ${tool.description} Parameters: ${JSON.stringify(tool.parameters)}`)
+    lines.push(`Keep the tool name (${call.name}) — only the arguments may change.`)
+  }
+  lines.push(
+    'Change nothing beyond what the defect requires: same target, same intent. ' +
+      'Scope, tier, duplicate, and safety gates all re-run on the corrected call, and a corrected call that trips them is refused for good. ' +
+      'Reply with exactly one corrected tool call.',
+  )
+  return lines.join('\n')
+}
+
 export async function agentLoop(
   ctx: Ctx,
   role: AgentRole,
@@ -100,6 +145,12 @@ export async function agentLoop(
      * unconstrained, exactly as before.
      */
     responseFormat?: ResponseFormat
+    /**
+     * Tool-call repair cap (RC Item 6): the most repair exchanges this
+     * loop invocation may spend on `repairable`-tagged dispatch results.
+     * Default 3; 0 disables repair. Loop option only — no config field.
+     */
+    repairCap?: number
     /** When declared, the turn is not finished until this file exists. */
     deliverable?: DeliverableSpec
   } = {},
@@ -132,6 +183,75 @@ export async function agentLoop(
     ], { tools: [] })
     tokenMeterFor(ctx).record(res.usage)
     return res.text
+  }
+  // Tool-call repair (RC Item 6): a dispatch result tagged `repairable`
+  // (a call-shape defect from the handlers' closed list — never a policy
+  // denial) earns its call ONE bounded repair exchange before tallies:
+  // a side-channel completion that sees the original call and its result
+  // first (API validity), then the steering (defect + schema + original
+  // arguments). The corrected call re-runs through dispatchTool — all
+  // gates — and on success the corrected result is the effective result
+  // the bookkeeping below carries. Every attempt is a `tool_repair`
+  // event (model-visible ⟺ logged). The budget is per loop invocation;
+  // a repair answer with no tool call closes repair for the rest of the
+  // loop — the model, asked to correct its call, declined to.
+  const repairCap = opts.repairCap ?? DEFAULT_REPAIR_CAP
+  let repairsSpent = 0
+  let repairClosed = false
+  const attemptRepair = async (call: ToolCallRequest, d: DispatchResult): Promise<DispatchResult> => {
+    repairsSpent++
+    const defect = d.repairable ?? ''
+    const unknownTool = defect.startsWith('unknown tool')
+    const logRepair = (outcome: string, detail: string): void => {
+      ctx.events.append({
+        phase,
+        actor: 'runner',
+        action: 'tool_repair',
+        target: d.target,
+        result: `tool_repair (${repairsSpent}/${repairCap}) outcome=${outcome} — ${detail}`,
+      })
+    }
+    let res: ChatResult
+    try {
+      res = await complete(role, [
+        { role: 'system', content: system },
+        { role: 'assistant', content: '(tool calls)', toolCalls: [call] },
+        { role: 'tool', toolCallId: call.id, content: d.result },
+        { role: 'user', content: buildRepairPrompt(call, d, tools, repairsSpent, repairCap) },
+      ], { tools })
+    } catch (err) {
+      logRepair('error', `the repair completion failed: ${(err as Error).message}. Original result stands.`)
+      return d
+    }
+    tokenMeterFor(ctx).record(res.usage)
+    const fix = res.toolCalls && res.toolCalls.length > 0 ? res.toolCalls[0] : undefined
+    if (!fix) {
+      repairClosed = true
+      logRepair(
+        'no-correction',
+        `the repair exchange for ${call.name} returned no tool call (defect: ${defect}); repair is closed for this loop. Original result stands.`,
+      )
+      return d
+    }
+    if (!unknownTool && fix.name !== call.name) {
+      logRepair(
+        'failed',
+        `the corrected call names ${fix.name}, not ${call.name} — the tool name may change only for an unknown-tool defect (this defect: ${defect}). Original result stands.`,
+      )
+      return d
+    }
+    if (unknownTool && tools.length > 0 && !tools.some(t => t.name === fix.name)) {
+      logRepair('failed', `the corrected call names ${fix.name}, which is not one of the offered tools. Original result stands.`)
+      return d
+    }
+    steps.tool(fix.name, JSON.stringify(fix.arguments ?? {}))
+    const corrected = await dispatchTool(ctx, role, phase, fix)
+    if (corrected.repairable === undefined && !/^(DENIED|HALTED)/i.test(corrected.result)) {
+      logRepair('repaired', `${call.name} defect: ${defect}; corrected call ${fix.name} re-dispatched and executed: ${corrected.result.slice(0, 300)}`)
+      return corrected
+    }
+    logRepair('failed', `corrected call ${fix.name} was refused: ${corrected.result.slice(0, 300)}. Original result stands.`)
+    return d
   }
   for (let turn = 0; turn < integrity.effectiveMaxTurns; turn++) {
     await respectBlackout(ctx, phase)
@@ -227,7 +347,13 @@ export async function agentLoop(
           steps.observation(call.name, `${TOOL_ERROR_PREFIX}${s.error.message}`)
           throw s.error
         }
-        const d = s.d
+        let d = s.d
+        // Tool-call repair (RC Item 6): a tagged result earns one repair
+        // exchange BEFORE tallies/integrity; the effective result is what
+        // the observation, the event log, and the tallies carry.
+        if (d.repairable !== undefined && repairCap > 0 && !repairClosed && repairsSpent < repairCap) {
+          d = await attemptRepair(call, d)
+        }
         steps.observation(call.name, d.result)
         // v0.13.0 safety case: PII is redacted from tool outputs BEFORE they
         // reach the audit log or the agent context. The agents reason about

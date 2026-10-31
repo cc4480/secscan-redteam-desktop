@@ -40,7 +40,7 @@ async function dispatchToolInner(ctx: Ctx, role: ActorRole, phase: EngagementPha
     const r = await h(ctx, role, phase, call, args);
     if (r) return r;
   }
-  return { result: `DENIED: unknown tool ${call.name}` };
+  return { result: `DENIED: unknown tool ${call.name}`, repairable: `unknown tool "${call.name}"` };
 }
 
 /**

@@ -63,7 +63,7 @@ export async function handleXTool(
   const profileId = strArg(args, "profile") ?? spec.profiles[0]!.id;
 
   if (action === "run" && !host) {
-    return { result: `DENIED: ${spec.id}_exec run requires 'host'${offline ? " — the path to a hash file" : ""}.`, attackId, target: "" };
+    return { result: `DENIED: ${spec.id}_exec run requires 'host'${offline ? " — the path to a hash file" : ""}.`, attackId, target: "", repairable: `${spec.id}_exec run requires a 'host' argument` };
   }
   const profile = spec.profiles.find((p) => p.id === profileId);
   if (action === "run" && !profile) {
@@ -71,6 +71,7 @@ export async function handleXTool(
       result: `DENIED: unknown profile ${JSON.stringify(profileId)} — available: ${spec.profiles.map((p) => p.id).join(", ")}.`,
       attackId,
       target: host,
+      repairable: `unknown profile ${JSON.stringify(profileId)} for ${spec.id}_exec`,
     };
   }
   if (action === "run" && profile && profile.minTier > ctx.tier.current) {

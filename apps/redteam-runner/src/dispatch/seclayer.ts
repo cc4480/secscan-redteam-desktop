@@ -211,7 +211,7 @@ export async function handleSeclayerTools(
     if (call.name === "seclayer_bola") {
       const identities = bolaIdentitiesFromArgs(args);
       if (!identities) {
-        return { result: "DENIED: seclayer_bola needs both test identities — aAuthHeader/aOwnResource and bAuthHeader/bOwnResource.", attackId: pre.attackId, target: url };
+        return { result: "DENIED: seclayer_bola needs both test identities — aAuthHeader/aOwnResource and bAuthHeader/bOwnResource.", attackId: pre.attackId, target: url, repairable: "seclayer_bola requires both test identities (aAuthHeader/aOwnResource and bAuthHeader/bOwnResource)" };
       }
       const findings = await bolaProbe(new URL(url).origin, identities, headers);
       return recordSeclayerFindings(ctx, call.name, url, findings as RawSeclayerFinding[], pre, "bola-idor");
@@ -229,7 +229,7 @@ export async function handleSeclayerTools(
     const probeName = (strArg(args, "probe") ?? "").toLowerCase();
     const probe = AGGRESSIVE_PROBES[probeName];
     if (!probe) {
-      return { result: `DENIED: seclayer_aggressive probe must be one of ${Object.keys(AGGRESSIVE_PROBES).join(", ")} — got ${JSON.stringify(args["probe"] ?? null)}.`, attackId: pre.attackId, target: url };
+      return { result: `DENIED: seclayer_aggressive probe must be one of ${Object.keys(AGGRESSIVE_PROBES).join(", ")} — got ${JSON.stringify(args["probe"] ?? null)}.`, attackId: pre.attackId, target: url, repairable: `seclayer_aggressive probe must be one of ${Object.keys(AGGRESSIVE_PROBES).join(", ")}` };
     }
     const finding = await probe({ url, fuzzHeaders: headers });
     return recordSeclayerFindings(ctx, call.name, url, finding ? [finding] : [], pre, `aggressive-${probeName}`);

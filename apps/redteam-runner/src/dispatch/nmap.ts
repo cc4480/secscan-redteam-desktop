@@ -57,7 +57,7 @@ export async function handleNmapTools(
       target: host,
     };
   }
-  if (!host) return { result: "DENIED: nmap_exec requires a host.", attackId, target: "" };
+  if (!host) return { result: "DENIED: nmap_exec requires a host.", attackId, target: "", repairable: "nmap_exec requires a 'host' argument" };
 
   const action = args["action"] === "scan" ? "scan" : "profiles";
   const profileId = strArg(args, "profile") ?? "quick";
@@ -67,6 +67,7 @@ export async function handleNmapTools(
       result: `DENIED: unknown profile ${JSON.stringify(profileId)} — available: ${NMAP_PROFILES.map((p) => p.id).join(", ")}.`,
       attackId,
       target: host,
+      repairable: `unknown profile ${JSON.stringify(profileId)} for nmap_exec`,
     };
   }
   // Profile tier gate — see the header. A profile above the declared tier is

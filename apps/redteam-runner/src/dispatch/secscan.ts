@@ -74,7 +74,7 @@ export async function handleSecscanTools(
     return { result: `DENIED by ROE: technique ${attackId} is excluded for this engagement.`, attackId, target: url }
   }
   if (!url) {
-    return { result: 'DENIED: secscan_exec requires a url (the in-scope target to scan).', attackId, target: url }
+    return { result: 'DENIED: secscan_exec requires a url (the in-scope target to scan).', attackId, target: url, repairable: "secscan_exec requires a 'url' argument" }
   }
   const depth = args['depth'] === 'deep' ? 'deep' : 'passive'
   if (depth === 'deep' && !ctx.verificationProof) {

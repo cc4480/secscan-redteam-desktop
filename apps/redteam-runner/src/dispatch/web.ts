@@ -26,7 +26,7 @@ if (call.name === "http_probe") {
   try {
     path = new URL(url).pathname;
   } catch {
-    return { result: `DENIED: unparseable URL ${url}`, attackId, target: url };
+    return { result: `DENIED: unparseable URL ${url}`, attackId, target: url, repairable: `unparseable URL ${JSON.stringify(url)}` };
   }
   const cooldownKey = `${method} ${path}`;
   if (ctx.opsecCooldown.has(cooldownKey)) {
@@ -87,7 +87,7 @@ if (call.name === "burst_probe") {
   try {
     path = new URL(url).pathname;
   } catch {
-    return { result: `DENIED: unparseable URL ${url}`, attackId, target: url };
+    return { result: `DENIED: unparseable URL ${url}`, attackId, target: url, repairable: `unparseable URL ${JSON.stringify(url)}` };
   }
   const burstKey = `BURST ${path}`;
   if (ctx.opsecCooldown.has(burstKey)) {
