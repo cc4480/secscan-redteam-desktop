@@ -148,6 +148,15 @@ describe("argv construction", () => {
     assert.ok(!argv.includes("--"), "sqlmap rejects a bare --");
   });
 
+  it("sqlmap launches through the platform Python (python3 off Windows)", () => {
+    const argv = buildXToolArgv(sqlmap, {
+      bin: "sqlmap", target: "https://h/?id=1",
+      profile: findProfile(sqlmap, "detect")!, timeoutS: 60,
+    });
+    assert.equal(argv[0], process.platform === "win32" ? "python" : "python3");
+    assert.equal(argv[1], "sqlmap.py");
+  });
+
   it("a target beginning with '-' cannot be read as a flag", () => {
     const argv = buildXToolArgv(ffuf, {
       bin: "ffuf.exe", target: "--os-shell", wordlist: "w.txt",
