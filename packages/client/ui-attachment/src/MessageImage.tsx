@@ -42,7 +42,7 @@ export interface MessageImageLabels {
   lightbox: ImageLightboxLabels
 }
 
-/** Display box for a lone image (DeepSeek Chat rule): long edge 240px with
+/** Display box for a lone image (chat display rule): long edge 240px with
  * the rendered aspect ratio clamped to [0.25, 4] — the overflow is cropped by
  * `object-fit: cover` — and never upscaled past the image's natural size. The
  * crop anchor keeps the top of very tall images and the left of very wide

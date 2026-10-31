@@ -1,5 +1,5 @@
 ---
-description: "Desktop Account settings display DeepSeek login state and offer browser authorization and cancellation; the sidebar account menu provides Platform sign-out."
+description: "Desktop Account settings display SecScan sign-in state and offer browser authorization and cancellation; the sidebar account menu provides Platform sign-out."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Desktop Account settings display DeepSeek login state and offer browser authorization and cancellation; the sidebar account menu provides Platform sign-out.
+Desktop Account settings display SecScan sign-in state and offer browser authorization and cancellation; the sidebar account menu provides Platform sign-out.
 
 ## Table of Contents
 

@@ -1,5 +1,5 @@
 ---
-description: "Desktop 设置中的账号页面显示 DeepSeek 登录状态，并提供浏览器授权和取消；侧边栏账号菜单提供 Platform 退出登录。"
+description: "Desktop 设置中的账号页面显示 SecScan 登录状态，并提供浏览器授权和取消；侧边栏账号菜单提供 Platform 退出登录。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-Desktop 设置中的账号页面显示 DeepSeek 登录状态，并提供浏览器授权和取消；侧边栏账号菜单提供 Platform 退出登录。
+Desktop 设置中的账号页面显示 SecScan 登录状态，并提供浏览器授权和取消；侧边栏账号菜单提供 Platform 退出登录。
 
 ## 目录
 

@@ -25,7 +25,7 @@ This package gives an `official` client build the SecScan RedTeam mark and name 
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this plugin in the browser roster of a deployment whose identity is DeepSeek's own, then build the client with the `official` profile so the occupants register.
+Mount this plugin in the browser roster of a deployment whose identity is SecScan RedTeam's own, then build the client with the `official` profile so the occupants register.
 
 ### Choosing the profile
 
