@@ -11,7 +11,7 @@ import { McpClient } from "../mcp.js";
 import { MsfExecutor } from "../msf/index.js";
 import { NucleiExecutor } from "../nuclei/index.js";
 import { NmapExecutor } from "../nmap/index.js";
-import { CredentialAttemptGuard, TargetAutoHalt, TargetRateLimiter, describeEnvironment, parseEnvironment, productionConfirmed, requireGraduation, resolveEffectiveRps, resolveLogRotationConfig, assertDistFresh } from "../safety/index.js";
+import { CredentialAttemptGuard, TargetAutoHalt, TargetRateLimiter, describeEnvironment, parseEnvironment, productionConfirmed, requireEstopClear, requireGraduation, resolveEffectiveRps, resolveLogRotationConfig, assertDistFresh } from "../safety/index.js";
 import { type VulnerabilityRegistry, loadRegistryFile, saveRegistryFile, seedRegistry } from "../registry.js";
 import { WebProber, allHostsPrivateOrLoopback } from "../prober.js";
 import { activeTargets } from "../targets.js";
@@ -38,6 +38,12 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
   // Stale compiled dist/ is a silent-safety bug (an old model policy running after a src-only change). Fail fast — before any target touch.
   assertDistFresh();
   const config = resolveConfig(process.env, opts);
+  // Q-ESTOP-APP fleet pause sentinel: checked once, at launch, immediately
+  // after config resolution and before any validation or engagement state.
+  // An engaged sentinel refuses the launch with a typed EstopEngagedError;
+  // an engagement already running is never re-checked and finishes
+  // normally. Resume = delete the sentinel file; there is no override.
+  requireEstopClear(config.estopPaths);
   const deps = opts.deps ?? {};
 
   if (!input.target) throw new Error("[runner] target is required");
