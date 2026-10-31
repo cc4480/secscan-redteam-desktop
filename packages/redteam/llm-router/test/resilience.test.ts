@@ -5,8 +5,11 @@
  */
 
 import assert from 'node:assert/strict'
+import { mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { ProviderError } from '../src/errors.js'
+import { ProviderError, providerErrorFromResponse } from '../src/errors.js'
 import { ResilienceError, type RetryEvent } from '../src/executor.js'
 import { CredentialPool } from '../src/pool.js'
 import {
@@ -263,5 +266,30 @@ describe('resilienceConfigFromEnv', () => {
     assert.throws(() =>
       resilienceConfigFromEnv({ REDTEAM_LLM_FALLBACK_MODELS: 'deepseek-v4-pro' } as NodeJS.ProcessEnv),
     )
+  })
+})
+
+describe('trajectory log cause fields (Q-HALT Item 1)', () => {
+  test('a failed completion writes http_status, error_code, and cause_excerpt to the JSONL record', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'resilience-log-'))
+    const logPath = join(dir, 'trajectories.jsonl')
+    const inner = new FakeProvider([http(400, 'rejected', { code: 'content_filter' })])
+    const provider = new ResilientProvider(inner, {
+      pool: new CredentialPool('fake', ['key-a']),
+      config: config({ logPath }),
+      sleep: async () => {},
+    })
+    await assert.rejects(
+      provider.complete({ model: 'model-a', messages: [{ role: 'user', content: 'hi' }] }),
+      (err: unknown) => err instanceof ResilienceError,
+    )
+    const lines = readFileSync(logPath, 'utf8').trim().split('\n')
+    const failed = lines
+      .map(line => JSON.parse(line) as Record<string, unknown>)
+      .find(record => record['kind'] === 'llm/attempt-failed')
+    assert.ok(failed, 'an attempt-failed record was written')
+    assert.equal(failed['http_status'], 400)
+    assert.equal(failed['error_code'], 'content_filter')
+    assert.ok(String(failed['cause_excerpt']).includes('provider=fake'), String(failed['cause_excerpt']))
   })
 })

@@ -134,6 +134,46 @@ export async function providerErrorFromResponse(
  * @param err - The error fetch threw.
  * @returns The ProviderError to throw.
  */
+/**
+ * Describe the provider failure at the root of an error chain, for logs and
+ * event records. ResilienceError's own message carries only the classifier's
+ * rule name; the provider's actual words (status, code, body excerpt) live on
+ * the ProviderError it wraps as `cause`. This walks the chain (depth ≤ 3,
+ * starting from `err` itself) and formats the first ProviderError found; with
+ * no ProviderError in the chain it falls back to the deepest Error's message.
+ * Built from the ProviderError only — request data is never formatted, so no
+ * credential can appear (see the module header guarantee).
+ * @param err - The thrown error (typically a ResilienceError or ProviderError).
+ * @param maxChars - Hard cap on the returned text (default 300); a truncated
+ *   result ends with `…`.
+ * @returns The formatted cause, or undefined when nothing describable exists.
+ */
+export function describeErrorCause(err: unknown, maxChars = 300): string | undefined {
+  let deepest: Error | undefined
+  let current: unknown = err
+  for (let depth = 0; depth <= 3 && current !== undefined && current !== null; depth++) {
+    if (current instanceof ProviderError) {
+      const body = current.message.replace(/^\[llm-router\] [^[]*? HTTP \d{3}: /, '')
+      const head =
+        `provider=${current.provider}` +
+        (current.status !== undefined ? ` HTTP ${current.status}` : '') +
+        (current.code !== undefined ? ` code=${current.code}` : '')
+      const text = body.length > 0 ? `${head}: ${body}` : head
+      return text.length > maxChars ? `${text.slice(0, Math.max(0, maxChars - 1))}…` : text
+    }
+    if (current instanceof Error) {
+      deepest = current
+      current = current.cause
+      continue
+    }
+    break
+  }
+  if (deepest === undefined || deepest.message.length === 0) return undefined
+  return deepest.message.length > maxChars
+    ? `${deepest.message.slice(0, Math.max(0, maxChars - 1))}…`
+    : deepest.message
+}
+
 export function providerTransportError(provider: string, messagePrefix: string, err: unknown): ProviderError {
   const inner = err instanceof Error ? err : new Error(String(err))
   const isTimeout =

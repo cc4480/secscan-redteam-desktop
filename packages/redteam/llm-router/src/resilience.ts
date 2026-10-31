@@ -316,6 +316,9 @@ export class ResilientProvider implements LlmProvider {
           reason: event.reason ?? null,
           delay_ms: event.delayMs ?? null,
           detail: event.detail ?? null,
+          http_status: event.status ?? null,
+          error_code: event.code ?? null,
+          cause_excerpt: event.causeExcerpt ?? null,
         })}\n`,
         'utf8',
       )

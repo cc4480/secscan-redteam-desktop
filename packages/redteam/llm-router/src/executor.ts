@@ -24,6 +24,7 @@
  */
 
 import { classifyError, type ClassifiedFailure, type FailoverReason } from './classifier.js'
+import { describeErrorCause } from './errors.js'
 
 export interface AttemptContext {
   /** 1-based attempt number. */
@@ -48,6 +49,12 @@ export interface RetryEvent {
   /** Scheduled wait before the next attempt (retry-scheduled only). */
   delayMs?: number
   detail?: string
+  /** HTTP status of the failed attempt (attempt-failed only, when known). */
+  status?: number
+  /** Provider error code of the failed attempt (attempt-failed only, when known). */
+  code?: string
+  /** Provider-cause excerpt for the failed attempt (attempt-failed only). */
+  causeExcerpt?: string
   /** ISO timestamp of the event. */
   ts: string
 }
@@ -172,6 +179,9 @@ export async function executeStep<T>(opts: ExecuteStepOptions<T>): Promise<T> {
         keyId: ctx.keyId,
         reason: failure.reason,
         detail: failure.detail,
+        status: failure.status,
+        code: failure.code,
+        causeExcerpt: describeErrorCause(err),
       })
       if (opts.streamed) {
         // Emitted chunks cannot be durably separated from a retry's; the

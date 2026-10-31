@@ -211,3 +211,53 @@ describe('defaultBackoffMs', () => {
     assert.equal(defaultBackoffMs(20), 10_000)
   })
 })
+
+describe('executeStep attempt-failed cause fields (Q-HALT Item 1)', () => {
+  test('a ProviderError failure carries status, code, and causeExcerpt on the event', async () => {
+    const events: RetryEvent[] = []
+    const failure = new ProviderError({
+      provider: 'fake',
+      message: '[llm-router] Fake HTTP 400: {"error":{"message":"blocked by the safety system"}}',
+      status: 400,
+      code: 'safety_blocked',
+    })
+    await assert.rejects(
+      executeStep({
+        run: async () => {
+          throw failure
+        },
+        initial: INITIAL,
+        maxAttempts: 1,
+        onEvent: e => events.push(e),
+      }),
+      (err: unknown) => err instanceof ResilienceError,
+    )
+    assert.equal(events.length, 1)
+    const event = events[0]
+    assert.equal(event?.kind, 'attempt-failed')
+    assert.equal(event?.status, 400)
+    assert.equal(event?.code, 'safety_blocked')
+    assert.ok(event?.causeExcerpt?.includes('blocked by the safety system'), event?.causeExcerpt)
+    assert.ok(!(event?.causeExcerpt ?? '').includes('[llm-router]'), event?.causeExcerpt)
+  })
+
+  test('a plain Error failure leaves status and code absent (not empty strings)', async () => {
+    const events: RetryEvent[] = []
+    await assert.rejects(
+      executeStep({
+        run: async () => {
+          throw new Error('plain boom')
+        },
+        initial: INITIAL,
+        maxAttempts: 1,
+        onEvent: e => events.push(e),
+      }),
+      (err: unknown) => err instanceof ResilienceError,
+    )
+    const event = events[0]
+    assert.equal(event?.status, undefined)
+    assert.equal(event?.code, undefined)
+    // The helper's documented fallback: the deepest Error's message.
+    assert.equal(event?.causeExcerpt, 'plain boom')
+  })
+})
