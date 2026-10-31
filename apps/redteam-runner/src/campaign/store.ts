@@ -449,6 +449,9 @@ export function settleFailedWave(
   message: string,
   now: Date = new Date(),
 ): WaveRecord | null {
+  const existing = loadCampaign(campaignsDir, campaignId)
+  const existingWave = existing.waves.find(w => w.index === waveIndex)
+  if (!existingWave || existingWave.status !== 'running') return null
   return transactCampaign(
     campaignsDir,
     campaignId,
