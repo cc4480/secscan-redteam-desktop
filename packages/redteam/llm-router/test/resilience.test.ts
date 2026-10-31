@@ -241,10 +241,10 @@ describe('ResilientProvider', () => {
 })
 
 describe('resilienceConfigFromEnv', () => {
-  test('defaults: on, 3 attempts, stay-on-primary off', () => {
+  test('defaults: on, 4 attempts, stay-on-primary off', () => {
     const c = resilienceConfigFromEnv({} as NodeJS.ProcessEnv)
     assert.equal(c.enabled, true)
-    assert.equal(c.maxAttempts, 3)
+    assert.equal(c.maxAttempts, 4)
     assert.equal(c.stayOnPrimaryResetMs, 0)
   })
   test('REDTEAM_LLM_RESILIENCE=off disables', () => {

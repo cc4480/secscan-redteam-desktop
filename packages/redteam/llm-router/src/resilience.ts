@@ -143,7 +143,7 @@ export function resilienceConfigFromEnv(
   const enabledRaw = env[RESILIENCE_ENV.enabled]?.trim().toLowerCase()
   const config: ResilienceConfig = {
     enabled: enabledRaw !== 'off' && enabledRaw !== '0' && enabledRaw !== 'false',
-    maxAttempts: 3,
+    maxAttempts: 4,
     stayOnPrimaryResetMs: 0,
     maxDelayMs: 30_000,
     fallbackModels: parseFallbackModels(env[RESILIENCE_ENV.fallbackModels]),
