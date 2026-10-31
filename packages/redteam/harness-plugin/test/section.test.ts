@@ -127,14 +127,58 @@ describe('apply', () => {
     assert.match(text, /lead \+ recon \+ exploiter \+ reporter \+ architect/)
     assert.match(text, /Spawn all four with `spawn_teammate`/)
     // The generated roster lists every member except the coordinator (the
-    // Lead's own brief), each with its verbatim execution prompt as Brief.
+    // Lead's own brief), each followed by its assembled doctrine brief block.
     assert.doesNotMatch(text, /- `coordinator` —/)
     assert.match(text, /- `architect` — Consistency layer/)
-    assert.match(text, /Brief: You are the consistency layer/)
+    assert.doesNotMatch(text, /Brief: /)
     // The generated DAG seats the architect's review between the exploiter's
     // findings and the reporter's final assembly.
     assert.match(text, /`review` — Architecture and consistency review \(owner: architect; after recon, exploit\)/)
     assert.match(text, /`report` — Client report \(owner: reporter; after exploit, review\)/)
+  })
+
+  it('renders the assembled doctrine briefs: spawn blocks per member and the Lead block', () => {
+    const { sections } = captureApply()
+    const raw = sections[0]!.text
+    const block = (name: string): string => {
+      const begin = raw.indexOf(`<!-- BEGIN SPAWN BRIEF: ${name} -->`)
+      const end = raw.indexOf(`<!-- END SPAWN BRIEF: ${name} -->`)
+      assert.ok(begin !== -1 && end > begin, `spawn brief block missing for ${name}`)
+      return raw.slice(begin, end)
+    }
+    const baseProof = 'The playbook is a floor, not a ceiling'
+    const roleProof: Record<string, string> = {
+      recon: 'A page is not a target. A workflow is.',
+      exploiter: 'Interesting is a direction. Impact is a finding.',
+      reporter: 'The evidence never bends to the prose.',
+      architect: 'A finding recorded in the wrong shape',
+    }
+    for (const [name, proof] of Object.entries(roleProof)) {
+      assert.ok(raw.includes(`#### Spawn brief — \`${name}\``), `spawn brief heading missing for ${name}`)
+      const text = block(name)
+      // The assembled brief — shared base first, then the role file — not a paragraph.
+      assert.ok(text.includes(baseProof), `shared base missing from ${name}'s brief`)
+      assert.ok(text.includes(proof), `role doctrine missing from ${name}'s brief`)
+      assert.ok(text.indexOf(baseProof) < text.indexOf(proof), `base must precede the role file for ${name}`)
+    }
+    // The Lead's own commission sits immediately before the team roster and
+    // carries the coordinator's assembled brief.
+    const commissionAt = raw.indexOf('### Your own commission')
+    const teamAt = raw.indexOf('### The team')
+    assert.ok(commissionAt !== -1 && teamAt > commissionAt, 'Lead block must precede ### The team')
+    const lead = raw.slice(raw.indexOf('<!-- BEGIN LEAD BRIEF -->'), raw.indexOf('<!-- END LEAD BRIEF -->'))
+    assert.ok(lead.includes(baseProof), 'shared base missing from the Lead brief')
+    assert.ok(lead.includes('Malformed output gets returned for repair'), 'coordinator doctrine missing from the Lead brief')
+    // None of the five deleted executionPrompt paragraphs survive anywhere.
+    for (const fragment of [
+      'promote only what survives demonstration',
+      'Map like an attacker choosing the entry point',
+      'You are the black hat. One mission',
+      'no claim outruns its evidence by one degree',
+      'Flag drift and coverage gaps the moment',
+    ]) {
+      assert.ok(!raw.includes(fragment), `deleted executionPrompt fragment survived: ${fragment}`)
+    }
   })
 
   it('no longer teaches the service scan as the recon baseline', () => {

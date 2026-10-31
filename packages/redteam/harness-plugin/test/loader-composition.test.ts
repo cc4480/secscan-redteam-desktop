@@ -71,6 +71,13 @@ describe('harness plugin real Loader composition', () => {
       assert.equal(soul.text, defaultSoulText())
       const doctrine = assembly.sections[doctrineAt]!
       assert.match(doctrine.text, /engagement doctrine/)
+      // The fleet briefs ride inside the doctrine section through the real
+      // composition: the Lead's own commission and at least one spawn-brief
+      // block carrying the shared base — the guard that the packaged staging
+      // kept the package (and its agents/ directory) whole.
+      assert.match(doctrine.text, /### Your own commission/)
+      assert.match(doctrine.text, /<!-- BEGIN SPAWN BRIEF: recon -->/)
+      assert.match(doctrine.text, /The playbook is a floor, not a ceiling/)
     } finally {
       await context.fiber.dispose()
       await rm(root, { recursive: true, force: true })

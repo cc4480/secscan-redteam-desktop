@@ -58,6 +58,7 @@ import { ROLE_MODEL_POLICY, defaultSoulText } from '@secscan/redteam-llm-router'
 import type { Context, PluginModule } from './harness-types.js'
 import { installAuthGate } from './auth-gate.js'
 import { REDTEAM_PROFILE } from './redteam-profile.js'
+import { FleetBriefError, fleetBriefs } from './role-briefs.js'
 
 export const name = 'secscan-redteam'
 // 'tools' for the pre-execute hook surface, 'systemPrompt' for the section registry.
@@ -72,11 +73,48 @@ function rosterLines(): string {
   // says so in as many words, and listing it among the spawnable roles
   // contradicted that on the page. The task DAG still names "coordinator" as the
   // owner of the scope task - that owner is the Lead.
+  const briefs = fleetBriefs()
   return REDTEAM_PROFILE.members
     .filter(member => member.name !== 'coordinator')
-    .map(member =>
-      `- \`${member.name}\` — ${member.role}\n  Brief: ${member.executionPrompt ?? '(none)'}`,
-    ).join('\n')
+    .map((member) => {
+      const brief = briefs.get(member.name)
+      if (brief === undefined) {
+        throw new FleetBriefError(`no assembled brief for roster member: ${member.name}`)
+      }
+      return `- \`${member.name}\` — ${member.role}
+
+#### Spawn brief — \`${member.name}\`
+
+Pass the text between the BEGIN and END markers below, markers excluded, as the
+\`prompt\` argument to \`spawn_teammate\` — verbatim, complete, nothing added.
+
+<!-- BEGIN SPAWN BRIEF: ${member.name} -->
+${brief}
+<!-- END SPAWN BRIEF: ${member.name} -->`
+    }).join('\n\n')
+}
+
+/**
+ * The Lead's own commission: the shared base + coordinator.md, rendered
+ * in-section immediately before the team roster. The Lead is not spawned, so
+ * nobody hands it a brief at spawn time — its brief lives here, and the base
+ * binds it exactly as it binds every specialist.
+ */
+function leadBriefBlock(): string {
+  const brief = fleetBriefs().get('coordinator')
+  if (brief === undefined) {
+    throw new FleetBriefError('no assembled brief for the coordinator (Lead) role')
+  }
+  return `### Your own commission
+
+You are not spawned and nobody hands you a brief at spawn time; yours is here.
+The shared base first — it binds you exactly as it binds every specialist —
+then your commission as Lead.
+
+<!-- BEGIN LEAD BRIEF -->
+${brief}
+<!-- END LEAD BRIEF -->
+`
 }
 
 /** The task DAG the Lead must put on the shared board, generated from the profile. */
@@ -187,6 +225,7 @@ Seclayer call answers with an authentication error, the key is invalid or
 inactive: report the error as it came back, once, and stop. A key is fixed
 in the setup step, never by retrying the call.
 
+${leadBriefBlock()}
 ### The team
 
 An engagement is lead + recon + exploiter + reporter + architect. The Lead owns the plan,
@@ -217,9 +256,10 @@ responsibility:
   and requires corrections to propagate before the report is assembled. Never
   touches the target: no scans, no probes, no payloads.
 
-Spawn all four with \`spawn_teammate\`, passing each brief VERBATIM as the
-\`prompt\` argument — these briefs are the role definitions and must not be
-paraphrased, shortened or improved:
+Spawn all four with \`spawn_teammate\`, passing the text between each
+member's BEGIN and END SPAWN BRIEF markers VERBATIM as the \`prompt\`
+argument, markers excluded — these briefs are the role definitions and must
+not be paraphrased, shortened or improved:
 
 ${rosterLines()}
 
