@@ -15,6 +15,7 @@
  * "Target distress" is classified by the caller (dispatch passes an explicit
  * boolean), not regex-guessed here — the classifier lives next to the tools.
  */
+import { TOOL_TIMEOUT } from "../dispatch/timeout.js";
 
 export interface AutoHaltConfig {
   /** Consecutive distress outcomes that halt a target. */
@@ -125,9 +126,13 @@ export const LOCKOUT_TEXT_PATTERN =
  * Classify a dispatch result as target distress (true) or a clean outcome
  * (false). Distress = the target may be hurt: transport errors, timeouts,
  * connection refusals, 5xx. Clean = 404s, auth denials, vuln-absent, scope
- * denials, policy refusals — the target answered fine.
+ * denials, policy refusals — the target answered fine. A result carrying
+ * the TOOL_TIMEOUT error code is never distress: the timeout is our own
+ * tool's, and the machine-readable code outranks any timeout wording in
+ * the result text.
  */
-export function isTargetDistress(result: string): boolean {
+export function isTargetDistress(result: string, errorCode?: string): boolean {
+  if (errorCode === TOOL_TIMEOUT) return false; // our own tool timed out — no evidence about the target
   const r = result.toLowerCase();
   if (/^halted\b/.test(r)) return false; // our own halt, not target distress
   return (
