@@ -74,6 +74,7 @@ const stdioConfig: Config = {
   command: 'echo',
   args: [],
   env: {},
+  secretEnv: [],
   cwd: '',
   toolCallTimeoutMs: 60_000,
   failOnStartupError: false,

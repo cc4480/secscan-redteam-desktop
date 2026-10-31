@@ -96,6 +96,7 @@ function stdioConfig(reconnect?: Config['reconnect']): Config {
     command: 'echo',
     args: [],
     env: {},
+    secretEnv: [],
     cwd: '',
     toolCallTimeoutMs: 60_000,
     failOnStartupError: false,

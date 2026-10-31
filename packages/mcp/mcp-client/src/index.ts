@@ -39,6 +39,9 @@ const DEFAULT_TOOL_CALL_TIMEOUT_MS = 60_000
 /** Valid `serverName`, kept below the public tool-name budget. */
 const SERVER_NAME_PATTERN = /^[A-Za-z0-9_-]{1,32}$/
 
+/** Valid `secretEnv` entry: an environment variable name, never a value. */
+const SECRET_ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
+
 /**
  * Live `serverName` reservations per registration scope. Agent-scoped MCP
  * servers may reuse a namespace in another Agent, while global instances and
@@ -64,6 +67,14 @@ export interface StdioConfig {
   args: string[]
   /** Extra env vars merged on top of scrubbed ambient env. */
   env: Record<string, string>
+  /**
+   * Env names whose values the host process environment supplies to the child at
+   * spawn. Names only: a value never appears in config. Each named value is
+   * resolved when a connection generation starts and merged over the scrubbed
+   * ambient env and `env`, because the scrub drops credential-shaped names by
+   * design. An unset or empty name is not injected.
+   */
+  secretEnv: string[]
   /** Working directory for the child process. */
   cwd: string
   /** Timeout per tool call or resource request in milliseconds. */
@@ -103,8 +114,8 @@ export interface StreamableHttpConfig {
 /** Configuration for one stdio or Streamable HTTP MCP server. */
 export type Config = StdioConfig | StreamableHttpConfig
 
-type StdioConfigInput = Omit<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'failOnStartupError'>
-  & Partial<Pick<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'failOnStartupError'>>
+type StdioConfigInput = Omit<StdioConfig, 'args' | 'env' | 'secretEnv' | 'cwd' | 'toolCallTimeoutMs' | 'failOnStartupError'>
+  & Partial<Pick<StdioConfig, 'args' | 'env' | 'secretEnv' | 'cwd' | 'toolCallTimeoutMs' | 'failOnStartupError'>>
 type StreamableHttpConfigInput = Omit<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'failOnStartupError'>
   & Partial<Pick<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'failOnStartupError'>>
 type ConfigInput = StdioConfigInput | StreamableHttpConfigInput
@@ -123,6 +134,7 @@ export const Config = z.union([
     command: z.string().required(),
     args: z.array(String).default([]),
     env: z.dict(String).default({}),
+    secretEnv: z.array(String).default([]),
     cwd: z.string().default(''),
     toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
     failOnStartupError: z.boolean().default(false),
@@ -156,6 +168,22 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   // construction that bypassed Schemastery) rejects THIS instance before any
   // effect registers.
   const reconnect = resolveReconnectPolicy(config.reconnect, `mcp-client(${config.serverName}): reconnect`)
+
+  // Fail loud at load, same reasoning: a `secretEnv` entry that is not a valid
+  // env name, or a duplicate, can never resolve as intended. An entry is a
+  // name, not a secret, so the error names it.
+  if (config.transport === 'stdio') {
+    const seen = new Set<string>()
+    for (const entry of config.secretEnv) {
+      if (!SECRET_ENV_NAME_PATTERN.test(entry)) {
+        throw new Error(`mcp-client(${config.serverName}): secretEnv entry "${entry}" is not a valid environment variable name`)
+      }
+      if (seen.has(entry)) {
+        throw new Error(`mcp-client(${config.serverName}): secretEnv entry "${entry}" is listed more than once`)
+      }
+      seen.add(entry)
+    }
+  }
 
   // Reserve the namespace next: a duplicate `serverName` fails THIS instance
   // at load with an actionable error and leaves the earlier instance intact.

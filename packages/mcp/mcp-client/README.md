@@ -57,6 +57,7 @@ Add one entry per server; nothing else is required. After the harness starts, th
 | `transport` | required | `stdio` or `streamable-http` |
 | `serverName` | required | Namespace for the server's tool names; `[A-Za-z0-9_-]{1,32}`, unique inside one registration scope |
 | `command` / `args` / `env` / `cwd` | — | stdio: executable, arguments, extra env merged over scrubbed ambient env, working directory |
+| `secretEnv` | `[]` | stdio: environment names whose values the host process environment supplies to the child at spawn. Names only — a value never appears in config. Each value is resolved when a connection generation starts and merged over the scrubbed ambient env and `env`; an unset or empty name is not injected, and the startup attempt logs one warning per missing name |
 | `url` / `headers` | — | streamable-http: endpoint URL and extra request headers |
 | `toolCallTimeoutMs` | `60,000` | Timeout per `tools/call` or resource request |
 | `maxInstructionBytes` | `32,768` | Maximum UTF-8 bytes of server instructions including attribution; an oversized value rejects the connection |
@@ -136,6 +137,8 @@ A tool call uses the SDK with the raw name, complete tool definition, JSON argum
 ### Environment scrubbing (stdio)
 
 The child environment starts from the subprocess seam's `scrubbedParentEnv()` — ambient names matching `/KEY|PASSWORD|SECRET|TOKEN/i` and ambient `DSH_*` names are dropped — and the configured `env` merges on top, so explicit overrides survive. The MCP SDK owns the actual spawn; this package shares the scrub definition, not the spawn path.
+
+A credential the child needs therefore cannot arrive through the ambient env: the scrub drops it by design. `secretEnv` is the deliberate supply. The config lists env **names** only; when a connection generation starts, the transport resolves each name from the host process environment and merges the values last — after the scrubbed ambient env and after `env`, so a named secret wins over a same-named `env` literal. Resolution is per spawn, so a reconnect after rotation picks up the new value. An unset or empty name is not injected (the child never holds a present-but-blank credential), and the startup attempt logs one warning per missing name. Because only names live in config, nothing that serializes or diagnoses composed config can carry a live value.
 
 </details>
 

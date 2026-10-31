@@ -57,6 +57,7 @@ kind: "package-reference"
 | `transport` | 必填 | `stdio` 或 `streamable-http` |
 | `serverName` | 必填 | 服务器工具名称的 namespace；`[A-Za-z0-9_-]{1,32}`，在一个注册作用域内唯一 |
 | `command` / `args` / `env` / `cwd` | — | stdio：可执行文件、参数、合并到清洗过的环境之上的额外环境变量、工作目录 |
+| `secretEnv` | `[]` | stdio：由宿主进程环境在 spawn 时为子进程供值的环境名称。只有名称——值从不出现在配置中。每个值在连接 generation 启动时解析，并合并到清洗过的环境与 `env` 之上；未设置或为空的名称不会注入，启动尝试会为每个缺失的名称记录一条警告 |
 | `url` / `headers` | — | streamable-http：端点 URL 与额外请求标头 |
 | `toolCallTimeoutMs` | `60,000` | 每次 `tools/call` 或资源请求的超时 |
 | `maxInstructionBytes` | `32,768` | 包括服务器归属信息在内的服务器指令 UTF-8 字节上限；超出时连接失败 |
@@ -136,6 +137,8 @@ SDK 通过旧版通知或现代协议订阅接收工具列表变化。监督器�
 ### 环境清洗（stdio）
 
 子进程环境以子进程 seam 的 `scrubbedParentEnv()` 为基座——删除匹配 `/KEY|PASSWORD|SECRET|TOKEN/i` 的环境名称与所有 `DSH_*` 名称——再在其上合并配置的 `env`，因此显式覆盖得以保留。实际 spawn 由 MCP SDK 负责；本包共享清洗定义，而非 spawn 路径。
+
+因此，子进程需要的凭据无法经环境继承送达：清洗按设计将其删除。`secretEnv` 是有意的供给通道。配置只列出环境**名称**；在连接 generation 启动时，transport 从宿主进程环境解析每个名称，并将值最后合并——在清洗过的环境与 `env` 之后，因此命名 secret 优先于 `env` 中的同名字面量。解析以每次 spawn 为单位，轮换后重连会取得新值。未设置或为空的名称不会注入（子进程不会持有存在但为空的凭据），启动尝试会为每个缺失的名称记录一条警告。由于配置中只有名称，任何序列化或诊断组合配置的内容都不可能携带真实值。
 
 </details>
 

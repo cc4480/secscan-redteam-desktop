@@ -14,10 +14,13 @@ import { startConnection, resolveReconnectPolicy } from '../src/connection.ts'
 import type { Config } from '../src/index.ts'
 
 const { mockTransport } = vi.hoisted(() => ({ mockTransport: vi.fn<() => Transport>() }))
-vi.mock('../src/transport.ts', () => ({ createTransport: mockTransport }))
+vi.mock('../src/transport.ts', () => ({
+  createTransport: mockTransport,
+  resolveSecretEnv: (names: readonly string[]) => ({ values: {}, missing: [...names] }),
+}))
 
 const config: Config = {
-  transport: 'stdio', serverName: 'fixture', command: 'fixture', args: [], env: {}, cwd: '',
+  transport: 'stdio', serverName: 'fixture', command: 'fixture', args: [], env: {}, secretEnv: [], cwd: '',
   toolCallTimeoutMs: 60_000, failOnStartupError: true,
 }
 

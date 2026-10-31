@@ -20,7 +20,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { assertNever, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { ServerContext } from './server-context.ts'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
-import { createTransport } from './transport.ts'
+import { createTransport, resolveSecretEnv } from './transport.ts'
 import { syncTools } from './tools.ts'
 import type { ToolBridgeOptions, ToolDisposers } from './tools.ts'
 import type { Config } from './index.ts'
@@ -304,6 +304,15 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
     }
     let instructions: string
     try {
+      if (startup && config.transport === 'stdio') {
+        // Warn once per missing name before the first spawn: the child starts
+        // without that secret, and the operator learns it here instead of from
+        // a later tool failure. Names only; a value is never logged. Reconnect
+        // generations resolve silently — their failures already log.
+        for (const name of resolveSecretEnv(config.secretEnv).missing) {
+          ctx.logger.warn(`${label}: secretEnv name ${name} is not set in the host environment; the child starts without it`)
+        }
+      }
       transport = createTransport(config)
       await generation.connect(transport)
       if (hasClosed()) {
