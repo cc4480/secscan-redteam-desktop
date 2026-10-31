@@ -11,7 +11,7 @@ import { EventLog } from './events.js'
 import { McpClient } from './mcp.js'
 import { ProberLike } from './prober.js'
 import { HostExecutor } from './host-exec/index.js'
-import { TargetAutoHalt, TargetRateLimiter, type TestEnvironment } from './safety/index.js'
+import { TargetAutoHalt, TargetRateLimiter, type CredentialAttemptGuard, type TestEnvironment } from './safety/index.js'
 import { ApprovalLog, type TierState } from './accountability/index.js'
 import { type RegistryEntry, type TargetFingerprint, type VulnerabilityRegistry } from './registry.js'
 import { type EngagementInput, type OperationPlan, type ResolvedRunnerConfig } from './types.js'
@@ -66,6 +66,15 @@ export interface LiveFinding {
    * anything else ends 'detected'. Absent = never adjudicated.
    */
   cellState?: 'proven' | 'detected'
+  /**
+   * The adjudicated claim's expected marker + target URL, retained by
+   * exploit-cell/live.ts only when a claim was present at adjudication, so
+   * the report layer can show what was proven. The claim's receipt is NOT
+   * retained here — it lives in the audit trail.
+   */
+  provenClaim?: { expectedMarker: string; targetUrl: string }
+  /** The adjudication outcome's one-line detail, retained with the claim. */
+  cellDetail?: string
 }
 
 /** A killed hypothesis recorded live during exploitation (shared state). */
@@ -125,6 +134,14 @@ export interface Ctx {
   safety: {
     limiter: TargetRateLimiter
     autoHalt: TargetAutoHalt
+    /**
+     * Q-LOCKOUT credential-attempt interlock: per-(host, protocol-class)
+     * failed-validation budget of lockoutThreshold − 1, enforced in
+     * dispatch between the duplicate guard and the rate limiter, with a
+     * campaign ceiling and lockout-signal host trips. Resume only via a
+     * recorded operator decision (guard.reset).
+     */
+    lockout: CredentialAttemptGuard
     environment: TestEnvironment
     productionConfirmed: boolean
     rpsPerHost: number
