@@ -33,6 +33,7 @@ import type { EngagementInput } from "./types.js";
 export { runEngagement, resolveConfig } from "./phases.js";
 export * from "./workflows/commands.js";
 export * from "./workflows/protocol.js";
+export * from "./memory/index.js";
 export type { RunOptions } from "./phases.js";
 export type { RunnerDeps } from "./context.js";
 export type {

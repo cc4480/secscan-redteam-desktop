@@ -14,6 +14,7 @@ import { tier2ProductionConfirmed } from "../accountability/index.js";
 import { arg, argAll, buildInput, flag, parseLogRotationArgs, usage } from "./args.js";
 import { printCommandHelp, runCommandCli } from "./command.js";
 import { runArsenalCli } from "./arsenal.js";
+import { runMemoryCommand } from "../memory/cli.js";
 
 async function runReverify(): Promise<void> {
   const bundlePath = arg("--bundle");
@@ -181,6 +182,11 @@ export async function main(): Promise<void> {
   if (cmd === "arsenal") {
     process.exitCode = await runArsenalCli();
     return;
+  }
+  if (cmd === "memory") {
+    const result = runMemoryCommand(process.argv.slice(3), process.env, new Date().toISOString());
+    for (const line of result.lines) console.log(line);
+    process.exit(result.code);
   }
   if (cmd === "start") {
     const input = buildInput();
