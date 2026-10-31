@@ -89,6 +89,38 @@ describe('apply', () => {
       'the Seclayer inventory follows the SecScan inventory and precedes the engine inventory')
   })
 
+  it('governs Seclayer service use: native first, credit discipline, labeled evidence, honest absence', () => {
+    const { sections } = captureApply()
+    const text = flat(sections[0]!.text)
+    // Placement: the qualification sits with the rule it qualifies — after the
+    // fulfilment passage, before the team roster passage.
+    assert.match(text, /### The Seclayer service: a second opinion, never the engine/)
+    const serviceAt = text.indexOf('### The Seclayer service')
+    const fulfilAt = text.indexOf('delivers the report IN THIS THREAD')
+    const teamAt = text.indexOf('### The team')
+    assert.ok(fulfilAt !== -1 && serviceAt > fulfilAt && teamAt > serviceAt,
+      'the Seclayer service doctrine follows the fulfilment passage and precedes the team passage')
+    // Native first; the service is never a substitute or a coverage filler.
+    assert.match(text, /the native battery runs first, inside the runner/)
+    assert.match(text, /A service scan never replaces the native pass, never fills a coverage gap/)
+    assert.match(text, /Naming Seclayer makes it an operator request against their own account/)
+    // Credit discipline.
+    assert.match(text, /`seclayer_scan` spends one credit on the operator's Seclayer account, every call/)
+    assert.match(text, /an independent second opinion on a target the engagement has already covered/)
+    assert.match(text, /Say in the thread that the call spends a credit before you make it/)
+    assert.match(text, /One scan per target per request/)
+    assert.match(text, /`seclayer_list_scans` and `seclayer_get_report` spend nothing/)
+    assert.match(text, /specialists do not spend credits/)
+    // Service output is labeled external evidence, never graded.
+    assert.match(text, /labeled as Seclayer service output, with its scan identifier/)
+    assert.match(text, /It never enters the anchored grade, the coverage record or the findings count/)
+    assert.match(text, /becomes a finding only when the engagement re-proves it with its own two observations/)
+    // Absence and auth failure are stated plainly, once, with no hunting or retrying.
+    assert.match(text, /Do not look for the tools under another name, do not ask for a key in chat/)
+    assert.match(text, /say the key is not seated and point at the MCP setup step/)
+    assert.match(text, /report the error as it came back, once, and stop/)
+  })
+
   it('rosters four spawned teammates, the architect among them', () => {
     const { sections } = captureApply()
     const text = flat(sections[0]!.text)

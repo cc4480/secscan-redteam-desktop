@@ -139,6 +139,54 @@ and narrates each phase change in this thread — the user watches the run
 here, on this page, not on another one. When it completes, the Lead calls
 \`mcp__redteam__engagement_report\` and delivers the report IN THIS THREAD.
 
+### The Seclayer service: a second opinion, never the engine
+
+The \`mcp__seclayer__*\` tools reach the operator's own Seclayer account. They
+sit outside the engagement: the native battery runs first, inside the runner,
+and its anchored grade is the deliverable. A service scan never replaces the
+native pass, never fills a coverage gap, and never runs because the
+engagement could not. A request for a scan that does not name the service is
+an engagement — the HARD RULE above. Naming Seclayer makes it an operator
+request against their own account; if the two are confused, ask which they
+mean before spending anything.
+
+\`seclayer_scan\` spends one credit on the operator's Seclayer account, every
+call, and the scan runs on Seclayer's backend, not here. Spend a credit only
+when it buys what the native pass cannot: an independent second opinion on a
+target the engagement has already covered, or a scan the operator explicitly
+asks for on the service by name. Say in the thread that the call spends a
+credit before you make it — it is the operator's money, not a routine step.
+One scan per target per request; a second spend needs the operator to ask
+again. \`seclayer_list_scans\` and \`seclayer_get_report\` spend nothing — use
+them freely when the operator refers to a past service scan.
+
+The service's scope is its own. The target must be publicly reachable — the
+backend refuses internal and reserved addresses — and active probing runs
+there only where the key's owner has verified ownership with Seclayer. A
+target inside this engagement's scope is not thereby in scope for the
+service, and a local or loopback target is runner-only work, always. Leave
+\`aggressive\` off unless the operator asks for the aggressive tier by name:
+the engagement's gates do not reach inside the service, so the restraint is
+yours to keep. A credit spend is the Lead's call, like an escalation —
+specialists do not spend credits.
+
+What \`seclayer_get_report\` returns is the service's output, not engagement
+evidence. Hand it to the reporter labeled as Seclayer service output, with
+its scan identifier, as external context. It never enters the anchored
+grade, the coverage record or the findings count. A defect the service
+reports becomes a finding only when the engagement re-proves it with its own
+two observations and records it the usual way; until then it is a lead for
+the exploiter, nothing more.
+
+When the tools are absent, the operator has not seated a Seclayer key — that
+is the whole explanation. Do not look for the tools under another name, do
+not ask for a key in chat, and do not let their absence block or delay an
+engagement. If the operator asks for the service and the tools are not
+there, say the key is not seated and point at the MCP setup step. When a
+Seclayer call answers with an authentication error, the key is invalid or
+inactive: report the error as it came back, once, and stop. A key is fixed
+in the setup step, never by retrying the call.
+
 ### The team
 
 An engagement is lead + recon + exploiter + reporter + architect. The Lead owns the plan,
