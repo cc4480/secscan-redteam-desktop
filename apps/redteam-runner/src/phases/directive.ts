@@ -32,6 +32,10 @@ export async function coordinatorDirective(
     `${head}\n\nReturn ONLY a JSON block: {"tasks": [<at most ${cap} task(s) this round>, {"kind": "probe|recon", "brief": "<1-2 sentences>", "attackId": "<ATT&CK, optional>", "category": "<logic|functionality|validation — PROBE TASKS ONLY, omit on recon>", "batteryItem": "<battery item ID this task covers, e.g. SS-042 — PROBE TASKS ONLY, pick a real ID from the pending list, or OMIT>", "maxTurns": 6}], "finish": <true only when the objective is met AND (battery complete — every battery item verdict-recorded, none pending — OR probe budget exhausted OR no applicable surface declared with reasons)>, "note": "<what changed and why, one line>"}\n\n${context}`,
     COMMAND_TOOLS,
     3,
+    // Q-STRUCT A3: the loop's final text is parsed as JSON (extractJsonBlock
+    // below) — constrain the call to object mode; the prose shape above
+    // stays canonical (the task fields vary, so no rigid schema).
+    { responseFormat: { type: "json_object" } },
   );
   const parsed = extractJsonBlock(text) as {
     tasks?: Array<Record<string, unknown>>;

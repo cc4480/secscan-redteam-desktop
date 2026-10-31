@@ -28,6 +28,9 @@ export async function planPhase(ctx: Ctx, critique?: string): Promise<void> {
       (critique ? `\n\nCOMMANDER REDIRECT on the previous plan: ${critique}. Revise the plan accordingly.` : ""),
     [ABORT_TOOL],
     4,
+    // Q-STRUCT A3: same adoption as directive — the plan text is parsed as
+    // JSON below, so the loop runs under object mode.
+    { responseFormat: { type: "json_object" } },
   );
   const parsed = extractJsonBlock(text) as { adversaryProfile?: string; steps?: PlanStep[] } | null;
   const steps: PlanStep[] = [];

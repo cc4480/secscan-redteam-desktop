@@ -13,6 +13,7 @@ import {
   type ChatMessage,
   type ChatResult,
   type JsonSchemaTool,
+  type ResponseFormat,
 } from '@secscan/redteam-llm-router'
 import { createCharteredComplete } from './charter-completion.js'
 import { TurnIntegrity, type DeliverableSpec, type RoundCaps } from './turn-integrity.js'
@@ -89,6 +90,15 @@ export async function agentLoop(
      * over config.reflectorCap when set; 0 disables reflection.
      */
     reflectorCap?: number
+    /**
+     * Structured-output constraint for the loop's own completion calls
+     * (Q-STRUCT A3): forwarded to every turn's completion; the chartered
+     * seam and the router's capability record decide how each provider
+     * honors it. The reflector's verdict call is deliberately NOT
+     * constrained (brief §7 — its steering text stays prose). Absent =
+     * unconstrained, exactly as before.
+     */
+    responseFormat?: ResponseFormat
     /** When declared, the turn is not finished until this file exists. */
     deliverable?: DeliverableSpec
   } = {},
@@ -135,7 +145,7 @@ export async function agentLoop(
     await maybeCompactMessages(ctx, role, phase, messages, complete, usage => tokenMeterFor(ctx).record(usage))
     let res: ChatResult
     try {
-      res = await complete(role, messages, { tools })
+      res = await complete(role, messages, { tools, responseFormat: opts.responseFormat })
     } catch (err) {
       // The outgoing prompt did exist; only the response's tokens are unknown.
       steps.prompt(JSON.stringify(messages), null)
