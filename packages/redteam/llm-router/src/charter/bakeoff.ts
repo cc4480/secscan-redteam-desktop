@@ -261,6 +261,7 @@ export async function runBakeoff(
               messages: callMessages,
               exemplarPackVersion: system.exemplarPackVersion,
               anchorPresent: system.anchorPresent,
+              soulIncluded: system.soulIncluded,
             })
           } catch {
             taskThrew = true

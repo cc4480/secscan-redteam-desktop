@@ -4,7 +4,10 @@
  * re-implements: (1) filled charter, (2) role addendum, (3) the agent's
  * generated phase anchor when one is supplied, (4) the exemplar pack for
  * artifact-producing work, (5) any caller system text (persona/theme)
- * appended after the charter, never before it.
+ * appended after the charter, never before it, (6) the SOUL, last on
+ * purpose: it is the standing character the fleet works under, and the
+ * final position is the recency slot — nothing a caller supplies can push
+ * it out of the tail of the system message.
  */
 
 import type { ChatMessage } from '../types.js'
@@ -15,6 +18,7 @@ import {
   exemplarPackVersion,
   loadExemplarPackText,
 } from './exemplars.js'
+import { defaultSoulText } from './soul.js'
 
 /** Options for one chartered prompt assembly. */
 export interface CharterPromptOptions {
@@ -42,6 +46,14 @@ export interface CharterPrompt {
   exemplarPackVersion?: number
   /** True when a phase anchor was carried into the prompt. */
   anchorPresent: boolean
+  /**
+   * True when the SOUL section closed the system message. Assembly appends
+   * the SOUL unconditionally — a missing asset throws in the loader before
+   * any prompt exists (no SOUL, no run) — so on a returned prompt this is
+   * always true; the fact rides beside `anchorPresent` so the transcript
+   * records that the SOUL was in the room for this call.
+   */
+  soulIncluded: boolean
 }
 
 /**
@@ -50,7 +62,9 @@ export interface CharterPrompt {
  * System messages inside `taskMessages` are caller persona/theme text: they
  * are extracted and appended after the charter block, in their original
  * order — the charter is always first and is never diluted by placement.
- * All other messages pass through unchanged and in order.
+ * The SOUL section is appended after the persona texts, as the final
+ * section of the system message. All other messages pass through unchanged
+ * and in order.
  *
  * @param engagement - the engagement record supplying the charter fields
  * @param role - the agent's charter role
@@ -91,10 +105,12 @@ export function assembleCharterMessages(
     else rest.push(message)
   }
   if (personaTexts.length > 0) sections.push(...personaTexts)
+  sections.push(defaultSoulText())
 
   return {
     messages: [{ role: 'system', content: sections.join('\n\n') }, ...rest],
     exemplarPackVersion: packVersion,
     anchorPresent,
+    soulIncluded: true,
   }
 }
