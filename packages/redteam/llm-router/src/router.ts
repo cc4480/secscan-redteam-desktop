@@ -19,6 +19,10 @@
  * classification's hints allow it. REDTEAM_LLM_RESILIENCE=off restores the
  * raw registrations. Resilience configuration and pools are built once at
  * module load — pool bench state must persist across calls to mean anything.
+ * With pool persistence on (the default; REDTEAM_LLM_POOL_PERSIST=off
+ * disables it), that state also survives the process: every pool restores
+ * from the one shared state document at construction (see pool-store.ts
+ * for path resolution) and writes its mutations through.
  */
 
 import type {
@@ -41,7 +45,8 @@ import { MetaProvider, META_API_KEY_ENV } from './providers/meta.js'
 import { QwenProvider, QWEN_API_KEY_ENV } from './providers/qwen.js'
 import { LocalOpenAiProvider } from './providers/local.js'
 import { ResilienceError } from './executor.js'
-import { CredentialPool } from './pool.js'
+import { CredentialPool, type PoolEntrySnapshot } from './pool.js'
+import { FilePoolStateStore } from './pool-store.js'
 import {
   ResilientProvider,
   resilienceConfigFromEnv,
@@ -202,6 +207,41 @@ export async function completeWithCharter(opts: CharterCompleteOptions): Promise
 // register it here — no changes to the router core or the harness.
 const resilienceConfig: ResilienceConfig = resilienceConfigFromEnv()
 
+/** The pools resilient() built at module load, by provider id (for poolSnapshots()). */
+const livePools = new Map<string, CredentialPool>()
+
+let sharedPoolStore: FilePoolStateStore | undefined
+let poolStoreResolved = false
+
+/**
+ * The one pool-state store shared by every provider's pool (the document
+ * is keyed by provider id), resolved lazily from the environment.
+ * @returns The shared store, or undefined when persistence is off.
+ */
+function poolStateStore(): FilePoolStateStore | undefined {
+  if (!poolStoreResolved) {
+    poolStoreResolved = true
+    sharedPoolStore = FilePoolStateStore.fromEnv(process.env)
+  }
+  return sharedPoolStore
+}
+
+/** One provider's live pool state for the doctor surface: fingerprints only, never keys. */
+export interface PoolSnapshot {
+  providerId: string
+  entries: PoolEntrySnapshot[]
+}
+
+/**
+ * Snapshots of the router's live credential pools — the operator-visibility
+ * surface the runner's readiness report renders from. Empty when
+ * resilience is off (no pools are built then).
+ * @returns One snapshot per pooled provider, in registration order.
+ */
+export function poolSnapshots(): PoolSnapshot[] {
+  return [...livePools.entries()].map(([providerId, pool]) => ({ providerId, entries: pool.snapshot() }))
+}
+
 /**
  * Wrap a built-in provider in the resilience layer, with a credential pool
  * built from its key env var (+ numbered siblings) when it has one.
@@ -209,7 +249,24 @@ const resilienceConfig: ResilienceConfig = resilienceConfigFromEnv()
  */
 function resilient(provider: LlmProvider, keyEnv?: string): LlmProvider {
   if (!resilienceConfig.enabled) return provider
-  const pool = keyEnv ? CredentialPool.fromEnv(provider.id, keyEnv) : undefined
+  const pool = keyEnv
+    ? CredentialPool.fromEnv(provider.id, keyEnv, process.env, { store: poolStateStore() })
+    : undefined
+  if (pool !== undefined) {
+    livePools.set(provider.id, pool)
+    const report = pool.restoreReport
+    if (
+      report !== null &&
+      (report.restoredEntries > 0 || report.restoredBenches > 0 || report.prunedEntries > 0 || report.droppedLapsed > 0)
+    ) {
+      console.log(
+        `[llm-router] credential pool state restored for '${provider.id}': ` +
+          `${report.restoredEntries} entries, ${report.restoredBenches} benches` +
+          (report.prunedEntries > 0 ? `, ${report.prunedEntries} pruned` : '') +
+          (report.droppedLapsed > 0 ? `, ${report.droppedLapsed} lapsed dropped` : ''),
+      )
+    }
+  }
   return new ResilientProvider(provider, { pool, config: resilienceConfig })
 }
 

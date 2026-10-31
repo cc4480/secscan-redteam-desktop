@@ -15,8 +15,10 @@ export {
   completeForRole,
   completeWithCharter,
   listProviders,
+  poolSnapshots,
   registerProvider,
   type CharterCompleteOptions,
+  type PoolSnapshot,
 } from './router.js'
 export { LLM_PROVIDER_ENV, META_ROLE_MODEL_POLICY, ROLE_MODEL_POLICY, ROLE_ORDER, roleModelPolicy } from './policy.js'
 export {
