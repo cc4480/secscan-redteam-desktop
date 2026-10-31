@@ -174,6 +174,70 @@ describe('classifyError', () => {
   })
 })
 
+// Q-HALT Item 2: the test-lock above ('generic 400 is unknown and NOT
+// retryable') now pins "outside ALL tables INCLUDING the safety set" — its
+// body matches no content code and no safety phrase, old or new. The block
+// below proves the new safety-rejection vocabulary lands in content_policy
+// and that the negative controls still classify exactly as before. If the
+// lock ever goes red, a pattern here is too broad: narrow the pattern,
+// never edit the lock.
+describe('safety-rejection 400s', () => {
+  const expectContentPolicy = (f: ReturnType<typeof classifyError>): void => {
+    assert.equal(f.reason, 'content_policy')
+    assert.equal(f.detail, 'content-pattern')
+    assert.equal(f.hints.fallbackModel, true)
+    assert.equal(f.hints.fallbackProvider, true)
+    assert.equal(f.hints.retryable, false)
+  }
+
+  test('each safety code classifies content_policy on a neutral body', () => {
+    for (const code of [
+      'safety_blocked',
+      'content_safety_blocked',
+      'prohibited_content',
+      'guardrail_violation',
+      'content_blocked',
+    ]) {
+      expectContentPolicy(classifyError(httpError(400, 'request rejected by provider', { code })))
+    }
+  })
+
+  test('each safety phrase classifies content_policy', () => {
+    for (const body of [
+      'The request was blocked by the safety review team.',
+      'Our safety system declined this request.',
+      'This content violates policy.',
+      'Rejected: policy violation detected.',
+      'Removed by content moderation.',
+      'The prompt was flagged as inappropriate.',
+    ]) {
+      expectContentPolicy(classifyError(httpError(400, body)))
+    }
+  })
+
+  test('negative control: the lock body still falls to the catch-all', () => {
+    const f = classifyError(httpError(400, 'unknown parameter: temperature'))
+    assert.equal(f.reason, 'unknown')
+    assert.equal(f.detail, 'request-validation')
+    assert.equal(f.hints.retryable, false)
+  })
+
+  test('negative control: billing prose mentioning policy stays billing (402)', () => {
+    const f = classifyError(httpError(402, 'payment required: see billing policy'))
+    assert.equal(f.reason, 'billing')
+  })
+
+  test('negative control: a 429 mentioning policy stays rate_limit', () => {
+    const f = classifyError(httpError(429, 'rate limit policy: try again in 5s'))
+    assert.equal(f.reason, 'rate_limit')
+  })
+
+  test('negative control: an over-long prompt stays context_overflow', () => {
+    const f = classifyError(httpError(400, 'prompt is too long for the model'))
+    assert.equal(f.reason, 'context_overflow')
+  })
+})
+
 describe('providerErrorFromResponse', () => {
   test('extracts status, structured code, Retry-After, and reset headers', async () => {
     const res = new Response(JSON.stringify({ error: { code: 'insufficient_quota', message: 'no credits' } }), {

@@ -293,3 +293,25 @@ describe('trajectory log cause fields (Q-HALT Item 1)', () => {
     assert.ok(String(failed['cause_excerpt']).includes('provider=fake'), String(failed['cause_excerpt']))
   })
 })
+
+describe('safety-rejection fixture (Q-HALT brief §8, router leg)', () => {
+  test('a safety_blocked 400 surfaces content_policy with the cause on the attempt-failed event', async () => {
+    const body =
+      '{"error":{"code":"safety_blocked","message":"Request blocked by the safety system: the submitted content may violate policy."}}'
+    const fixture = await providerErrorFromResponse('fake', 'Fake', new Response(body, { status: 400 }))
+    const h = harness([fixture])
+    await assert.rejects(
+      h.call(),
+      (err: unknown) =>
+        err instanceof ResilienceError &&
+        err.classified.reason === 'content_policy' &&
+        err.classified.hints.fallbackProvider === true &&
+        err.attempts === 1,
+    )
+    assert.equal(h.inner.seen.length, 1)
+    const failed = h.events.find(e => e.kind === 'attempt-failed')
+    assert.equal(failed?.status, 400)
+    assert.equal(failed?.code, 'safety_blocked')
+    assert.ok(failed?.causeExcerpt?.includes('safety system'), failed?.causeExcerpt)
+  })
+})
