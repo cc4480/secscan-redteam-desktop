@@ -269,12 +269,16 @@ describe('first-run environment', () => {
 
   it('reads the same names the bundled red-team patch composes from', () => {
     const patch = readFileSync(join(repository, 'packages', 'redteam', 'desktop-bundle', 'cordis.patch.yml'), 'utf8')
-    // The patch's `!!js` scalars are evaluated against the Host process environment at composition
-    // time, so the names this module persists and the names the rows read have to be the same ones.
-    // SECLAYER_API_KEY differs in form, not in ownership: its row names it in a `secretEnv` list
-    // and the MCP client resolves it when the child spawns, so the spawn-time form is asserted
-    // with the row instead of here.
-    for (const name of MCP_ENVIRONMENT_NAMES.filter(name => name !== 'SECLAYER_API_KEY')) expect(patch).toContain(`process.env.${name}`)
+    // Each name reaches its server through the mechanism its row declares:
+    // the HTTP rows compose a header from the name at composition time (the
+    // patch's `!!js` scalars are evaluated against the Host process
+    // environment), and the stdio Seclayer row names it in `secretEnv`,
+    // which the MCP client resolves from the same host env when the child
+    // spawns. Either delivery form satisfies the parity.
+    for (const name of MCP_ENVIRONMENT_NAMES) {
+      const delivered = patch.includes(`process.env.${name}`) || patch.includes(`secretEnv: ['${name}']`)
+      expect(delivered, `${name} is not delivered by any row of the bundled patch`).toBe(true)
+    }
   })
 
   it('leaves an inherited environment alone and still loads the missing names', async () => {
