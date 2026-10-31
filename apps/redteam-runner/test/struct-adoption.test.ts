@@ -8,6 +8,9 @@
  * ops are declared as json_schema constraints on the calls themselves,
  * validated by the router's own validateResponseFormat; each site's
  * hand parser/validator stays as the response-side check.
+ * A3 — agentLoop's own completion calls carry a caller-supplied
+ * responseFormat opt; the directive and plan phases (whose loop text is
+ * parsed as JSON) adopt { type: 'json_object' } through it.
  */
 import { describe, it, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
@@ -30,6 +33,9 @@ import {
   REFINE_FORMAT,
 } from '../src/workgraph/wiring.js'
 import { EventLog } from '../src/events.js'
+import { agentLoop } from '../src/agents.js'
+import { coordinatorDirective } from '../src/phases/directive.js'
+import { planPhase } from '../src/phases/plan.js'
 import type { Ctx } from '../src/context.js'
 import type { PlanStep } from '../src/types.js'
 
@@ -147,5 +153,94 @@ describe('A2 — architect refine format rides the deps-injected completion', ()
     startGraphSubtask(ctx, sub.id)
     await completeGraphSubtask(ctx, sub.id, 'confirmed finding', 1)
     assert.deepEqual((captured.opts as { responseFormat?: unknown })?.responseFormat, REFINE_FORMAT)
+  })
+})
+
+describe('A3 — agentLoop forwards the opt; directive + plan adopt json_object', () => {
+  let dir = ''
+  beforeEach(() => {
+    dir = join(tmpdir(), `struct-a3-${process.pid}-${Date.now()}`)
+    mkdirSync(dir, { recursive: true })
+  })
+  afterEach(() => rmSync(dir, { recursive: true, force: true }))
+
+  type CallOpts = { responseFormat?: ResponseFormat }
+
+  /** A loop-ready fake Ctx (reflector-test shape) whose completion seam
+   * records the options of every call and replies with fixed text. */
+  function makeCtx(captured: CallOpts[], reply: string): Ctx {
+    const completeForRole = async (_role: unknown, _messages: unknown, opts?: CallOpts): Promise<ChatResult> => {
+      captured.push(opts ?? {})
+      return { text: reply, toolCalls: [], provider: 'fake', model: 'fake' }
+    }
+    return {
+      actions: 0,
+      consecutive5xx: 0,
+      deniedStreak: 0,
+      redirects: 0,
+      startedAt: Date.now(),
+      hosts: ['shop.example.test'],
+      domain: 'shop.example.test',
+      verificationProof: 'DNS TXT record',
+      config: { maxActions: 1000, maxDurationMs: 60_000, dryRunAgents: false },
+      input: {
+        target: 'https://shop.example.test',
+        mode: 'red',
+        objective: 'assess the shop',
+        roe: { blackoutWindows: [], scope: ['shop.example.test'] },
+        fullBattery: false,
+      },
+      deps: { completeForRole },
+      events: new EventLog(dir, 'eng-struct-a3', { target: 'shop.example.test', mode: 'red', objective: 'assess the shop' }),
+      coverage: new Set(),
+      targetCoverage: new Map(),
+      itemLedger: new Map(),
+      registryHits: [],
+      probesUsed: 0,
+      opsecCooldown: new Set(),
+      liveFindings: [],
+      killedLive: [],
+      targetMap: [],
+      plan: null,
+      fingerprint: { stack: [], appType: 'unknown' },
+      tier: { current: 0, chainSteps: new Map<string, number>() },
+      safety: { killSwitchAborts: 0 },
+      hostKill: { aborted: false, controllers: new Set<AbortController>() },
+    } as unknown as Ctx
+  }
+
+  it('agentLoop forwards the opt to the loop completion calls', async () => {
+    const captured: CallOpts[] = []
+    const ctx = makeCtx(captured, 'done')
+    const text = await agentLoop(ctx, 'coordinator', 'plan', 'sys', 'user', [], 2, { responseFormat: FORMAT })
+    assert.equal(text, 'done')
+    assert.ok(captured.length >= 1)
+    for (const opts of captured) assert.deepEqual(opts.responseFormat, FORMAT)
+  })
+
+  it('agentLoop leaves the opt absent when the caller passes none', async () => {
+    const captured: CallOpts[] = []
+    const ctx = makeCtx(captured, 'done')
+    await agentLoop(ctx, 'coordinator', 'plan', 'sys', 'user', [], 2)
+    assert.ok(captured.length >= 1)
+    for (const opts of captured) assert.equal(opts.responseFormat, undefined)
+  })
+
+  it('coordinatorDirective runs its loop under json_object', async () => {
+    const captured: CallOpts[] = []
+    const ctx = makeCtx(captured, JSON.stringify({ tasks: [], finish: true, note: 'fixture' }))
+    const out = await coordinatorDirective(ctx, 'decompose', 'fixture context')
+    assert.equal(out.finish, true)
+    assert.ok(captured.length >= 1)
+    for (const opts of captured) assert.deepEqual(opts.responseFormat, { type: 'json_object' })
+  })
+
+  it('planPhase runs its loop under json_object', async () => {
+    const captured: CallOpts[] = []
+    const ctx = makeCtx(captured, JSON.stringify({ adversaryProfile: 'fixture-profile', steps: [] }))
+    await planPhase(ctx)
+    assert.equal(ctx.plan?.adversaryProfile, 'fixture-profile')
+    assert.ok(captured.length >= 1)
+    for (const opts of captured) assert.deepEqual(opts.responseFormat, { type: 'json_object' })
   })
 })
