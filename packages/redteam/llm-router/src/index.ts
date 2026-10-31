@@ -52,7 +52,6 @@ export {
   POOL_STATE_ENV,
   POOL_STATE_FILENAME,
 } from './pool-store.js'
-export { poolSnapshots, type PoolSnapshot } from './router.js'
 export {
   ResilienceError,
   abortableSleep,
