@@ -290,3 +290,57 @@
 .overlayLayer > * {
   pointer-events: auto;
 }
+
+/* Glass shell (html-report-design skill, chat-shell section): the token
+   home is glass-shell.css (imported by AppFrame.tsx); this sheet carries
+   the frame's own scene and geometry rules, consuming those tokens. */
+
+/* The lit backdrop (dark): layered radial light pools over a diagonal zinc
+   base, with a faint tonal grain as the top layer — a scene with real light
+   variation for the glass to blur against, never flat black. macOS keeps
+   its transparent frame (window vibrancy is the backdrop there). */
+:global(html:not([data-platform='darwin'])) :global(body[data-ds-dark-theme]) .frame {
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.012) 0 1px, transparent 1px 3px),
+    radial-gradient(1100px 620px at 18% -8%, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 60%),
+    radial-gradient(900px 700px at 88% 112%, rgba(214, 205, 188, 0.07), rgba(214, 205, 188, 0) 62%),
+    radial-gradient(820px 560px at 4% 82%, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 60%),
+    radial-gradient(700px 480px at 62% 30%, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0) 65%),
+    linear-gradient(168deg, #101013 0%, #0a0a0c 46%, #060607 100%);
+  background-color: #09090b;
+}
+
+/* Floating geometry (dark, web + Windows caption layout excluded — the
+   caption layout keeps its edge-to-edge card): panels inset 12px with a
+   12px gutter, so the columns read as glass panels over the scene. The
+   Windows frame rule above owns the caption strip's top padding; only the
+   other three sides are set here. */
+:global(html:not([data-windows-titlebar])) :global(body[data-ds-dark-theme]) .frame {
+  padding: 12px;
+  gap: 12px;
+}
+
+/* Drag handles are positioned from the solved column widths; the floating
+   geometry moves the sidebar gutter's centre 18px right of the solved edge
+   (12px frame padding + half the 12px gap) and the rightbar gutter's centre
+   18px left of it. */
+:global(html:not([data-windows-titlebar])) :global(body[data-ds-dark-theme]) .handle[data-side='sidebar'] {
+  transform: translateX(18px);
+}
+
+:global(html:not([data-windows-titlebar])) :global(body[data-ds-dark-theme]) .handle[data-side='rightbar'] {
+  transform: translateX(-18px);
+}
+
+/* Columns stop painting their own ground in dark: the scene is the ground,
+   and each column's occupant draws its glass panel. The Windows centre card
+   keeps its top-left radius against the caption strip but lets the scene
+   and the conversation panel show through. */
+:global(body[data-ds-dark-theme]) .sidebarCol {
+  background: transparent;
+  border-right: none;
+}
+
+:global([data-windows-titlebar]) :global(body[data-ds-dark-theme]) .centerCol {
+  background: transparent;
+}

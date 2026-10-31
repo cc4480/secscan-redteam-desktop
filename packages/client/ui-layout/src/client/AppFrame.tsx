@@ -23,6 +23,9 @@ import { CENTER_MIN, clampWidth, computeColumns, RIGHTBAR_DEFAULT_RATIO, RIGHTBA
 import { DocumentTitle } from './DocumentTitle.tsx'
 import type { createLayoutStore } from './stores.ts'
 import css from './AppFrame.module.css'
+// The glass/motion token sheet (plain CSS: its subjects are global). It
+// rides this package's bundle because the frame is the shell root.
+import './glass-shell.css'
 
 /** Full composed props: runtime share + child-slot render share + store share. */
 export type AppFrameProps =
