@@ -82,6 +82,15 @@ function handlerCtx(): Ctx {
   } as unknown as Ctx;
 }
 
+/** A LOCAL-host engagement context — the same calls must work here too (the gate is availability only). */
+function handlerCtxLocal(): Ctx {
+  return {
+    input: { target: "operator-pc", mode: "red", objective: "test", localHost: true, roe: { scope: ["operator-pc"] } },
+    events: { dir: "/tmp/bridge-fleet-dispatch-no-dir", append: () => {} },
+    deps: {},
+  } as unknown as Ctx;
+}
+
 describe("bridge handler — availability re-check and full routing", () => {
   it("does not claim other families' tools", async () => {
     const client = fakeClient();
@@ -109,6 +118,16 @@ describe("bridge handler — availability re-check and full routing", () => {
       [...REGISTRY_OPS],
       "every one of the 67 ops forwarded unprefixed and unfiltered — shell_pwsh, type_text, power, delete_file included",
     );
+  });
+
+  it("the supervisor's named ops are callable in a LOCAL engagement too (shell_pwsh, type_text, power, delete_file)", async () => {
+    const up = fakeClient({ available: true });
+    for (const op of ["shell_pwsh", "type_text", "power", "delete_file"]) {
+      const r = await handleBridgeTools(handlerCtxLocal(), "exploiter", "exploit", call(`bridge_${op}`, { probe: op }), { probe: op }, up);
+      assert.equal(r?.ok, true, `bridge_${op} callable in a local engagement`);
+      assert.equal(r?.result, `result of ${op}`);
+    }
+    assert.deepEqual(up.calls.map((c) => c.name), ["shell_pwsh", "type_text", "power", "delete_file"]);
   });
 
   it("a bridge-side consent denial is a clean typed result — never a hang, crash, or silent drop", async () => {
