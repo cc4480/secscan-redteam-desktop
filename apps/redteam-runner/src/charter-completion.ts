@@ -48,6 +48,7 @@ import {
   type ChatResult,
   type FallbackCallImpl,
   type JsonSchemaTool,
+  type ResponseFormat,
   type RoleRoute,
 } from '@secscan/redteam-llm-router'
 import { type Ctx } from './context.js'
@@ -103,6 +104,9 @@ export interface CharteredCallOptions {
   signal?: AbortSignal
   maxTokens?: number
   temperature?: number
+  /** Structured-output constraint for this call (Q-STRUCT A1 seam).
+   * Absent = unconstrained, exactly the historical behavior. */
+  responseFormat?: ResponseFormat
 }
 
 /** Injectable provider seam for tests; production uses the router registry. */
@@ -219,6 +223,7 @@ export function createCharteredComplete(
           signal: o.signal,
           maxTokens: o.maxTokens,
           temperature: o.temperature,
+          responseFormat: o.responseFormat,
         }))
     const result = await call(route, messages, opts)
     // Refusal gate: only a tool-less response can be a refusal outcome —

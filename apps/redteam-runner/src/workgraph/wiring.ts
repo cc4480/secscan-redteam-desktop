@@ -18,7 +18,7 @@
  * Every function here is failure-isolated: the work-graph is the plan's
  * record, never a reason to fail an engagement.
  */
-import type { ChatMessage } from "@secscan/redteam-llm-router";
+import type { ChatMessage, ResponseFormat } from "@secscan/redteam-llm-router";
 import { createCharteredComplete } from "../charter-completion.js";
 import type { Ctx } from "../context.js";
 import { extractJsonBlock } from "../util.js";
@@ -158,6 +158,50 @@ export async function completeGraphSubtask(
   }
 }
 
+/**
+ * The wire-level form of the RefineOps contract (Q-STRUCT A2): the same
+ * fields the prompt below declares in prose, as a json_schema constraint
+ * on the call itself. The prose stays (it also serves ladder-era
+ * fallback); the schema is the constraint now. All fields optional —
+ * an empty object is a valid, common answer.
+ */
+export const REFINE_FORMAT: ResponseFormat = {
+  type: "json_schema",
+  name: "refine_ops",
+  schema: {
+    type: "object",
+    properties: {
+      addSubtasks: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            taskId: { type: "string" },
+            title: { type: "string" },
+            kind: { type: "string", enum: ["probe", "recon"] },
+          },
+          required: ["taskId", "title", "kind"],
+          additionalProperties: false,
+        },
+      },
+      skipSubtaskIds: { type: "array", items: { type: "string" } },
+      reprioritize: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            taskId: { type: "string" },
+            priority: { type: "number" },
+          },
+          required: ["taskId", "priority"],
+          additionalProperties: false,
+        },
+      },
+    },
+    additionalProperties: false,
+  },
+};
+
 /** The production RefineFn: one coordinator completion over the graph. */
 async function coordinatorRefine(ctx: Ctx, flow: WorkFlow, resultSummary: string): Promise<RefineOps | null> {
   const complete = ctx.deps.completeForRole ?? createCharteredComplete(ctx, "exploit");
@@ -182,7 +226,7 @@ async function coordinatorRefine(ctx: Ctx, flow: WorkFlow, resultSummary: string
         `Subtask result:\n${resultSummary.slice(0, 1500)}\n\nTasks:\n${taskList}\n\nPending subtasks:\n${pending.join("\n") || "(none)"}`,
     },
   ];
-  const res = await complete("coordinator", messages, { tools: [] });
+  const res = await complete("coordinator", messages, { tools: [], responseFormat: REFINE_FORMAT });
   const parsed = extractJsonBlock(res.text) as RefineOps | null;
   return parsed ?? null;
 }
