@@ -530,7 +530,7 @@ describe('parseHtmlIndexEntries (coordinator-ruled GTFOBins HTML-index rung)', (
       { config, cacheDir, sourceCommit: 'x' },
       {
         fetchText: fixtureFetchText(
-          new Map([['gtfobins.github.io', GTFO_INDEX_HTML]]),
+          new Map([['/GTFOBins/', GTFO_INDEX_HTML]]),
         ),
       },
     )
@@ -540,5 +540,67 @@ describe('parseHtmlIndexEntries (coordinator-ruled GTFOBins HTML-index rung)', (
     assert.equal(row.fetchError, null)
     const names = data.entries.filter(e => e.collectionSlug === 'gtfobins').map(e => e.name)
     assert.deepEqual(names, ['7z', 'aa-exec'])
+  })
+})
+
+describe('table rung (production census format)', () => {
+  const TABLE_DOC = [
+    '# Census (table-rung test)',
+    '',
+    '## Awesome Repositories',
+    '',
+    'Repository | Description',
+    '---- | ----',
+    '[Alpha List](https://github.com/example/alpha-list) | First curated list',
+    '[Beta Tools](https://github.com/example/beta-tools) | Second curated list',
+    '[Site Index](https://beta.example.io) | A project site, not a repo',
+    '',
+    '- [Bullet Entry](https://github.com/example/bullet-entry) - A list item still parses',
+  ].join('\n')
+
+  it('parseLevel1 reads table rows as collections with heading topics', () => {
+    const census = parseLevel1(TABLE_DOC)
+    assert.deepEqual(
+      census.collections.map(c => [c.slug, c.topic]),
+      [
+        ['alpha-list', 'Awesome Repositories'],
+        ['beta-tools', 'Awesome Repositories'],
+        ['site-index', 'Awesome Repositories'],
+        ['bullet-entry', 'Awesome Repositories'],
+      ],
+    )
+    assert.equal(census.collections[0].description, 'First curated list')
+    assert.equal(census.itemCount, 4)
+    assert.equal(census.unparsedCount, 0)
+  })
+
+  it('parseLinkedList reads table rows as entries too', () => {
+    const parsed = parseLinkedList(TABLE_DOC)
+    assert.equal(parsed.entries.length, 4)
+    assert.equal(parsed.entries[1].name, 'Beta Tools')
+    assert.equal(parsed.entries[1].description, 'Second curated list')
+  })
+
+  const PIPE_DOC = [
+    '# Toolkit (pipe-table test)',
+    '',
+    '## Recon',
+    '|Name|Description|URL|',
+    '|-----|-----------|----|',
+    '|RustyScan|The modern port scanner|https://github.com/example/rustyscan|',
+    '|Amassive|Attack surface mapping|https://github.com/example/amassive|',
+    '|NoLink|No URL cell in this row|-|',
+  ].join('\n')
+
+  it('reads pipe-table rows with a bare-URL cell as entries', () => {
+    const parsed = parseLinkedList(PIPE_DOC)
+    assert.deepEqual(
+      parsed.entries.map(e => [e.name, e.url, e.description]),
+      [
+        ['RustyScan', 'https://github.com/example/rustyscan', 'The modern port scanner'],
+        ['Amassive', 'https://github.com/example/amassive', 'Attack surface mapping'],
+      ],
+    )
+    assert.equal(parsed.itemCount, 2)
   })
 })

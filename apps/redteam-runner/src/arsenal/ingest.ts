@@ -100,6 +100,8 @@ const MAX_LINE_CHARS = 8192
 
 const HEADING_RE = /^[ \t]{0,3}#{1,6}[ \t]+(.+?)[ \t]*$/
 const ITEM_RE = /^[ \t]{0,10}(?:[-*+]|\d{1,3}[.)])[ \t]+(.*)$/
+const TABLE_ROW_RE = /^[ \t]{0,3}\[([^\]\n]+)\]\(([^)\s]+)\)[ \t]*\|[ \t]?(.*)$/
+const PIPE_TABLE_ROW_RE = /^[ \t]{0,3}\|(.*)\|[ \t]*$/
 const FENCE_RE = /^[ \t]{0,3}(```|~~~)/
 const LINK_RE = /\[([^\]\n]*)\]\(([^)\s]*)(?:[ \t]+[^)]*)?\)/g
 const BARE_URL_RE = /https?:\/\/\S+/i
@@ -237,6 +239,35 @@ function scanDocument(markdown: string): ScannedItem[] {
     if (heading) {
       topic = cleanInlineText(heading[1].replace(/[ \t]+#+$/, ''))
       continue
+    }
+    // Table rung (production-census addition, 2026-10-31): the real
+    // Awesome Hacking README \u2014 and several priority READMEs \u2014 publish
+    // their entries as markdown TABLE rows, not list items; the list-only
+    // ladder parsed 1 of the census's 81 rows. Two forms:
+    //  (a) `[Name](url) | description` \u2014 the row is re-expressed in the
+    //      list form the ladder already resolves. Header/separator rows
+    //      carry no link and never match.
+    //  (b) pipe tables `|Name|Description|https://\u2026|` \u2014 a row whose cells
+    //      include exactly one bare http(s) URL cell; the first non-URL
+    //      cell is the name, the rest the description. Header rows (no
+    //      URL cell) and separator rows (dash cells) never match.
+    const tableRow = TABLE_ROW_RE.exec(line)
+    if (tableRow) {
+      items.push({ topic, content: `[${tableRow[1]}](${tableRow[2]}) - ${tableRow[3]}` })
+      continue
+    }
+    const pipeRow = PIPE_TABLE_ROW_RE.exec(line)
+    if (pipeRow) {
+      const cells = pipeRow[1].split('|').map(x => x.trim())
+      const urlCells = cells.filter(x => normalizeArsenalUrl(x) !== null)
+      if (urlCells.length === 1) {
+        const url = urlCells[0]
+        const rest = cells.filter(x => x !== '' && x !== url)
+        if (rest.length > 0) {
+          items.push({ topic, content: `[${rest[0]}](${url}) - ${rest.slice(1).join(' | ')}` })
+          continue
+        }
+      }
     }
     const item = ITEM_RE.exec(line)
     if (item) items.push({ topic, content: item[1] })
