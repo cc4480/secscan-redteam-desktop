@@ -14,8 +14,9 @@ import { type Ctx } from "../context.js";
 import { type ActorRole, type EngagementPhase } from "../types.js";
 import type { ToolCallRequest } from "@secscan/redteam-llm-router";
 import { type DispatchResult } from "./types.js";
+import { toolTimeoutResult } from "./timeout.js";
 import { noteCategoryCoverage, strListArg } from "./prelude.js";
-import { mapTemplateToBattery, overlapHint } from "../nuclei/index.js";
+import { mapTemplateToBattery, overlapHint, resolveNucleiTimeoutS } from "../nuclei/index.js";
 
 function strArg(args: Record<string, unknown>, key: string): string | undefined {
   const v = args[key];
@@ -77,7 +78,13 @@ export async function handleNucleiTools(ctx: Ctx, _role: ActorRole, phase: Engag
     });
     if (res.refused) return { result: `DENIED by nuclei safety policy: ${res.refused}`, attackId, target: host };
     if (res.timedOut) {
-      return { result: `ABORTED: nuclei run timed out at the runner timeout — target ${host}. Partial results below.\n${res.output}`, attackId, target: host };
+      // Q-TOOLTIMEOUT §2.5 adoption: the executor-timeout path returns the
+      // typed TOOL_TIMEOUT result (budget = the executor's own spawn
+      // deadline), never the old ABORTED free text — a timeout of our own
+      // tool is not target distress. Partial output rides after the
+      // canonical text.
+      const t = toolTimeoutResult({ toolName: "nuclei_exec", timeoutMs: resolveNucleiTimeoutS() * 1000 + 15000, target: host });
+      return { ...t, result: res.output ? `${t.result} Partial results below.\n${res.output}` : t.result, attackId };
     }
     // Honest counting: template executions are variant-level checks, tracked
     // separately from the 418 intents (see nuclei/reporting.ts).

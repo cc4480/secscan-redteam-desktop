@@ -12,6 +12,7 @@ import { type ToolCallRequest } from "@secscan/redteam-llm-router";
 import { checkTierAllows, recordExploitStep, readTierFile, TIER_NAMES } from "../accountability/index.js";
 import { distressEscalationResult, isTargetDistress, readAbortFile, consumeAbortFile, classifyCredentialAttempt, classifyAuthOutcome, lockoutGuardFor, type CredentialClassification } from "../safety/index.js";
 import { type DispatchResult } from "./types.js";
+import { TOOL_TIMEOUT } from "./timeout.js";
 import { recordItemAttempt } from "./verdicts.js";
 import { checkVariantCap, recordVariantExecution } from "../variants/index.js";
 import { postDispatchHooks, preDispatchGate } from "./policy-gate.js";
@@ -212,7 +213,7 @@ export async function dispatchTool(ctx: Ctx, role: ActorRole, phase: EngagementP
   d = await postDispatchHooks(ctx, phase, gate.call, d, host);
   recordCallOutcome(ctx, role, phase, call, host, d);
   if (host) {
-    const haltReason = ctx.safety.autoHalt.recordOutcome(host, isTargetDistress(d.result));
+    const haltReason = ctx.safety.autoHalt.recordOutcome(host, isTargetDistress(d.result, d.errorCode));
     if (haltReason) {
       ctx.events.append({
         phase,
@@ -285,6 +286,9 @@ export async function dispatchTool(ctx: Ctx, role: ActorRole, phase: EngagementP
     // v0.21.0: nuclei template listing is recon for the methodology item —
     // only `run` executions mark the item attempted.
     !(call.name === "nuclei_exec" && (call.arguments as Record<string, unknown> | undefined)?.["action"] !== "run") &&
+    // Q-TOOLTIMEOUT §2.3 rule 2: a coded tool timeout executed nothing —
+    // it must not mark its battery item attempted or advance a variant.
+    d.errorCode !== TOOL_TIMEOUT &&
     !/^(DENIED|HALTED|ABORTED|REFUSED)/i.test(d.result) &&
     !d.result.startsWith("probe failed")
   ) {
