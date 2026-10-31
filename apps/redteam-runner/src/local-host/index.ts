@@ -4,3 +4,4 @@
  */
 export * from "./types.js";
 export * from "./collect.js";
+export * from "./artifact.js";

@@ -9,14 +9,20 @@
  * fabricated.
  */
 import assert from 'node:assert/strict'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, it } from 'node:test'
 import { PC_AGENT_OBSERVE_TOOLS, pcAgentToolTier, type FetchLike, type PcAgentTool } from '../src/host-exec/pc-agent.js'
 import {
+  LOCAL_COLLECTOR_ID,
   LOCAL_INVENTORY_OPERATIONS,
   buildLocalEngagementInput,
   collectLocalInventory,
   localChannelFromEnv,
   localVerificationProof,
+  toHostInventoryArtifact,
+  writeHostInventoryArtifact,
   type LocalChannel,
 } from '../src/local-host/index.js'
 import { PC_AGENT_TOOLS, PC_OBSERVE_OPERATIONS } from '../src/tools/pc-agent.js'
@@ -119,6 +125,55 @@ describe('local-host collector', () => {
     assert.equal(inventory.sections.processes.status, 'failed')
     assert.equal(inventory.sections.filesystem.status, 'collected')
     assert.equal(inventory.sections.system.status, 'collected')
+  })
+})
+
+describe('local-host artifact (pair contract)', () => {
+  it('maps a successful collection onto the ok form with real system rows', async () => {
+    const { channel } = stubChannel()
+    const inventory = await collectLocalInventory(channel, OPTS)
+    const artifact = toHostInventoryArtifact(inventory)
+    assert.equal(artifact.status, 'ok')
+    if (artifact.status !== 'ok') return
+    assert.equal(artifact.inventory.hostname, 'CHO-ZEN1')
+    assert.equal(artifact.inventory.collector, LOCAL_COLLECTOR_ID)
+    const os = artifact.inventory.system.find((row) => row.label === 'OS')
+    assert.equal(os?.value, 'Windows')
+    // Un-collectable required blocks are present, empty, and reconciled at zero.
+    assert.deepEqual(artifact.inventory.volumes, [])
+    assert.deepEqual(artifact.inventory.accounts, [])
+    assert.deepEqual(artifact.inventory.patches, [])
+    assert.deepEqual(artifact.inventory.software, [])
+    assert.deepEqual(artifact.inventory.totals, { volumes: 0, accounts: 0, patches: 0, software: 0, files: 0 })
+    assert.match(artifact.inventory.patchLevel, /not collected/iu)
+    // Optional blocks the collector cannot fill are omitted, not emptied.
+    assert.equal('filesystem' in artifact.inventory, false)
+    assert.equal('sensitive' in artifact.inventory, false)
+    assert.equal('defender' in artifact.inventory, false)
+  })
+
+  it('maps a failed identity gate onto the failed form', async () => {
+    const { channel } = stubChannel({ system_info: new Error('bridge down') })
+    const inventory = await collectLocalInventory(channel, OPTS)
+    const artifact = toHostInventoryArtifact(inventory)
+    assert.equal(artifact.status, 'failed')
+    if (artifact.status !== 'failed') return
+    assert.equal(artifact.hostname, 'CHO-ZEN1')
+    assert.match(artifact.error, /identity not established/u)
+  })
+
+  it('writes host-inventory.json into the engagement directory', async () => {
+    const { channel } = stubChannel()
+    const inventory = await collectLocalInventory(channel, OPTS)
+    const dir = await mkdtemp(join(tmpdir(), 'rp11-artifact-'))
+    try {
+      const path = await writeHostInventoryArtifact(dir, inventory)
+      assert.equal(path, join(dir, 'host-inventory.json'))
+      const parsed = JSON.parse(await readFile(path, 'utf8')) as { status?: string }
+      assert.equal(parsed.status, 'ok')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })
 
