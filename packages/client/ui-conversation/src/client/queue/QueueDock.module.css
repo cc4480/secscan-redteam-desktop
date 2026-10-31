@@ -41,8 +41,8 @@
   z-index: -1;
   inset: 0;
   border-radius: inherit;
-  background: var(--dsw-specific-menu);
-  backdrop-filter: var(--dsw-menu-backdrop-filter);
+  background: var(--glass-hi);
+  backdrop-filter: var(--glass-blur);
   content: '';
   pointer-events: none;
 }
@@ -270,4 +270,10 @@
 .action:disabled {
   cursor: default;
   opacity: 0.45;
+}
+
+/* Entrance (motion tokens, shell scope): the dock rises as it appears
+   above the composer card. */
+.panel {
+  animation: dsh-rise var(--dur-base) var(--ease-out) backwards;
 }

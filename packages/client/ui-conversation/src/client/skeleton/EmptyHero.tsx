@@ -72,17 +72,17 @@ export interface HeroShellProps {
 }
 
 /**
- * The hero product mark (34px wide), static. This slot used to hold the animated
- * DeepSeek whale, morphing the mark path through two hand-generated swim
- * variants via SMIL; those variants were whale geometry and went with it, so the
- * mark now holds still and keeps its size and place in the layout.
+ * The hero fallback mark (34px wide): the primitives' mark glyph in
+ * headline ink. It sways on hover (the `.fishSwim` rules in
+ * HeroShell.module.css); a registered occupant of the hero brand slot —
+ * the official diamond — replaces it wholesale and always holds still.
  * @param props.hovering - driven by the hitbox parent's pointer state.
  * @returns the mark svg element.
  */
 function HeroFish({ hovering }: { hovering: boolean }) {
   return (
     <svg
-      className={css.fish}
+      className={[css.fish, css.fishSwim].join(' ')}
       data-hovering={hovering ? '' : undefined}
       width={34}
       height={(34 * FISH_LOGO_VIEWBOX.height) / FISH_LOGO_VIEWBOX.width}

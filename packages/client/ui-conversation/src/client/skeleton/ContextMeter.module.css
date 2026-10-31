@@ -51,8 +51,8 @@
   padding: 12px;
   border: 0;
   border-radius: 12px;
-  background: var(--dsw-specific-menu);
-  backdrop-filter: var(--dsw-menu-backdrop-filter);
+  background: var(--glass-hi);
+  backdrop-filter: var(--glass-blur);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
   font-size: 12px;

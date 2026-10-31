@@ -75,7 +75,8 @@
 }
 
 /* Keep hover detection on a stationary box while the mark moves within it;
-   hover rules target the hitbox so a slot-occupant mark swims too. */
+   hover rules target the hitbox. Only the fallback mark swims — a slot
+   occupant (the official diamond) always holds still. */
 .fishHitbox {
   display: inline-flex;
   flex: none;
@@ -93,10 +94,15 @@
   color: var(--dsw-alias-label-primary);
 }
 
-/* Hover swim: a slow continuous sway about the body center — the head
-   (left) lifts as the whale rises, then settles back with a small
-   counter-tilt, like treading water. Negative rotation = head up (the head
-   is the left half; origin 50% 60%). */
+/* The swim-enabled mark: only the hero's fallback carries this class; the
+   hover animation below names it, so slot occupants never loop. */
+.fishSwim {
+  transform-origin: 50% 60%;
+}
+
+/* Hover swim: a slow continuous sway about the body center — the mark
+   lifts, then settles back with a small counter-tilt, like treading
+   water. */
 @keyframes hero-fish-swim {
   0%,
   100% {
@@ -113,7 +119,7 @@
 }
 
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
-  .fishHitbox:hover .fish {
+  .fishHitbox:hover .fishSwim {
     animation: hero-fish-swim 1.6s ease-in-out infinite;
   }
 }
@@ -228,4 +234,11 @@
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-state-error-primary);
+}
+
+/* Entrance (motion tokens, shell scope): the hero stack rises once on
+   mount, two stagger steps behind the sidebar. */
+.stack {
+  animation: dsh-rise var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: calc(var(--stagger) * 2);
 }
