@@ -71,6 +71,11 @@ export function syncLiveFindingsToState(ctx: Ctx): void {
       fix: "(pending — the reporter writes the fix)",
       retest: "(pending)",
       status: "confirmed" as const,
+      // Q-PROVEN: the cell verdict rides into state so console consumers
+      // see the same verdict the report renders. Absent stays absent.
+      cellState: f.cellState,
+      provenClaim: f.provenClaim,
+      cellDetail: f.cellDetail,
     })),
   });
 }
