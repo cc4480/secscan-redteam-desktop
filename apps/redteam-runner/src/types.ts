@@ -172,6 +172,18 @@ export interface Finding {
   fix: string
   retest: string
   status: 'confirmed' | 'killed' | 'deferred'
+  /**
+   * Dual-exploiter cell verdict carried from the live finding at report
+   * time (Q-PROVEN): 'proven' means the cell adjudicated a recorded claim
+   * with both signatures plus a passing negative control. Stamped by the
+   * RUNNER only (report-phase join / halted-path map) — never model-set.
+   * Absent = never adjudicated.
+   */
+  cellState?: 'proven' | 'detected'
+  /** The adjudicated claim's expected marker + target URL, carried with cellState so the report can render the Cell Receipt. The claim's receipt is NOT carried — it lives in the audit trail. */
+  provenClaim?: { expectedMarker: string; targetUrl: string }
+  /** The cell adjudication's one-line detail, carried with the claim. */
+  cellDetail?: string
   /** Named human operator accountable for this finding (v0.17.0). Stamped by the runner at report time. */
   accountableOperator?: string
 }
