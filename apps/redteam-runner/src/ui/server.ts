@@ -25,6 +25,8 @@ import { handleConsoleScope } from './routes/console-scope.js'
 import { handleAbort, handleEscalate, handleReverify, handleJob, handleWatchProfiles, handleWatchTrigger } from './routes/actions.js'
 import { json, notFound, readJsonBody } from './routes/http.js'
 import { handleMcp } from './mcp-endpoint.js'
+import { resolveArsenalConfig } from '../arsenal/config.js'
+import { startArsenalRefreshTimer } from '../arsenal/refresh.js'
 import { handleModels } from './routes/models.js'
 import { handleFoundry, handleFoundryLoop, handleFoundryRunGold, handleFoundryVerify } from './routes/foundry.js'
 import type { UiServerOptions } from './types.js'
@@ -253,8 +255,23 @@ export async function startUiServer(opts: UiServerOptions = {}): Promise<UiServe
   console.log(explicitToken ? '[ui] UI token: using REDTEAM_UI_TOKEN from the environment (not logged).' : `[ui] UI token (do not share): ${token}`)
   console.log(`[ui] engagements dir: ${store.engagementsDir}`)
 
+  // Arsenal refresh timer (spec §9.2): schedules one background refresh
+  // per configured interval and never attempts one at startup, so
+  // booting the console performs zero arsenal network activity. A
+  // misconfigured REDTEAM_ARSENAL_* variable is logged here and leaves
+  // the timer off — the /mcp endpoint still fails loud per request on
+  // the same misconfiguration.
+  let stopArsenalTimer: () => void = () => {}
+  try {
+    const arsenalConfig = resolveArsenalConfig(process.env, { engagementsDir: store.engagementsDir })
+    stopArsenalTimer = startArsenalRefreshTimer({ config: arsenalConfig })
+  } catch (err) {
+    console.error(`[ui] arsenal refresh timer disabled: ${(err as Error).message}`)
+  }
+
   const close = () =>
     new Promise<void>((resolve) => {
+      stopArsenalTimer()
       server.close(() => resolve())
     })
   process.on('SIGINT', () => {
