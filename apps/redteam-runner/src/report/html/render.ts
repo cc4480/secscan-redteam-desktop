@@ -33,6 +33,11 @@ import {
   type CoverageInput,
 } from "./sections.js";
 import { TIER_DEFINITION, TIER_LABEL, TIER_ORDER, esc, type ReportTier, type SeverityName } from "./tokens.js";
+import type { ReportDetail } from "../detail.js";
+import {
+  breakdownSection, impactSection, pillarSection, prioritySection,
+  riskAreasSection, surfaceSection, whatChangedSection,
+} from "./detail-sections.js";
 
 export type { ActivityInput, CoverageInput } from "./sections.js";
 export type { FindingMeta } from "./cards.js";
@@ -51,6 +56,9 @@ export interface EngagementReportInput {
   noBundleReasons: ReadonlyMap<string, string>;
   negativeProof: NegativeProof[];
   findingMeta: ReadonlyMap<string, FindingMeta>;
+  /** The Q-REPORT-DETAIL derivations (report/detail.ts), when the
+   * phase assembled them. Absent => the pre-detail anatomy renders. */
+  detail?: ReportDetail;
   coverage: CoverageInput;
   activity: ActivityInput;
   haltedReason?: string;
@@ -119,8 +127,18 @@ export function renderEngagementReportHtml(o: EngagementReportInput): string {
   const activeCount = counts.proven + counts.confirmed + counts.deferred;
 
   const parts: string[] = [];
+  const d = o.detail;
+  // The cover carries live deltas only when the baseline diff carries a
+  // numeric score delta (a counts-only baseline renders none anywhere).
+  const coverDelta = d && d.diff && d.diff.scoreDelta !== undefined && o.meta.baseline
+    ? {
+        scoreDelta: d.diff.scoreDelta,
+        findingsDelta: d.diff.findingsDelta,
+        baselineLabel: o.meta.baseline.startedAt.slice(0, 10),
+      }
+    : undefined;
   parts.push(
-    coverSection({ meta: o.meta, posture: o.posture, tierCounts: counts, haltedReason: o.haltedReason, dryRun: o.dryRun }),
+    coverSection({ meta: o.meta, posture: o.posture, tierCounts: counts, haltedReason: o.haltedReason, dryRun: o.dryRun, delta: coverDelta }),
   );
   if (halted) parts.push(haltBanner(o.haltedReason as string));
   else if (o.banner) parts.push(bannerSection(o.banner));
@@ -132,7 +150,14 @@ export function renderEngagementReportHtml(o: EngagementReportInput): string {
     );
   }
 
-  parts.push(coverageSection(o.coverage));
+  if (d) {
+    parts.push(breakdownSection(d));
+    parts.push(whatChangedSection(d, o.meta.target));
+    if (d.riskAreas.length > 0) parts.push(riskAreasSection(d));
+    parts.push(impactSection(d));
+  } else {
+    parts.push(coverageSection(o.coverage));
+  }
 
   parts.push(
     severityChips(o.posture.findingsBySeverity as Record<SeverityName, number>) +
@@ -150,6 +175,12 @@ export function renderEngagementReportHtml(o: EngagementReportInput): string {
   }
 
   parts.push(fixPromptSection(o.meta.target, o.findings, o.bundles));
+  if (d) {
+    parts.push(prioritySection(d));
+    parts.push(pillarSection(d));
+    parts.push(coverageSection(o.coverage));
+    parts.push(surfaceSection(d));
+  }
   parts.push(activitySection(o.activity));
   parts.push(footerSection(o.meta));
 

@@ -18,6 +18,18 @@ export interface CoverInput {
   tierCounts: Record<ReportTier, number>;
   haltedReason?: string;
   dryRun?: boolean;
+  /** Baseline deltas (detail.ts outputs), present only when a same-engine
+   * baseline with a recorded score exists — never a fabricated Δ 0. */
+  delta?: { scoreDelta?: number; findingsDelta: number; baselineLabel: string };
+}
+
+function signed(n: number): string {
+  return n > 0 ? `+${n}` : n < 0 ? `−${-n}` : "0";
+}
+
+function deltaClass(n: number, upIsGood: boolean): string {
+  if (n === 0) return "d-flat";
+  return n > 0 === upIsGood ? "d-good" : "d-bad";
 }
 
 /** Section 1 — the cover: SecScan's composition (target + summary meta on
@@ -55,6 +67,14 @@ export function coverSection(o: CoverInput): string {
     `<div class="posture-word">${halted ? "Incomplete" : esc(o.posture.postureRating)}</div>` +
     severityBar(o.posture.findingsBySeverity as Record<SeverityName, number>) +
     counts +
+    (o.delta && !halted
+      ? `<div class="delta-line">` +
+        (o.delta.scoreDelta !== undefined
+          ? `Δ score <span class="${deltaClass(o.delta.scoreDelta, true)}">${signed(o.delta.scoreDelta)}</span> · `
+          : "") +
+        `Δ findings <span class="${deltaClass(o.delta.findingsDelta, false)}">${signed(o.delta.findingsDelta)}</span>` +
+        ` since ${esc(o.delta.baselineLabel)}</div>`
+      : "") +
     `</div></div></section>`
   );
 }

@@ -14,6 +14,7 @@ import { TARGET_PROFILES } from "../../targets.js";
 import { projectApprovals, projectDanglingCauses, projectToolStats } from "../../events/projections.js";
 import { type NegativeProof, type PocBundle } from "../../proof/index.js";
 import { gradeBanner, gradeFindings } from "../grading.js";
+import { buildReportDetail, type DetailInput } from "../detail.js";
 import { type ReportMeta } from "../html.js";
 import {
   type ActivityInput,
@@ -46,6 +47,9 @@ export interface WireDeps {
   planOnly: string[];
   events: EngagementEvent[];
   haltedReason?: string;
+  /** The assembled detail derivations input (report/predecessor.ts),
+   * when the phase could build one; absent => pre-detail anatomy. */
+  detailInput?: DetailInput;
 }
 
 /**
@@ -146,6 +150,7 @@ export function buildEngagementReportInput(deps: WireDeps): EngagementReportInpu
     noBundleReasons: deps.proof.noBundleReasons,
     negativeProof: deps.proof.negative,
     findingMeta: buildFindingMeta(deps.bundles),
+    detail: deps.detailInput ? buildReportDetail(deps.detailInput) : undefined,
     coverage: buildCoverage(deps),
     activity: buildActivity(deps.events),
     haltedReason: deps.haltedReason,

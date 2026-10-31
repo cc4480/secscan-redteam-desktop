@@ -29,9 +29,11 @@ import { readEvents } from "../events.js";
 import { writeSafetyArtifacts } from "./safety.js";
 import { writeComplianceArtifacts } from "./compliance.js";
 import { extractNarrative } from "./narrative.js";
-import { buildEngagementMeta } from "./html.js";
+import { buildEngagementMeta, type ReportMeta } from "./html.js";
 import { renderEngagementReportHtml } from "./html/render.js";
-import { buildEngagementReportInput } from "./html/wire.js";
+import { buildEngagementReportInput, buildFindingMeta } from "./html/wire.js";
+import { buildDetailInput, recordReportMeta } from "./predecessor.js";
+import { type DetailInput } from "./detail.js";
 import { buildGradeSection, gradeFindings } from "./grading.js";
 
 export async function reportPhase(
@@ -237,7 +239,7 @@ export async function reportPhase(
   // record and the input to other tooling; this is the thing a person opens.
   // Its own try/catch: a rendering problem must not break the report itself.
   try {
-    const meta = buildEngagementMeta(ctx, findings, {
+    const totals = {
       total: lsum.total,
       confirmed: lsum.confirmed,
       executedClean: lsum.executedClean,
@@ -245,7 +247,26 @@ export async function reportPhase(
       blocked: lsum.blocked,
       na: lsum.na,
       pending: lsum.pending,
-    });
+    };
+    const cells = fbStatus.map(({ t, c, s }) => ({ target: t, category: c, state: s }));
+    // Q-REPORT-DETAIL: record the posture of record, resolve the
+    // predecessor, assemble the detail input (additive — see catch).
+    let detailInput: DetailInput | undefined;
+    let baselineMeta: ReportMeta["baseline"];
+    try {
+      recordReportMeta(ctx, gradeFindings(findings));
+      const assembled = buildDetailInput({
+        ctx, findings, bundles: pocBundleMap, totals, cells,
+        findingMeta: buildFindingMeta(pocBundleMap),
+        planOnly: fbPlanOnly, events: reportEvents,
+      });
+      detailInput = assembled.input;
+      baselineMeta = assembled.baselineMeta;
+    } catch (err) {
+      ctx.events.append({ phase: "report", actor: "runner", action: "report_detail_failed", result: `Detail derivations skipped (HTML unaffected): ${(err as Error).message}` });
+    }
+    const meta = buildEngagementMeta(ctx, findings, totals);
+    if (baselineMeta) meta.baseline = baselineMeta;
     writeFileSync(
       join(ctx.events.dir, "report.html"),
       renderEngagementReportHtml(
@@ -257,19 +278,12 @@ export async function reportPhase(
           narrativeMd: narrativeSource,
           bundles: pocBundleMap,
           proof: proofData,
-          cells: fbStatus.map(({ t, c, s }) => ({ target: t, category: c, state: s })),
-          totals: {
-            total: lsum.total,
-            confirmed: lsum.confirmed,
-            executedClean: lsum.executedClean,
-            killed: lsum.killed,
-            blocked: lsum.blocked,
-            na: lsum.na,
-            pending: lsum.pending,
-          },
+          cells,
+          totals,
           planOnly: fbPlanOnly,
           events: reportEvents,
           haltedReason: opts.haltedReason,
+          detailInput,
         }),
       ),
     );

@@ -29,7 +29,8 @@ export function tierOf(f: Finding, bundle?: PocBundle): ReportTier {
   return "ruled-out";
 }
 
-function severityChip(sev: string): string {
+/** The severity chip, shared with the detail sections (area/pillar rows). */
+export function severityChip(sev: string): string {
   const s = (SEVERITY_ORDER as readonly string[]).includes(sev) ? (sev as SeverityName) : "info";
   return `<span class="sevchip chip-${s}">${SEVERITY_TOKENS[s].label}</span>`;
 }
@@ -118,7 +119,7 @@ export function findingCard(o: CardInput): string {
   if (o.bundle?.batteryItemId) foot.push(`Battery item: ${esc(o.bundle.batteryItemId)}`);
 
   return (
-    `<article class="card ${tier}">` +
+    `<article class="card ${tier}" id="finding-${esc(f.id)}">` +
     `<div class="card-top">${chips.join("")}` +
     `<span class="card-title">${esc(f.title)}</span>` +
     `<span class="card-id">${esc(f.id)}</span></div>` +
