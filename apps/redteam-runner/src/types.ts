@@ -93,6 +93,15 @@ export interface EngagementInput {
    */
   fullBattery?: boolean
   /**
+   * Local-host engagement (Q-RP-11): the target is the machine the app
+   * itself runs on (target = os.hostname(), scope = [hostname]). The
+   * collector runs ON-HOST during recon — no network services, no test
+   * credentials — and writes host-inventory.json into the engagement
+   * dir for the report's inventory sections. Set by /pcscan and by the
+   * chat surface's engagement_launch_local; never for a remote target.
+   */
+  localHost?: boolean
+  /**
    * Subset of full-battery targets, set via --targets (comma-separated).
    * Defaults to all four (secscan, seclayer, windows, linux).
    */
