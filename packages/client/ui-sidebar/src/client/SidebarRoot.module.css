@@ -30,7 +30,7 @@
 
 /* Rail geometry (figma rail spec): 36x36 control boxes centered in the 56px
    rail (10px side padding), 12px vertical rhythm, 18px from the rail top to
-   the whale's box (24px to the 24-wide whale glyph itself). */
+   the brand mark's box (24px to the 24px brand glyph itself). */
 .root.collapsed {
   padding: 18px 10px 6px;
 }
@@ -341,8 +341,8 @@
   border-radius: 12px;
 }
 
-/* Rail logo swap: collapsed, the toggle rests as the whale mark (brand ink,
-   no hover circle) and hovering reveals the panel icon — the expand
+/* Rail logo swap: collapsed, the toggle rests as the brand mark (no hover
+   circle) and hovering reveals the panel icon — the expand
    affordance (figma sidebar-hover flow). Expanded it is a plain panel icon. */
 .collapsed .toggle .panelIcon {
   display: none;
@@ -586,4 +586,44 @@
     transition: none;
     animation: none;
   }
+}
+
+/* Entrance (motion tokens, shell scope): the sidebar rises once on mount.
+   Under prefers-reduced-motion the token collapse lands it in place. */
+.root {
+  animation: dsh-rise var(--dur-slow) var(--ease-out) backwards;
+}
+
+/* Glass shell (dark): the sidebar is a floating glass panel over the lit
+   scene — translucent fill, backdrop blur, hairline border, top highlight.
+   Placed after the macOS transparent rule so dark wins there too (the
+   window vibrancy blurs through the fill). */
+:global([data-ds-dark-theme]) .root {
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-line);
+  border-radius: 18px;
+  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow);
+}
+
+/* Collapsed, the brand toggle rests as a glass tile (the sample's rail
+   tile). Scoped away from the Windows caption layout, whose fixed 28px
+   caption controls keep their own geometry. */
+:global(html:not([data-windows-titlebar])) :global([data-ds-dark-theme]) .collapsed .toggle {
+  background: var(--glass-hi);
+  border: 1px solid var(--glass-line);
+  border-radius: 11px;
+  box-shadow: inset 0 1px 0 var(--glass-edge);
+}
+
+/* Panel rows take the glass steps in dark: hover lifts one step, the
+   active row sits on the strongest fill with the highlight and ring. */
+:global([data-ds-dark-theme]) .panelRow:hover {
+  background: var(--glass-hi);
+}
+
+:global([data-ds-dark-theme]) .panelRow.panelActive {
+  background: var(--glass-strong);
+  box-shadow: inset 0 1px 0 var(--glass-edge), inset 0 0 0 1px var(--glass-line);
 }
