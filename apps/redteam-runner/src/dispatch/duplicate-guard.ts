@@ -16,65 +16,130 @@
  * - A call identical to one that already failed twice is refused from
  *   the third attempt; one retry of a failed call stays legal (a
  *   transient network failure must not wedge a target).
+ * - Near-duplicates (runner corrections Item 9): a call whose arguments
+ *   differ from an executed call's ONLY in that tool's listed
+ *   non-semantic keys (NEAR_DUP_IGNORED_KEYS — timeout/retry-style
+ *   knobs that cannot change what the target receives) is refused at
+ *   the SECOND call, whether the first succeeded (digest carried) or
+ *   failed (no failure grace: cosmetic variation was never a new
+ *   probe). The table is empty by default, so an unlisted tool's near
+ *   key IS its exact key and behavior is literally the exact rule.
  * - Refusals are DENIED-prefixed results, so the agent loop's existing
  *   wall detection and turn-integrity treat them as no-progress, and
  *   each refusal is written to the engagement event log — never silent.
  */
-import { createHash } from "node:crypto";
-import { type ActorRole, type EngagementPhase } from "../types.js";
-import { type Ctx } from "../context.js";
-import { type ToolCallRequest } from "@secscan/redteam-llm-router";
-import { type DispatchResult } from "./types.js";
+import { createHash } from 'node:crypto'
+import { type ActorRole, type EngagementPhase } from '../types.js'
+import { type Ctx } from '../context.js'
+import { type ToolCallRequest } from '@secscan/redteam-llm-router'
+import { type DispatchResult } from './types.js'
 
 interface GuardEntry {
   /** Result text of the first clean execution (capped), once one exists. */
-  cleanResult?: string;
+  cleanResult?: string
   /** How many identical calls have failed without a clean execution. */
-  failures: number;
+  failures: number
   /** Most recent failure text (capped), quoted in the refusal digest. */
-  lastFailure?: string;
+  lastFailure?: string
 }
 
 /** Per-engagement guard state, keyed by the engagement's Ctx object. */
-const seen = new WeakMap<Ctx, Map<string, GuardEntry>>();
+const seen = new WeakMap<Ctx, Map<string, GuardEntry>>()
 
 function mapFor(ctx: Ctx): Map<string, GuardEntry> {
-  let m = seen.get(ctx);
+  let m = seen.get(ctx)
   if (!m) {
-    m = new Map();
-    seen.set(ctx, m);
+    m = new Map()
+    seen.set(ctx, m)
   }
-  return m;
+  return m
+}
+
+/**
+ * Per-tool argument keys whose variation cannot change what the target
+ * receives (timeout, delay/jitter, retry knobs, output verbosity). A
+ * key may be listed ONLY if varying it cannot change the request the
+ * target receives — never a URL/path/query, method, body, port, scheme,
+ * or a header that is itself the probe. Entries are added per tool
+ * only with the handler owner's review. EMPTY BY DEFAULT: a tool with
+ * no entry gets nearKey === toolCallKey, so the near-duplicate rule
+ * cannot fire for it and behavior is literally today's.
+ */
+export const NEAR_DUP_IGNORED_KEYS: Readonly<Record<string, readonly string[]>> = {}
+
+interface NearGuardEntry {
+  /** How many substantially-identical calls have executed. */
+  executions: number
+  /** Result text of the first clean execution (capped), once one exists. */
+  cleanDigest?: string
+}
+
+/** Near-duplicate state, same per-Ctx WeakMap lifecycle as the exact map. */
+const nearSeen = new WeakMap<Ctx, Map<string, NearGuardEntry>>()
+
+function nearMapFor(ctx: Ctx): Map<string, NearGuardEntry> {
+  let m = nearSeen.get(ctx)
+  if (!m) {
+    m = new Map()
+    nearSeen.set(ctx, m)
+  }
+  return m
 }
 
 /** Stable JSON for argument values: object keys sorted, arrays in order. */
 function canonical(value: unknown): string {
-  if (value === null || value === undefined) return "null";
-  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
-  if (typeof value === "object") {
-    const rec = value as Record<string, unknown>;
-    const keys = Object.keys(rec).filter((k) => rec[k] !== undefined).sort();
-    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonical(rec[k])}`).join(",")}}`;
+  if (value === null || value === undefined) return 'null'
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
+  if (typeof value === 'object') {
+    const rec = value as Record<string, unknown>
+    const keys = Object.keys(rec).filter(k => rec[k] !== undefined).sort()
+    return `{${keys.map(k => `${JSON.stringify(k)}:${canonical(rec[k])}`).join(',')}}`
   }
-  return JSON.stringify(value) ?? "null";
+  return JSON.stringify(value) ?? 'null'
 }
 
 /** Identity of a call itself: tool name + canonical arguments, hashed. */
 export function toolCallKey(call: ToolCallRequest): string {
-  return createHash("sha256")
+  return createHash('sha256')
     .update(`${call.name}\n${canonical(call.arguments ?? {})}`)
-    .digest("hex");
+    .digest('hex')
 }
 
 function fingerprint(role: ActorRole, phase: EngagementPhase, call: ToolCallRequest): string {
-  return `${role}|${phase}|${toolCallKey(call)}`;
+  return `${role}|${phase}|${toolCallKey(call)}`
+}
+
+/**
+ * Near-identity of a call: tool name + canonical arguments with the
+ * tool's listed non-semantic keys removed. Reuses `canonical`, so
+ * key-order normalization is shared with the exact key. A tool with no
+ * NEAR_DUP_IGNORED_KEYS entry gets nearKey === toolCallKey.
+ */
+export function nearKey(call: ToolCallRequest): string {
+  const ignored = NEAR_DUP_IGNORED_KEYS[call.name]
+  if (!ignored || ignored.length === 0) return toolCallKey(call)
+  const strip = new Set(ignored)
+  const args: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(call.arguments ?? {})) {
+    if (!strip.has(k)) args[k] = v
+  }
+  return createHash('sha256')
+    .update(`${call.name}\n${canonical(args)}`)
+    .digest('hex')
+}
+
+function nearFingerprint(role: ActorRole, phase: EngagementPhase, call: ToolCallRequest, host: string): string {
+  // The host is part of the near scope even though it usually also sits
+  // inside the arguments: target identity is semantic and never
+  // stripped, so two hosts can never share a near entry.
+  return `${role}|${phase}|${host}|${nearKey(call)}`
 }
 
 /** The dispatcher's own clean-result heuristic, mirrored from router.ts. */
 function isClean(d: DispatchResult): boolean {
   return d.ok === undefined
-    ? !/^(DENIED|HALTED)/i.test(d.result) && !d.result.startsWith("probe failed")
-    : d.ok;
+    ? !/^(DENIED|HALTED)/i.test(d.result) && !d.result.startsWith('probe failed')
+    : d.ok
 }
 
 /**
@@ -89,25 +154,53 @@ export function duplicateRefusal(
   call: ToolCallRequest,
   host: string | undefined,
 ): DispatchResult | undefined {
-  if (!host) return undefined;
-  const entry = mapFor(ctx).get(fingerprint(role, phase, call));
-  if (!entry) return undefined;
-  let result: string;
-  if (entry.cleanResult !== undefined) {
-    result =
-      `DENIED: duplicate call refused — ${call.name} with identical arguments already ` +
-      `completed in this ${phase} phase; repeating it sends the same traffic for no new ` +
-      `information. Vary the probe or move on. Previous result digest: ${entry.cleanResult.slice(0, 500)}`;
-  } else if (entry.failures >= 2) {
-    result =
-      `DENIED: duplicate call refused — ${call.name} with identical arguments already ` +
-      `failed ${entry.failures} times in this ${phase} phase. Change the probe, the ` +
-      `target, or the approach. Last failure digest: ${(entry.lastFailure ?? "").slice(0, 300)}`;
-  } else {
-    return undefined;
+  if (!host) return undefined
+  const entry = mapFor(ctx).get(fingerprint(role, phase, call))
+  if (entry) {
+    // Exact checks first, unchanged: an exact repeat keeps today's
+    // refusal text and today's failure grace.
+    let result: string
+    if (entry.cleanResult !== undefined) {
+      result =
+        `DENIED: duplicate call refused — ${call.name} with identical arguments already ` +
+        `completed in this ${phase} phase; repeating it sends the same traffic for no new ` +
+        `information. Vary the probe or move on. Previous result digest: ${entry.cleanResult.slice(0, 500)}`
+    } else if (entry.failures >= 2) {
+      result =
+        `DENIED: duplicate call refused — ${call.name} with identical arguments already ` +
+        `failed ${entry.failures} times in this ${phase} phase. Change the probe, the ` +
+        `target, or the approach. Last failure digest: ${(entry.lastFailure ?? '').slice(0, 300)}`
+    } else {
+      return undefined
+    }
+    ctx.events.append({ phase, actor: 'runner', action: 'duplicate_refused', target: host, result })
+    return { result, target: host, ok: false }
   }
-  ctx.events.append({ phase, actor: "runner", action: "duplicate_refused", target: host, result });
-  return { result, target: host, ok: false };
+  // Near-duplicate check (Item 9): only when this call is not itself an
+  // exact repeat. The second substantially-identical call is refused
+  // whether the first succeeded (digest carried) or failed (no failure
+  // grace — the varied call was never a new probe).
+  const near = nearMapFor(ctx).get(nearFingerprint(role, phase, call, host))
+  if (near && near.executions >= 1) {
+    let result: string
+    if (near.cleanDigest !== undefined) {
+      result =
+        `DENIED: duplicate call refused — ${call.name} is a near-duplicate of a call that already ` +
+        `completed in this ${phase} phase: same tool and target, arguments differing only in ` +
+        'non-semantic fields (listed cosmetic keys, e.g. timeouts). Cosmetic variation is not a ' +
+        `new probe and earns no extra traffic. Previous result digest: ${near.cleanDigest.slice(0, 500)}`
+    } else {
+      result =
+        `DENIED: duplicate call refused — ${call.name} is a near-duplicate of a call that already ` +
+        `failed in this ${phase} phase: same tool and target, arguments differing only in ` +
+        'non-semantic fields (listed cosmetic keys, e.g. timeouts). Near-duplicates get no ' +
+        'failure grace — cosmetic variation was never a new probe. Change the probe, the ' +
+        'target, or the approach.'
+    }
+    ctx.events.append({ phase, actor: 'runner', action: 'duplicate_refused', target: host, result })
+    return { result, target: host, ok: false }
+  }
+  return undefined
 }
 
 /**
@@ -123,15 +216,26 @@ export function recordCallOutcome(
   host: string | undefined,
   d: DispatchResult,
 ): void {
-  if (!host) return;
-  const map = mapFor(ctx);
-  const key = fingerprint(role, phase, call);
-  const entry = map.get(key) ?? { failures: 0 };
+  if (!host) return
+  const map = mapFor(ctx)
+  const key = fingerprint(role, phase, call)
+  const entry = map.get(key) ?? { failures: 0 }
   if (isClean(d)) {
-    entry.cleanResult = d.result.slice(0, 4000);
+    entry.cleanResult = d.result.slice(0, 4000)
   } else {
-    entry.failures++;
-    entry.lastFailure = d.result.slice(0, 1000);
+    entry.failures++
+    entry.lastFailure = d.result.slice(0, 1000)
   }
-  map.set(key, entry);
+  map.set(key, entry)
+  // Near map: every executed guarded call also seeds its near entry,
+  // so a later cosmetically-varied repeat can be refused at the second
+  // call. Gate denials never reach this function and seed neither map.
+  const nearMap = nearMapFor(ctx)
+  const nKey = nearFingerprint(role, phase, call, host)
+  const near = nearMap.get(nKey) ?? { executions: 0 }
+  near.executions++
+  if (isClean(d)) {
+    near.cleanDigest = d.result.slice(0, 4000)
+  }
+  nearMap.set(nKey, near)
 }
