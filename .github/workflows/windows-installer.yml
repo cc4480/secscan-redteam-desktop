@@ -144,6 +144,18 @@ jobs:
         run: node apps/desktop/scripts/vendor-llama.mjs
           Write-Host "wrote $path"
 
+      # The external-tool payload is build output, not source: it is gitignored
+      # and the electron-builder config silently omits it when absent, leaving
+      # the runner to fall back to PATH on the target machine. The vendor
+      # script re-materializes it (the manifest carries URL + SHA-256 pins).
+      - name: Vendor the bundled external tools
+        shell: cmd
+        run: node apps/desktop/scripts/vendor-tools.mjs
+
+      - name: Verify the bundled external tools
+        shell: cmd
+        run: node apps/desktop/scripts/vendor-tools.mjs --check
+
       - name: Build and package the installer
         shell: cmd
         run: pnpm run package:desktop:win:x64:unsigned
