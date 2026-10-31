@@ -1,8 +1,16 @@
 /**
- * AdapterProvider — the DeepInfer/recipe discipline as one choke point.
+ * AdapterProvider — the DeepInfer/recipe discipline as one wrapper.
  *
- * Every model call in the red-team flows through this wrapper (router.ts
- * registers providers pre-wrapped). It enforces, for every call:
+ * Wiring state, stated plainly: this class is NOT in the registered provider
+ * chain — router.ts registers providers wrapped in ResilientProvider only.
+ * Two of its disciplines ARE on the live path: its validation functions
+ * (validateResponseFormat / validateJsonSchema) are called by
+ * router.complete() before dispatch, and the constraint selection below is
+ * the rule the wire translation follows (providers/openai-wire.ts). The
+ * wrapper's remaining disciplines (pinned sampling, trajectory logging,
+ * replay-safe retries) are retained here but inactive; wiring them is a
+ * separate decision (Q-STRUCT brief D2). When the wrapper IS used, it
+ * enforces, for every call:
  *
  *   1. Structured outputs validated at home — a malformed JSON Schema or
  *      regex fails here, never as a paid API round-trip (recipe: conversion
@@ -124,7 +132,7 @@ export function validateResponseFormat(format: ResponseFormat): void {
   }
 }
 
-/** Recipe's constraint selection: tools > json_schema > regex > json_object. */
+/** Recipe's constraint selection: a call carrying tools is constrained by its tool block; otherwise the caller's chosen response format is the constraint. */
 export function selectConstraint(options: CompleteOptions): string {
   if (options.tools && options.tools.length > 0) return 'tool_calls'
   if (options.responseFormat) return options.responseFormat.type
