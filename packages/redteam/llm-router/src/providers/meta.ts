@@ -12,6 +12,9 @@
  *     $20.00 / 1M output, $0.20 / 1M cached input. The thinking seats.
  *   - muse-spark-1.3 — fast volume tier. $1.25 / 1M input, $4.25 / 1M
  *     output, $0.15 / 1M cached input. The tool-loop seats.
+ *   - muse-spark-1.2 — challenger / fallback candidate, 1M context.
+ *     $1.25 / 1M input, $4.25 / 1M output, $0.15 / 1M cached input.
+ *     Registered for explicit calls and A/B lanes; not seated.
  * Both accept `reasoning_effort` ("low" | "medium" | "high" | "xhigh");
  * the router's hint is passed through when present.
  *
@@ -40,8 +43,10 @@ export const META_BASE_URL = 'https://api.meta.ai/v1'
 export const META_MODELS = {
   /** Frontier-priced tier. Registered for explicit calls, small one-off jobs, and A/B lanes; not seated by default (see policy.ts). */
   wonder: 'muse-wonder-1.0',
-  /** The fleet's engine on the Meta seats: all four roles, exploiter included. */
+  /** The fleet's engine on the Meta seats: all five roles, exploiter included. */
   spark: 'muse-spark-1.3',
+  /** Challenger / fallback candidate. Registered for explicit calls and A/B lanes against the spark seat; NOT seated by default. */
+  spark12: 'muse-spark-1.2',
 } as const
 
 /** Router hint → Meta reasoning_effort (same scale; passed through). */
