@@ -95,7 +95,7 @@ export function resolveConfig(env: NodeJS.ProcessEnv, opts: {
     reflectorCap: opts.reflectorCap ?? parseEnvPositiveNumber(env['REDTEAM_REFLECTOR_CAP'], 'REDTEAM_REFLECTOR_CAP') ?? 3,
     softRoundCap: opts.softRoundCap ?? parseEnvPositiveNumber(env['REDTEAM_SOFT_ROUND_CAP'], 'REDTEAM_SOFT_ROUND_CAP'),
     hardRoundCap: opts.hardRoundCap ?? parseEnvPositiveNumber(env['REDTEAM_HARD_ROUND_CAP'], 'REDTEAM_HARD_ROUND_CAP'),
-    maxActions: opts.maxActions ?? 60,
+    maxActions: opts.maxActions ?? 100,
     maxDurationMs: opts.maxDurationMs ?? 45 * 60_000,
     probeDelayMs: opts.probeDelayMs ?? 800,
     engagementsDir:

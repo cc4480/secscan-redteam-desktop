@@ -190,7 +190,7 @@ export interface RunnerOptions {
   /** Max LLM turns per phase. Default 10 (recon), 14 (exploit) — see constants. */
   maxReconTurns?: number
   maxExploitProbes?: number
-  /** Global caps. Defaults: 60 actions, 45 minutes. */
+  /** Global caps. Defaults: 100 actions, 45 minutes. */
   maxActions?: number
   maxDurationMs?: number
   /** Reflection cap override (see ResolvedRunnerConfig). Env REDTEAM_REFLECTOR_CAP. */
