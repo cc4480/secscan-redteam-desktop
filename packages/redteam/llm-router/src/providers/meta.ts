@@ -15,6 +15,10 @@
  *   - muse-spark-1.2 — challenger / fallback candidate, 1M context.
  *     $1.25 / 1M input, $4.25 / 1M output, $0.15 / 1M cached input.
  *     Registered for explicit calls and A/B lanes; not seated.
+ *   - muse-spark-1.1 — pinned canary / baseline tier. Verified callable
+ *     from Cho-zen on 2026-10-31 (Q-G71 probe: HTTP 200, returned model
+ *     muse-spark-1.1). Registered for baseline and canary comparisons
+ *     only; not seated.
  * Both accept `reasoning_effort` ("low" | "medium" | "high" | "xhigh");
  * the router's hint is passed through when present.
  *
@@ -47,6 +51,8 @@ export const META_MODELS = {
   spark: 'muse-spark-1.3',
   /** Challenger / fallback candidate. Registered for explicit calls and A/B lanes against the spark seat; NOT seated by default. */
   spark12: 'muse-spark-1.2',
+  /** Pinned canary / baseline tier. Registered for baseline and canary comparisons against the seated spark tier; NOT seated by default. */
+  spark11: 'muse-spark-1.1',
 } as const
 
 /** Router hint → Meta reasoning_effort (same scale; passed through). */

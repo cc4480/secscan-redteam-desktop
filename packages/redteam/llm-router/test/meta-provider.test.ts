@@ -138,28 +138,33 @@ describe('Meta model registry', () => {
     assert.equal(META_MODELS.spark12, 'muse-spark-1.2')
   })
 
-  test('holds exactly the three evidenced models, in registration order', () => {
-    // The exact-key assertion is also the guard that muse-spark-1.1 is NOT
-    // silently registered: it is key-gated and joins only after the Wave-4
-    // live probe settles its wire ID (07:18 addendum to the G7/G8 brief).
-    assert.deepEqual(Object.keys(META_MODELS), ['wonder', 'spark', 'spark12'])
-    assert.deepEqual(Object.values(META_MODELS), ['muse-wonder-1.0', 'muse-spark-1.3', 'muse-spark-1.2'])
+  test('registers spark-1.1 under its evidenced wire ID', () => {
+    assert.equal(META_MODELS.spark11, 'muse-spark-1.1')
   })
 
-  test('registers no contributor variant, no catalog-only ID, and no key-gated ID', () => {
+  test('holds exactly the four evidenced models, in registration order', () => {
+    // The exact-key assertion is the guard against silent registry
+    // additions: muse-spark-1.1 joined only after the Q-G71 live probe
+    // settled its wire ID (Cho-zen, 2026-10-31: HTTP 200, returned model
+    // muse-spark-1.1).
+    assert.deepEqual(Object.keys(META_MODELS), ['wonder', 'spark', 'spark12', 'spark11'])
+    assert.deepEqual(Object.values(META_MODELS), ['muse-wonder-1.0', 'muse-spark-1.3', 'muse-spark-1.2', 'muse-spark-1.1'])
+  })
+
+  test('registers no contributor variant and no catalog-only ID', () => {
     for (const id of Object.values(META_MODELS)) {
       assert.doesNotMatch(id, /contributor/i)
       assert.notEqual(id, 'muse-wonder-full-1.0')
-      assert.notEqual(id, 'muse-spark-1.1')
     }
   })
 
-  test('spark-1.2 and wonder are registered but never seated on the fleet', () => {
+  test('spark-1.2, spark-1.1, and wonder are registered but never seated on the fleet', () => {
     for (const role of ROLE_ORDER) {
       assert.equal(META_ROLE_MODEL_POLICY[role].model, META_MODELS.spark)
     }
     const seated = new Set(ROLE_ORDER.map(role => META_ROLE_MODEL_POLICY[role].model))
     assert.equal(seated.has(META_MODELS.spark12), false)
+    assert.equal(seated.has(META_MODELS.spark11), false)
     assert.equal(seated.has(META_MODELS.wonder), false)
   })
 })
