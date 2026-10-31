@@ -107,8 +107,8 @@ export async function reconPhase(ctx: Ctx): Promise<string> {
       ` Write each discovery to the shared target map with update_target_map as you make it — ` +
       `the map is what the coordinator reviews at sign-off, and it is refused while the map is empty. ` +
       `Finish with the attack-surface brief and end it with the FINGERPRINT: line.`,
-    // Q-BRIDGE-TOOLS: bridge tools join the surface only when the
-    // local-host + bridge-availability gate opens (bridge-gate.ts).
+    // Q-BRIDGE-TOOLS: bridge tools join the surface when the bridge
+    // is live on this machine (bridge-gate.ts).
     await withBridgeTools(ctx, "recon", RECON_TOOLS),
     ctx.config.maxReconTurns,
   );

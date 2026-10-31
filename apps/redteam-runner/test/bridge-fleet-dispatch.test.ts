@@ -1,13 +1,15 @@
 /**
- * Bridge dispatch (Q-BRIDGE-TOOLS, Builder B).
+ * Bridge dispatch (Q-BRIDGE-TOOLS, Builder B — revised design,
+ * Carlos's order 2026-10-31 ~18:00 CDT).
  *
- * The handler re-checks the offering gate LIVE on every call: a
- * bridge_* call in a remote engagement is refused before any client
- * resolution, and a bridge that stops answering mid-engagement closes
- * the gate for the next call — including a re-dispatch through
- * dispatchTool, which treats bridge calls like any other dispatch
- * (no bypass, and gate denials are never tagged repairable). The
- * loop-level test proves the house invariant end to end: a bridge
+ * No allowlist, no localHost restriction: any bridge_* call routes to
+ * the client whenever the bridge is live — including in a remote
+ * engagement, because the tools act on the operator's own machine.
+ * The handler re-checks availability LIVE on every call, so a bridge
+ * that stops answering closes the gate for the next call, including a
+ * re-dispatch through dispatchTool. A bridge-side consent denial is a
+ * clean typed result (ok:false, never repairable, never a hang or a
+ * crash). The loop-level test proves the house invariant: a bridge
  * call's result lands in the engagement's event log.
  */
 import { describe, it } from "node:test";
@@ -25,11 +27,13 @@ import { withBridgeTools } from "../src/dispatch/bridge-gate.js";
 import { handleBridgeTools } from "../src/dispatch/bridge.js";
 import { dispatchTool } from "../src/dispatch/router.js";
 
-const ALLOWLISTED_OPS = [
+const REGISTRY_OPS = [
   "cdp_launch", "cdp_connect", "cdp_targets", "cdp_navigate", "cdp_snapshot",
   "cdp_click", "cdp_type", "cdp_evaluate", "cdp_readback", "cdp_close",
   "submit_job", "job_status", "job_result", "job_cancel",
   "screenshot", "uia_find",
+  "shell_exec", "shell_pwsh", "fs_read", "fs_write", "fs_delete",
+  "input_type", "input_click", "list_windows", "proc_list", "power",
 ] as const;
 
 interface FakeClient extends BridgeClientLike {
@@ -49,7 +53,7 @@ function fakeClient(opts?: { available?: boolean; callError?: Error }): FakeClie
       return available;
     },
     async listTools(): Promise<BridgeToolInfo[]> {
-      return ALLOWLISTED_OPS.map((name) => ({ name, description: `bridge description for ${name}`, inputSchema: { type: "object", properties: {} } }));
+      return REGISTRY_OPS.map((name) => ({ name, description: `bridge description for ${name}`, inputSchema: { type: "object", properties: {} } }));
     },
     async call(name, args) {
       calls.push({ name, args });
@@ -62,80 +66,73 @@ function fakeClient(opts?: { available?: boolean; callError?: Error }): FakeClie
 const call = (name: string, args: Record<string, unknown> = {}): ToolCallRequest =>
   ({ id: "c-1", name, arguments: args }) as unknown as ToolCallRequest;
 
-function handlerCtx(localHost: boolean | undefined): Ctx {
+/** A REMOTE engagement context (web target, no localHost) — bridge tools work here too when the bridge is live. */
+function handlerCtx(): Ctx {
   return {
-    input: { target: "operator-pc", mode: "red", objective: "test", localHost, roe: { scope: ["operator-pc"] } },
+    input: { target: "https://shop.example.test", mode: "red", objective: "test", roe: { scope: ["shop.example.test"] } },
     events: { dir: "/tmp/bridge-fleet-dispatch-no-dir", append: () => {} },
     deps: {},
   } as unknown as Ctx;
 }
 
-describe("bridge handler — gate re-check and routing", () => {
+describe("bridge handler — availability re-check and full routing", () => {
   it("does not claim other families' tools", async () => {
     const client = fakeClient();
-    const r = await handleBridgeTools(handlerCtx(true), "recon", "recon", call("http_probe"), {}, client);
+    const r = await handleBridgeTools(handlerCtx(), "recon", "recon", call("http_probe"), {}, client);
     assert.equal(r, null);
     assert.equal(client.calls.length, 0);
   });
 
-  it("refuses a bridge call in a remote engagement before touching the client", async () => {
-    const client = fakeClient({ available: true });
-    const r = await handleBridgeTools(handlerCtx(undefined), "exploiter", "exploit", call("bridge_cdp_navigate", { url: "http://127.0.0.1:3000" }), { url: "http://127.0.0.1:3000" }, client);
-    assert.equal(r?.ok, false);
-    assert.match(r?.result ?? "", /only inside a local-host engagement/u);
-    assert.equal(r?.repairable, undefined, "a gate denial is never a repair candidate");
-    assert.equal(client.calls.length, 0);
-  });
-
-  it("refuses when the bridge does not answer, and routes when it does", async () => {
+  it("refuses when the bridge does not answer, and routes the full registry when it does", async () => {
     const down = fakeClient({ available: false });
-    const refused = await handleBridgeTools(handlerCtx(true), "recon", "recon", call("bridge_screenshot"), {}, down);
+    const refused = await handleBridgeTools(handlerCtx(), "recon", "recon", call("bridge_screenshot"), {}, down);
     assert.equal(refused?.ok, false);
     assert.match(refused?.result ?? "", /not available on this machine/u);
+    assert.equal(refused?.repairable, undefined);
     assert.equal(down.calls.length, 0);
 
     const up = fakeClient({ available: true });
-    const args = { url: "http://127.0.0.1:3000/login" };
-    const routed = await handleBridgeTools(handlerCtx(true), "exploiter", "exploit", call("bridge_cdp_navigate", args), args, up);
-    assert.equal(routed?.ok, true);
-    assert.equal(routed?.result, "result of cdp_navigate");
-    assert.deepEqual(up.calls, [{ name: "cdp_navigate", args }], "the prefix is stripped and args forwarded unchanged");
+    for (const op of REGISTRY_OPS) {
+      const r = await handleBridgeTools(handlerCtx(), "exploiter", "exploit", call(`bridge_${op}`, { probe: op }), { probe: op }, up);
+      assert.equal(r?.ok, true, `bridge_${op} routes in a remote engagement`);
+      assert.equal(r?.result, `result of ${op}`);
+    }
+    assert.deepEqual(
+      up.calls.map((c) => c.name),
+      [...REGISTRY_OPS],
+      "every op forwarded unprefixed and unfiltered, shell/power included",
+    );
   });
 
-  it("routes every allowlisted op and relays allowlist and bridge failures as honest results", async () => {
-    const client = fakeClient({ available: true });
-    for (const op of ALLOWLISTED_OPS) {
-      const r = await handleBridgeTools(handlerCtx(true), "recon", "recon", call(`bridge_${op}`), {}, client);
-      assert.equal(r?.ok, true, `bridge_${op} routes`);
-    }
-    assert.equal(client.calls.length, ALLOWLISTED_OPS.length);
+  it("a bridge-side consent denial is a clean typed result — never a hang, crash, or silent drop", async () => {
+    const consent = fakeClient({ callError: new BridgeCallError("bridge-denied", "denied by local approval") });
+    const r = await handleBridgeTools(handlerCtx(), "exploiter", "exploit", call("bridge_fs_write", { path: "x" }), { path: "x" }, consent);
+    assert.equal(r?.ok, false);
+    assert.match(r?.result ?? "", /operator consent denied/u);
+    assert.equal(r?.repairable, undefined);
+    assert.equal(consent.calls.length, 1, "the call reached the bridge and its no came back as a result");
+  });
 
-    const notAllowed = fakeClient({ callError: new BridgeCallError("not-allowlisted", "shell_exec is not in the allowlist") });
-    const denied = await handleBridgeTools(handlerCtx(true), "recon", "recon", call("bridge_shell_exec"), {}, notAllowed);
-    assert.equal(denied?.ok, false);
-    assert.match(denied?.result ?? "", /not in the bridge allowlist/u);
-    assert.equal(denied?.repairable, undefined);
-
+  it("bridge failures relay as honest results", async () => {
     const broken = fakeClient({ callError: new BridgeCallError("bridge-error", "target crashed") });
-    const failed = await handleBridgeTools(handlerCtx(true), "recon", "recon", call("bridge_cdp_snapshot"), {}, broken);
+    const failed = await handleBridgeTools(handlerCtx(), "recon", "recon", call("bridge_cdp_snapshot"), {}, broken);
     assert.equal(failed?.ok, false);
     assert.equal(failed?.result, "bridge error: target crashed");
 
-    const consent = fakeClient({ callError: new BridgeCallError("bridge-denied", "denied by local approval") });
-    const deniedByOperator = await handleBridgeTools(handlerCtx(true), "recon", "recon", call("bridge_cdp_click"), {}, consent);
-    assert.equal(deniedByOperator?.ok, false);
-    assert.match(deniedByOperator?.result ?? "", /operator consent denied/u);
-    assert.equal(deniedByOperator?.repairable, undefined);
+    const gone = fakeClient({ callError: new BridgeCallError("unavailable", "connection reset") });
+    const unavailable = await handleBridgeTools(handlerCtx(), "recon", "recon", call("bridge_screenshot"), {}, gone);
+    assert.equal(unavailable?.ok, false);
+    assert.match(unavailable?.result ?? "", /became unavailable/u);
   });
 
-  it("the allowlist wrapper rejects a forbidden op locally — the raw client is never touched", async () => {
+  it("the wrapper passes the full registry through and normalizes A's result shape", async () => {
     const rawCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
     const raw = {
       async available() {
         return true;
       },
       async listTools(): Promise<BridgeToolInfo[]> {
-        return [...ALLOWLISTED_OPS, "shell_exec", "fs_write", "power"].map((name) => ({ name, description: `d ${name}`, inputSchema: { type: "object", properties: {} } }));
+        return REGISTRY_OPS.map((name) => ({ name, description: `d ${name}`, inputSchema: { type: "object", properties: {} } }));
       },
       async call(name: string, args: Record<string, unknown>) {
         rawCalls.push({ name, args });
@@ -143,17 +140,12 @@ describe("bridge handler — gate re-check and routing", () => {
       },
     };
     const wrapped = wrapBridgeClient(raw);
-    for (const forbidden of ["bridge_shell_exec", "bridge_fs_write", "bridge_power"]) {
-      const r = await handleBridgeTools(handlerCtx(true), "exploiter", "exploit", call(forbidden, { command: "whoami" }), { command: "whoami" }, wrapped);
-      assert.equal(r?.ok, false, `${forbidden} is refused`);
-      assert.match(r?.result ?? "", /not in the bridge allowlist/u);
-    }
-    assert.equal(rawCalls.length, 0, "a forbidden op never reaches the bridge client");
     const listed = await wrapped.listTools();
-    assert.deepEqual(listed.map((t) => t.name), [...ALLOWLISTED_OPS], "the wrapper filters the full registry to the allowlist");
-    const ok = await handleBridgeTools(handlerCtx(true), "recon", "recon", call("bridge_uia_find", { name: "OK" }), { name: "OK" }, wrapped);
-    assert.equal(ok?.ok, true);
-    assert.equal(ok?.result, "raw result of uia_find", "A's {text} result shape is normalized to text");
+    assert.deepEqual(listed.map((t) => t.name), [...REGISTRY_OPS], "no name is filtered out of the listing");
+    const r = await handleBridgeTools(handlerCtx(), "exploiter", "exploit", call("bridge_shell_exec", { command: "whoami" }), { command: "whoami" }, wrapped);
+    assert.equal(r?.ok, true);
+    assert.equal(r?.result, "raw result of shell_exec");
+    assert.deepEqual(rawCalls, [{ name: "shell_exec", args: { command: "whoami" } }]);
   });
 });
 
@@ -164,9 +156,9 @@ describe("bridge handler — gate re-check and routing", () => {
 function dispatchCtx(client: BridgeClientLike): Ctx {
   return {
     actions: 0,
-    input: { target: "operator-pc", mode: "red", objective: "test", localHost: true, roe: { scope: ["operator-pc"], blackoutWindows: [] } },
-    hosts: ["operator-pc"],
-    domain: "operator-pc",
+    input: { target: "https://shop.example.test", mode: "red", objective: "test", roe: { scope: ["shop.example.test"], blackoutWindows: [] } },
+    hosts: ["shop.example.test"],
+    domain: "shop.example.test",
     events: { dir: "/tmp/bridge-fleet-dispatch-no-dir", append: () => {} },
     hostKill: { aborted: false, controllers: new Set<AbortController>() },
     tier: { current: 2, declared: 2, chainSteps: new Map<string, number>() },
@@ -227,12 +219,11 @@ function loopCtx(dir: string, completeForRole: CompleteFn, client: BridgeClientL
     input: {
       mode: "red",
       objective: "test",
-      target: "operator-pc",
-      localHost: true,
-      roe: { blackoutWindows: [], scope: ["operator-pc"] },
+      target: "https://shop.example.test",
+      roe: { blackoutWindows: [], scope: ["shop.example.test"] },
     },
     deps: { completeForRole, bridgeClient: client },
-    events: new EventLog(dir, "eng-bridge-fleet", { target: "operator-pc", mode: "red", objective: "test" }),
+    events: new EventLog(dir, "eng-bridge-fleet", { target: "shop.example.test", mode: "red", objective: "test" }),
     hostKill: { aborted: false, controllers: new Set<AbortController>() },
     safety: {
       killSwitchAborts: 0,
@@ -241,8 +232,8 @@ function loopCtx(dir: string, completeForRole: CompleteFn, client: BridgeClientL
       rpsPerHost: 5,
     },
     tier: { current: 2, declared: 2, chainSteps: new Map<string, number>() },
-    hosts: ["operator-pc"],
-    domain: "operator-pc",
+    hosts: ["shop.example.test"],
+    domain: "shop.example.test",
     plan: null,
     targetMap: [],
     liveFindings: [],
@@ -289,6 +280,8 @@ describe("bridge calls in agentLoop", () => {
       const logged = readEvents(dir).filter((e) => e.action === "bridge_screenshot");
       assert.equal(logged.length, 1, "the bridge call is in the engagement's event log");
       assert.match(logged[0]!.result, /result of screenshot/u);
+      const active = readEvents(dir).filter((e) => e.action === "bridge_tools_active");
+      assert.equal(active.length, 1, "the engagement recorded that bridge tools were active");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

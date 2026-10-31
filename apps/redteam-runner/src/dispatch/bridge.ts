@@ -1,18 +1,18 @@
 /**
  * AlterEgo bridge dispatch (Q-BRIDGE-TOOLS, Builder B).
  *
- * Routes `bridge_*` tool calls to Builder A's bridge client. The gate
- * is re-checked LIVE here on every call — an engagement that was
- * offered bridge tools while the bridge answered does not keep them
- * when it stops answering, and a re-dispatch (including a repair-loop
- * re-dispatch, which flows through dispatchTool unchanged) re-runs
- * this check like every other gate. Denials are plain DispatchResults
- * with ok:false and are NEVER tagged `repairable`: a closed gate is
- * not a call-shape defect, and the Item-6 tag list is a closed list
- * this handler does not extend. A's client enforces the allowlist
- * locally before any network call; a not-allowlisted rejection is
- * relayed as a denial, so a forbidden op is unreachable through this
- * surface even if a model names it.
+ * Routes `bridge_*` tool calls to Builder A's bridge client. The one
+ * gate — bridge availability — is re-checked LIVE here on every call:
+ * an engagement that was offered bridge tools while the bridge
+ * answered does not keep them when it stops answering, and a
+ * re-dispatch (including a repair-loop re-dispatch, which flows
+ * through dispatchTool unchanged) re-runs this check. Denials are
+ * plain DispatchResults with ok:false and are NEVER tagged
+ * `repairable`: a down bridge is not a call-shape defect, and the
+ * Item-6 tag list is a closed list this handler does not extend. A
+ * bridge-side consent denial (the bridge's native dialog said no, or
+ * timed out) surfaces as its own clean typed result — never a hang,
+ * a crash, or a silent drop.
  */
 import type { ToolCallRequest } from "@secscan/redteam-llm-router";
 import type { Ctx } from "../context.js";
@@ -41,19 +41,8 @@ export async function handleBridgeTools(
 ): Promise<DispatchResult | null> {
   if (!isBridgeToolName(call.name)) return null;
   const op = bridgeOpName(call.name);
-  // Gate (a): local-host engagements only. A bridge call in a remote
-  // engagement was never offered; naming one anyway is refused here,
-  // before any client resolution or network probe.
-  if (ctx.input.localHost !== true) {
-    return {
-      result:
-        `DENIED: ${call.name} exists only inside a local-host engagement — bridge tools act on the ` +
-        "operator's own machine and are never a surface against remote targets.",
-      ok: false,
-    };
-  }
   const client = clientArg ?? (await resolveBridgeClient(ctx));
-  // Gate (b): the bridge must answer NOW, not merely when the tool
+  // The gate: the bridge must answer NOW, not merely when the tool
   // list was composed.
   let available = false;
   try {
@@ -74,14 +63,6 @@ export async function handleBridgeTools(
     return { result: text, ok: true };
   } catch (err) {
     if (err instanceof BridgeCallError) {
-      if (err.kind === "not-allowlisted") {
-        return {
-          result:
-            `DENIED: ${op} is not in the bridge allowlist — this surface exposes only the cdp_* family, ` +
-            "the job layer (submit_job, job_status, job_result, job_cancel), screenshot, and uia_find.",
-          ok: false,
-        };
-      }
       if (err.kind === "bridge-denied") {
         return {
           result: `DENIED: the bridge's operator consent denied ${call.name} (${err.message}). The operator said no; do not retry it.`,

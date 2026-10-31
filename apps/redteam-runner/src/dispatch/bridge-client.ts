@@ -9,45 +9,15 @@
  * to an always-unavailable client, because bridge absence is a normal
  * state, never an error (the Seclayer-key doctrine).
  *
- * ALLOWLIST ENFORCEMENT LIVES HERE. A's client (landed 65cb1fde) exposes
- * the bridge's full registry by its own design; the fleet design's
- * allowlist is the surface boundary, so this wrapper filters tools/list
- * to {@link BRIDGE_ALLOWLISTED_OPS} and rejects any other call locally,
- * before A's client — and therefore the bridge — is touched. Widening the
- * fleet's reach is a one-constant change in this file, made deliberately.
+ * FULL SURFACE (Carlos's direct order, 2026-10-31 ~18:00 CDT, relayed
+ * by the coordinator): there is no allowlist and no name filtering
+ * anywhere in the fleet wiring — every tool the bridge offers is
+ * offered and callable. A's client (landed 65cb1fde) exposes the full
+ * registry; this wrapper passes it through unchanged, normalizing
+ * result shapes and classifying errors. The only gate is bridge
+ * availability (dispatch/bridge-gate.ts).
  */
 import type { Ctx } from "../context.js";
-
-/**
- * The only bridge ops the fleet may ever see: the CDP browser family,
- * the job layer, and the two read-only observation ops. Everything else
- * the bridge offers (shell, synthetic input, file writes/deletes,
- * process and power control) is not exposed — not present-but-erroring,
- * absent.
- */
-export const BRIDGE_ALLOWLISTED_OPS: ReadonlySet<string> = new Set([
-  "cdp_launch",
-  "cdp_connect",
-  "cdp_targets",
-  "cdp_navigate",
-  "cdp_snapshot",
-  "cdp_click",
-  "cdp_type",
-  "cdp_evaluate",
-  "cdp_readback",
-  "cdp_close",
-  "submit_job",
-  "job_status",
-  "job_result",
-  "job_cancel",
-  "screenshot",
-  "uia_find",
-]);
-
-/** Whether a bridge op name is inside the fleet allowlist. */
-export function isAllowlistedBridgeOp(name: string): boolean {
-  return BRIDGE_ALLOWLISTED_OPS.has(name);
-}
 
 /** One tool as A's client reports it (the MCP tools/list shape). */
 export interface BridgeToolInfo {
@@ -62,7 +32,7 @@ export interface BridgeToolInfo {
 }
 
 /** The honest failure states a bridge call can end in. */
-export type BridgeErrorKind = "unavailable" | "not-allowlisted" | "bridge-denied" | "bridge-error";
+export type BridgeErrorKind = "unavailable" | "bridge-denied" | "bridge-error";
 
 /** A classified bridge failure; `kind` is what callers branch on. */
 export class BridgeCallError extends Error {
@@ -84,13 +54,12 @@ export interface BridgeClientLike {
   /** Whether a paired bridge answers on this machine right now. Never throws. */
   available(): Promise<boolean>;
   /**
-   * The allowlisted tools the bridge offers (A's client returns the full
-   * registry; the wrapper filters).
+   * Every tool the bridge offers — the full registry, unfiltered.
    * @throws {BridgeCallError} unavailable / bridge-error.
    */
   listTools(): Promise<BridgeToolInfo[]>;
   /**
-   * Call one allowlisted op; resolves with the result as text.
+   * Call any tool the bridge offers; resolves with the result as text.
    * @throws {BridgeCallError} with the kind naming the failed state.
    */
   call(name: string, args: Record<string, unknown>): Promise<string>;
@@ -148,7 +117,6 @@ function errorKind(error: unknown): BridgeErrorKind {
   const name = error instanceof Error ? error.name : "";
   const message = error instanceof Error ? error.message : String(error);
   const haystack = `${code} ${name} ${message}`;
-  if (/not[-_ ]?allowlist|not in the .*allowlist|not allowlisted/i.test(haystack)) return "not-allowlisted";
   if (/bridge-denied|denied by local approval|local approval.*(denied|timed out)/i.test(haystack)) return "bridge-denied";
   if (/unavailable|not configured|unreachable|ECONNREFUSED|fetch failed|timed? ?out/i.test(haystack)) return "unavailable";
   return "bridge-error";
@@ -162,9 +130,9 @@ function toBridgeCallError(error: unknown): BridgeCallError {
 
 /**
  * Normalize a raw client (A's, or a test's raw fake) into the shape B
- * consumes — AND enforce the allowlist: tools/list is filtered to
- * {@link BRIDGE_ALLOWLISTED_OPS}, and a call outside it is rejected
- * locally without the raw client being touched.
+ * consumes: results flattened to text, failures classified into
+ * {@link BridgeErrorKind}. No filtering — the full registry passes
+ * through (Carlos's order, 2026-10-31).
  */
 export function wrapBridgeClient(raw: {
   available(): Promise<boolean>;
@@ -181,16 +149,12 @@ export function wrapBridgeClient(raw: {
     },
     async listTools() {
       try {
-        const tools = await raw.listTools();
-        return tools.filter((t) => isAllowlistedBridgeOp(t.name));
+        return [...(await raw.listTools())];
       } catch (error) {
         throw toBridgeCallError(error);
       }
     },
     async call(name, args) {
-      if (!isAllowlistedBridgeOp(name)) {
-        throw new BridgeCallError("not-allowlisted", `${name} is not in the bridge allowlist`);
-      }
       try {
         return resultText(await raw.call(name, args));
       } catch (error) {
@@ -230,7 +194,7 @@ let defaultClient: Promise<BridgeClientLike> | undefined;
 /**
  * Resolve the bridge client for an engagement: the injected test seam
  * when present, otherwise the lazily-built default (A's client behind
- * the allowlist wrapper, or the always-unavailable fallback).
+ * the normalizing wrapper, or the always-unavailable fallback).
  */
 export async function resolveBridgeClient(ctx: Ctx): Promise<BridgeClientLike> {
   if (ctx.deps.bridgeClient) return ctx.deps.bridgeClient;

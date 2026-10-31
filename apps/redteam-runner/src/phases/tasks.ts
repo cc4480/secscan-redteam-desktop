@@ -45,8 +45,8 @@ export interface TaskResult {
  */
 export async function runTask(ctx: Ctx, task: TaskDef): Promise<TaskResult> {
   const role = task.kind === "recon" ? "recon" : "exploiter";
-  // Q-BRIDGE-TOOLS: bridge tools join the surface only when the
-  // local-host + bridge-availability gate opens (bridge-gate.ts).
+  // Q-BRIDGE-TOOLS: bridge tools join the surface when the bridge
+  // is live on this machine (bridge-gate.ts).
   const tools = await withBridgeTools(ctx, "exploit", task.kind === "recon" ? RECON_TOOLS : EXPLOIT_TOOLS);
   const probesBefore = ctx.probesUsed;
   const findingsBefore = ctx.liveFindings.length;
