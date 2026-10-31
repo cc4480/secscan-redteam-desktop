@@ -4,10 +4,10 @@
  * Pair contract (rp11 build log): when a local engagement runs, the
  * collector writes ONE artifact into the engagement directory and the
  * report renders from it. This module maps the collector's record
- * (types.ts) onto that artifact's shape. The mapping is honest about the
- * channel's limits: blocks the pc-agent channel cannot enumerate
- * (volumes, accounts, patches, software) are present because the artifact
- * contract requires them, but they carry no rows — the renderer is
+ * (types.ts) onto that artifact's shape. The four enumeration blocks
+ * (volumes, accounts, patches, software) carry the tier-2 collection's
+ * real rows and reconciling totals; a block whose tier-2 collection did
+ * not complete carries no rows and a zero total — the renderer is
  * responsible for presenting an empty required block as "not collected",
  * never as "none exist" (flagged in the pair log). Optional blocks the
  * collector cannot fill (defender, remoteConfig, hardening, filesystem,
@@ -15,7 +15,16 @@
  */
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { LocalHostInventory, LocalSystemInfo } from "./types.js";
+import { patchLevelSummary } from "./scripts.js";
+import type {
+  LocalAccountRow,
+  LocalHostInventory,
+  LocalInventorySection,
+  LocalPatchRow,
+  LocalSoftwareRow,
+  LocalSystemInfo,
+  LocalVolumeRow,
+} from "./types.js";
 
 /** Artifact file name inside the engagement directory. */
 export const HOST_INVENTORY_ARTIFACT = "host-inventory.json";
@@ -29,6 +38,48 @@ export interface HostInventoryWellRow {
   readonly value: string;
 }
 
+/** One volume row in the artifact (fileSystem omitted when unreported). */
+export interface HostInventoryVolumeRow {
+  readonly name: string;
+  readonly fileSystem?: string;
+  readonly sizeBytes: number;
+  readonly freeBytes: number;
+}
+
+/** One account row in the artifact. */
+export interface HostInventoryAccountRow {
+  readonly name: string;
+  readonly kind: string;
+  readonly enabled: boolean;
+  readonly groups: readonly string[];
+}
+
+/** One hotfix row in the artifact (installedOn omitted when unknown). */
+export interface HostInventoryPatchRow {
+  readonly id: string;
+  readonly installedOn?: string;
+}
+
+/** One software row in the artifact (empty version/publisher omitted). */
+export interface HostInventorySoftwareRow {
+  readonly name: string;
+  readonly version?: string;
+  readonly publisher?: string;
+}
+
+/**
+ * One process row in the artifact — the optional processes block B's
+ * renderer supports. The bridge's list_processes rows carry pid + exe
+ * name only; user/CPU/memory stay absent rather than invented.
+ */
+export interface HostInventoryProcessRow {
+  readonly name: string;
+  readonly pid?: number;
+  readonly user?: string;
+  readonly cpuPercent?: number;
+  readonly memoryPercent?: number;
+}
+
 /** The ok form of the artifact (see the pair contract for the full shape). */
 export interface HostInventoryArtifactOk {
   readonly status: "ok";
@@ -37,18 +88,20 @@ export interface HostInventoryArtifactOk {
     readonly collectedAt: string;
     readonly collector: string;
     readonly system: readonly HostInventoryWellRow[];
-    readonly volumes: readonly never[];
-    readonly accounts: readonly never[];
-    readonly patches: readonly never[];
-    /** Prose line: why the patch block carries no rows in v1. */
+    readonly volumes: readonly HostInventoryVolumeRow[];
+    readonly accounts: readonly HostInventoryAccountRow[];
+    readonly patches: readonly HostInventoryPatchRow[];
+    /** Summary when the patch block was collected; the not-collected line otherwise. */
     readonly patchLevel: string;
-    readonly software: readonly never[];
+    readonly software: readonly HostInventorySoftwareRow[];
+    /** Optional block: present only when the process list was collected. */
+    readonly processes?: readonly HostInventoryProcessRow[];
     readonly totals: {
-      readonly volumes: 0;
-      readonly accounts: 0;
-      readonly patches: 0;
-      readonly software: 0;
-      readonly files: 0;
+      readonly volumes: number;
+      readonly accounts: number;
+      readonly patches: number;
+      readonly software: number;
+      readonly files: number;
     };
   };
 }
@@ -81,6 +134,94 @@ function systemRows(info: LocalSystemInfo): HostInventoryWellRow[] {
     .map(([label, value]) => ({ label, value: String(value) }));
 }
 
+/** Rows of one section when it collected; no rows when it did not. */
+function sectionRows<T>(section: LocalInventorySection<readonly T[]>): readonly T[] {
+  return section.status === "collected" && section.data !== undefined ? section.data : [];
+}
+
+function volumeRows(rows: readonly LocalVolumeRow[]): HostInventoryVolumeRow[] {
+  return rows.map((row) => ({
+    name: row.name,
+    ...(row.fileSystem !== "" ? { fileSystem: row.fileSystem } : {}),
+    sizeBytes: row.sizeBytes,
+    freeBytes: row.freeBytes,
+  }));
+}
+
+function accountRows(rows: readonly LocalAccountRow[]): HostInventoryAccountRow[] {
+  return rows.map((row) => ({
+    name: row.name,
+    kind: row.kind,
+    enabled: row.enabled,
+    groups: row.groups,
+  }));
+}
+
+function patchRows(rows: readonly LocalPatchRow[]): HostInventoryPatchRow[] {
+  return rows.map((row) => ({
+    id: row.id,
+    ...(row.installedOn !== "" ? { installedOn: row.installedOn } : {}),
+  }));
+}
+
+function softwareRows(rows: readonly LocalSoftwareRow[]): HostInventorySoftwareRow[] {
+  return rows.map((row) => ({
+    name: row.name,
+    ...(row.version !== "" ? { version: row.version } : {}),
+    ...(row.publisher !== undefined ? { publisher: row.publisher } : {}),
+  }));
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === "string" && value !== "" ? value : undefined;
+}
+
+function asNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * Map the tier-0 process section onto the optional processes block. The
+ * bridge answers list_processes as a `{ count, processes }` envelope
+ * whose rows carry `pid` + `exe` (+ `parent`, which the report shape has
+ * no column for); a bare row array is accepted too. Rows without a name
+ * are skipped, and the block is omitted entirely when the section did
+ * not collect or no row maps — an omitted optional block renders
+ * nothing, which is the honest form for uncollected processes.
+ * @param section - the collector's process section (untyped data).
+ * @returns the artifact rows, or undefined to omit the block.
+ */
+function processRows(section: LocalInventorySection): HostInventoryProcessRow[] | undefined {
+  if (section.status !== "collected" || section.data === undefined) return undefined;
+  const list: unknown = Array.isArray(section.data) ? section.data : asRecord(section.data)?.["processes"];
+  if (!Array.isArray(list)) return undefined;
+  const rows: HostInventoryProcessRow[] = [];
+  for (const entry of list) {
+    const record = asRecord(entry);
+    if (record === undefined) continue;
+    const name = asString(record["name"]) ?? asString(record["exe"]);
+    if (name === undefined) continue;
+    const pid = asNumber(record["pid"]);
+    const user = asString(record["user"]);
+    const cpuPercent = asNumber(record["cpuPercent"] ?? record["cpu_percent"]);
+    const memoryPercent = asNumber(record["memoryPercent"] ?? record["memory_percent"]);
+    rows.push({
+      name,
+      ...(pid !== undefined ? { pid } : {}),
+      ...(user !== undefined ? { user } : {}),
+      ...(cpuPercent !== undefined ? { cpuPercent } : {}),
+      ...(memoryPercent !== undefined ? { memoryPercent } : {}),
+    });
+  }
+  return rows.length > 0 ? rows : undefined;
+}
+
 /**
  * Map a collected inventory onto the artifact shape.
  * @param inventory - the collector's record.
@@ -97,6 +238,11 @@ export function toHostInventoryArtifact(inventory: LocalHostInventory): HostInve
         "local collection failed: the collected hostname did not match the declared local target",
     };
   }
+  const volumes = volumeRows(sectionRows(inventory.sections.volumes));
+  const accounts = accountRows(sectionRows(inventory.sections.users));
+  const patches = patchRows(sectionRows(inventory.sections.patches));
+  const software = softwareRows(sectionRows(inventory.sections.installedSoftware));
+  const processes = processRows(inventory.sections.processes);
   return {
     status: "ok",
     inventory: {
@@ -104,13 +250,22 @@ export function toHostInventoryArtifact(inventory: LocalHostInventory): HostInve
       collectedAt: inventory.collectedAt,
       collector: LOCAL_COLLECTOR_ID,
       system: systemRows(inventory.sections.system.data ?? {}),
-      volumes: [],
-      accounts: [],
-      patches: [],
+      volumes,
+      accounts,
+      patches,
       patchLevel:
-        "Patch level not collected: the pc-agent channel has no patch-enumeration op (Q-RP-11 v1).",
-      software: [],
-      totals: { volumes: 0, accounts: 0, patches: 0, software: 0, files: 0 },
+        inventory.sections.patches.status === "collected"
+          ? patchLevelSummary(inventory.sections.patches.data ?? [])
+          : "Patch level not collected: the tier-2 Get-HotFix collection did not complete (Q-RP-11).",
+      software,
+      ...(processes !== undefined ? { processes } : {}),
+      totals: {
+        volumes: volumes.length,
+        accounts: accounts.length,
+        patches: patches.length,
+        software: software.length,
+        files: 0,
+      },
     },
   };
 }

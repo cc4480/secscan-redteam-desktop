@@ -4,10 +4,15 @@
  * A local engagement assesses the machine the runner itself runs on. The
  * collector (collect.ts) gathers host inventory through the paired pc-agent
  * channel on that same machine — never through SMB/WinRM/SSH and never with
- * target credentials — and returns this record. The report's host-inventory
- * section renders `sections` in declaration order; a section the channel
- * cannot answer is `unsupported` with the reason in `note`, never an empty
- * table presented as collected data.
+ * target credentials — and returns this record. Collection runs in two
+ * tiers over that one channel: tier-0 read-only bridge ops first (identity
+ * gate, processes, directory listings), then — only after the identity
+ * gate passes — tier-2 fixed read-only PowerShell scripts (scripts.ts)
+ * for the blocks no tier-0 op enumerates: volumes, accounts, patches,
+ * software. The report's host-inventory section renders `sections` in
+ * declaration order; a section the collection cannot fill is `failed` or
+ * `unsupported` with the reason in `note`, never an empty table presented
+ * as collected data.
  */
 
 /** Outcome of one inventory section. */
@@ -50,6 +55,42 @@ export interface LocalDirListing {
   readonly raw: string;
 }
 
+/** One mounted volume (tier-2 Get-Volume row). */
+export interface LocalVolumeRow {
+  readonly name: string;
+  /** File-system name ("NTFS"); "" when the volume reports none. */
+  readonly fileSystem: string;
+  readonly sizeBytes: number;
+  readonly freeBytes: number;
+}
+
+/** One local account (tier-2 Get-LocalUser row, groups resolved by SID). */
+export interface LocalAccountRow {
+  readonly name: string;
+  /** Account class; the fixed script emits "local user". */
+  readonly kind: string;
+  readonly enabled: boolean;
+  /** Names of the local groups the account belongs to. */
+  readonly groups: readonly string[];
+}
+
+/** One installed hotfix (tier-2 Get-HotFix row, most recent first). */
+export interface LocalPatchRow {
+  /** Hotfix id ("KB5066133"). */
+  readonly id: string;
+  /** Install date as the script formatted it ("2026-10-12"); "" when unknown. */
+  readonly installedOn: string;
+}
+
+/** One installed program (tier-2 registry uninstall-keys row). */
+export interface LocalSoftwareRow {
+  readonly name: string;
+  /** Display version; "" when the uninstall entry carries none. */
+  readonly version: string;
+  /** Publisher; the script omits the field when the entry carries none. */
+  readonly publisher?: string;
+}
+
 /** Verification basis recorded on every local engagement. */
 export type LocalVerificationBasis = "local-operator-possession";
 
@@ -79,10 +120,11 @@ export interface LocalHostInventory {
     readonly system: LocalInventorySection<LocalSystemInfo>;
     readonly processes: LocalInventorySection;
     readonly filesystem: LocalInventorySection<readonly LocalDirListing[]>;
-    readonly users: LocalInventorySection;
-    readonly installedSoftware: LocalInventorySection;
+    readonly volumes: LocalInventorySection<readonly LocalVolumeRow[]>;
+    readonly users: LocalInventorySection<readonly LocalAccountRow[]>;
+    readonly installedSoftware: LocalInventorySection<readonly LocalSoftwareRow[]>;
     readonly services: LocalInventorySection;
     readonly listeningPorts: LocalInventorySection;
-    readonly patches: LocalInventorySection;
+    readonly patches: LocalInventorySection<readonly LocalPatchRow[]>;
   };
 }

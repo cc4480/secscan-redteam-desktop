@@ -7,9 +7,15 @@
  * the target, the exact combination a real field run stalled on
  * (host-exec/pc-agent.ts field note). Local mode inverts that: the target is
  * the machine this runner runs on, and collection happens over the
- * operator-paired pc-agent channel already running on that machine. Every
- * call the collector makes is a tier-0 (read-only) bridge tool; no network
- * service and no target credential is involved.
+ * operator-paired pc-agent channel already running on that machine. No
+ * network service and no target credential is involved. Collection runs
+ * in two tiers over that one channel: tier-0 read-only bridge tools
+ * (identity, processes, directory listings), then — only after the
+ * identity gate passes — tier-2 fixed read-only PowerShell scripts
+ * (scripts.ts) for the blocks no tier-0 op enumerates. The tier-2 scripts
+ * are fixed strings, executed by the operator's own paired agent under
+ * the bridge's own consent prompts; a declined prompt fails that one
+ * block, honestly, and collection continues.
  *
  * Scope posture — explicit, never a silent bypass: a local engagement's
  * scope is exactly the machine's own hostname, and ownership is established
@@ -28,11 +34,25 @@ import {
   type PcAgentTool,
 } from "../host-exec/pc-agent.js";
 import type { EngagementInput } from "../types.js";
+import {
+  LOCAL_TIER2_BLOCKS,
+  LOCAL_TIER2_TOOL,
+  parseAccountRows,
+  parsePatchRows,
+  parseSoftwareRows,
+  parseVolumeRows,
+  shellStdout,
+  type LocalTier2Block,
+} from "./scripts.js";
 import type {
+  LocalAccountRow,
   LocalDirListing,
   LocalHostInventory,
   LocalInventorySection,
+  LocalPatchRow,
+  LocalSoftwareRow,
   LocalSystemInfo,
+  LocalVolumeRow,
 } from "./types.js";
 
 /** The channel the collector consumes; the pc-agent client satisfies it. */
@@ -49,7 +69,7 @@ export interface LocalChannel {
 /** Raw section text cap; longer bridge results are truncated and flagged. */
 export const LOCAL_RAW_CAP = 20_000;
 
-/** Inventory operations the collector uses — all tier-0 bridge tools. */
+/** Tier-0 inventory operations — the collector's first pass, all read-only. */
 export const LOCAL_INVENTORY_OPERATIONS: readonly PcAgentTool[] = [
   "system_info",
   "list_processes",
@@ -57,17 +77,15 @@ export const LOCAL_INVENTORY_OPERATIONS: readonly PcAgentTool[] = [
 ];
 
 /**
- * Sections the pc-agent channel cannot answer, with the reason each is
- * unsupported. The channel's closed allow-list has no op that enumerates
- * these; answering them would need tier-2 shell access, which read-only
- * local collection must not require.
+ * Sections no collection tier answers in v1, with the reason each is
+ * unsupported. Volumes, accounts, patches, and software moved off this
+ * list when the tier-2 pass landed (scripts.ts); services and listening
+ * ports stay here — no fixed read-only script for them is in v1's scope,
+ * and an unmeasured section is named, never fabricated.
  */
 const UNSUPPORTED_SECTIONS: ReadonlyArray<readonly [string, string]> = [
-  ["users", "no pc-agent op enumerates local user accounts"],
-  ["installedSoftware", "no pc-agent op enumerates installed software"],
   ["services", "no pc-agent op enumerates services"],
   ["listeningPorts", "no pc-agent op enumerates listening ports"],
-  ["patches", "no pc-agent op enumerates installed patches"],
 ];
 
 /**
@@ -101,6 +119,7 @@ export function buildLocalEngagementInput(opts: {
 }): EngagementInput {
   return {
     target: opts.hostname,
+    localHost: true,
     mode: opts.mode ?? "red",
     objective:
       opts.objective ?? "Assess this workstation (local host mode): inventory first, then the host battery.",
@@ -108,9 +127,9 @@ export function buildLocalEngagementInput(opts: {
       scope: [opts.hostname],
       notes:
         "LOCAL MODE: the target is the machine this runner runs on. Collection is through the " +
-        "paired pc-agent channel only (tier-0 reads); no network services (SMB/WinRM/SSH) and no " +
-        "target credentials are used. Verification basis: local-operator-possession — see the " +
-        "engagement record's verification proof.",
+        "paired pc-agent channel only (tier-0 reads, then fixed read-only tier-2 scripts); no " +
+        "network services (SMB/WinRM/SSH) and no target credentials are used. Verification " +
+        "basis: local-operator-possession — see the engagement record's verification proof.",
     },
     ...(opts.operatorName !== undefined ? { operatorName: opts.operatorName } : {}),
     targets: ["windows"],
@@ -195,16 +214,86 @@ function failedSection<T>(note: string): LocalInventorySection<T> {
 
 function unsupportedSections(): Pick<
   LocalHostInventory["sections"],
-  "users" | "installedSoftware" | "services" | "listeningPorts" | "patches"
+  "services" | "listeningPorts"
 > {
   const sections: Record<string, LocalInventorySection> = {};
   for (const [name, reason] of UNSUPPORTED_SECTIONS) {
     sections[name] = { status: "unsupported", note: reason, batteryCoverage: "none" };
   }
-  return sections as Pick<
-    LocalHostInventory["sections"],
-    "users" | "installedSoftware" | "services" | "listeningPorts" | "patches"
-  >;
+  return sections as Pick<LocalHostInventory["sections"], "services" | "listeningPorts">;
+}
+
+/** The four tier-2 blocks as section keys. */
+type Tier2Sections = Pick<
+  LocalHostInventory["sections"],
+  "volumes" | "users" | "installedSoftware" | "patches"
+>;
+
+/** The tier-2 blocks when collection never reached them (identity gate). */
+function unCollectedSections(note: string): Tier2Sections {
+  return {
+    volumes: failedSection(note),
+    users: failedSection(note),
+    installedSoftware: failedSection(note),
+    patches: failedSection(note),
+  };
+}
+
+/**
+ * Run one tier-2 block: its fixed script through the bridge's shell path.
+ * A declined consent prompt, a bridge timeout, a nonzero exit, or output
+ * that does not parse whole all land here as one failed section whose
+ * note says the block was not collected — the other blocks are unaffected.
+ * @param channel - the collector channel.
+ * @param block - the fixed script and timeout for this block.
+ * @param parse - the block's stdout parser.
+ * @returns the collected or honestly-failed section.
+ */
+async function tier2Section<T>(
+  channel: LocalChannel,
+  block: LocalTier2Block,
+  parse: (stdout: string) => readonly T[],
+): Promise<LocalInventorySection<readonly T[]>> {
+  try {
+    const text = await channel.call(LOCAL_TIER2_TOOL, {
+      script: block.script,
+      timeout_s: block.timeoutS,
+    });
+    return { status: "collected", data: parse(shellStdout(text)), batteryCoverage: "partial" };
+  } catch (error) {
+    return { status: "failed", note: `not collected: ${errorText(error)}`, batteryCoverage: "none" };
+  }
+}
+
+/**
+ * Collect the four tier-2 enumeration blocks, sequentially — on a real
+ * bridge each `shell_pwsh` call can raise a consent prompt, and prompts
+ * must arrive one at a time, never stacked.
+ * @param channel - the collector channel.
+ * @returns the four sections, keyed as the inventory record names them.
+ */
+async function collectTier2Sections(channel: LocalChannel): Promise<Tier2Sections> {
+  const volumes = await tier2Section<LocalVolumeRow>(
+    channel,
+    LOCAL_TIER2_BLOCKS.volumes,
+    parseVolumeRows,
+  );
+  const users = await tier2Section<LocalAccountRow>(
+    channel,
+    LOCAL_TIER2_BLOCKS.accounts,
+    parseAccountRows,
+  );
+  const patches = await tier2Section<LocalPatchRow>(
+    channel,
+    LOCAL_TIER2_BLOCKS.patches,
+    parsePatchRows,
+  );
+  const installedSoftware = await tier2Section<LocalSoftwareRow>(
+    channel,
+    LOCAL_TIER2_BLOCKS.software,
+    parseSoftwareRows,
+  );
+  return { volumes, users, installedSoftware, patches };
 }
 
 /** Options for one local collection. */
@@ -226,9 +315,10 @@ export interface CollectLocalOptions {
  *
  * Order matters: `system_info` runs first and gates everything else — when
  * the machine's own hostname does not match the declared local target (or
- * identity cannot be read at all), collection aborts and every remaining
- * section is marked failed with the reason. Section failures after the
- * identity gate are per-section: one dead op does not lose the rest.
+ * identity cannot be read at all), collection aborts before any tier-2
+ * call and every remaining section is marked failed with the reason.
+ * Section failures after the identity gate are per-section, across both
+ * tiers: one dead op or declined script does not lose the rest.
  * @param channel - the collector channel (the pc-agent client, or a stub).
  * @param opts - the declared target and collection options.
  * @returns the collected inventory record.
@@ -262,6 +352,7 @@ export async function collectLocalInventory(
         system: failedSection(note),
         processes: failedSection(note),
         filesystem: failedSection(note),
+        ...unCollectedSections(note),
         ...unsupportedSections(),
       },
     };
@@ -290,6 +381,7 @@ export async function collectLocalInventory(
         system: { ...systemSection, note },
         processes: failedSection(note),
         filesystem: failedSection(note),
+        ...unCollectedSections(note),
         ...unsupportedSections(),
       },
     };
@@ -331,6 +423,8 @@ export async function collectLocalInventory(
         }
       : failedSection(`all directory listings failed: ${failures.join("; ")}`);
 
+  const tier2 = await collectTier2Sections(channel);
+
   return {
     ...base,
     target: { declaredHostname: opts.declaredHostname, collectedHostname, hostnameMatch: true },
@@ -338,6 +432,7 @@ export async function collectLocalInventory(
       system: systemSection,
       processes,
       filesystem,
+      ...tier2,
       ...unsupportedSections(),
     },
   };
