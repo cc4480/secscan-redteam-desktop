@@ -1,7 +1,7 @@
 /* Stat-dialog surface skin shared by the Turn-stat pills (TurnUsagePanel) and
-   the session stats pills (StatsPills): menu surface, r12, elevation-prominent
-   — ContextMeter's panel skin. Placement comes from useStatDialog
-   (stat-dialog.ts). */
+   the session stats pills (StatsPills): glass surface (shell tokens), r12,
+   elevation-prominent — ContextMeter's panel skin. Placement comes from
+   useStatDialog (stat-dialog.ts). */
 
 /* Portal surface: fixed in the viewport, left/top supplied inline from the
    anchored-position clamp so the panel keeps its 12px viewport margin instead
@@ -20,8 +20,8 @@
   padding: 16px;
   border: 0;
   border-radius: 12px;
-  background: var(--dsw-specific-menu);
-  backdrop-filter: var(--dsw-menu-backdrop-filter);
+  background: var(--glass-hi);
+  backdrop-filter: var(--glass-blur);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
   font-size: 12px;

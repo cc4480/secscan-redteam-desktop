@@ -185,3 +185,16 @@
 .modalAction {
   min-width: 72px;
 }
+
+/* Glass shell (dark): the back-to-bottom control floats as glass over the
+   thread panel. */
+:global([data-ds-dark-theme]) .toBottom {
+  background: var(--glass-hi);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow);
+}
+
+:global([data-ds-dark-theme]) .toBottom:hover {
+  background: var(--glass-strong);
+}

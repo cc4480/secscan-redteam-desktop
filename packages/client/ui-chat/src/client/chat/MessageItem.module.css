@@ -385,3 +385,13 @@
   font-size: 12px;
   line-height: 15px;
 }
+
+/* Glass shell (dark): the user bubble is the strongest glass in the thread
+   (the sample's treatment) — translucent fill and backdrop blur over the
+   thread panel, with the top highlight and hairline ring. */
+:global([data-ds-dark-theme]) .bubble {
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: inset 0 1px 0 var(--glass-edge), inset 0 0 0 1px var(--glass-line);
+}
