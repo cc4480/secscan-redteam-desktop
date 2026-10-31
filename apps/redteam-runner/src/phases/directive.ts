@@ -2,7 +2,8 @@
  * Coordinator directive synthesis (v0.19.0 refactor — extracted from phases.ts).
  */
 import { COMMAND_TOOLS } from "../tools.js";
-import { type Ctx } from "../context.js";
+import { HaltError, type Ctx } from "../context.js";
+import { describeErrorCause } from "@secscan/redteam-llm-router";
 import { agentLoop, promptCtx } from "../agents.js";
 import { coordinatorPrompt } from "../prompts.js";
 import { extractJsonBlock } from "../util.js";
@@ -49,3 +50,39 @@ export async function coordinatorDirective(
   return { tasks, finish, note };
 }
 
+/**
+ * coordinatorDirective with the honest-close failure path (Q-HALT Item 4).
+ *
+ * A directive call that fails (e.g. the provider safety-rejects the re-plan
+ * context) must not halt the engagement: the phase has completed work worth
+ * reporting, and every other incompleteness in the phase closes honestly.
+ * On success this returns the directive; on a HaltError it RETHROWS
+ * untouched (deliberate stops — caps, blackout, consecutive-5xx — remain
+ * engagement halts by design); on any other error it appends exactly one
+ * directive_failed event carrying the provider cause (describeErrorCause —
+ * the ResilienceError message alone is only the classifier's rule name)
+ * and returns null, leaving the caller to close the phase with completed
+ * work only. coordinatorDirective itself is unchanged.
+ */
+export async function coordinatorDirectiveOrClose(
+  ctx: Ctx,
+  kind: "decompose" | "replan",
+  context: string,
+): Promise<CoordinatorDirective | null> {
+  try {
+    return await coordinatorDirective(ctx, kind, context);
+  } catch (err) {
+    if (err instanceof HaltError) throw err;
+    const cause = describeErrorCause(err);
+    ctx.events.append({
+      phase: "exploit",
+      actor: "coordinator",
+      action: "directive_failed",
+      result:
+        `${kind} directive call failed: ${(err as Error).message}` +
+        (cause !== undefined ? ` Cause: ${cause}` : "") +
+        ` — closing the phase with completed work only.`,
+    });
+    return null;
+  }
+}
