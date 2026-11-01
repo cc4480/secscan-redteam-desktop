@@ -24,6 +24,7 @@ import { type ItemVerdict } from './coverage/items.js'
 import { type MemoryEngagementState } from './memory/types.js'
 import { type MemoryDeps } from './memory/lifecycle.js'
 import { type BridgeClientLike } from './dispatch/bridge-client.js'
+import { type SearchProvider } from './research/provider.js'
 import { type PolicyRules } from './policy/rules.js'
 import { type ScopeGuard } from './safety/scope-guard.js'
 import { type HookRegistry } from './hooks/index.js'
@@ -51,6 +52,12 @@ export interface RunnerDeps {
    * offering and dispatch both resolve through it.
    */
   bridgeClient?: BridgeClientLike
+  /**
+   * Injectable for tests (Q-RESEARCH-TOOLS; default: the keyless
+   * search provider resolved from the environment by
+   * research/provider.ts resolveSearchProvider).
+   */
+  researchProvider?: SearchProvider
 }
 
 /** One entry in the shared target map (recon-written, whole-team-read). */

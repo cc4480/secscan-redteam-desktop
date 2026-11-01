@@ -18,6 +18,7 @@ import { handleMsfTools } from "./msf.js";
 import { handleNmapTools } from "./nmap.js";
 import { handleNucleiTools } from "./nuclei.js";
 import { handlePcAgentTools } from "./pc-agent.js";
+import { handleResearchTools } from "./research.js";
 import { handleSecscanTools } from "./secscan.js";
 import { handleSeclayerTools } from "./seclayer.js";
 import { handleSeclayerDastTool } from "./seclayer-dast.js";
@@ -37,6 +38,7 @@ const HANDLERS = [
   handleSecscanTools,
   handleSeclayerTools,
   handleSeclayerDastTool,
+  handleResearchTools,
   handleBookkeepingTools,
 ];
 

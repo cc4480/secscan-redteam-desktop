@@ -98,6 +98,12 @@ const TIER0_TOOLS = new Set([
   "variant_list", // v0.20.0: pure bookkeeping — returns curated payloads, never fires
   "http_probe",
   "burst_probe",
+  // Web research (the deep-research-osint skill's execution layer):
+  // read-only lookups against public sources, never target traffic.
+  // The skill's scope law for target-named queries is enforced in the
+  // research handler, not by the tier ladder.
+  "research_search",
+  "research_fetch",
   // abort_engagement is always allowed — the kill switch must work at every tier.
   "abort_engagement",
 ]);

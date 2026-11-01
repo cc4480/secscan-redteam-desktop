@@ -3,6 +3,7 @@
  */
 import type { JsonSchemaTool } from "@secscan/redteam-llm-router";
 import { BURST_PROBE_TOOL, PROBE_TOOL } from "./web.js";
+import { RESEARCH_TOOLS } from "./research.js";
 import { SECSCAN_EXEC_TOOL } from "./secscan.js";
 import {
   SECLAYER_REDTEAM_TOOL,
@@ -52,7 +53,7 @@ function withBatteryItem(t: JsonSchemaTool): JsonSchemaTool {
   };
 }
 
-export const RECON_TOOLS = [withBatteryItem(SECSCAN_EXEC_TOOL), ...HOST_TOOLS.map(withBatteryItem), withBatteryItem(MSF_EXEC_TOOL), withBatteryItem(NUCLEI_EXEC_TOOL), withBatteryItem(NMAP_EXEC_TOOL), ...XTOOL_DEFS.map(withBatteryItem), ...PC_AGENT_TOOLS, QUERY_REGISTRY_TOOL, READ_SPILL_TOOL, UPDATE_TARGET_MAP_TOOL, withBatteryItem(RECORD_ITEM_VERDICT_TOOL), VARIANT_LIST_TOOL];
-export const EXPLOIT_TOOLS = [withBatteryItem(PROBE_TOOL), withBatteryItem(BURST_PROBE_TOOL), ...HOST_TOOLS.map(withBatteryItem), withBatteryItem(MSF_EXEC_TOOL), withBatteryItem(NUCLEI_EXEC_TOOL), withBatteryItem(NMAP_EXEC_TOOL), ...PC_AGENT_TOOLS, QUERY_REGISTRY_TOOL, READ_SPILL_TOOL, withBatteryItem(RECORD_FINDING_TOOL), withBatteryItem(RECORD_KILLED_TOOL), withBatteryItem(RECORD_ITEM_VERDICT_TOOL), VARIANT_LIST_TOOL, withBatteryItem(SECLAYER_REDTEAM_TOOL), withBatteryItem(SECLAYER_BOLA_TOOL), withBatteryItem(SECLAYER_API_TOOL), withBatteryItem(SECLAYER_WEBHOOK_TOOL), withBatteryItem(SECLAYER_DAST_TOOL), withBatteryItem(SECLAYER_AGGRESSIVE_TOOL)];
+export const RECON_TOOLS = [withBatteryItem(SECSCAN_EXEC_TOOL), ...HOST_TOOLS.map(withBatteryItem), withBatteryItem(MSF_EXEC_TOOL), withBatteryItem(NUCLEI_EXEC_TOOL), withBatteryItem(NMAP_EXEC_TOOL), ...XTOOL_DEFS.map(withBatteryItem), ...PC_AGENT_TOOLS, QUERY_REGISTRY_TOOL, READ_SPILL_TOOL, UPDATE_TARGET_MAP_TOOL, withBatteryItem(RECORD_ITEM_VERDICT_TOOL), VARIANT_LIST_TOOL, ...RESEARCH_TOOLS];
+export const EXPLOIT_TOOLS = [withBatteryItem(PROBE_TOOL), withBatteryItem(BURST_PROBE_TOOL), ...HOST_TOOLS.map(withBatteryItem), withBatteryItem(MSF_EXEC_TOOL), withBatteryItem(NUCLEI_EXEC_TOOL), withBatteryItem(NMAP_EXEC_TOOL), ...PC_AGENT_TOOLS, QUERY_REGISTRY_TOOL, READ_SPILL_TOOL, withBatteryItem(RECORD_FINDING_TOOL), withBatteryItem(RECORD_KILLED_TOOL), withBatteryItem(RECORD_ITEM_VERDICT_TOOL), VARIANT_LIST_TOOL, withBatteryItem(SECLAYER_REDTEAM_TOOL), withBatteryItem(SECLAYER_BOLA_TOOL), withBatteryItem(SECLAYER_API_TOOL), withBatteryItem(SECLAYER_WEBHOOK_TOOL), withBatteryItem(SECLAYER_DAST_TOOL), withBatteryItem(SECLAYER_AGGRESSIVE_TOOL), ...RESEARCH_TOOLS];
 /** The coordinator's command tools: no probes, only command authority. */
 export const COMMAND_TOOLS = [ABORT_TOOL];

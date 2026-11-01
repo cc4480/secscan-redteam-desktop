@@ -9,6 +9,7 @@
 export { type DispatchResult } from "./dispatch/types.js";
 export { optStr, numArg } from "./dispatch/prelude.js";
 export { handleWebTools } from "./dispatch/web.js";
+export { handleResearchTools } from "./dispatch/research.js";
 export { handleHostTools } from "./dispatch/host.js";
 export { handleMsfTools } from "./dispatch/msf.js";
 export { handlePcAgentTools } from "./dispatch/pc-agent.js";
