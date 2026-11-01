@@ -260,6 +260,14 @@
     - id: ui-sidebar-files
       name: '@deepseek-ai/dsh-client-ui-sidebar-files'
 
+    # The RedTeam console's Watch tab type in the right Sidebar
+    # (Q-CONSOLE-MERGE): live engagement feed, fleet seats, the
+    # engagement's own stats, and console controls over the host
+    # console-share routes. Later merge phases add this package's
+    # Engagements panel and rail surfaces to the same row.
+    - id: ui-redteam-console
+      name: '@deepseek-ai/dsh-client-ui-redteam-console'
+
     - id: ui-settings
       name: '@deepseek-ai/dsh-client-ui-settings'
 
