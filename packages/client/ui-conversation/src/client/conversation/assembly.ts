@@ -133,14 +133,15 @@ class BoundConversation implements ConversationBinding {
     if (publication === 'none') return
     if (publication === 'animation-frame' && typeof requestAnimationFrame === 'function') {
       if (this.frame !== undefined) return
-      // Cross three paint opportunities before publishing high-frequency stream updates.
+      // Publish on the next paint. One frame of coalescing bounds stream
+      // publication to the display refresh rate, so painted states track
+      // delta arrivals at frame granularity instead of lagging three
+      // frames behind them; the flush is one assembler pass over the
+      // accumulated updates either way, so the shorter cadence costs no
+      // extra fold work — it only removes the artificial paint lag.
       this.frame = requestAnimationFrame(() => {
-        this.frame = requestAnimationFrame(() => {
-          this.frame = requestAnimationFrame(() => {
-            this.frame = undefined
-            this.flush()
-          })
-        })
+        this.frame = undefined
+        this.flush()
       })
       return
     }

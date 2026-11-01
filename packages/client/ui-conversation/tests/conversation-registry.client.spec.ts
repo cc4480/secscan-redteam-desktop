@@ -122,6 +122,12 @@ function viewDefinition(target: string): ConversationViewDefinition<Conversation
   }
 }
 
+function appendEvent(source: MutableSessionEventSource, event: SessionEventLike): void {
+  source.append(event.type === 'assistant/live-chunk'
+    ? { type: 'transient', event }
+    : { type: 'event', event })
+}
+
 async function bootRegistries(): Promise<{
   ctx: Context
   uiConversation: UiConversation
@@ -143,7 +149,7 @@ async function bootRegistries(): Promise<{
 }
 
 describe('Conversation registries', () => {
-  it('publishes frame-paced updates after three animation frames and lets immediate updates preempt them', async () => {
+  it('publishes frame-paced updates on the next animation frame and lets immediate updates preempt them', async () => {
     let nextFrame = 0
     const frames = new Map<number, FrameRequestCallback>()
     const requestFrame = vi.fn((callback: FrameRequestCallback) => {
@@ -182,15 +188,10 @@ describe('Conversation registries', () => {
     const listener = vi.fn()
     const unsubscribe = conversation.snapshot.subscribe(listener)
     const source = binding.eventSource as MutableSessionEventSource
-    const append = (event: SessionEventLike): void => {
-      source.append(event.type === 'assistant/live-chunk'
-        ? { type: 'transient', event }
-        : { type: 'event', event })
-    }
 
-    append({ seq: SessionSeq(1), time: 1, type: 'turn/start', data: { turn: 1 } })
+    appendEvent(source, { seq: SessionSeq(1), time: 1, type: 'turn/start', data: { turn: 1 } })
     listener.mockClear()
-    append({
+    appendEvent(source, {
       seq: SessionSeq(2),
       time: 2,
       type: 'assistant/live-chunk',
@@ -199,7 +200,7 @@ describe('Conversation registries', () => {
         turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'a' },
       },
     })
-    append({
+    appendEvent(source, {
       seq: SessionSeq(3),
       time: 3,
       type: 'assistant/live-chunk',
@@ -215,23 +216,10 @@ describe('Conversation registries', () => {
     if (first === undefined) throw new Error('first animation frame was not scheduled')
     frames.delete(1)
     first(0)
-    expect(requestFrame).toHaveBeenCalledTimes(2)
-    expect(listener).not.toHaveBeenCalled()
-
-    const second = frames.get(2)
-    if (second === undefined) throw new Error('second animation frame was not scheduled')
-    frames.delete(2)
-    second(16)
-    expect(requestFrame).toHaveBeenCalledTimes(3)
-    expect(listener).not.toHaveBeenCalled()
-
-    const third = frames.get(3)
-    if (third === undefined) throw new Error('third animation frame was not scheduled')
-    frames.delete(3)
-    third(32)
+    expect(requestFrame).toHaveBeenCalledOnce()
     expect(listener).toHaveBeenCalledOnce()
 
-    append({
+    appendEvent(source, {
       seq: SessionSeq(4),
       time: 4,
       type: 'assistant/live-chunk',
@@ -258,11 +246,189 @@ describe('Conversation registries', () => {
         surfaceOp: 'append',
       },
     })
-    expect(cancelFrame).toHaveBeenCalledWith(4)
+    expect(cancelFrame).toHaveBeenCalledWith(2)
     expect(frames).toHaveLength(0)
     expect(listener).toHaveBeenCalledTimes(2)
 
     unsubscribe()
+    await binding.ctx.fiber.dispose()
+  })
+
+  it('paints one cumulative state per frame from a recorded delta sequence, coalesces bursts losslessly, and settles byte-identical', async () => {
+    let nextFrame = 0
+    const frames = new Map<number, FrameRequestCallback>()
+    const requestFrame = vi.fn((callback: FrameRequestCallback) => {
+      nextFrame++
+      frames.set(nextFrame, callback)
+      return nextFrame
+    })
+    const cancelFrame = vi.fn((frame: number) => { frames.delete(frame) })
+    vi.stubGlobal('requestAnimationFrame', requestFrame)
+    vi.stubGlobal('cancelAnimationFrame', cancelFrame)
+    const { uiConversation, binding, events, views } = await bootRegistries()
+    const attemptId = LlmAttemptId('stream-paint-probe')
+    interface PaintSnapshot {
+      readonly order: readonly string[]
+      readonly nodes: ReadonlyMap<string, ConversationViewNode>
+    }
+    let painted: PaintSnapshot = { order: [], nodes: new Map() }
+    const paintView: ConversationViewDefinition<ConversationViewNode, PaintSnapshot> = {
+      target: 'chat',
+      create: () => ({
+        empty: painted,
+        replace: ({ nodes }) => {
+          painted = {
+            order: nodes.map(node => node.key),
+            nodes: new Map(nodes.map(node => [node.key, node])),
+          }
+          return painted
+        },
+        apply: ({ upserts }) => {
+          const nodes = new Map(painted.nodes)
+          const order = [...painted.order]
+          for (const node of upserts) {
+            if (!nodes.has(node.key)) order.push(node.key)
+            nodes.set(node.key, node)
+          }
+          painted = { order, nodes }
+          return painted
+        },
+      }),
+    }
+    const definition: ConversationNodeDefinition<string> = {
+      kind: 'stream-paint-probe',
+      target: 'chat',
+      match: event => event.type === 'turn/start'
+        ? { id: String(event.data.turn), role: 'start' }
+        : event.type === 'assistant/live-chunk' || event.type === 'assistant/message'
+          ? { id: String(event.data.turn), role: 'update' }
+          : null,
+      start: () => '',
+      update: (context, match) => {
+        if (match.event.type === 'assistant/live-chunk') {
+          const chunk = match.event.data.chunk
+          return chunk.type === 'text-delta' ? context.state + chunk.text : context.state
+        }
+        if (match.event.type === 'assistant/message') {
+          return match.event.data.message.content
+            .filter(block => block.type === 'text')
+            .map(block => block.text)
+            .join('')
+        }
+        return context.state
+      },
+      publication: match => match.event.type === 'assistant/live-chunk' ? 'animation-frame' : 'immediate',
+      buildViewNode: context => ({
+        key: context.key,
+        kind: 'stream-paint-probe',
+        id: context.id,
+        target: 'chat',
+        data: context.state,
+      }),
+    }
+    events.register(definition)
+    views.register(paintView)
+    await Promise.resolve()
+    const conversation = uiConversation.binding(binding)
+    conversation.activate('chat')
+    const source = binding.eventSource as MutableSessionEventSource
+    const append = (event: SessionEventLike): void => { appendEvent(source, event) }
+    const paintedText = (): string | undefined => {
+      const node = [...painted.nodes.values()].find(candidate => candidate.kind === 'stream-paint-probe')
+      return node?.data as string | undefined
+    }
+    let frameTime = 0
+    const tick = (): void => {
+      const pending = [...frames.entries()]
+      expect(pending).toHaveLength(1)
+      const [id, callback] = pending[0] as [number, FrameRequestCallback]
+      frames.delete(id)
+      frameTime += 16
+      callback(frameTime)
+    }
+
+    append({ seq: SessionSeq(1), time: 1, type: 'turn/start', data: { turn: 1 } })
+    expect(paintedText()).toBe('')
+
+    // Recorded delta fixture, fed one delta per frame: every arrival paints
+    // exactly one new cumulative state on the next frame.
+    const deltas = ['The ', 'quick ', 'brown ', 'fox ', 'jumps.']
+    const states: string[] = []
+    let seq = 1
+    for (const text of deltas) {
+      seq++
+      append({
+        seq: SessionSeq(seq),
+        time: seq,
+        type: 'assistant/live-chunk',
+        data: { attemptId, turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text } },
+      })
+      // Nothing paints before the frame; exactly one frame is ever pending.
+      expect(paintedText()).toBe(states.at(-1) ?? '')
+      tick()
+      states.push(paintedText() as string)
+    }
+    expect(states).toEqual(['The ', 'The quick ', 'The quick brown ', 'The quick brown fox ', 'The quick brown fox jumps.'])
+
+    // A burst of three deltas inside one frame window coalesces into ONE
+    // new painted state carrying all three — cumulative, nothing lost.
+    for (const text of [' over', ' the', ' lazy']) {
+      seq++
+      append({
+        seq: SessionSeq(seq),
+        time: seq,
+        type: 'assistant/live-chunk',
+        data: { attemptId, turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text } },
+      })
+    }
+    expect(paintedText()).toBe('The quick brown fox jumps.')
+    tick()
+    expect(paintedText()).toBe('The quick brown fox jumps. over the lazy')
+    states.push(paintedText() as string)
+
+    seq++
+    append({
+      seq: SessionSeq(seq),
+      time: seq,
+      type: 'assistant/live-chunk',
+      data: { attemptId, turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: ' dog.' } },
+    })
+    tick()
+    const streamed = 'The quick brown fox jumps. over the lazy dog.'
+    expect(paintedText()).toBe(streamed)
+    states.push(paintedText() as string)
+
+    // Seven paint windows total (5 single + 1 burst + 1 final), one rAF each:
+    // paints are driven by delta arrivals at frame cadence, never a chain.
+    expect(requestFrame).toHaveBeenCalledTimes(7)
+    expect(states).toHaveLength(7)
+    for (let index = 1; index < states.length; index++) {
+      expect((states[index] as string).startsWith(states[index - 1] as string)).toBe(true)
+    }
+
+    // Settlement: the durable message's text is byte-identical to the text
+    // the deltas streamed, and the painted node does not change by a byte.
+    source.settleAssistant(attemptId, {
+      type: 'event',
+      event: {
+        seq: SessionSeq(seq + 1),
+        time: seq + 1,
+        type: 'assistant/message',
+        data: {
+          turn: 1,
+          step: 1,
+          message: createAssistantMessage({
+            content: [{ type: 'text', text: streamed }],
+            source: { provider: 'test', model: 'test' },
+          }),
+          stream: [],
+        },
+        surfaceOp: 'append',
+      },
+    })
+    expect(paintedText()).toBe(streamed)
+    expect(paintedText()).toBe(deltas.join('') + ' over' + ' the' + ' lazy' + ' dog.')
+
     await binding.ctx.fiber.dispose()
   })
 
