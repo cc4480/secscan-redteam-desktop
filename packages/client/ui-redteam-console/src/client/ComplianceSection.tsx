@@ -34,13 +34,8 @@ type DocId = typeof DOCS[number]['id']
  * @param html - the server-rendered fragment.
  * @returns a full document string for srcDoc.
  */
-function asDocument(html: string): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><style>
-    body { font-family: system-ui, sans-serif; margin: 24px auto; max-width: 860px; padding: 0 20px 40px; color: #16161a; background: #fdfdfc; line-height: 1.55; }
-    code, pre { font-family: ui-monospace, monospace; font-size: 0.92em; }
-    pre { overflow: auto; padding: 10px; background: #f0f0ee; border-radius: 8px; }
-    table { border-collapse: collapse; } td, th { border: 1px solid #d8d8d3; padding: 4px 8px; }
-  </style></head><body>${html}</body></html>`
+function asDocument(t: (key: 'compliance.docOpen' | 'compliance.docClose') => string, html: string): string {
+  return `${t('compliance.docOpen')}${html}${t('compliance.docClose')}`
 }
 
 /**
@@ -85,7 +80,7 @@ export function ComplianceSection({ section, t }: {
             className={css.docFrame}
             title={t(active.label)}
             sandbox=""
-            srcDoc={asDocument(html)}
+            srcDoc={asDocument(t, html)}
           />
         )}
     </div>

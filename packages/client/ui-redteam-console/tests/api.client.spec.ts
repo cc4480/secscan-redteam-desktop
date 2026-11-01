@@ -67,6 +67,14 @@ describe('createConsoleApi', () => {
     })
   })
 
+  it('renders a bare-status failure through the injected formatter', async () => {
+    fetchMock.mockResolvedValue(new Response('not json', { status: 502 }))
+    const bare = createConsoleApi()
+    await expect(bare.models(new AbortController().signal)).resolves.toEqual({ ok: false, message: '502' })
+    const localized = createConsoleApi(status => ['HTTP', String(status)].join(' '))
+    await expect(localized.models(new AbortController().signal)).resolves.toEqual({ ok: false, message: 'HTTP 502' })
+  })
+
   it('maps a network rejection to the same failure code', async () => {
     fetchMock.mockRejectedValue(new Error('socket closed'))
     const api = createConsoleApi()
@@ -129,6 +137,30 @@ describe('createConsoleApi', () => {
     await api.reverify({ id: 'eng-9', finding: 'F-1', execute: true, scope: ['fixture.invalid'] })
     expect(JSON.parse(String(fetchMock.mock.calls.at(-1)![1]?.body))).toEqual({
       id: 'eng-9', finding: 'F-1', execute: true, scope: ['fixture.invalid'],
+    })
+  })
+
+  it('addresses the phase 3 routes: detail, foundry + actions, arsenal bridge, scope', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(200, {}))
+    const api = createConsoleApi()
+    const signal = new AbortController().signal
+    await api.detail('eng-9', signal)
+    await api.foundry(signal)
+    await api.scope(signal)
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual([
+      'redteam-console/api/engagements/eng-9',
+      'redteam-console/api/foundry',
+      'redteam-console/api/console/scope',
+    ])
+    await api.foundryAction('run-gold')
+    const actionCall = fetchMock.mock.calls.at(-1)!
+    expect(actionCall[0]).toBe('redteam-console/api/foundry/run-gold')
+    expect(actionCall[1]?.method).toBe('POST')
+    await api.arsenal('arsenal_search', { query: 'idor', limit: 25 })
+    const arsenalCall = fetchMock.mock.calls.at(-1)!
+    expect(arsenalCall[0]).toBe('redteam-console/arsenal')
+    expect(JSON.parse(String(arsenalCall[1]?.body))).toEqual({
+      tool: 'arsenal_search', arguments: { query: 'idor', limit: 25 },
     })
   })
 

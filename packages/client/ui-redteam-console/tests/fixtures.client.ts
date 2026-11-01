@@ -10,6 +10,10 @@ import type {
   Compliance, Coverage, Finding, JobRecord, ProofBundle,
 } from '../src/client/engagements-model.ts'
 import type {
+  ArsenalBrowse, ArsenalResults, ArsenalToolName, EngagementDetail, FoundryActionKind,
+  FoundryActionResult, FoundryState, FoundryVerifyResult, ScopeAggregate,
+} from '../src/client/library-model.ts'
+import type {
   ConsoleEngagement, ConsoleEngagementsResponse, EngagementEvent, EscalateInput, EscalateOutcome, ModelsResponse,
 } from '../src/client/model.ts'
 
@@ -181,6 +185,133 @@ export interface ScriptedFeed {
   emitError(): void
 }
 
+/** The fixture Foundry state: snapshot located, gate available, one case. */
+export const FOUNDRY_STATE: FoundryState = {
+  available: true,
+  reason: null,
+  snapshotDir: '/fixture/foundry-snapshot',
+  snapshotVia: 'fixture',
+  searched: ['/fixture/foundry-snapshot'],
+  snapshot: {
+    name: 'fixture-snapshot',
+    generatedAt: '2026-10-31T20:00:00.000Z',
+    declaredCounts: { datasets: 12, gold: 2, silver: 3, liveCases: 1 },
+    bundles: [
+      {
+        slug: 'fixture-gold-1', family: 'idor', loopTier: 'GOLD', vulnClass: 'IDOR', cwe: 'CWE-639',
+        tier: 1, status: 'active', fitness: 0.87, panelPassRate: 0.9,
+      },
+    ],
+    counts: { total: 5, gold: 2, silver: 3, other: 0 },
+  },
+  gate: { available: true, cliPath: '/fixture/gate-cli', packageRoots: ['/fixture'] },
+  store: {
+    dir: '/fixture/store',
+    available: true,
+    cases: [
+      {
+        id: 'case-fixture-1', family: 'idor', tier: 'gold', origin: 'scan', vulnClass: 'IDOR',
+        cwe: 'CWE-639', severity: 'high', payloadClass: 'http', proofType: 'canary',
+        endpointShape: '/api/accounts/:id', sourceEngagementId: DONE_ENGAGEMENT.id,
+        createdAt: '2026-10-31T21:00:00.000Z', lineage: null,
+      },
+    ],
+    bundles: [],
+    counts: { total: 1, byTier: { gold: 1 }, byFamily: { idor: 1 } },
+    sanitizerNotes: [],
+  },
+  loop: {
+    cyclesRun: 3,
+    lastCycle: null,
+    fitness: [{ caseId: 'case-fixture-1', fitness: 0.87, components: null, at: '2026-10-31T21:30:00.000Z' }],
+  },
+}
+
+/** The fixture verify answer. */
+export const FOUNDRY_VERIFY: FoundryVerifyResult = {
+  ok: true,
+  exitCode: 0,
+  timedOut: false,
+  totals: { ok: 5, total: 5 },
+  perFamily: [{ family: 'idor', total: 5, ok: 5, failed: 0, failedSlugs: [] }],
+}
+
+/** The fixture scope aggregate. */
+export const SCOPE_AGGREGATE: ScopeAggregate = {
+  available: true,
+  generatedAt: '2026-10-31T22:10:00.000Z',
+  window: { engagementsScanned: 2 },
+  totals: {
+    denials: 4, scopeViolations: 1, policyDenials: 1, hookDenials: 1,
+    authorizationDenied: 0, targetAutoHalts: 1, engagementHalts: 1, aborts: 0, halts: 2,
+  },
+  haltReasons: [{ reason: 'fixture halt reason', count: 1 }],
+  perEngagement: [
+    { id: LIVE_ENGAGEMENT.id, target: 'fixture.invalid', startedAt: LIVE_ENGAGEMENT.startedAt, denials: 4, halts: 1, total: 5 },
+  ],
+  latest: [
+    {
+      ts: '2026-10-31T22:05:00.000Z', engagementId: LIVE_ENGAGEMENT.id, kind: 'tool_exec_denied',
+      target: 'fixture.invalid', reason: 'denied: target outside engagement scope (fixture)',
+    },
+  ],
+  notes: ['Fixture aggregate note.'],
+}
+
+/** The fixture detail: the done engagement's deliverables, two gaps. */
+export const DETAIL_DONE: EngagementDetail = {
+  state: {
+    status: 'complete',
+    target: 'fixture-done.invalid',
+    deliverables: {
+      'report.html': '/fixture/engagements/eng-fixture-done-1/report.html',
+      'report.md': '/fixture/engagements/eng-fixture-done-1/report.md',
+      'report.json': '/fixture/engagements/eng-fixture-done-1/report.json',
+      'report.txt': '/fixture/engagements/eng-fixture-done-1/report.txt',
+      'findings.csv': '/fixture/engagements/eng-fixture-done-1/findings.csv',
+    },
+  },
+  live: false,
+}
+
+/** The fixture detail for a live engagement: no completion record yet. */
+export const DETAIL_LIVE: EngagementDetail = {
+  state: { status: 'running', target: 'fixture.invalid' },
+  live: true,
+}
+
+/** The fixture Arsenal census. */
+export const ARSENAL_CENSUS: ArsenalBrowse = {
+  topics: [
+    { topic: 'web', collections: 41, entries: 700 },
+    { topic: 'wordlists', collections: 10, entries: 226 },
+  ],
+  index: { entries: 1039 },
+}
+
+/** The fixture Arsenal category browse. */
+export const ARSENAL_CATEGORY: ArsenalBrowse = {
+  collections: [
+    {
+      slug: 'gtfobins', name: 'GTFOBins', url: 'https://gtfobins.github.io/',
+      description: 'Fixture collection description.', entry_count: 478, level2: true,
+    },
+  ],
+  index: { entries: 1039 },
+}
+
+/** The fixture Arsenal search answer. */
+export const ARSENAL_RESULTS: ArsenalResults = {
+  results: [
+    {
+      name: 'fixture-idor-entry', url: 'https://example.invalid/idor', description: 'Fixture IDOR entry.',
+      description_truncated: false, collection: 'bug-bounty-reference', tags: ['idor'], targets: [], battery: ['A01'],
+    },
+  ],
+  total: 1,
+  index: { entries: 1039 },
+}
+
 /** The scripted console: the API plus every hand on it. */
 export interface ScriptedConsole {
   readonly api: ConsoleApi
@@ -188,6 +319,8 @@ export interface ScriptedConsole {
   readonly aborts: { id: string; reason: string }[]
   readonly escalates: { id: string; input: EscalateInput }[]
   readonly reverifies: ReverifyInput[]
+  readonly foundryActions: FoundryActionKind[]
+  readonly arsenalCalls: { tool: ArsenalToolName; args: Readonly<Record<string, unknown>> }[]
   listCalls: number
   modelsCalls: number
   jobPolls: number
@@ -208,6 +341,8 @@ export function scriptedConsole(): ScriptedConsole {
   const aborts: { id: string; reason: string }[] = []
   const escalates: { id: string; input: EscalateInput }[] = []
   const reverifies: ReverifyInput[] = []
+  const foundryActions: FoundryActionKind[] = []
+  const arsenalCalls: { tool: ArsenalToolName; args: Readonly<Record<string, unknown>> }[] = []
   let jobs: readonly JobRecord[] = [{
     id: 'job-fixture-1', kind: 'reverify', status: 'done', startedAt: '2026-10-31T22:06:00.000Z',
     finishedAt: '2026-10-31T22:06:30.000Z', result: { verdict: 'still-vulnerable', summary: 'Fixture verdict summary.' },
@@ -222,6 +357,8 @@ export function scriptedConsole(): ScriptedConsole {
     aborts,
     escalates,
     reverifies,
+    foundryActions,
+    arsenalCalls,
     listCalls: 0,
     modelsCalls: 0,
     jobPolls: 0,
@@ -280,6 +417,22 @@ export function scriptedConsole(): ScriptedConsole {
         const record = jobs[Math.min(scripted.jobPolls - 1, jobs.length - 1)] ?? jobs[0]!
         return { ok: true, value: record } as ConsoleResult<JobRecord>
       }),
+      detail: vi.fn(async (id: string) => ({
+        ok: true, value: id === DONE_ENGAGEMENT.id ? DETAIL_DONE : DETAIL_LIVE,
+      }) as ConsoleResult<EngagementDetail>),
+      foundry: vi.fn(async () => ({ ok: true, value: FOUNDRY_STATE }) as ConsoleResult<FoundryState>),
+      foundryAction: vi.fn(async (kind: FoundryActionKind) => {
+        foundryActions.push(kind)
+        return { ok: true, value: FOUNDRY_VERIFY } as ConsoleResult<FoundryActionResult>
+      }),
+      arsenal: vi.fn(async (tool: ArsenalToolName, args: Readonly<Record<string, unknown>>) => {
+        arsenalCalls.push({ tool, args })
+        if (tool === 'arsenal_browse') {
+          return { ok: true, value: args['category'] === undefined ? ARSENAL_CENSUS : ARSENAL_CATEGORY }
+        }
+        return { ok: true, value: ARSENAL_RESULTS }
+      }),
+      scope: vi.fn(async () => ({ ok: true, value: SCOPE_AGGREGATE }) as ConsoleResult<ScopeAggregate>),
       openFeed: vi.fn((id: string, after: number, handlers: FeedHandlers): FeedConnection => {
         const feed: ScriptedFeed = {
           id,

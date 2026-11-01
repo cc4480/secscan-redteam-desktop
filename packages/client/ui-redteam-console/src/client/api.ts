@@ -10,6 +10,10 @@
  */
 import { CONSOLE_SHARE_PREFIX_ROUTE } from '@secscan/redteam-console-share/shared'
 import type {
+  ArsenalToolName, EngagementDetail, FoundryActionKind, FoundryActionResult,
+  FoundryState, ScopeAggregate,
+} from './library-model.ts'
+import type {
   Compliance, Coverage, Finding, JobRecord, ProofBundle, ReverifyPlan,
 } from './engagements-model.ts'
 import type {
@@ -101,6 +105,41 @@ export interface ConsoleApi {
    * @returns the job, or the failure.
    */
   job(jobId: string, signal: AbortSignal): Promise<ConsoleResult<JobRecord>>
+  /**
+   * Read one engagement's detail record (the Reports library's source:
+   * the autofire completion record rides `state.deliverables`).
+   * @param id - the engagement id.
+   * @param signal - the caller's lifetime.
+   * @returns the detail, or the failure.
+   */
+  detail(id: string, signal: AbortSignal): Promise<ConsoleResult<EngagementDetail>>
+  /**
+   * Read the Foundry state (snapshot, gate, store, loop).
+   * @param signal - the caller's lifetime.
+   * @returns the state, or the failure.
+   */
+  foundry(signal: AbortSignal): Promise<ConsoleResult<FoundryState>>
+  /**
+   * Fire one Foundry gate action; the answer lands when the run settles
+   * (verify is quick; run-gold can take minutes on the console side).
+   * @param kind - which action.
+   * @returns the action's answer, or the failure.
+   */
+  foundryAction(kind: FoundryActionKind): Promise<ConsoleResult<FoundryActionResult>>
+  /**
+   * Call one Arsenal tool through the Phase 0 bridge (the browser never
+   * speaks MCP; the bridge forwards only the three read-only tools).
+   * @param tool - the tool name.
+   * @param args - the tool arguments.
+   * @returns the tool's parsed JSON result, or the failure.
+   */
+  arsenal<T>(tool: ArsenalToolName, args: Readonly<Record<string, unknown>>): Promise<ConsoleResult<T>>
+  /**
+   * Read the cross-engagement Scope & Safety aggregate.
+   * @param signal - the caller's lifetime.
+   * @returns the aggregate, or the failure.
+   */
+  scope(signal: AbortSignal): Promise<ConsoleResult<ScopeAggregate>>
 }
 
 /** A reverify request: the console resolves the bundle from the engagement's own records. */
@@ -132,9 +171,9 @@ export interface FeedConnection {
   close(): void
 }
 
-async function readJson<T>(response: Response): Promise<ConsoleResult<T>> {
+async function readJson<T>(response: Response, httpStatus: (status: number) => string): Promise<ConsoleResult<T>> {
   if (!response.ok) {
-    let message = `HTTP ${response.status}`
+    let message = httpStatus(response.status)
     try {
       const body = await response.json() as { error?: unknown; message?: unknown }
       if (typeof body.message === 'string') message = body.message
@@ -157,23 +196,27 @@ async function settle<T>(call: Promise<ConsoleResult<T>>): Promise<ConsoleResult
 
 /**
  * The production console API, bound to the share routes.
+ * @param formatHttpStatus - renders the bare-status failure line in the
+ *   operator's language (the locale dictionary's `api.httpStatus`); the
+ *   registration wires it, bare callers get the status code itself.
  * @returns the API the Watch face performs its calls through.
  */
-export function createConsoleApi(): ConsoleApi {
+export function createConsoleApi(formatHttpStatus?: (status: number) => string): ConsoleApi {
   const base = CONSOLE_SHARE_PREFIX_ROUTE
+  const httpStatus = formatHttpStatus ?? ((status: number) => String(status))
   return {
     listEngagements(signal) {
-      return settle(fetch(`${base}/api/console/engagements`, { signal }).then(r => readJson<ConsoleEngagementsResponse>(r)))
+      return settle(fetch(`${base}/api/console/engagements`, { signal }).then(r => readJson<ConsoleEngagementsResponse>(r, httpStatus)))
     },
     models(signal) {
-      return settle(fetch(`${base}/api/models`, { signal }).then(r => readJson<ModelsResponse>(r)))
+      return settle(fetch(`${base}/api/models`, { signal }).then(r => readJson<ModelsResponse>(r, httpStatus)))
     },
     abort(id, reason) {
       return settle(fetch(`${base}/api/engagements/${encodeURIComponent(id)}/abort`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ reason }),
-      }).then(r => readJson<AbortOutcome>(r)))
+      }).then(r => readJson<AbortOutcome>(r, httpStatus)))
     },
     escalate(id, input) {
       return settle(fetch(`${base}/api/engagements/${encodeURIComponent(id)}/escalate`, {
@@ -188,19 +231,19 @@ export function createConsoleApi(): ConsoleApi {
           // confirm happens here before this call is made.
           confirmTier2Production: input.tier === '2',
         }),
-      }).then(r => readJson<EscalateOutcome>(r)))
+      }).then(r => readJson<EscalateOutcome>(r, httpStatus)))
     },
     findings(id, signal) {
-      return settle(fetch(`${base}/api/engagements/${encodeURIComponent(id)}/findings`, { signal }).then(r => readJson<readonly Finding[]>(r)))
+      return settle(fetch(`${base}/api/engagements/${encodeURIComponent(id)}/findings`, { signal }).then(r => readJson<readonly Finding[]>(r, httpStatus)))
     },
     proof(id, findingId, signal) {
-      return settle(fetch(`${base}/api/engagements/${encodeURIComponent(id)}/proof/${encodeURIComponent(findingId)}`, { signal }).then(r => readJson<ProofBundle>(r)))
+      return settle(fetch(`${base}/api/engagements/${encodeURIComponent(id)}/proof/${encodeURIComponent(findingId)}`, { signal }).then(r => readJson<ProofBundle>(r, httpStatus)))
     },
     coverage(id, signal) {
-      return settle(fetch(`${base}/api/engagements/${encodeURIComponent(id)}/coverage`, { signal }).then(r => readJson<Coverage>(r)))
+      return settle(fetch(`${base}/api/engagements/${encodeURIComponent(id)}/coverage`, { signal }).then(r => readJson<Coverage>(r, httpStatus)))
     },
     compliance(id, signal) {
-      return settle(fetch(`${base}/api/engagements/${encodeURIComponent(id)}/compliance`, { signal }).then(r => readJson<Compliance>(r)))
+      return settle(fetch(`${base}/api/engagements/${encodeURIComponent(id)}/compliance`, { signal }).then(r => readJson<Compliance>(r, httpStatus)))
     },
     reverify(input) {
       return settle(fetch(`${base}/api/reverify`, {
@@ -212,10 +255,33 @@ export function createConsoleApi(): ConsoleApi {
           ...(input.execute === true ? { execute: true } : {}),
           ...(input.scope !== undefined ? { scope: input.scope } : {}),
         }),
-      }).then(r => readJson<ReverifyStart>(r)))
+      }).then(r => readJson<ReverifyStart>(r, httpStatus)))
     },
     job(jobId, signal) {
-      return settle(fetch(`${base}/api/jobs/${encodeURIComponent(jobId)}`, { signal }).then(r => readJson<JobRecord>(r)))
+      return settle(fetch(`${base}/api/jobs/${encodeURIComponent(jobId)}`, { signal }).then(r => readJson<JobRecord>(r, httpStatus)))
+    },
+    detail(id, signal) {
+      return settle(fetch(`${base}/api/engagements/${encodeURIComponent(id)}`, { signal }).then(r => readJson<EngagementDetail>(r, httpStatus)))
+    },
+    foundry(signal) {
+      return settle(fetch(`${base}/api/foundry`, { signal }).then(r => readJson<FoundryState>(r, httpStatus)))
+    },
+    foundryAction(kind) {
+      return settle(fetch(`${base}/api/foundry/${kind}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      }).then(r => readJson<FoundryActionResult>(r, httpStatus)))
+    },
+    arsenal(tool, args) {
+      return settle(fetch(`${base}/arsenal`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tool, arguments: args }),
+      }).then(r => readJson(r, httpStatus)))
+    },
+    scope(signal) {
+      return settle(fetch(`${base}/api/console/scope`, { signal }).then(r => readJson<ScopeAggregate>(r, httpStatus)))
     },
     openFeed(id, after, handlers) {
       const source = new EventSource(`${base}/api/engagements/${encodeURIComponent(id)}/events?after=${after}`)

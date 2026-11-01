@@ -175,8 +175,8 @@ function FindingCard({ finding, proof, reverify, target, face, t }: {
       </header>
       <div className={css.findingMeta}>
         <span>{finding.status}</span>
-        {finding.cellState !== undefined && <span>{`cell: ${finding.cellState}`}</span>}
-        {finding.cvss !== undefined && <span>{`CVSS ${finding.cvss}`}</span>}
+        {finding.cellState !== undefined && <span>{t('findings.cellState', { state: finding.cellState })}</span>}
+        {finding.cvss !== undefined && <span>{t('findings.cvssScore', { score: finding.cvss })}</span>}
         {finding.cwe !== undefined && <span>{finding.cwe}</span>}
         {finding.producer !== undefined && <span>{finding.producer}</span>}
       </div>

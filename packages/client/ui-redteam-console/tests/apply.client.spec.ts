@@ -11,11 +11,18 @@ import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { SidebarRightTabRegistry } from '@deepseek-ai/dsh-client-ui-sidebar-right/src/client/tab-registry.ts'
 import { WATCH_ID, WATCH_KIND } from '../src/client/definition.ts'
-import { apply, inject, PANEL_ID } from '../src/client/index.ts'
+import {
+  apply, ARSENAL_PANEL_ID, FOUNDRY_PANEL_ID, inject, PANEL_ID, REPORTS_PANEL_ID, SCOPE_PANEL_ID,
+} from '../src/client/index.ts'
 import { apply as hostApply } from '../src/index.ts'
+import { ArsenalPage } from '../src/client/ArsenalPage.tsx'
 import { EngagementsPage } from '../src/client/EngagementsPage.tsx'
+import { FoundryPage } from '../src/client/FoundryPage.tsx'
 import { en, zh } from '../src/client/locales.ts'
 import { PanelIcon } from '../src/client/PanelIcon.tsx'
+import { ArsenalIcon, FoundryIcon, ReportsIcon, ScopeIcon } from '../src/client/PanelIcons.tsx'
+import { ReportsPage } from '../src/client/ReportsPage.tsx'
+import { ScopePage } from '../src/client/ScopePage.tsx'
 import { WatchBody } from '../src/client/WatchBody.tsx'
 import { WatchTitle } from '../src/client/WatchTitle.tsx'
 
@@ -79,8 +86,18 @@ describe('ui-redteam-console apply', () => {
       ['sidebar.right.pane.tab.title', WATCH_ID, undefined, WatchTitle],
       ['main', PANEL_ID, 'redteamConsole', EngagementsPage],
       ['sidebar.panellist', undefined, 'redteamConsole', PanelIcon],
+      ['main', FOUNDRY_PANEL_ID, 'redteamConsole', FoundryPage],
+      ['sidebar.panellist', undefined, 'redteamConsole', FoundryIcon],
+      ['main', ARSENAL_PANEL_ID, 'redteamConsole', ArsenalPage],
+      ['sidebar.panellist', undefined, 'redteamConsole', ArsenalIcon],
+      ['main', REPORTS_PANEL_ID, 'redteamConsole', ReportsPage],
+      ['sidebar.panellist', undefined, 'redteamConsole', ReportsIcon],
+      ['main', SCOPE_PANEL_ID, 'redteamConsole', ScopePage],
+      ['sidebar.panellist', undefined, 'redteamConsole', ScopeIcon],
     ])
-    expect(registered[3]!.id).toBe(PANEL_ID)
+    expect(registered.map(entry => entry.id).filter(id => id !== undefined)).toEqual([
+      PANEL_ID, FOUNDRY_PANEL_ID, ARSENAL_PANEL_ID, REPORTS_PANEL_ID, SCOPE_PANEL_ID,
+    ])
     const body = registered[0]!
     expect(body.store).toBeDefined()
     // The seat's inject is the slot factory: (sessionId, actions) => face.
