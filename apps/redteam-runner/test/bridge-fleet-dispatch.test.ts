@@ -27,9 +27,9 @@ import { withBridgeTools } from "../src/dispatch/bridge-gate.js";
 import { handleBridgeTools } from "../src/dispatch/bridge.js";
 import { dispatchTool } from "../src/dispatch/router.js";
 
-/** The live bridge's full registry (supervisor ground truth, ~/workspace/alterego @ 92ab12d): 63 ALL_TOOLS wire names + 4 job ops = 67. */
+/** The live bridge's full registry (supervisor ground truth, ~/workspace/alterego @ 92ab12d): 63 ALL_TOOLS wire names + 4 job ops = 67. Re-ground-truthed 2026-11-01 (once-over sweep): the arbitration op's wire name is `arbitrate_tool` — it already was at 92ab12d; the fixture's `arbitrate` never matched the registry. */
 const REGISTRY_OPS = [
-  "active_window", "arbitrate", "batch", "browser_click", "browser_eval", "browser_fill",
+  "active_window", "arbitrate_tool", "batch", "browser_click", "browser_eval", "browser_fill",
   "browser_navigate", "browser_snapshot", "clipboard_get", "clipboard_set", "close_window", "copy_file",
   "create_dir", "delete_file", "dns_query", "doctor", "edit_file", "exec_background",
   "exec_cancel", "exec_status", "file_info", "focus_window", "hotkey", "http_headers",

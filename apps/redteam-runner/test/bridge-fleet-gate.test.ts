@@ -23,9 +23,14 @@ import type { BridgeClientLike, BridgeToolInfo } from "../src/dispatch/bridge-cl
  * against ~/workspace/alterego @ 92ab12d: 63 ALL_TOOLS wire names + the
  * 4 job-layer ops = 67 tools. No cdp_* names — the live bridge does not
  * serve them today (supervisor note D-3); the gate passes through
- * whatever a bridge offers, so the fixture is the real list. */
+ * whatever a bridge offers, so the fixture is the real list.
+ * Re-ground-truthed 2026-11-01 (once-over sweep) against the AlterEgo
+ * fix stack (245dfde..170466e): the arbitration op's wire name is
+ * `arbitrate_tool` — it already was at 92ab12d (tool_wrappers.py
+ * registers `_arb.arbitrate_tool`); the fixture's `arbitrate` never
+ * matched the registry. Every other name unchanged. */
 const REGISTRY_OPS = [
-  "active_window", "arbitrate", "batch", "browser_click", "browser_eval", "browser_fill",
+  "active_window", "arbitrate_tool", "batch", "browser_click", "browser_eval", "browser_fill",
   "browser_navigate", "browser_snapshot", "clipboard_get", "clipboard_set", "close_window", "copy_file",
   "create_dir", "delete_file", "dns_query", "doctor", "edit_file", "exec_background",
   "exec_cancel", "exec_status", "file_info", "focus_window", "hotkey", "http_headers",
