@@ -30,6 +30,9 @@
 #                         send_message, list_agents, wait_agent,
 #                         interrupt_agent, team_task_{create,list,get,update}.
 #   7. ui-agent-team    - the Web UI for viewing the roster and task board.
+#   8. command-redteam  - @secscan/redteam-command: the operator's RedTeam
+#                         slash commands (/scan, /status, /report, /stop,
+#                         /use) over the harness command registry.
 #
 # Secrets are cordis-native: schemastery Config with env fallbacks.
 # NEVER put a raw key in this file.
@@ -219,6 +222,14 @@
       config:
         baseUrl: !!js "process.env.REDTEAM_MCP_URL || 'http://127.0.0.1:8787/mcp'"
         token: !!js "process.env.REDTEAM_UI_TOKEN || ''"
+
+    # The operator's RedTeam slash commands (/scan, /status, /report,
+    # /stop, /use) over the harness command registry the base layer mounts:
+    # the composer's existing / menu lists them, the registry logs every
+    # execution, and the handlers route deterministic operator directives
+    # into the engagement flow and the Lead's real tool catalog.
+    - id: command-redteam
+      name: '@secscan/redteam-command'
 
     # The team itself. Durable session storage is the activation requirement and
     # is already mounted by dsh-base (row `session-persistence-jsonl`), so the

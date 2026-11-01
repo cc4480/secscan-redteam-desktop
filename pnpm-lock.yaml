@@ -9898,6 +9898,27 @@ importers:
 
   packages/redteam/auth-gate: {}
 
+  packages/redteam/command-redteam:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:*
+        version: link:../../core/agent
+      '@deepseek-ai/dsh-commands':
+        specifier: workspace:*
+        version: link:../../interaction/commands
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:*
+        version: link:../../llm/llm
+      '@deepseek-ai/dsh-scope':
+        specifier: workspace:*
+        version: link:../../core/scope
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:*
+        version: link:../../core/session
+
   packages/redteam/console-share:
     dependencies:
       '@deepseek-ai/schemastery':
@@ -9931,6 +9952,9 @@ importers:
       '@deepseek-ai/dsh-mcp-client':
         specifier: workspace:*
         version: link:../../mcp/mcp-client
+      '@secscan/redteam-command':
+        specifier: workspace:*
+        version: link:../command-redteam
       '@secscan/redteam-console-share':
         specifier: workspace:*
         version: link:../console-share
