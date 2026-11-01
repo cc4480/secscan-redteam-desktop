@@ -27,6 +27,7 @@ import {
   type LlamaServerClock,
   type LlamaServerLocation,
   type LlamaServerOptions,
+  type LlamaServerStartInput,
 } from '../src/llama-server.ts'
 
 /** One captured spawn: the child the supervisor asked the machine for. */
@@ -171,7 +172,7 @@ function tick(): Promise<void> {
 /** @returns the failure a start reported, so one assertion can read both its type and its message. */
 async function startFailure(
   target: LlamaServer,
-  input = START_INPUT,
+  input: LlamaServerStartInput = START_INPUT,
 ): Promise<LlamaServerStartupError> {
   const failure = await target.start(input).then(() => undefined, (error: unknown) => error)
   if (!(failure instanceof LlamaServerStartupError)) throw new Error('the server started instead of failing')

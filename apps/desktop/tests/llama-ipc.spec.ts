@@ -14,6 +14,7 @@ import {
   LLAMA_IPC,
   type LlamaDownloadProgress,
   type LlamaModel,
+  type LlamaRepoFile,
   type LlamaServerState,
   type LlamaSettings,
 } from '../src/llama-api.ts'
@@ -108,7 +109,7 @@ function fakeModels() {
 /** The Hugging Face fake: a repo holds one GGUF and one plain file. */
 function fakeHf() {
   return {
-    listRepoFiles: vi.fn(async (_options: { repo: string; token?: string }) => [
+    listRepoFiles: vi.fn(async (_options: { repo: string; token?: string }): Promise<LlamaRepoFile[]> => [
       { file: 'Qwen.Q4_K_M.gguf', sizeBytes: 1024, isGguf: true },
       { file: 'README.md', isGguf: false },
     ]),
