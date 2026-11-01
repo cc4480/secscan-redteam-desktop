@@ -81,7 +81,7 @@ function Aggregate({ aggregate, t }: { aggregate: ScopeAggregate; t: T }): React
                   </span>
                 </div>
                 <p className={css.rowBody}>
-                  <span className={css.mono}>{entry.id}</span> · {formatDateTime(entry.startedAt)}
+                  <span className={css.mono}>{entry.id}</span> · {formatDateTime(entry.startedAt ?? '')}
                 </p>
               </li>
             ))}

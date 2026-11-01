@@ -246,7 +246,7 @@ export interface ScopeAggregate {
   readonly perEngagement?: readonly {
     readonly id: string
     readonly target: string | null
-    readonly startedAt: string
+    readonly startedAt: string | null
     readonly denials: number
     readonly halts: number
     readonly total: number

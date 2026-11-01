@@ -383,7 +383,7 @@ export function scriptedConsole(): ScriptedConsole {
         return {
           ok: true,
           value: {
-            ok: true, engagementId: id, fromTier: '1', toTier: input.tier,
+            ok: true, engagementId: id, fromTier: 1, toTier: Number(input.tier),
             operator: input.operator, engagementStatus: 'running', message: `tier set to ${input.tier}`,
           },
         } as ConsoleResult<EscalateOutcome>

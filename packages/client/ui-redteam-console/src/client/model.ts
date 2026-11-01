@@ -94,8 +94,8 @@ export interface AbortOutcome {
 export interface EscalateOutcome {
   readonly ok: boolean
   readonly engagementId: string
-  readonly fromTier: string
-  readonly toTier: string
+  readonly fromTier: 0 | 1 | 2
+  readonly toTier: 0 | 1 | 2
   readonly operator: string
   readonly engagementStatus: string
   readonly message: string
