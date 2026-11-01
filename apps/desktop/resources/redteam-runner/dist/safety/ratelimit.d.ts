@@ -15,6 +15,13 @@ export interface RateLimitConfig {
     rpsPerHost: number;
     /** Burst allowance (tokens available immediately). Defaults to rpsPerHost. */
     burst?: number;
+    /**
+     * TEST MODE (REDTEAM_TEST_MODE): the limiter admits every acquire
+     * immediately — no tokens, no waiting. Set from the resolved runner
+     * config in phases/run.ts; the bypass is recorded by the engagement's
+     * test_mode_active event. Default false.
+     */
+    disabled?: boolean;
 }
 export declare const DEFAULT_STAGING_RPS = 5;
 export declare const DEFAULT_PRODUCTION_RPS = 2;
@@ -27,6 +34,8 @@ export declare const PRODUCTION_RPS_CAP = 2;
 export declare class TargetRateLimiter {
     readonly rpsPerHost: number;
     readonly burst: number;
+    /** TEST MODE: admits immediately, never waits (see RateLimitConfig.disabled). */
+    readonly disabled: boolean;
     private buckets;
     private now;
     /** Total ms agents spent waiting on the limiter this engagement (manifest). */

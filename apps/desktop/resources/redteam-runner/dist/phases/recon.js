@@ -1,22 +1,96 @@
+/**
+ * Reconnaissance phase (v0.19.0 refactor — extracted from phases.ts).
+ */
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { pcAgentConfig } from "../host-exec/pc-agent.js";
+import { collectLocalInventory, localChannelFromEnv } from "../local-host/collect.js";
+import { HOST_INVENTORY_ARTIFACT, writeHostInventoryArtifact } from "../local-host/artifact.js";
 import { RECON_TOOLS } from "../tools.js";
+import { withBridgeTools } from "../dispatch/bridge-gate.js";
 import { agentLoop, promptCtx } from "../agents.js";
 import { reconPrompt } from "../prompts.js";
+/** Write the artifact's failed form directly (no collector record exists). */
+async function writeFailedInventoryArtifact(dir, hostname, error) {
+    const artifact = { status: "failed", hostname, collectedAt: new Date().toISOString(), error };
+    await writeFile(join(dir, HOST_INVENTORY_ARTIFACT), `${JSON.stringify(artifact, null, 2)}\n`, "utf8");
+}
+/**
+ * Q-RP-11 recon seam: for a LOCAL-host engagement, collect the host
+ * inventory mechanically through the paired pc-agent channel and write
+ * host-inventory.json into the engagement dir — the exact file the
+ * report phase reads (report/html/wire.ts). Runs before the recon
+ * agent, so the inventory exists whatever the agents do next.
+ *
+ * Failure is data, not a halt: an unconfigured bridge or a failed
+ * collection writes the artifact's `failed` form and recon continues —
+ * the report then states the failure honestly instead of rendering no
+ * section (which would read as "nothing to report"). Remote
+ * engagements are untouched: no artifact, no section.
+ * @param ctx - the engagement context (or its local-collection slice).
+ * @param channel - collector channel seam for tests; defaults to the
+ * env-configured paired bridge channel.
+ * @returns true when the engagement is local (artifact written),
+ * false when it is not.
+ */
+export async function collectLocalHostInventory(ctx, channel) {
+    if (ctx.input.localHost !== true)
+        return false;
+    const hostname = ctx.input.target;
+    const ch = channel ?? localChannelFromEnv();
+    if (ch === undefined) {
+        const error = "local inventory collection unavailable: the pc-agent bridge is not configured " +
+            "on this machine (REDTEAM_PC_AGENT_URL / REDTEAM_PC_AGENT_TOKEN unset)";
+        await writeFailedInventoryArtifact(ctx.events.dir, hostname, error);
+        ctx.events.append({ phase: "recon", actor: "runner", action: "local_inventory_failed", result: error });
+        return true;
+    }
+    try {
+        const inventory = await collectLocalInventory(ch, {
+            declaredHostname: hostname,
+            ...(ctx.input.operatorName ? { operatorName: ctx.input.operatorName } : {}),
+            channelUrl: pcAgentConfig()?.url ?? "pc-agent",
+        });
+        await writeHostInventoryArtifact(ctx.events.dir, inventory);
+        ctx.events.append({
+            phase: "recon",
+            actor: "runner",
+            action: inventory.target.hostnameMatch ? "local_inventory_collected" : "local_inventory_failed",
+            result: inventory.target.hostnameMatch
+                ? `host-inventory.json written for ${hostname} (collected on-host via the paired pc-agent channel).`
+                : `host-inventory.json written for ${hostname} in the failed form: the collected hostname did not match the declared local target.`,
+        });
+    }
+    catch (err) {
+        const error = `local inventory collection failed: ${err.message}`;
+        await writeFailedInventoryArtifact(ctx.events.dir, hostname, error).catch(() => undefined);
+        ctx.events.append({ phase: "recon", actor: "runner", action: "local_inventory_failed", result: error });
+    }
+    return true;
+}
 export async function reconPhase(ctx) {
     if (ctx.config.dryRunAgents) {
         ctx.events.append({ phase: "recon", actor: "recon", action: "recon_brief", result: "dry-run: recon skipped." });
         return "dry-run brief";
     }
+    // Q-RP-11: a local engagement's inventory is collected mechanically
+    // at the head of recon (never in dry-run: collection touches the
+    // bridge and can raise consent prompts).
+    await collectLocalHostInventory(ctx);
     const brief = await agentLoop(ctx, "recon", "recon", reconPrompt(promptCtx(ctx)), `Begin reconnaissance of ${ctx.input.target}. In-scope hosts: ${ctx.hosts.join(", ")}. ` +
         (ctx.input.mode === "red"
-            ? "Use scan_url with aggressive=true for the active tier."
-            : "Start with the passive tier (scan_url without aggressive). Escalate only if the plan calls for it.") +
+            ? "Use secscan_exec with depth=deep for the active tier."
+            : "Start with the passive tier (secscan_exec at depth=passive). Escalate only if the plan calls for it.") +
         // The shared target map is the handoff the coordinator actually reviews.
         // Asking only for a brief let an agent spend every turn on scanners, write
         // nothing to the map, and loop until the run died — the work was real but
         // invisible to the rest of the team.
         ` Write each discovery to the shared target map with update_target_map as you make it — ` +
         `the map is what the coordinator reviews at sign-off, and it is refused while the map is empty. ` +
-        `Finish with the attack-surface brief and end it with the FINGERPRINT: line.`, RECON_TOOLS, ctx.config.maxReconTurns);
+        `Finish with the attack-surface brief and end it with the FINGERPRINT: line.`, 
+    // Q-BRIDGE-TOOLS: bridge tools join the surface when the bridge
+    // is live on this machine (bridge-gate.ts).
+    await withBridgeTools(ctx, "recon", RECON_TOOLS), ctx.config.maxReconTurns);
     ctx.events.append({ phase: "recon", actor: "recon", action: "recon_brief", result: brief.slice(0, 1200) });
     // Target fingerprint: the runner parses the FINGERPRINT: line from the brief
     // (format: FINGERPRINT: stack=<csv>; appType=<...>; notes=<one line>).

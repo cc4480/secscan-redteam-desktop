@@ -9,8 +9,8 @@
  *
  * This registry publishes the ctx of each RUNNING engagement so an operator can
  * invoke those tools on demand. It adds reach, not authority — every call goes
- * through dispatchTool, so the kill switch, the tier ladder, auto-halt, the
- * per-host rate limiter and the variant cap all still run first.
+ * through dispatchTool, so the tier ladder, the per-host rate limiter
+ * and the variant cap all still run first.
  *
  * The operator is given exactly the tool access the engagement's own agent
  * would have AT THE CURRENT PHASE. There is no role parameter to pass, because

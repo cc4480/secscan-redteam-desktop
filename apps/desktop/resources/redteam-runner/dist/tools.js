@@ -6,6 +6,7 @@
  * the `./tools.js` import path working unchanged.
  */
 export * from "./tools/web.js";
+export * from "./tools/research.js";
 export * from "./tools/host.js";
 export * from "./tools/msf.js";
 export * from "./tools/bookkeeping.js";

@@ -3,7 +3,7 @@
  *
  * Why: the web battery's highest-value items (cross-account IDOR, business
  * logic, JWT flows, authenticated crawling) need a real signed-in session. Today
- * `scan_url` can only send an `authHeader`, so anything behind a login form is
+ * the scanner can only send an `authHeader`, so anything behind a login form is
  * out of reach.
  *
  * This module defines the driver contract and the configuration gate. The CDP

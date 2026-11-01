@@ -18,8 +18,7 @@ export function cycleEngagementId(profile, trigger, now) {
 }
 /** Real reverify: bundle → reverifyBundle with the production replayer. */
 export function realReverifyFn(scope, env) {
-    const killSwitch = { aborted: false };
-    const replayer = createReplayer({ scope, env, killSwitch });
+    const replayer = createReplayer({ scope, env });
     return async (bundlePath) => {
         const bundle = JSON.parse(readFileSync(bundlePath, "utf8"));
         const report = await reverifyBundle(bundle, replayer);

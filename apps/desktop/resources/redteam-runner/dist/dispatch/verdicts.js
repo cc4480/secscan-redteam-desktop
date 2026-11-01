@@ -60,6 +60,15 @@ export function syncLiveFindingsToState(ctx) {
             fix: "(pending — the reporter writes the fix)",
             retest: "(pending)",
             status: "confirmed",
+            // Q-PROVEN: the cell verdict rides into state so console consumers
+            // see the same verdict the report renders. Absent stays absent.
+            cellState: f.cellState,
+            provenClaim: f.provenClaim,
+            cellDetail: f.cellDetail,
+            // Q-FLEET-XCHECK: producer + peer-review stamp ride along on the
+            // same rule — the console shows the checker beside the claim.
+            producer: f.producer,
+            peerReview: f.peerReview,
         })),
     });
 }
@@ -107,8 +116,16 @@ export function writeKilledToRegistry(ctx, kl) {
     if (created)
         ctx.registry.killed.push(created);
 }
-/** Merge the exploiter's final VERDICTS JSON block into shared state + registry (backstop for verdicts never recorded live). */
-export function mergeVerdictBlock(ctx, text) {
+/**
+ * Merge a task loop's final VERDICTS JSON block into shared state +
+ * registry (backstop for verdicts never recorded live). The block is
+ * model-authored text, so the producer stamp is NEVER read from it:
+ * the caller passes the role its own loop executed as — an
+ * execution-side variable — and every confirmed verdict merged here is
+ * stamped with exactly that role (a recon task's block stamps recon,
+ * an exploiter task's stamps exploiter).
+ */
+export function mergeVerdictBlock(ctx, text, producer) {
     const parsed = extractJsonBlock(text);
     const verdicts = parsed && Array.isArray(parsed.verdicts) ? parsed.verdicts : [];
     let merged = 0;
@@ -121,6 +138,10 @@ export function mergeVerdictBlock(ctx, text) {
                 attackId: (optStr(v["attackId"]) ?? "T1190").toUpperCase(),
                 evidence: redactPii(String(v["evidence"] ?? "").slice(0, 800)),
                 payload: optStr(v["payloadPattern"]),
+                // Q-FLEET-XCHECK: stamped with the role that executed the
+                // task loop, passed by the caller — never parsed from the
+                // model-authored block itself.
+                producer,
             };
             if (ctx.liveFindings.some((f) => f.title === lf.title && f.attackId === lf.attackId))
                 continue;

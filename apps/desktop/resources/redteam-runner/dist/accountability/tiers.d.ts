@@ -43,9 +43,13 @@ export declare function tier2ProductionConfirmed(env?: NodeJS.ProcessEnv): boole
 export declare function requireTier2ProductionApproval(tier: AutonomyTier, environment: "staging" | "production", confirmed: boolean): void;
 /**
  * Minimum tier for a tool call. Three tools are argument-sensitive:
- *  - scan_url: passive scan is Tier 0; aggressive=true runs the active test
- *    tier (injection, XSS, SSRF) → Tier 1.
- *  - msf_exec: search/suggest never fire → Tier 1; run fires exploits → Tier 2.
+ *  - secscan_exec: depth=passive is Tier 0; depth=deep runs the embedded
+ *    engine's verification-gated active web app tests → Tier 1 (the ladder
+ *    the retired scan_url wrapper used; the verification-record refusal
+ *    itself lives in the dispatch handler, which can name what is missing).
+ *  - msf_exec: search/suggest never fire → Tier 1; run fires exploits and
+ *    the session actions (session_command / credential_dump /
+ *    session_close) act through a live session on the target → Tier 2.
  *  - nuclei_exec: templates never fires (local template listing) → Tier 1;
  *    run executes templates against the target → Tier 2.
  *  - nmap_exec: profiles touches no target (it runs `nmap --version`) → Tier 0;
@@ -54,6 +58,8 @@ export declare function requireTier2ProductionApproval(tier: AutonomyTier, envir
  *    would be as reachable at Tier 0 as a top-100 sweep. The same gate is
  *    enforced again in the nmap dispatch handler, which is where the refusal
  *    can name the tier that would allow it.
+ *  - net_exec: caps touches no target → Tier 0; socket/packet/flood actions
+ *    fire raw traffic → Tier 2 (see the branch below).
  */
 export declare function toolMinTier(toolName: string, args?: Record<string, unknown>): AutonomyTier;
 export declare function isExploitStepTool(toolName: string, args?: Record<string, unknown>): boolean;

@@ -37,6 +37,15 @@ export interface ReportMeta {
     objective: string;
     startedAt: string;
     generatedAt: string;
+    /** The recorded same-engine predecessor this report diffs against
+     * (spec §1.2), when one exists. score/grade absent => the baseline
+     * predates recorded scores and the diff renders counts-only. */
+    baseline?: {
+        engagementId: string;
+        startedAt: string;
+        score?: number;
+        grade?: string;
+    };
     /** Counts shown in the summary strip. */
     findings?: {
         critical: number;

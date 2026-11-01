@@ -1,119 +1,15 @@
-import { HaltError } from "../context.js";
 import { checkTierAllows, recordExploitStep, readTierFile, TIER_NAMES } from "../accountability/index.js";
-import { isTargetDistress, readAbortFile, consumeAbortFile } from "../safety/index.js";
+import { classifyCredentialAttempt, classifyAuthOutcome, lockoutGuardFor } from "../safety/index.js";
+import { TOOL_TIMEOUT } from "./timeout.js";
 import { recordItemAttempt } from "./verdicts.js";
 import { checkVariantCap, recordVariantExecution } from "../variants/index.js";
 import { postDispatchHooks, preDispatchGate } from "./policy-gate.js";
 import { checkScopeGate } from "./scope-gate.js";
-import { handleWebTools } from "./web.js";
-import { handleHostTools } from "./host.js";
-import { handleMsfTools } from "./msf.js";
-import { handleNucleiTools } from "./nuclei.js";
-import { handleNmapTools } from "./nmap.js";
-import { handleXTool } from "./xtool.js";
-import { XTOOLS } from "../xtool/registry.js";
-import { handleMcpTools } from "./mcp.js";
-import { handleBookkeepingTools } from "./bookkeeping.js";
-import { handlePcAgentTools } from "./pc-agent.js";
-async function dispatchToolInner(ctx, role, phase, call) {
-    const args = call.arguments ?? {};
-    ctx.actions++;
-    const handlers = [handleWebTools, handleHostTools, handleMsfTools, handleNucleiTools, handleNmapTools, handleXTool, handlePcAgentTools, handleMcpTools, handleBookkeepingTools];
-    for (const h of handlers) {
-        const r = await h(ctx, role, phase, call, args);
-        if (r)
-            return r;
-    }
-    return { result: `DENIED: unknown tool ${call.name}` };
-}
-/**
- * Tool names owned by the external-tool bridge. Kept as an explicit set because
- * an `_exec` suffix is NOT a safe discriminator — it also matches the host-exec
- * family (ssh_exec, smb_exec, winrm_exec, …), which has no `action` argument.
- */
-const XTOOL_TOOL_NAMES = new Set(XTOOLS.map((t) => `${t.id}_exec`));
-/**
- * Tools whose calls generate traffic against a target host. Tools without a
- * resolvable target host (shared-state tools, MCP read-only tools) skip the
- * limiter — they generate no target traffic.
- *
- * Exported so test/tool-family-consistency.test.ts can assert that every host
- * tool the runner exposes is actually rate-limited and auto-halt tracked. A
- * tool missing from this set fires real traffic with no limiter at all, which
- * is exactly the class of gap the nmap scope check fell into.
- */
-export const RATE_LIMITED_TOOLS = new Set([
-    "http_probe",
-    "burst_probe",
-    "scan_url",
-    "ssh_exec",
-    "smb_exec",
-    "winrm_exec",
-    "winrm_probe",
-    "rdp_auth",
-    "rdp_shadow_prep",
-    "smb_pth",
-    "ad_enum",
-    "krb_ptt",
-    "ssh_agent_audit",
-    "nfs_enum",
-    "msf_exec",
-    "nuclei_exec",
-    "nmap_exec",
-    "sqlmap_exec",
-    "ffuf_exec",
-    "gobuster_exec",
-    "nikto_exec",
-]);
-/** Best-effort target host for a tool call — undefined when the tool has no target traffic. */
-function toolTargetHost(call) {
-    if (!RATE_LIMITED_TOOLS.has(call.name))
-        return undefined;
-    const args = call.arguments ?? {};
-    // v0.21.0: nuclei_exec templates is local-only (reads the operator's
-    // template checkout) — no target traffic, so no limiter/halt applies.
-    if (call.name === "nuclei_exec" && args["action"] !== "run")
-        return undefined;
-    // v0.31.0: nmap_exec profiles runs `nmap --version` locally — no target
-    // traffic, so no limiter and no auto-halt applies.
-    if (call.name === "nmap_exec" && args["action"] !== "scan")
-        return undefined;
-    // v0.32.0: an xtool probe runs nothing; john_exec is offline entirely.
-    //
-    // The xtool names are listed EXPLICITLY rather than matched with an `_exec`
-    // suffix test. A suffix test also matches ssh_exec, smb_exec, winrm_exec and
-    // the rest of the host-exec family — none of which take an `action`
-    // argument — so it returned undefined for every one of them and silently
-    // removed them from the rate limiter and the auto-halt tracker. The chaining
-    // test caught it: a second ssh_exec against the same target fired instead of
-    // being refused.
-    if (XTOOL_TOOL_NAMES.has(call.name) && args["action"] !== "run")
-        return undefined;
-    if (call.name === "john_exec")
-        return undefined;
-    const direct = typeof args["host"] === "string" ? args["host"].trim().toLowerCase() : "";
-    if (direct) {
-        // URL-taking tools (sqlmap/ffuf/gobuster/nikto) take the target in `host`
-        // as a full URL. Key on the hostname so varying the path/query/scheme cannot
-        // mint a fresh rate-limit bucket (and defeat auto-halt) for the same host.
-        try {
-            return new URL(direct).hostname.toLowerCase();
-        }
-        catch {
-            return direct;
-        }
-    }
-    const url = typeof args["url"] === "string" ? args["url"] : "";
-    if (url) {
-        try {
-            return new URL(url).hostname.toLowerCase();
-        }
-        catch {
-            return undefined;
-        }
-    }
-    return undefined;
-}
+import { toolTargetHost } from "./target-host.js";
+export { RATE_LIMITED_TOOLS } from "./target-host.js";
+import { duplicateRefusal, recordCallOutcome } from "./duplicate-guard.js";
+import { dispatchToolInner } from "./handlers.js";
+import { noteTestModeBypass, testModeOn } from "./test-mode.js";
 /**
  * v0.24.0: mid-run tier changes. The operator may raise/lower the tier via
  * `redteam-runner escalate` or the UI; both rewrite tier.json in the
@@ -137,63 +33,7 @@ export function refreshTierFromDisk(ctx, phase) {
             `Picked up from tier.json; see approvals.jsonl for the operator approval record. No restart needed.`,
     });
 }
-/**
- * v0.25.0: cross-process kill switch. The UI cannot reach into a
- * CLI-launched engagement's process, so it writes abort.json into the
- * engagement dir; the dispatcher checks for it here on every dispatch
- * cycle. When the marker is found, the abort sequence is identical to the
- * in-process kill switch: set the flag, terminate every in-flight
- * execution via the registered controllers (shared ctx — covers parallel
- * tasks), count it for the safety manifest, log abort_engagement, consume
- * the marker (the audit event is the durable record), and throw HaltError
- * so the run unwinds to "halted". Exported for tests; dispatchTool calls
- * it. A missing or corrupt file means "no abort requested" — never a
- * crash, never a spurious abort.
- */
-export function checkAbortSignal(ctx, phase) {
-    if (ctx.hostKill.aborted)
-        return;
-    const sig = readAbortFile(ctx.events.dir);
-    if (!sig)
-        return;
-    ctx.hostKill.aborted = true;
-    for (const c of ctx.hostKill.controllers) {
-        try {
-            c.abort();
-        }
-        catch {
-            /* best effort */
-        }
-    }
-    ctx.hostKill.controllers.clear();
-    ctx.safety.killSwitchAborts++;
-    ctx.events.append({
-        phase,
-        actor: "coordinator",
-        action: "abort_engagement",
-        result: `ABORTED by operator: ${sig.reason ?? "operator abort"} ` +
-            `(cross-process kill switch; requested ${sig.requestedAt}${sig.by ? ` by ${sig.by}` : ""})`,
-    });
-    consumeAbortFile(ctx.events.dir);
-    throw new HaltError("aborted by operator (kill switch)");
-}
 export async function dispatchTool(ctx, role, phase, call) {
-    // v0.22.0 UI kill switch: the operator abort is mechanically identical to
-    // the coordinator's abort_engagement. In-flight work is already dead
-    // (controllers aborted when the flag was set); the next tool call throws
-    // HaltError so the engagement unwinds to "halted" instead of spinning on
-    // preflight refusals. Nothing sets hostKill.aborted and continues — the
-    // coordinator's own abort sets it and throws immediately after.
-    if (ctx.hostKill.aborted) {
-        throw new HaltError("aborted by operator (kill switch)");
-    }
-    // v0.25.0 cross-process kill switch: a CLI-launched engagement has no
-    // abort handle inside the UI server process, so the UI writes abort.json
-    // into the engagement dir instead. Check for it on every dispatch — the
-    // abort sequence below is identical to the in-process kill switch
-    // (flag, controllers, audit event), then HaltError unwinds to "halted".
-    // Checked before the rate limiter: an aborted run acquires nothing.
-    checkAbortSignal(ctx, phase);
     const host = toolTargetHost(call);
     const args = call.arguments ?? {};
     // v0.17.0 accountability: autonomy tiers are MECHANICAL. A tool above the
@@ -207,7 +47,12 @@ export async function dispatchTool(ctx, role, phase, call) {
     refreshTierFromDisk(ctx, phase);
     const tierDenial = checkTierAllows(ctx.tier, call.name, args, host);
     if (tierDenial) {
-        return { result: tierDenial, target: host };
+        // TEST MODE (operator order): tier enforcement is bypassed and the
+        // bypass is event-logged; the call proceeds to the remaining gates.
+        if (!testModeOn(ctx)) {
+            return { result: tierDenial, target: host };
+        }
+        noteTestModeBypass(ctx, phase, host, `autonomy-tier denial for ${call.name} would have refused this call: ${tierDenial}`);
     }
     // Scope gate: the central target-scope choke point (deny-beats-allow,
     // plus the deny-list scan of command text). Runs before the limiter for
@@ -218,15 +63,54 @@ export async function dispatchTool(ctx, role, phase, call) {
     if (scopeDenial) {
         return scopeDenial;
     }
+    // Q-LOCKOUT: the call's credential classification, computed at the
+    // interlock gate below and consumed by the outcome recording after
+    // dispatch (one post-dispatch block owns the per-host outcome state).
+    let lockoutCls;
     if (host) {
-        // Auto-halt first: a halted target is refused before any packet AND
-        // before waiting on the rate limiter — never hammer, never queue.
-        if (ctx.safety.autoHalt.isHalted(host)) {
-            const reason = ctx.safety.autoHalt.haltReason(host) ?? "auto-halted";
-            return {
-                result: `HALTED: target ${host} was auto-halted (${reason}). No further traffic to this host this engagement — pivot to another in-scope target or report the halt.`,
-                target: host,
-            };
+        // Duplicate guard (A1): an identical repeat of a call that already
+        // completed (or already failed twice) is refused before the limiter —
+        // it consumes no rate token and sends no traffic.
+        const dup = duplicateRefusal(ctx, role, phase, call, host);
+        if (dup)
+            return dup;
+        // Q-LOCKOUT interlock (spec §5.5): classify → trip check → budget
+        // reservation, after the duplicate guard and BEFORE limiter.acquire —
+        // a refused attempt consumes no rate token and sends no packet, and
+        // out-of-scope hosts refused above never touch the budget. The
+        // refusal is a result string, never a throw.
+        lockoutCls = classifyCredentialAttempt(call);
+        // TEST MODE (operator order): the lockout interlock is skipped
+        // entirely — no admission check here and no outcome recording below
+        // (lockoutCls is cleared so the outcome block stays inert). The
+        // skip is event-logged once per classified call.
+        if (lockoutCls.kind !== "none" && testModeOn(ctx)) {
+            noteTestModeBypass(ctx, phase, host, `credential lockout interlock skipped for ${call.name} (${lockoutCls.kind} credential attempt)`);
+            lockoutCls = undefined;
+        }
+        if (lockoutCls && lockoutCls.kind !== "none") {
+            const verdict = lockoutGuardFor(ctx).check(host, lockoutCls, call.name);
+            if (!verdict.allowed) {
+                if (verdict.refusalKind === "budget" || verdict.refusalKind === "opaque") {
+                    ctx.events.append({
+                        phase,
+                        actor: "runner",
+                        action: "lockout_budget_exhausted",
+                        target: host,
+                        result: verdict.refusal,
+                    });
+                }
+                return { result: verdict.refusal, target: host };
+            }
+            if (lockoutCls.kind !== "watch") {
+                ctx.events.append({
+                    phase,
+                    actor: "runner",
+                    action: "credential_attempt",
+                    target: host,
+                    result: `${call.name} (${lockoutCls.kind}${lockoutCls.protocolClass ? `/${lockoutCls.protocolClass}` : ""}) admitted under the credential lockout budget for ${host}.`,
+                });
+            }
         }
         await ctx.safety.limiter.acquire(host);
     }
@@ -235,7 +119,12 @@ export async function dispatchTool(ctx, role, phase, call) {
     // item can't spray the target.
     const variantDenial = checkVariantCap(ctx.itemLedger, args);
     if (variantDenial) {
-        return { result: variantDenial, target: host };
+        // TEST MODE (operator order): the variant cap is bypassed and the
+        // bypass is event-logged; the call proceeds.
+        if (!testModeOn(ctx)) {
+            return { result: variantDenial, target: host };
+        }
+        noteTestModeBypass(ctx, phase, host, `per-item variant cap denial for ${call.name} would have refused this call: ${variantDenial}`);
     }
     // v0.34.0 operator controls: policy (deny-wins) and pre-execute hooks, then
     // post-hooks — all audited individually. A denial sends nothing.
@@ -244,16 +133,43 @@ export async function dispatchTool(ctx, role, phase, call) {
         return gate.denial;
     let d = await dispatchToolInner(ctx, role, phase, gate.call);
     d = await postDispatchHooks(ctx, phase, gate.call, d, host);
+    recordCallOutcome(ctx, role, phase, call, host, d);
     if (host) {
-        const haltReason = ctx.safety.autoHalt.recordOutcome(host, isTargetDistress(d.result));
-        if (haltReason) {
+        // Q-LOCKOUT: the credential outcome is recorded here — a success
+        // resets the key's failed-validation count, a failed validation
+        // spends budget, a lockout signal trips the host (and the campaign
+        // ceiling can trip the engagement). Watch/event-only calls record
+        // signals only; their budgets were settled at admission.
+        if (lockoutCls && lockoutCls.kind !== "none") {
+            const outcome = classifyAuthOutcome(d.result, d.ok);
+            const info = lockoutGuardFor(ctx).recordOutcome(host, lockoutCls, call.name, outcome);
             ctx.events.append({
                 phase,
                 actor: "runner",
-                action: "target_auto_halt",
+                action: "credential_attempt_outcome",
                 target: host,
-                result: `AUTO-HALT: ${host} — ${haltReason}. Further traffic to this host refused this engagement.`,
+                result: `${call.name} (${lockoutCls.protocolClass ?? "opaque"}): ${outcome}.`,
             });
+            if (outcome === "lockout-signal") {
+                ctx.events.append({
+                    phase,
+                    actor: "runner",
+                    action: "lockout_signal_detected",
+                    target: host,
+                    result: `LOCKOUT SIGNAL: ${call.name} against ${host} reported a locked or locking account — tripping all credential testing on this host.`,
+                });
+            }
+            if (info.trippedNow) {
+                ctx.events.append({
+                    phase,
+                    actor: "runner",
+                    action: "lockout_tripped",
+                    target: host,
+                    result: info.trippedNow === "campaign"
+                        ? `CAMPAIGN LOCKOUT TRIP: ${info.reason}. Credential testing is refused engagement-wide; resume requires a recorded operator decision.`
+                        : `LOCKOUT TRIP: ${host} — ${info.reason}. Credential testing against this host is refused; resume requires a recorded operator decision.`,
+                });
+            }
         }
         // v0.17.0 accountability: a successful validated exploit step consumes
         // the Tier 1 per-target chain budget. Denials, halts, and failures don't.
@@ -279,6 +195,9 @@ export async function dispatchTool(ctx, role, phase, call) {
         // v0.21.0: nuclei template listing is recon for the methodology item —
         // only `run` executions mark the item attempted.
         !(call.name === "nuclei_exec" && call.arguments?.["action"] !== "run") &&
+        // Q-TOOLTIMEOUT §2.3 rule 2: a coded tool timeout executed nothing —
+        // it must not mark its battery item attempted or advance a variant.
+        d.errorCode !== TOOL_TIMEOUT &&
         !/^(DENIED|HALTED|ABORTED|REFUSED)/i.test(d.result) &&
         !d.result.startsWith("probe failed")) {
         recordItemAttempt(ctx, args, phase);

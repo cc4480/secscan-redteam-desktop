@@ -53,7 +53,7 @@ export async function adEnumerate(transport, args) {
     const push = (operation, summary, findingCount) => sections.push({ operation, summary: redact(summary), findingCount });
     try {
         if (args.signal?.aborted)
-            throw new Error("[ad] aborted by kill switch");
+            throw new Error("[ad] aborted by call signal");
         await transport.connect(url);
         const bindDn = args.creds.domain ? `${args.creds.domain}\\${args.creds.username}` : args.creds.username;
         if (!args.creds.password)

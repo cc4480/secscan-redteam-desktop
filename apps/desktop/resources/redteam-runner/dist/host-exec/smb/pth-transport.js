@@ -89,7 +89,7 @@ export function createSmbPthTransport(connectImpl = (host, port) => new Promise(
                 throw new Error("[smb-pth] ntHashHex must be 32 lowercase hex chars");
             }
             if (args.signal?.aborted)
-                throw new Error("[smb-pth] aborted by kill switch before connect");
+                throw new Error("[smb-pth] aborted by call signal before connect");
             const hash = Buffer.from(args.ntHashHex, "hex");
             const domain = args.domain ?? "";
             let conn;

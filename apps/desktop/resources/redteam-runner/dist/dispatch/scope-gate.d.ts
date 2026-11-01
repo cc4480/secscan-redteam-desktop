@@ -21,10 +21,10 @@
  * A refusal is a `scope_violation` audit event plus a DENIED result the
  * coordinator re-plans around — never silent, never a throw.
  */
-import type { Ctx } from '../context.js'
-import type { EngagementPhase } from '../types.js'
-import type { ToolCallRequest } from '@secscan/redteam-llm-router'
-import type { DispatchResult } from './types.js'
+import type { Ctx } from "../context.js";
+import type { EngagementPhase } from "../types.js";
+import type { ToolCallRequest } from "@secscan/redteam-llm-router";
+import type { DispatchResult } from "./types.js";
 /**
  * Run the scope gate for one dispatch. Returns the denial to send back
  * when the call must not reach its handler, or undefined to proceed.
@@ -35,4 +35,4 @@ import type { DispatchResult } from './types.js'
  * @param host - The call's resolved target host, when it has one.
  * @returns A denial DispatchResult, or undefined when the call is in scope.
  */
-export declare function checkScopeGate(ctx: Ctx, phase: EngagementPhase, call: ToolCallRequest, host: string | undefined): DispatchResult | undefined
+export declare function checkScopeGate(ctx: Ctx, phase: EngagementPhase, call: ToolCallRequest, host: string | undefined): DispatchResult | undefined;

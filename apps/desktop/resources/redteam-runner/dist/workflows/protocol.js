@@ -19,7 +19,7 @@ export const PROTOCOL_ROLES = [
     {
         id: "recon",
         mandate: "Map the surface without touching it.",
-        may: ["scan_url/get_report", "http_probe GET/HEAD", "nmap/nuclei recon-safe actions", "write the shared target map"],
+        may: ["secscan_exec", "http_probe GET/HEAD", "nmap/nuclei recon-safe actions", "write the shared target map"],
         never: ["craft payloads", "exploit", "confirm by touching", "report a guess as a fact"],
         outputs: ["target map entries", "fingerprint", "attack-surface brief"],
     },
@@ -56,7 +56,7 @@ export const PROTOCOL_RULES = [
     "Stay inside the ROE scope: out-of-scope hosts are refused before the packet, not after.",
     "Honest limits beat fake coverage: declare not-covered items with a reason code.",
     "The report is written from the ledger only; nothing enters it that was not observed.",
-    "Stop conditions are absolute: auth-gate attempt, ROE breach, production impact, kill switch.",
+    "Stop conditions are absolute: auth-gate attempt, ROE breach, production impact.",
 ];
 export const REPORT_CONTRACT = {
     sections: [
@@ -71,7 +71,7 @@ export const REPORT_CONTRACT = {
         { id: "compliance", required: false, content: "PCI DSS 4.0.1 11.4 / SOC 2 / ISO 27001 mapping when requested" },
         { id: "appendix-coverage", required: true, content: "battery cells probed, blocked and skipped, per family" },
     ],
-    formats: ["report.html", "report.md"],
+    formats: ["report.html", "report.md", "report.json", "report.txt", "findings.csv", "report.docx", "report-package.zip"],
     severityScale: ["critical", "high", "medium", "low", "info"],
 };
 /** One machine-checkable rule list for the protocol test. */

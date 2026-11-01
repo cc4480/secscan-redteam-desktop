@@ -12,6 +12,8 @@ import { describeEscalation, escalateEngagement } from "../accountability/index.
 import { tier2ProductionConfirmed } from "../accountability/index.js";
 import { arg, argAll, buildInput, flag, parseLogRotationArgs, usage } from "./args.js";
 import { printCommandHelp, runCommandCli } from "./command.js";
+import { runArsenalCli } from "./arsenal.js";
+import { runMemoryCommand } from "../memory/cli.js";
 async function runReverify() {
     const bundlePath = arg("--bundle");
     if (!bundlePath || !existsSync(bundlePath)) {
@@ -47,12 +49,7 @@ async function runReverify() {
         console.error(`[runner] --execute requires --scope <host> (exact hosts; enforced mechanically)`);
         process.exit(3);
     }
-    const killSwitch = { aborted: false };
-    process.on("SIGINT", () => {
-        killSwitch.aborted = true;
-        console.error(`\n[runner] SIGINT â€” kill switch set; in-flight step will abort`);
-    });
-    const report = await reverifyBundle(bundle, createReplayer({ scope: scopes, killSwitch }));
+    const report = await reverifyBundle(bundle, createReplayer({ scope: scopes }));
     const outDir = arg("--out") ?? dirname(resolve(bundlePath));
     mkdirSync(outDir, { recursive: true });
     const outPath = join(outDir, `${bundle.findingId}.reverify-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
@@ -169,6 +166,16 @@ export async function main() {
         else
             console.log(formatReadiness(report));
         process.exit(report.ok ? 0 : 1);
+    }
+    if (cmd === "arsenal") {
+        process.exitCode = await runArsenalCli();
+        return;
+    }
+    if (cmd === "memory") {
+        const result = runMemoryCommand(process.argv.slice(3), process.env, new Date().toISOString());
+        for (const line of result.lines)
+            console.log(line);
+        process.exit(result.code);
     }
     if (cmd === "start") {
         const input = buildInput();

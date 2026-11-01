@@ -13,7 +13,7 @@ export async function handleWebTools(ctx, _role, _phase, call, args) {
         const attackId = typeof args["attackId"] === "string" ? args["attackId"].toUpperCase() : undefined;
         const rawCat = typeof args["category"] === "string" ? args["category"].toLowerCase() : "";
         const category = BATTERY_CATEGORIES.includes(rawCat) ? rawCat : undefined;
-        if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe)) {
+        if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe, { testMode: ctx.config?.testMode === true })) {
             return { result: `DENIED by ROE: technique ${attackId} is excluded for this engagement.`, attackId, target: String(args["url"] ?? "") };
         }
         const url = String(args["url"] ?? "");
@@ -23,7 +23,7 @@ export async function handleWebTools(ctx, _role, _phase, call, args) {
             path = new URL(url).pathname;
         }
         catch {
-            return { result: `DENIED: unparseable URL ${url}`, attackId, target: url };
+            return { result: `DENIED: unparseable URL ${url}`, attackId, target: url, repairable: `unparseable URL ${JSON.stringify(url)}` };
         }
         const cooldownKey = `${method} ${path}`;
         if (ctx.opsecCooldown.has(cooldownKey)) {
@@ -78,7 +78,7 @@ export async function handleWebTools(ctx, _role, _phase, call, args) {
     }
     if (call.name === "burst_probe") {
         const attackId = typeof args["attackId"] === "string" ? args["attackId"].toUpperCase() : undefined;
-        if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe)) {
+        if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe, { testMode: ctx.config?.testMode === true })) {
             return { result: `DENIED by ROE: technique ${attackId} is excluded for this engagement.`, attackId, target: String(args["url"] ?? "") };
         }
         const url = String(args["url"] ?? "");
@@ -87,7 +87,7 @@ export async function handleWebTools(ctx, _role, _phase, call, args) {
             path = new URL(url).pathname;
         }
         catch {
-            return { result: `DENIED: unparseable URL ${url}`, attackId, target: url };
+            return { result: `DENIED: unparseable URL ${url}`, attackId, target: url, repairable: `unparseable URL ${JSON.stringify(url)}` };
         }
         const burstKey = `BURST ${path}`;
         if (ctx.opsecCooldown.has(burstKey)) {
@@ -116,7 +116,7 @@ export async function handleWebTools(ctx, _role, _phase, call, args) {
     }
     // -- Host execution tools (v0.9.0): ssh/smb/winrm via the safety core ----
     // Host targets are NEVER inferred — targetProfile is required and must be
-    // windows|linux. Every refusal (scope, denylist, kill switch, credentials)
+    // windows|linux. Every refusal (scope, denylist, credentials)
     // is a DENIED event, never silent. Coverage counts like http_probe.
     return null;
 }

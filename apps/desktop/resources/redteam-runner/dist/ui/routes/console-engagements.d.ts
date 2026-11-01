@@ -40,8 +40,8 @@
  * Read-only: this route reads artifacts and the store's in-memory list; it
  * writes nothing.
  */
-import type { ServerResponse } from 'node:http'
-import type { UiStore } from '../store.js'
+import type { ServerResponse } from 'node:http';
+import type { UiStore } from '../store.js';
 /**
  * GET /api/console/engagements — the 20 most recent engagements, live first.
  *
@@ -49,4 +49,4 @@ import type { UiStore } from '../store.js'
  * @param res - the HTTP response to write the JSON payload to
  * @returns nothing; the response is written to `res`
  */
-export declare function handleConsoleEngagements(store: UiStore, res: ServerResponse): void
+export declare function handleConsoleEngagements(store: UiStore, res: ServerResponse): void;

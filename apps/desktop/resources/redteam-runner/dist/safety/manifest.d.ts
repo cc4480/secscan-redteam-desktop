@@ -7,10 +7,11 @@
  * the engagement, and the residual risks — honestly. We never claim "zero
  * risk"; we claim specific protections and what they mechanically enforce.
  */
+import type { LockoutManifestData } from "./lockout.js";
 import type { TestEnvironment } from "./graduation.js";
 import type { ZeroDisruptionRecord } from "./disruption.js";
 import type { ApprovalEntry, AutonomyTier } from "../accountability/index.js";
-export declare const SAFETY_MANIFEST_VERSION = "v0.17.0";
+export declare const SAFETY_MANIFEST_VERSION = "v0.18.0";
 /** The mechanical protections — stated as what the RUNNER enforces, not what the agents were told. */
 export declare const PROTECTIONS_IN_FORCE: string[];
 /**
@@ -32,16 +33,12 @@ export interface SafetyManifest {
         throttledMs: number;
         acquires: number;
     };
-    killSwitch: {
-        armed: boolean;
-        aborts: number;
-    };
     destructiveDenylist: {
         version: string;
         patternCount: number;
         patterns: string[];
     };
-    payloadPolicy: "canary-only";
+    payloadPolicy: "canary-or-gated-session";
     dosPolicy: "excluded-always";
     humanOverride: {
         operator: string;
@@ -52,13 +49,12 @@ export interface SafetyManifest {
         enabled: boolean;
         patterns: string[];
     };
-    autoHalt: {
-        consecutiveThreshold: number;
-        windowSize: number;
-        windowFailureRate: number;
-        haltedTargets: string[];
-        haltCount: number;
-    };
+    /**
+     * Q-LOCKOUT: the credential-attempt interlock's numbers for this
+     * engagement — declared threshold, per-key failed validations, opaque
+     * runs used, tripped hosts, total failures vs the campaign ceiling.
+     */
+    lockout: LockoutManifestData;
     protectionsInForce: string[];
     zeroDisruption: ZeroDisruptionRecord;
     disruptionVerdict: string;
@@ -85,15 +81,13 @@ export interface ManifestInputs {
     productionCapApplied: boolean;
     throttledMs: number;
     acquires: number;
-    killSwitchAborts: number;
     operator: string;
-    autoHalt: {
-        consecutiveThreshold: number;
-        windowSize: number;
-        windowFailureRate: number;
-        haltedTargets: string[];
-        haltCount: number;
-    };
+    /**
+     * Q-LOCKOUT: the guard's manifest data (ctx.safety.lockout.manifestData()).
+     * Optional for backward compatibility — absent means no guard was wired
+     * (partial contexts), and the manifest states the defaults with zero activity.
+     */
+    lockout?: LockoutManifestData;
     zeroDisruption: ZeroDisruptionRecord;
     disruptionVerdict: string;
     generatedAt?: string;

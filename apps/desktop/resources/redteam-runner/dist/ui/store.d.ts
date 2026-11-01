@@ -1,10 +1,11 @@
 /**
  * In-memory registries for the UI server (v0.22.0).
  *
- * Engagements launched through the UI are tracked here with their abort
- * handles (kill switch). Historical engagements are listed from the
- * engagements dir on disk — the UI works even for runs started by the CLI.
+ * Engagements launched through the UI are tracked here while their runs
+ * are in flight. Historical engagements are listed from the engagements
+ * dir on disk — the UI works even for runs started by the CLI.
  */
+import { type ReadStream } from "node:fs";
 import type { StoredEngagement, UiJob } from "./types.js";
 /** Same env convention as resolveConfig: REDTEAM_HOME or cwd. */
 export declare function defaultEngagementsDir(): string;
@@ -39,7 +40,6 @@ export declare class UiStore {
     constructor(engagementsDir?: string);
     register(e: StoredEngagement): void;
     get(id: string): StoredEngagement | undefined;
-    setAbort(id: string, abort: (reason: string) => void): void;
     complete(id: string): void;
     fail(id: string, err: unknown): void;
     /** All engagements: live-tracked first, then history from disk. */
@@ -52,6 +52,11 @@ export declare class UiStore {
     readJsonArtifact(id: string, name: string): unknown | null;
     /** Read a markdown artifact from an engagement dir (null when absent). */
     readTextArtifact(id: string, name: string): string | null;
+    /** Open an artifact of an engagement dir as a byte stream with its size (null when absent). */
+    openArtifact(id: string, name: string): {
+        size: number;
+        stream: ReadStream;
+    } | null;
     /** List files in a subdir of the engagement dir (e.g. poc/). */
     listSubdir(id: string, sub: string): string[];
 }

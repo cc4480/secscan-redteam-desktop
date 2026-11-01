@@ -11,7 +11,7 @@
  * the existing engagement engine. Nothing in this module talks to a target.
  */
 import type { TargetId } from "../targets.js";
-import type { EngagementPhase } from "../types.js";
+import type { EngagementInput, EngagementPhase } from "../types.js";
 /** One slash command the operator may type. */
 export interface CommandSpec {
     /** Canonical name including the slash, e.g. `/deepscan`. */
@@ -30,6 +30,10 @@ export interface CommandSpec {
     readonly tier: 0 | 1 | 2;
     /** True when the run must stop for operator approval before the exploit phase. */
     readonly requiresApproval: boolean;
+    /** True for a LOCAL-host engagement (Q-RP-11): the target is the
+     * machine the app runs on, collected on-host — never a remote
+     * battery re-aimed at the machine's own hostname. */
+    readonly local?: boolean;
     /** Artifacts the run must leave behind. */
     readonly artifacts: readonly string[];
 }
@@ -65,5 +69,19 @@ export interface PlannedPhase {
  * @returns the plan with one entry per phase.
  */
 export declare function planCommand(invocation: CommandInvocation): readonly PlannedPhase[];
+/**
+ * Build the EngagementInput for a LOCAL command invocation (/pcscan):
+ * the target is this machine's hostname, the scope is exactly that
+ * hostname, and localHost is set so the collector runs on-host. The
+ * old shell instead re-aimed the remote battery at the hostname and
+ * stamped the run production + confirmProduction — both gone: a local
+ * assessment is a staging-class run against the operator's own box,
+ * attested by the operator running it.
+ * @param invocation - parsed local command.
+ * @param host - this machine's hostname.
+ * @param mode - engagement mode from the CLI (red|black).
+ * @returns the engagement input for runEngagement.
+ */
+export declare function buildLocalEngagementInput(invocation: CommandInvocation, host: string, mode?: EngagementInput["mode"]): EngagementInput;
 /** The operator-facing help text, generated from the registry. */
 export declare function commandHelp(): string;

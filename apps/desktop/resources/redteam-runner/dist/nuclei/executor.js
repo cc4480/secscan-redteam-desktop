@@ -9,7 +9,7 @@
  *    the runner-built argv. Exploit-phase-gated by the dispatcher (like
  *    msf_exec run), Tier 2.
  *
- * Preflight order (mirrors the msf bridge): kill switch → exact-hostname
+ * Preflight order (mirrors the msf bridge): exact-hostname
  * ROE scope check (before any packet) → template/tag policy. Injectable
  * spawn + binary probe make everything testable with a fake binary.
  */
@@ -20,7 +20,6 @@ import { realNucleiSpawn, parseNucleiJsonl } from "./runner.js";
 /** Max templates returned by the recon-safe listing (operator sanity bound). */
 export const NUCLEI_LIST_CAP = 200;
 export class NucleiExecutor {
-    killSwitch = { aborted: false };
     deps;
     constructor(deps = {}) {
         this.deps = deps;
@@ -43,9 +42,6 @@ export class NucleiExecutor {
         }
     }
     preflight(host, scopeHosts) {
-        if (this.killSwitch.aborted) {
-            return { refused: "kill switch active — coordinator aborted; no new nuclei executions" };
-        }
         const v = validateHostTarget(host, scopeHosts);
         if (!v.ok)
             return { refused: v.reason };
@@ -57,9 +53,6 @@ export class NucleiExecutor {
      */
     async templates(args) {
         const started = Date.now();
-        if (this.killSwitch.aborted) {
-            return this.refused("kill switch active — coordinator aborted; no new nuclei executions", started);
-        }
         const bin = resolveNucleiBinary(this.env);
         if (!(await this.binaryAvailable(bin))) {
             return this.refused(`nuclei binary not available.\n${NUCLEI_SETUP_INSTRUCTIONS}`, started);
@@ -111,7 +104,7 @@ export class NucleiExecutor {
             summary: `Nuclei run against ${target}: ${parsed.findings.length} findings ` +
                 `(top severity: ${sev}; ${parsed.rawLines} output lines, ${parsed.parseErrors} parse errors)` +
                 (r.timedOut ? " — TIMED OUT at the runner timeout" : "") +
-                (r.killed && !r.timedOut ? " — KILLED by kill switch" : ""),
+                (r.killed && !r.timedOut ? " — KILLED by call signal" : ""),
             output: parsed.findings
                 .slice(0, 25)
                 .map((f) => `[${f.severity}] ${f.templateId} — ${f.name} @ ${f.matchedAt}${f.cve ? ` [${f.cve}]` : ""}`)

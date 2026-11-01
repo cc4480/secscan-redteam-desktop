@@ -1,13 +1,3 @@
-import { checkAuthorization } from "../gate.js";
-export async function recheckVerified(ctx) {
-    // Cache the authorize-phase proof for 5 minutes; re-check after that.
-    if (ctx.verifiedAt && Date.now() - Date.parse(ctx.verifiedAt) < 5 * 60_000)
-        return true;
-    const v = await checkAuthorization(ctx.domain, { mcpEndpoint: ctx.config.mcpEndpoint, mcpToken: ctx.config.mcpToken }, ctx.deps.verify, { allowLocalSandbox: ctx.config.localSandbox });
-    if (v.allowed)
-        ctx.verifiedAt = new Date().toISOString();
-    return v.allowed;
-}
 /** Optional string arg: trimmed, or undefined when absent/blank. */
 export function optStr(v) {
     return typeof v === "string" && v.trim() ? v.trim() : undefined;

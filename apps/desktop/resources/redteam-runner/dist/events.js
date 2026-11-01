@@ -8,7 +8,7 @@
  *    proof, plan, findings so far. One read gives the console everything.
  *  - engagement.md — the human paper trail (Time | Phase | Actor | Action | Result).
  */
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, renameSync, writeFileSync, existsSync } from "node:fs";
 import { basename, join } from "node:path";
 import { maybeRotateLog } from "./safety/rotation.js";
 import { redact } from "./events/redact.js";
@@ -134,7 +134,16 @@ export class EventLog {
         return { ...this.state, findings: [...this.state.findings] };
     }
     persistState() {
-        writeFileSync(join(this.dir, "state.json"), JSON.stringify(this.state, null, 2));
+        // Atomic replace (tmp file + rename, the workgraph/store.ts pattern):
+        // state.json is rewritten on every event while the console reads it,
+        // so an in-place write lets a reader observe a torn file (readState
+        // then returns null and the engagement flickers out of listings) and
+        // a crash mid-write leaves a permanently unparseable state. Rename
+        // publishes the old state or the new one, never a partial file.
+        const path = join(this.dir, "state.json");
+        const tmp = `${path}.tmp-${process.pid}`;
+        writeFileSync(tmp, JSON.stringify(this.state, null, 2));
+        renameSync(tmp, path);
     }
 }
 function oneLine(s) {

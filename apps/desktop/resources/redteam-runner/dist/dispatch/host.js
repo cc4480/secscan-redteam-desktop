@@ -6,6 +6,8 @@ import { isTargetId } from "../targets.js";
 import { techniqueAllowed } from "../gate.js";
 import { sleep } from "../util.js";
 import { noteCategoryCoverage, numArg, optStr } from "./prelude.js";
+import { checkDestructive } from "../host-exec/common.js";
+import { noteTestModeBypass, testModeOn } from "./test-mode.js";
 /** Host-exec tools landed after the ssh/smb/winrm trio. Exported so
  *  test/tool-family-consistency.test.ts can pin the family against the
  *  rate-limit set and the proof-action set. */
@@ -29,10 +31,10 @@ export const WAVE2_TOOLS = new Set([
  * duplicated checks drift the same way. One source, one fix.
  *
  * Returns a ready-to-return refusal, or the scope-checked host plus the
- * kill-switch controller the caller must release in its `finally`.
+ * per-call controller whose signal the caller passes to the executor.
  */
 function hostExecPrelude(ctx, call, args, attackId, category, wantTp) {
-    if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe)) {
+    if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe, { testMode: ctx.config?.testMode === true })) {
         return { refused: { result: `DENIED by ROE: technique ${attackId} is excluded for this engagement.`, attackId, target: String(args["host"] ?? "") } };
     }
     const rawTp = typeof args["targetProfile"] === "string" ? args["targetProfile"].toLowerCase() : "";
@@ -49,14 +51,12 @@ function hostExecPrelude(ctx, call, args, attackId, category, wantTp) {
     // The exec is really going out: count it toward the battery.
     ctx.probesUsed++;
     noteCategoryCoverage(ctx, category, wantTp);
-    // Kill-switch wiring: register this execution's controller so a coordinator
-    // abort terminates it mid-flight (shared ctx → all parallel tasks). The
-    // executor checks the aborted flag before starting.
+    // Per-call timeout wiring: this execution's controller — the dispatch
+    // timeout aborts it when the call overruns (dispatch/timeout.ts).
     const ctrl = new AbortController();
-    ctx.hostKill.controllers.add(ctrl);
     return { host, ctrl };
 }
-export async function handleHostTools(ctx, _role, _phase, call, args) {
+export async function handleHostTools(ctx, _role, phase, call, args) {
     if (call.name !== "ssh_exec" && call.name !== "smb_exec" && call.name !== "winrm_exec" && !WAVE2_TOOLS.has(call.name))
         return null;
     if (call.name === "ssh_exec" || call.name === "smb_exec" || call.name === "winrm_exec") {
@@ -67,11 +67,19 @@ export async function handleHostTools(ctx, _role, _phase, call, args) {
         if ("refused" in pre)
             return pre.refused;
         const { host, ctrl } = pre;
+        // TEST MODE (operator order): the executor's preflight will skip the
+        // destructive-command denylist — pre-compute the would-be refusal here
+        // so the bypass lands in the engagement log with its label.
+        if ((call.name === "ssh_exec" || call.name === "winrm_exec") && testModeOn(ctx)) {
+            const deniedLabel = checkDestructive(String(args["command"] ?? ""));
+            if (deniedLabel) {
+                noteTestModeBypass(ctx, phase, host, `host-exec destructive-command denylist would refuse ${call.name}: ${deniedLabel}`);
+            }
+        }
         try {
             if (ctx.input.mode === "black")
                 await sleep(Math.random() * 2500); // jitter
             const exec = ctx.hostExecutor;
-            exec.killSwitch = ctx.hostKill;
             const res = call.name === "ssh_exec"
                 ? await exec.sshExec({ host, port: numArg(args["port"]), command: String(args["command"] ?? ""), scopeHosts: ctx.hosts, signal: ctrl.signal })
                 : call.name === "smb_exec"
@@ -93,9 +101,6 @@ export async function handleHostTools(ctx, _role, _phase, call, args) {
                         scopeHosts: ctx.hosts,
                         signal: ctrl.signal,
                     });
-            if (/kill switch/i.test(res.summary)) {
-                return { result: `ABORTED by coordinator kill switch — engagement halting. ${res.summary}`, attackId, target: host };
-            }
             if (res.refused) {
                 return { result: `DENIED by host-exec safety core: ${res.refused}`, attackId, target: host };
             }
@@ -103,14 +108,13 @@ export async function handleHostTools(ctx, _role, _phase, call, args) {
             return { result: `${res.summary}.${out}`, attackId, target: host, ok: res.ok };
         }
         finally {
-            ctx.hostKill.controllers.delete(ctrl);
         }
     }
     // -- Host execution tools, wave 2 (v0.10.0): winrm_probe, rdp_auth,
     // rdp_shadow_prep, smb_pth, ad_enum, krb_ptt, ssh_agent_audit, nfs_enum.
     // Same safety-core contract as wave 1: ROE technique check, pinned
-    // targetProfile (never inferred), coverage counting, kill-switch
-    // controller registration, DENIED/ABORTED mapping.
+    // targetProfile (never inferred), coverage counting, per-call abort
+    // signal, DENIED/ABORTED mapping.
     if (WAVE2_TOOLS.has(call.name)) {
         const attackId = typeof args["attackId"] === "string" ? args["attackId"].toUpperCase() : undefined;
         const rawCat = typeof args["category"] === "string" ? args["category"].toLowerCase() : "";
@@ -124,7 +128,6 @@ export async function handleHostTools(ctx, _role, _phase, call, args) {
             if (ctx.input.mode === "black")
                 await sleep(Math.random() * 2500); // jitter
             const exec = ctx.hostExecutor;
-            exec.killSwitch = ctx.hostKill;
             const t = { host, scopeHosts: ctx.hosts, signal: ctrl.signal };
             const res = call.name === "winrm_probe"
                 ? await exec.winrmProbe({ ...t, ports: Array.isArray(args["ports"]) ? args["ports"].map(Number).filter((n) => n > 0 && n < 65536).slice(0, 16) : undefined })
@@ -147,9 +150,6 @@ export async function handleHostTools(ctx, _role, _phase, call, args) {
                                     : call.name === "ssh_agent_audit"
                                         ? await exec.sshAgentAudit({ ...t, port: numArg(args["port"]), mode: args["mode"] === "abuse-path" ? "abuse-path" : "socket-check" })
                                         : await exec.nfsEnum(t);
-            if (/kill switch/i.test(res.summary)) {
-                return { result: `ABORTED by coordinator kill switch — engagement halting. ${res.summary}`, attackId, target: host };
-            }
             if (res.refused) {
                 return { result: `DENIED by host-exec safety core: ${res.refused}`, attackId, target: host };
             }
@@ -157,15 +157,14 @@ export async function handleHostTools(ctx, _role, _phase, call, args) {
             return { result: `${res.summary}.${out}`, attackId, target: host, ok: res.ok };
         }
         finally {
-            ctx.hostKill.controllers.delete(ctrl);
         }
     }
     // -- Metasploit bridge (v0.11.0): msf_exec --------------------------------
     // search/suggest are recon-safe (never fire); run is EXPLOIT PHASE ONLY —
     // the recon→exploit coordinator sign-off is the approval gate, enforced
     // mechanically here (not by prompt). Same contract as host tools: ROE
-    // technique check, pinned targetProfile, coverage counting, kill-switch
-    // controller, DENIED/ABORTED mapping. Per-CVE instances (attackId like
+    // technique check, pinned targetProfile, coverage counting, per-call
+    // abort signal, DENIED/ABORTED mapping. Per-CVE instances (attackId like
     // "MSF-CVE-2021-44228" is NOT a valid attackId — the coordinator rejects
     // anything that isn't a real ATT&CK ID (lookupTechnique). Per-CVE instances
     // travel in the `cve` field and are named in the result; they reconcile

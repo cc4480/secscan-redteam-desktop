@@ -135,9 +135,10 @@ export const WINDOWS_PART_5 = [
     // CLASSES; these items cover CVE-SPECIFIC exploits WITHOUT hardcoding
     // CVEs: recon detects a service/version → msf_exec suggest maps it to
     // candidate modules → the coordinator approves → msf_exec run fires ONE
-    // module with a benign canary marker as the only payload action. Each
-    // CVE validated at runtime becomes a per-CVE instance (attackId
-    // "MSF-CVE-…") that reconciles against coverage via its category.
+    // module, validated by the benign canary marker (echoed through the
+    // session when a Meterpreter payload lands one; the session registers
+    // to the run). Each CVE validated at runtime becomes a per-CVE instance
+    // (attackId "MSF-CVE-…") that reconciles against coverage via its category.
     {
         id: "WS-105", category: "logic", name: "CVE → Metasploit module mapping",
         brief: "Detected service/version mapped to candidate CVE exploit modules for coordinator approval.",
@@ -148,7 +149,7 @@ export const WINDOWS_PART_5 = [
         id: "WS-106", category: "functionality", name: "CVE exploit validation via Metasploit",
         brief: "Coordinator-approved CVE modules fired with benign canary marker payloads.",
         owasp: "CIS-v8-4.4", attackId: "T1190", needs: NEEDS_MSFRPCD,
-        what: "For each coordinator-approved candidate from WS-105, run msf_exec run in the exploit phase: ONE module, generic cmd payload executing ONLY the runner-built canary marker (echo REDTEAM-MARKER-*). The marker echoing back IS the validation — command execution achieved. dos/destructive modules are refused by policy; stray sessions are stopped by hygiene. Tag attackId T1190 and put the CVE in the cve field — each validated CVE is recorded as its own report instance.",
+        what: "For each coordinator-approved candidate from WS-105, run msf_exec run in the exploit phase: ONE module. A generic cmd payload executes ONLY the runner-built canary marker (echo REDTEAM-MARKER-*); a Meterpreter session payload may land the run instead — the session registers to the run and the marker is proven through it before any session command. The marker echoing back IS the validation — command execution achieved. dos/destructive modules are refused by policy; sessions a run did not register are stopped by hygiene. Tag attackId T1190 and put the CVE in the cve field — each validated CVE is recorded as its own report instance.",
         blackNote: "One module per CVE; lowest-rank-sufficient module first; stop on first defender signal.",
     },
     {

@@ -23,9 +23,6 @@ export interface NucleiExecResult {
 /** Max templates returned by the recon-safe listing (operator sanity bound). */
 export declare const NUCLEI_LIST_CAP = 200;
 export declare class NucleiExecutor {
-    killSwitch: {
-        aborted: boolean;
-    };
     private deps;
     constructor(deps?: NucleiDeps);
     private get env();

@@ -22,13 +22,6 @@ export { parseAgentSocketCheck, parseAgentAbusePath, type AgentAuditParsed } fro
 type ArgsOf<F> = F extends (core: ExecutorCore, args: infer A) => unknown ? A : never;
 export declare class HostExecutor {
     private readonly core;
-    /** Kill-switch state, shared with the engagement context (phases.ts owns it). */
-    get killSwitch(): {
-        aborted: boolean;
-    };
-    set killSwitch(v: {
-        aborted: boolean;
-    });
     constructor(deps?: HostExecDeps);
     sshExec(args: ArgsOf<typeof sshExecImpl>): Promise<HostExecResult>;
     smbExec(args: ArgsOf<typeof smbExecImpl>): Promise<HostExecResult>;

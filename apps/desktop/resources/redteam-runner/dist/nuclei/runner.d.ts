@@ -2,7 +2,7 @@ export interface NucleiSpawnOpts {
     argv: string[];
     /** Milliseconds before the child is killed. */
     timeoutMs: number;
-    /** AbortSignal from the coordinator kill switch — kills the child. */
+    /** Per-call AbortSignal — kills the child when it fires. */
     signal?: AbortSignal;
 }
 export interface SpawnFn {

@@ -15,7 +15,6 @@ import { TARGET_PROFILES, activeTargets, targetCellStatus } from "../targets.js"
 import { ledgerSummary, serializeLedger } from "../coverage/items.js";
 import { agentLoop, promptCtx } from "../agents.js";
 import { extractJsonBlock } from "../util.js";
-import { READ_TOOLS } from "../tools.js";
 import { batteryStatusLine } from "../coverage/cells.js";
 import { resolveOperatorName } from "../accountability/index.js";
 import { countVariants, variantCountLine, variantProgressSuffix } from "../variants/index.js";
@@ -27,7 +26,15 @@ import { readEvents } from "../events.js";
 import { writeSafetyArtifacts } from "./safety.js";
 import { writeComplianceArtifacts } from "./compliance.js";
 import { extractNarrative } from "./narrative.js";
-import { buildEngagementMeta, renderReportHtml } from "./html.js";
+import { buildEngagementMeta } from "./html.js";
+import { renderEngagementReportHtml } from "./html/render.js";
+import { buildEngagementReportInput, buildFindingMeta } from "./html/wire.js";
+import { emitDeliverables, stampFindingRefs } from "./finding-refs.js";
+import { buildDetailInput, recordReportMeta } from "./predecessor.js";
+import { buildGradeSection, gradeFindings } from "./grading.js";
+import { applyCellVerdicts, haltedFindingFromLive } from "./cell-verdicts.js";
+import { peerDeferredPromptSection, peerVerdictSuffix, stampPeerVerdicts } from "./peer-verdicts.js";
+export { applyCellVerdicts, haltedFindingFromLive } from "./cell-verdicts.js";
 export async function reportPhase(ctx, reconBrief, exploitSummary, opts = {}) {
     const selected = ctx.input.fullBattery ? activeTargets(ctx.input) : [];
     const fbCells = selected.flatMap((t) => BATTERY_CATEGORIES.map((c) => ({ t, c })));
@@ -89,42 +96,39 @@ export async function reportPhase(ctx, reconBrief, exploitSummary, opts = {}) {
             (covered.length < 3 ? `NOT COVERED: ${BATTERY_CATEGORIES.filter((c) => !ctx.coverage.has(c)).join(", ")} — list these under Honest limits.` : "Full battery complete.");
     let reportMd;
     let findings;
-    if (opts.haltedReason) {
-        // Halt path (action/duration cap, 5xx auto-halt, kill switch, aborted
-        // sign-off, unexpected error): NEVER run the reporter LLM here — it could
+    if (opts.haltedReason || opts.blockedReason) {
+        // Halt path (action/duration cap, aborted
+        // sign-off, unexpected error) and blocked path (authorization denied;
+        // Q-DELIVERABLES-AUTOFIRE P3): NEVER run the reporter LLM here — it could
         // re-hit the same cap and we would lose the accountability record exactly
         // when it matters most. Build the report mechanically from the audit-log
-        // state so the safety manifest, proof bundles, and item verdicts still
-        // ship. Findings are the live-confirmed set recorded during the run.
+        // state; findings are the live set recorded so far.
         reportMd =
-            `# Engagement report (HALTED)\n\n` +
+            `# Engagement report (${opts.blockedReason ? "BLOCKED" : "HALTED"})\n\n` +
                 `Target: ${ctx.input.target}\nMode: ${ctx.input.mode}\n` +
-                `Status: HALTED — ${opts.haltedReason}\n` +
+                `Status: ${opts.blockedReason ? "BLOCKED" : "HALTED"} — ${opts.haltedReason ?? opts.blockedReason}\n` +
                 `Authorization: ${ctx.verificationProof}\n\n` +
-                `This engagement halted before the reporter phase. The findings, coverage, ` +
-                `proof bundles, and safety manifest below are the runner-computed record of ` +
-                `work completed up to the halt — no reporter-agent narrative was generated.\n`;
-        findings = ctx.liveFindings.map((lf, i) => ({
-            id: `F-${i + 1}`,
-            severity: (["critical", "high", "medium", "low", "info"].includes(lf.severity)
-                ? lf.severity
-                : "info"),
-            title: lf.title,
-            attackIds: lf.attackId ? [lf.attackId] : [],
-            evidence: lf.evidence,
-            fix: "(engagement halted before remediation guidance was written)",
-            retest: "(engagement halted before a retest plan was written)",
-            status: "confirmed",
-        }));
+                `This engagement ${opts.blockedReason ? "was blocked at authorization, before any testing" : "halted before the reporter phase"}. The findings, coverage, proof bundles, and safety manifest below are the runner-computed record of ` +
+                `work completed up to the ${opts.blockedReason ? "block" : "halt"} — no reporter-agent narrative was generated.\n`;
+        findings = ctx.liveFindings.map((lf, i) => haltedFindingFromLive(lf, i));
+        stampPeerVerdicts(findings, ctx);
     }
     else if (ctx.config.dryRunAgents) {
         reportMd = `# Engagement report (dry-run)\n\nTarget: ${ctx.input.target}\nMode: ${ctx.input.mode}\n`;
         findings = [];
     }
     else {
-        reportMd = await agentLoop(ctx, "reporter", "report", reporterPrompt(promptCtx(ctx)), `Write the client report now.\n\nAuthorization: ${ctx.verificationProof}\n\nOperation plan: ${JSON.stringify(ctx.plan)}\n\nShared verdicts this engagement — confirmed (${ctx.liveFindings.length}):\n${ctx.liveFindings.map((f) => `- [${f.severity}] ${f.title} (${f.attackId}${f.vulnClass ? `, ${f.vulnClass}` : ""}): ${f.evidence}`).join("\n") || "(none)"}\nKilled hypotheses (${ctx.killedLive.length}):\n${ctx.killedLive.map((k) => `- ${k.hypothesis} → ${k.killingObservation}`).join("\n") || "(none)"}\nRegistry hits consulted: ${ctx.registryHits.length}. Target fingerprint: ${JSON.stringify(ctx.fingerprint)}.\n\n${batteryLine}\n\nRecon brief:\n${reconBrief.slice(0, 4000)}\n\nExploitation summary:\n${exploitSummary.slice(0, 4000)}\n\nProof of exploitation is appended mechanically by the runner from the audit log — do not invent PoC details, marker values, or reproduction steps in your narrative; describe findings only from the evidence given.\n\nEnd the report with a JSON block: \`\`\`json {"findings": [{"id":"F-1","severity":"low","title":"...","attackIds":["T1190"],"evidence":"...","fix":"...","retest":"...","status":"confirmed"}]} \`\`\``, READ_TOOLS, 4);
+        reportMd = await agentLoop(ctx, "reporter", "report", reporterPrompt(promptCtx(ctx)), `Write the client report now.\n\nAuthorization: ${ctx.verificationProof}\n\nOperation plan: ${JSON.stringify(ctx.plan)}\n\nShared verdicts this engagement — confirmed (${ctx.liveFindings.length}):\n${ctx.liveFindings.map((f) => `- [${f.severity}] ${f.title} (${f.attackId}${f.vulnClass ? `, ${f.vulnClass}` : ""}${f.cellState ? `, cell: ${f.cellState.toUpperCase()}` : ""}${peerVerdictSuffix(f)}): ${f.evidence}`).join("\n") || "(none)"}\nKilled hypotheses (${ctx.killedLive.length}):\n${ctx.killedLive.map((k) => `- ${k.hypothesis} → ${k.killingObservation}`).join("\n") || "(none)"}\n${peerDeferredPromptSection(ctx.peerDeferredLive)}Registry hits consulted: ${ctx.registryHits.length}. Target fingerprint: ${JSON.stringify(ctx.fingerprint)}.\n\n${batteryLine}\n\nRecon brief:\n${reconBrief.slice(0, 4000)}\n\nExploitation summary:\n${exploitSummary.slice(0, 4000)}\n\nProof of exploitation is appended mechanically by the runner from the audit log — do not invent PoC details, marker values, or reproduction steps in your narrative; describe findings only from the evidence given.\n\nEnd the report with a JSON block: \`\`\`json {"findings": [{"id":"F-1","severity":"low","title":"...","attackIds":["T1190"],"evidence":"...","fix":"...","retest":"...","status":"confirmed"}]} \`\`\``, [], 4);
         const parsed = extractJsonBlock(reportMd);
         findings = Array.isArray(parsed?.findings) ? parsed.findings : [];
+        for (const f of findings) {
+            delete f.producer;
+            delete f.peerReview;
+        } // attribution is runner-stamped by the joins below, never model-set
+        // Q-PROVEN: join the parsed findings back to the live findings so the
+        // cell verdict reaches the report (before the accountable stamp below).
+        applyCellVerdicts(findings, ctx.liveFindings);
+        stampPeerVerdicts(findings, ctx);
     }
     // v0.17.0 accountability: every finding records the named human
     // accountable for it. Stamped mechanically by the runner at report time —
@@ -134,6 +138,7 @@ export async function reportPhase(ctx, reconBrief, exploitSummary, opts = {}) {
         for (const f of findings)
             f.accountableOperator = accountable;
     }
+    stampFindingRefs(findings, ctx.liveFindings);
     // The unified operation narrative ("Megazord"): the reporter writes it first
     // as plain paragraphs; the runner extracts it for the console header.
     const narrative = extractNarrative(reportMd);
@@ -141,8 +146,24 @@ export async function reportPhase(ctx, reconBrief, exploitSummary, opts = {}) {
         ctx.operationNarrative = narrative;
         ctx.events.updateState({ operationNarrative: narrative });
     }
+    // Snapshot for the HTML renderer's executive-summary slot: the narrative
+    // before the runner-computed sections are appended to report.md below.
+    const narrativeSource = reportMd;
     // Runner-computed facts are appended deterministically — never trusted to the model.
     reportMd += `\n\n---\n\n## Battery coverage (runner-computed)\n\n${batteryLine}\n`;
+    // The engagement grade: the embedded Seclayer anchored scoring engine
+    // is the runner's one grading voice (report/grading.ts) — deterministic,
+    // computed here from the final confirmed findings, never the model's — and never issued for a halted/blocked end (N/A, as the HTML cover renders).
+    {
+        const posture = gradeFindings(findings);
+        reportMd += `\n---\n\n${opts.haltedReason || opts.blockedReason ? `## Security grade — SecScan (anchored scoring)\n\n**Grade N/A** — engagement ${opts.blockedReason ? "blocked" : "halted"}; no grade is issued for an incomplete engagement.\n` : buildGradeSection(findings)}`;
+        ctx.events.append({
+            phase: "report",
+            actor: "runner",
+            action: "report_grade",
+            result: opts.haltedReason || opts.blockedReason ? `Security grade N/A — engagement ${opts.blockedReason ? "blocked" : "halted"}; no grade issued for an incomplete engagement.` : `Security grade ${posture.grade} (${posture.score}/100, ${posture.postureRating}) over ${posture.activeCount} confirmed finding(s) — Seclayer anchored scoring.`,
+        });
+    }
     // v0.21.0 nuclei: honest counting — template executions are variant-level
     // checks, printed whenever nuclei ran (not only full-battery), reported
     // separately from intents, never merged.
@@ -150,10 +171,12 @@ export async function reportPhase(ctx, reconBrief, exploitSummary, opts = {}) {
     if (ncAny)
         reportMd += `\n${ncAny}\n`;
     const pocBundleMap = new Map();
-    reportMd += buildProofSection(ctx, findings, pocBundleMap);
+    const proofData = buildProofSection(ctx, findings, pocBundleMap);
+    reportMd += proofData.markdown;
     // v0.18.0 per-item verdicts: the item reconciliation section — every
     // battery item's disposition, derived from the ledger (audit log +
     // verdict tools), never hand-waved. Full ledger: item-verdicts.json.
+    const itemsMark = reportMd.length;
     if (ctx.input.fullBattery && ctx.itemLedger.size > 0) {
         reportMd += `\n---\n\n## Item reconciliation (runner-computed)\n\n`;
         reportMd +=
@@ -190,15 +213,16 @@ export async function reportPhase(ctx, reconBrief, exploitSummary, opts = {}) {
                     `See Honest limits.\n`;
         }
     }
-    reportMd += buildActivitySection(readEvents(ctx.events.dir, 0, 100000));
-    reportMd += await buildIntegrationsSection(ctx, findings, pocBundleMap);
-    writeFileSync(join(ctx.events.dir, "report.md"), reportMd);
-    // The HTML twin is the human-facing deliverable — self-contained, severity
-    // colour-coded, print/PDF-ready. report.md stays as the diffable, greppable
-    // record and the input to other tooling; this is the thing a person opens.
-    // Its own try/catch: a rendering problem must not break the report itself.
+    const reportEvents = readEvents(ctx.events.dir, 0, 100000);
+    reportMd += buildActivitySection(reportEvents);
+    const integrationsMd = await buildIntegrationsSection(ctx, findings, pocBundleMap);
+    reportMd += integrationsMd;
+    // report.md + findings.csv are written after the HTML input exists
+    // (below): both render from the ONE report document when it built;
+    // the legacy assembly above is the fallback when it could not.
+    let reportInput;
     try {
-        const meta = buildEngagementMeta(ctx, findings, {
+        const totals = {
             total: lsum.total,
             confirmed: lsum.confirmed,
             executedClean: lsum.executedClean,
@@ -206,18 +230,52 @@ export async function reportPhase(ctx, reconBrief, exploitSummary, opts = {}) {
             blocked: lsum.blocked,
             na: lsum.na,
             pending: lsum.pending,
-        });
-        writeFileSync(join(ctx.events.dir, "report.html"), renderReportHtml({
-            title: "Penetration Test Report",
-            subtitle: `${ctx.input.mode === "red" ? "Full-knowledge" : "Black-box"} engagement against ${ctx.input.target}`,
+        };
+        const cells = fbStatus.map(({ t, c, s }) => ({ target: t, category: c, state: s }));
+        // Q-REPORT-DETAIL: record the posture of record, resolve the
+        // predecessor, assemble the detail input (additive — see catch).
+        let detailInput;
+        let baselineMeta;
+        try {
+            recordReportMeta(ctx, gradeFindings(findings));
+            const assembled = buildDetailInput({
+                ctx, findings, bundles: pocBundleMap, totals, cells,
+                findingMeta: buildFindingMeta(pocBundleMap, findings),
+                planOnly: fbPlanOnly, events: reportEvents,
+            });
+            detailInput = assembled.input;
+            baselineMeta = assembled.baselineMeta;
+        }
+        catch (err) {
+            ctx.events.append({ phase: "report", actor: "runner", action: "report_detail_failed", result: `Detail derivations skipped (HTML unaffected): ${err.message}` });
+        }
+        const meta = buildEngagementMeta(ctx, findings, totals);
+        if (baselineMeta)
+            meta.baseline = baselineMeta;
+        reportInput = buildEngagementReportInput({
+            ctx,
             meta,
-            markdown: reportMd,
-        }));
+            title: "Penetration Test Report",
+            findings,
+            narrativeMd: narrativeSource,
+            bundles: pocBundleMap,
+            proof: proofData,
+            cells,
+            totals,
+            planOnly: fbPlanOnly,
+            events: reportEvents,
+            haltedReason: opts.haltedReason,
+            blockedReason: opts.blockedReason,
+            detailInput,
+        });
+        writeFileSync(join(ctx.events.dir, "report.html"), renderEngagementReportHtml(reportInput));
         ctx.events.append({ phase: "report", actor: "runner", action: "report_html_written", result: "HTML report written alongside report.md." });
     }
     catch (err) {
         ctx.events.append({ phase: "report", actor: "runner", action: "report_html_failed", result: `HTML report generation failed (report.md unaffected): ${err.message}` });
     }
+    // Q-RP-2 + Q-RP-5 + Q-DELIVERABLES-AUTOFIRE + Q-REPORT-TEMPLATES: closing set — md/csv from the document, DOCX, twins, zip.
+    emitDeliverables(ctx, reportInput, { findings, totals: lsum, cells: fbStatus, haltedReason: opts.haltedReason, blockedReason: opts.blockedReason }, { legacyMd: reportMd, findings, bundles: pocBundleMap, annexes: { batteryLine, nucleiLine: ncAny || undefined, itemsMd: reportMd.slice(itemsMark), proofMd: proofData.markdown, integrationsMd } });
     ctx.events.append({ phase: "report", actor: "reporter", action: "report_written", result: `Report written (${findings.length} findings parsed).` });
     const safetyManifest = writeSafetyArtifacts(ctx);
     writeComplianceArtifacts(ctx, findings, batteryLine, safetyManifest);

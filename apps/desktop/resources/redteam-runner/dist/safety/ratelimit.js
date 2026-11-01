@@ -21,6 +21,8 @@ export const PRODUCTION_RPS_CAP = 2;
 export class TargetRateLimiter {
     rpsPerHost;
     burst;
+    /** TEST MODE: admits immediately, never waits (see RateLimitConfig.disabled). */
+    disabled;
     buckets = new Map();
     now;
     /** Total ms agents spent waiting on the limiter this engagement (manifest). */
@@ -33,6 +35,7 @@ export class TargetRateLimiter {
         }
         this.rpsPerHost = cfg.rpsPerHost;
         this.burst = cfg.burst && cfg.burst > 0 ? cfg.burst : cfg.rpsPerHost;
+        this.disabled = cfg.disabled === true;
         this.now = now;
     }
     bucket(host) {
@@ -50,6 +53,10 @@ export class TargetRateLimiter {
     }
     /** Non-blocking: true when a token is available right now. */
     tryAcquire(host) {
+        if (this.disabled) {
+            this.acquires++;
+            return true;
+        }
         const b = this.bucket(host);
         this.refill(b, this.now());
         if (b.tokens >= 1) {

@@ -3,7 +3,7 @@
  *
  * Why this exists: the runner was an MCP CLIENT only (see ../mcp.ts — it calls
  * SecScan's server). Nothing in the product offered an MCP SERVER, so a harness
- * like DeepSeek Harness had nothing to snap onto. This is that face: POST /mcp
+ * like the upstream harness had nothing to snap onto. This is that face: POST /mcp
  * on the console server, exposing the console's existing routes as MCP tools so
  * an external agent can drive and supervise an engagement.
  *
@@ -16,58 +16,66 @@
  * token, checked here because a JSON-RPC caller must receive a 401 it can
  * parse rather than the HTML login page the generic gate would serve.
  */
-import { isAuthorized } from "./auth.js";
-import { json, readJsonBody } from "./routes/http.js";
-import { TOOLS, TOOLS_BY_NAME } from "./mcp-tools.js";
-import { EXEC_TOOLS, EXEC_TOOLS_BY_NAME, LIST_LIVE_TOOL } from "./mcp-exec.js";
-const PROTOCOL_VERSION = "2025-03-26";
-const SERVER_INFO = { name: "secscan-redteam-runner", version: "0.22.0" };
+import { isAuthorized } from './auth.js';
+import { json, readJsonBody } from './routes/http.js';
+import { TOOLS, TOOLS_BY_NAME } from './mcp-tools.js';
+import { EXEC_TOOLS, EXEC_TOOLS_BY_NAME, LIST_LIVE_TOOL } from './mcp-exec.js';
+import { resolveArsenalServingConfig } from '../arsenal/config.js';
+import { ARSENAL_TOOLS, ARSENAL_TOOLS_BY_NAME, bindArsenalConfig } from '../arsenal/tools.js';
+const PROTOCOL_VERSION = '2025-03-26';
+const SERVER_INFO = { name: 'secscan-redteam-runner', version: '0.22.0' };
 function rpcOk(id, result) {
-    return { jsonrpc: "2.0", id: id ?? null, result };
+    return { jsonrpc: '2.0', id: id ?? null, result };
 }
 function rpcErr(id, code, message) {
-    return { jsonrpc: "2.0", id: id ?? null, error: { code, message } };
+    return { jsonrpc: '2.0', id: id ?? null, error: { code, message } };
 }
 /** One JSON-RPC message in, one reply out (null for notifications). */
-async function dispatch(store, r) {
+async function dispatch(store, r, arsenalEnabled) {
     switch (r.method) {
-        case "initialize":
+        case 'initialize':
             return rpcOk(r.id, {
                 protocolVersion: PROTOCOL_VERSION,
                 capabilities: { tools: { listChanged: false } },
                 serverInfo: SERVER_INFO,
             });
-        case "notifications/initialized":
-        case "notifications/cancelled":
+        case 'notifications/initialized':
+        case 'notifications/cancelled':
             return null; // notifications are never answered
-        case "ping":
+        case 'ping':
             return rpcOk(r.id, {});
-        case "tools/list":
-            // Two surfaces, deliberately in one list. The cockpit tools drive
+        case 'tools/list':
+            // Three surfaces, deliberately in one list. The cockpit tools drive
             // ENGAGEMENTS (start one, read its feed, escalate, abort); the executor
-            // tools drive the tooling INSIDE a running one (nuclei_exec, msf_exec,
-            // http_probe, ssh_exec, …), each requiring an engagementId.
+            // tools are the tooling itself (nuclei_exec, msf_exec, http_probe,
+            // ssh_exec, …) — an engagementId aims one at a running engagement,
+            // and omitting it runs the tool directly as an operator call; the arsenal
+            // tools (arsenal_search/browse/recommend) read the local Arsenal index
+            // and are present only when the arsenal is enabled.
             return rpcOk(r.id, {
                 tools: [
-                    ...TOOLS.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
+                    ...TOOLS.map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
                     {
                         name: LIST_LIVE_TOOL.name,
                         description: LIST_LIVE_TOOL.description,
                         inputSchema: LIST_LIVE_TOOL.inputSchema,
                     },
-                    ...EXEC_TOOLS.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
+                    ...EXEC_TOOLS.map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
+                    ...(arsenalEnabled
+                        ? ARSENAL_TOOLS.map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }))
+                        : []),
                 ],
             });
-        case "tools/call": {
-            const name = String(r.params?.["name"] ?? "");
-            const args = (r.params?.["arguments"] ?? {});
+        case 'tools/call': {
+            const name = String(r.params?.['name'] ?? '');
+            const args = (r.params?.['arguments'] ?? {});
             if (name === LIST_LIVE_TOOL.name) {
                 try {
-                    return rpcOk(r.id, { content: [{ type: "text", text: await LIST_LIVE_TOOL.run({}) }] });
+                    return rpcOk(r.id, { content: [{ type: 'text', text: await LIST_LIVE_TOOL.run({}) }] });
                 }
                 catch (err) {
                     return rpcOk(r.id, {
-                        content: [{ type: "text", text: `tool failed: ${err.message}` }],
+                        content: [{ type: 'text', text: `tool failed: ${err.message}` }],
                         isError: true,
                     });
                 }
@@ -75,14 +83,26 @@ async function dispatch(store, r) {
             const exec = EXEC_TOOLS_BY_NAME.get(name);
             if (exec) {
                 try {
-                    return rpcOk(r.id, { content: [{ type: "text", text: await exec.run(args) }] });
+                    return rpcOk(r.id, { content: [{ type: 'text', text: await exec.run(args) }] });
                 }
                 catch (err) {
                     // Refusals arrive here as text, not as transport errors: a tier
                     // denial or a halted target is a RESULT the model must reason about.
                     // A genuine failure (unknown engagement, transport) is isError.
                     return rpcOk(r.id, {
-                        content: [{ type: "text", text: `tool failed: ${err.message}` }],
+                        content: [{ type: 'text', text: `tool failed: ${err.message}` }],
+                        isError: true,
+                    });
+                }
+            }
+            const arsenal = arsenalEnabled ? ARSENAL_TOOLS_BY_NAME.get(name) : undefined;
+            if (arsenal) {
+                try {
+                    return rpcOk(r.id, { content: [{ type: 'text', text: await arsenal.run(args) }] });
+                }
+                catch (err) {
+                    return rpcOk(r.id, {
+                        content: [{ type: 'text', text: `tool failed: ${err.message}` }],
                         isError: true,
                     });
                 }
@@ -92,14 +112,25 @@ async function dispatch(store, r) {
                 return rpcErr(r.id, -32602, `unknown tool: ${name}`);
             try {
                 const out = await tool.run(store, args);
-                const text = typeof out.body === "string" ? out.body : JSON.stringify(out.body, null, 2);
+                const text = typeof out.body === 'string' ? out.body : JSON.stringify(out.body, null, 2);
                 // A 4xx from a handler is a tool-level failure the model should see and
                 // reason about, not a transport error — so it rides in the result.
-                return rpcOk(r.id, { content: [{ type: "text", text }], isError: out.status >= 400 });
+                // A body carrying a speaker stamp (ui/speaker.ts) also rides as
+                // structuredContent — the same data as the text, in machine form —
+                // so the harness can persist the stamp with the session record.
+                // The JSON round-trip keeps it identical to what the text shows.
+                const structured = out.status < 400 && typeof out.body === 'object' && out.body !== null && 'speaker' in out.body
+                    ? JSON.parse(text)
+                    : undefined;
+                return rpcOk(r.id, {
+                    content: [{ type: 'text', text }],
+                    ...(structured ? { structuredContent: structured } : {}),
+                    isError: out.status >= 400,
+                });
             }
             catch (err) {
                 return rpcOk(r.id, {
-                    content: [{ type: "text", text: `tool failed: ${err.message}` }],
+                    content: [{ type: 'text', text: `tool failed: ${err.message}` }],
                     isError: true,
                 });
             }
@@ -110,12 +141,12 @@ async function dispatch(store, r) {
 }
 /** POST /mcp — one JSON-RPC message per request, stateless. */
 export async function handleMcp(store, token, reqIn, res) {
-    if ((reqIn.method ?? "GET") !== "POST") {
-        json(res, 405, rpcErr(null, -32600, "use POST"));
+    if ((reqIn.method ?? 'GET') !== 'POST') {
+        json(res, 405, rpcErr(null, -32600, 'use POST'));
         return;
     }
     if (!isAuthorized(reqIn, token)) {
-        json(res, 401, rpcErr(null, -32001, "unauthorized: send the console token as a Bearer header"));
+        json(res, 401, rpcErr(null, -32001, 'unauthorized: send the console token as a Bearer header'));
         return;
     }
     let parsed;
@@ -126,21 +157,30 @@ export async function handleMcp(store, token, reqIn, res) {
         json(res, 400, rpcErr(null, -32700, `parse error: ${err.message}`));
         return;
     }
+    // Arsenal surface: resolve the serving config for THIS server's
+    // engagements dir and bind it for the tool handlers, so the index path
+    // follows the console's real data home — including an existing index at
+    // the REDTEAM_HOME convention when the canonical desktop path has none
+    // yet. Resolution throws on a misconfigured REDTEAM_ARSENAL_* variable —
+    // fail loud rather than serve a misbound index (the server's route
+    // catch turns the throw into a 500).
+    const arsenalConfig = resolveArsenalServingConfig(process.env, { engagementsDir: store.engagementsDir });
+    bindArsenalConfig(arsenalConfig);
     // Batch: an array of requests gets an array of responses.
     if (Array.isArray(parsed)) {
         const out = [];
         for (const one of parsed) {
-            const reply = await dispatch(store, one);
+            const reply = await dispatch(store, one, arsenalConfig.enabled);
             if (reply)
                 out.push(reply);
         }
         json(res, 200, out);
         return;
     }
-    const reply = await dispatch(store, parsed);
+    const reply = await dispatch(store, parsed, arsenalConfig.enabled);
     if (reply === null) {
         // A notification still needs a transport-level acknowledgement.
-        res.writeHead(202, { "Content-Type": "application/json", "Content-Length": 0 });
+        res.writeHead(202, { 'Content-Type': 'application/json', 'Content-Length': 0 });
         res.end();
         return;
     }

@@ -1,5 +1,6 @@
 import { BATTERY_CATEGORIES } from '../battery.js';
 import { TARGET_PROFILES, activeTargets, targetCellStatus } from '../targets.js';
+import { memoryDigestLine } from '../memory/lifecycle.js';
 /**
  * Runner-computed battery coverage line. Generic engagements: 3 global
  * categories. Full-battery engagements: 3 categories × selected targets
@@ -40,6 +41,12 @@ export function sharedStateDigest(ctx, phase) {
         parts.push(`OPSEC cooldowns: ${ctx.opsecCooldown.size}`);
     if (ctx.redirects)
         parts.push(`redirects used: ${ctx.redirects}/2`);
+    // Q-MEMTIER: one line when a recall pack exists (survivor counts by
+    // tier + receipt id); memoryDigestLine returns null otherwise. The
+    // 1600-char cap below applies to the joined digest as before.
+    const memoryLine = memoryDigestLine(ctx);
+    if (memoryLine)
+        parts.push(memoryLine);
     const s = parts.join('\n');
     return s.length > 1600 ? s.slice(0, 1600) + '…' : s;
 }

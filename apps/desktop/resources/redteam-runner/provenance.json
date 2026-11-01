@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "package": "@secscan/redteam-runner",
-  "version": "0.37.1",
+  "version": "0.1.7-rc.7",
   "source": "/home/hatch/workspace/secscan-redteam-desktop/apps/redteam-runner",
   "lockfile": {
     "source": "/home/hatch/workspace/secscan-redteam-desktop/pnpm-lock.yaml",
-    "sha256": "eb5320a0541c67760ff73372083b7a1260ec12e29245a6d39fd6af115fcdf8c6"
+    "sha256": "72f5cfe52b19731f302272612643282b558369e32a374691fcb146dece52e472"
   },
   "packages": [
     {
@@ -22,11 +22,15 @@
     },
     {
       "name": "@secscan/redteam-auth-gate",
-      "version": "0.1.0"
+      "version": "0.1.7-rc.7"
+    },
+    {
+      "name": "@secscan/redteam-fleet-skills",
+      "version": "0.1.7-rc.7"
     },
     {
       "name": "@secscan/redteam-llm-router",
-      "version": "0.2.0"
+      "version": "0.1.7-rc.7"
     },
     {
       "name": "abort-controller",
@@ -67,6 +71,10 @@
     {
       "name": "fast-xml-parser",
       "version": "5.11.1"
+    },
+    {
+      "name": "fflate",
+      "version": "0.8.2"
     },
     {
       "name": "ieee754",
@@ -129,6 +137,10 @@
       "version": "0.14.5"
     },
     {
+      "name": "undici",
+      "version": "7.28.0"
+    },
+    {
       "name": "uuid",
       "version": "8.3.2"
     },
@@ -140,6 +152,34 @@
       "name": "xml-naming",
       "version": "0.3.0"
     }
+  ],
+  "charterAssets": [
+    "node_modules/@secscan/redteam-llm-router/lib/charter/charter.md",
+    "node_modules/@secscan/redteam-llm-router/lib/charter/exemplars.md",
+    "node_modules/@secscan/redteam-llm-router/lib/charter/soul.md"
+  ],
+  "fleetSkillsAssets": [
+    "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/skills/blackteam-adversary-emulation/SKILL.md",
+    "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/skills/browser-action-execution/SKILL.md",
+    "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/skills/deep-research-osint/SKILL.md",
+    "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/skills/exploit-coding-toolbuilding/SKILL.md",
+    "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/skills/findings-grading-reporting/SKILL.md",
+    "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/skills/html-report-design/SKILL.md",
+    "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/skills/redteam-ops-coordination/SKILL.md",
+    "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/skills/webapp-exploit/SKILL.md",
+    "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/skills/webapp-scan/SKILL.md",
+    "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/prompts/master.md",
+    "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/prompts/seats/coder.md",
+    "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/prompts/seats/coordinator.md",
+    "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/prompts/seats/evaluator-reporter.md",
+    "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/prompts/seats/exploiter.md",
+    "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/prompts/seats/recon-research.md",
+    "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/prompts/souls/architect.md",
+    "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/prompts/souls/morpheus.md",
+    "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/prompts/souls/neo.md",
+    "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/prompts/souls/operator.md",
+    "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/prompts/souls/smith.md",
+    "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/prompts/souls/tank.md"
   ],
   "excludedOptionalDependencies": [
     {

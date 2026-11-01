@@ -51,7 +51,7 @@ export const XTOOLS = [
         envBin: "REDTEAM_SQLMAP_BIN",
         envDir: "REDTEAM_SQLMAP_DIR",
         purpose: "detect and confirm SQL injection against ONE scope-checked URL",
-        command: () => ["python", "sqlmap.py"],
+        command: () => [process.platform === "win32" ? "python" : "python3", "sqlmap.py"],
         profiles: [
             { id: "detect", description: "Non-destructive detection only — no data extraction.", minTier: 1, args: ["--batch", "--smart", "--level", "1", "--risk", "1"], target: "flag" },
             { id: "enumerate", description: "Detection plus DBMS banner and current user/db. Still read-only.", minTier: 1, args: ["--batch", "--level", "2", "--risk", "1", "--banner", "--current-user", "--current-db"], target: "flag" },

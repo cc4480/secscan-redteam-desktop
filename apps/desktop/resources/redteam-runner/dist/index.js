@@ -12,8 +12,9 @@
  * ```
  *
  * Credentials come from the environment (Secure Vault), never from code:
- *   SECSCAN_MCP_TOKEN, DEEPSEEK_API_KEY, QWEN_API_KEY (optional since v0.6 â€”
- *   DeepSeek-only policy), SECSCAN_MCP_URL (optional).
+ *   MODEL_API_KEY (Meta Model API — the fleet’s provider key; DEEPSEEK_API_KEY
+ *   remains supported), QWEN_API_KEY (optional since v0.6), SECSCAN_MCP_TOKEN +
+ *   SECSCAN_MCP_URL (optional — only the REDTEAM_VERIFY_VIA_SERVICE=1 opt-in reads them).
  *
  * Console bridge: the console's "start engagement" action writes an
  * EngagementInput JSON file into the queue dir; `watchQueue()` picks it up
@@ -29,13 +30,14 @@ import { parseTier } from "./accountability/index.js";
 export { runEngagement, resolveConfig } from "./phases.js";
 export * from "./workflows/commands.js";
 export * from "./workflows/protocol.js";
+export * from "./memory/index.js";
 export { readEvents, readState };
 export { TECHNIQUES, lookupTechnique, defaultExcludedForMode, resolveExcludedTechniques, ALWAYS_EXCLUDED } from "./attack.js";
 export { BATTERY, BATTERY_CATEGORIES, CATEGORY_LABELS, batteryChecklistText, batteryItemsFor, lookupBatteryItem, } from "./battery.js";
 export { scopeHosts, urlInScope, inBlackout, inTestWindow, techniqueAllowed, checkAuthorization, checkScopeAuthorization } from "./gate.js";
 export { isPrivateOrLoopbackHost, validateProbeTarget } from "./prober.js";
 export { COMPLIANCE_CONTROLS, METHODOLOGY_EXCLUSIONS, METHODOLOGY_TOOLS, TECHNIQUE_CONTROL_MAP, allBatteryAttackIds, buildCompliancePack, buildRetestEvidence, controlsForTechnique, invalidMappedControlIds, lookupControl, renderAttestationLetter, renderCompliancePackMarkdown, unmappedBatteryTechniques, } from "./compliance/index.js";
-export { TargetRateLimiter, TargetAutoHalt, ScopeGuard, HostSet, classifyScopeEntry, extractTargets, commandUsesNetworkTool, buildSafetyManifest, renderSafetyManifestMarkdown, buildZeroDisruptionRecord, disruptionVerdict, redactPii, piiPatternLabels, parseEnvironment, productionConfirmed, requireGraduation, resolveEffectiveRps, isTargetDistress, PROTECTIONS_IN_FORCE, RESIDUAL_RISKS, SAFETY_MANIFEST_VERSION, } from "./safety/index.js";
+export { TargetRateLimiter, ScopeGuard, HostSet, classifyScopeEntry, extractTargets, commandUsesNetworkTool, buildSafetyManifest, renderSafetyManifestMarkdown, buildZeroDisruptionRecord, disruptionVerdict, redactPii, piiPatternLabels, parseEnvironment, productionConfirmed, requireGraduation, resolveEffectiveRps, PROTECTIONS_IN_FORCE, RESIDUAL_RISKS, SAFETY_MANIFEST_VERSION, } from "./safety/index.js";
 export { loadWatchProfile, checkScopeFresh, profileHome, alertSeverities, emptyBaseline, loadBaseline, saveBaseline, findingKey, bundlePathFor, classifyDrift, resolveMissingDrift, buildDriftReport, applyDriftToBaseline, touchBaselineEntries, remediateBaselineEntries, flagBaselineNeedsReview, renderDriftMarkdown, runWatchCycle, watchLoop, WATCH_PROFILE_VERSION, BASELINE_VERSION, } from "./continuous/index.js";
 /** Where the console drops engagement requests. REDTEAM_HOME-aware. */
 function defaultQueueDir() {

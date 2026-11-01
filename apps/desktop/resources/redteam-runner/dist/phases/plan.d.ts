@@ -1,3 +1,6 @@
+/**
+ * Planning phase (v0.19.0 refactor — extracted from phases.ts).
+ */
 import { type Ctx } from "../context.js";
 export declare function planPhase(ctx: Ctx, critique?: string): Promise<void>;
 /**

@@ -12,6 +12,9 @@ export interface UiLaunchRequest {
     client?: string;
     operatorName?: string;
     fullBattery?: boolean;
+    /** Q-RP-11 local-host engagement: target/scope are the app's own
+     * machine; carried into EngagementInput.localHost at launch. */
+    localHost?: boolean;
     /** Cap on agent actions; default 60. Raise for full-battery work. */
     maxActions?: number;
     targets?: string[];
@@ -35,8 +38,8 @@ export interface StoredEngagement {
      */
     target?: string;
     mode?: string;
-    /** Set while the engagement is live in this process (kill-switch handle). */
-    abort?: (reason: string) => void;
+    /** True while the engagement's run is in flight in this process. */
+    running?: boolean;
     error?: string;
 }
 /** Background job (reverify-execute, watch trigger). */

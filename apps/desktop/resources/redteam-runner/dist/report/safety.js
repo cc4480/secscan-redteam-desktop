@@ -16,7 +16,6 @@ export function writeSafetyArtifacts(ctx) {
     try {
         const events = readEvents(ctx.events.dir);
         const zeroDisruption = buildZeroDisruptionRecord(events);
-        const ah = ctx.safety.autoHalt;
         safetyManifest = buildSafetyManifest({
             engagementId: ctx.events.engagementId,
             environment: ctx.safety.environment,
@@ -27,15 +26,10 @@ export function writeSafetyArtifacts(ctx) {
             productionCapApplied: ctx.safety.productionCapApplied,
             throttledMs: Math.round(ctx.safety.limiter.throttledMs),
             acquires: ctx.safety.limiter.acquires,
-            killSwitchAborts: ctx.safety.killSwitchAborts,
             operator: ctx.input.operatorName || process.env["REDTEAM_OPERATOR"]?.trim() || "(operator name not supplied — set REDTEAM_OPERATOR)",
-            autoHalt: {
-                consecutiveThreshold: ah.config.consecutiveThreshold,
-                windowSize: ah.config.windowSize,
-                windowFailureRate: ah.config.windowFailureRate,
-                haltedTargets: ah.haltedHosts(),
-                haltCount: ah.halts,
-            },
+            // Q-LOCKOUT: the interlock's numbers ride the manifest (§5.6 — if
+            // it is not in the manifest, it did not happen).
+            lockout: ctx.safety.lockout?.manifestData(),
             zeroDisruption,
             disruptionVerdict: disruptionVerdict(zeroDisruption),
             // v0.17.0 accountability: the autonomy tier and its approval trail are

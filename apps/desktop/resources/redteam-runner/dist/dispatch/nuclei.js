@@ -3,15 +3,16 @@
  *
  * Mirrors the msf_exec dispatcher shape: ROE technique check, explicit
  * targetProfile pinning (windows|linux, never inferred), exploit-phase
- * gating for `run`, kill-switch controller registration, DENIED/ABORTED
- * mapping, coverage counting, per-item attempt recording.
+ * gating for `run`, per-call abort signal, DENIED/ABORTED mapping,
+ * coverage counting, per-item attempt recording.
  */
 import { BATTERY_CATEGORIES } from "../battery.js";
 import { isTargetId } from "../targets.js";
 import { techniqueAllowed } from "../gate.js";
 import { sleep } from "../util.js";
+import { toolTimeoutResult } from "./timeout.js";
 import { noteCategoryCoverage, strListArg } from "./prelude.js";
-import { mapTemplateToBattery, overlapHint } from "../nuclei/index.js";
+import { mapTemplateToBattery, overlapHint, resolveNucleiTimeoutS } from "../nuclei/index.js";
 function strArg(args, key) {
     const v = args[key];
     return typeof v === "string" && v.trim() ? v.trim() : undefined;
@@ -22,7 +23,7 @@ export async function handleNucleiTools(ctx, _role, phase, call, args) {
     const attackId = strArg(args, "attackId")?.toUpperCase();
     const rawCat = (strArg(args, "category") ?? "").toLowerCase();
     const category = BATTERY_CATEGORIES.includes(rawCat) ? rawCat : undefined;
-    if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe)) {
+    if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe, { testMode: ctx.config?.testMode === true })) {
         return { result: `DENIED by ROE: technique ${attackId} is excluded for this engagement.`, attackId, target: String(args["host"] ?? "") };
     }
     const rawTp = (strArg(args, "targetProfile") ?? "").toLowerCase();
@@ -45,12 +46,10 @@ export async function handleNucleiTools(ctx, _role, phase, call, args) {
     ctx.probesUsed++;
     noteCategoryCoverage(ctx, category, rawTp);
     const ctrl = new AbortController();
-    ctx.hostKill.controllers.add(ctrl);
     try {
         if (ctx.input.mode === "black")
             await sleep(Math.random() * 2500); // jitter
         const exec = ctx.nucleiExecutor;
-        exec.killSwitch = ctx.hostKill;
         const filter = {
             ids: strListArg(args, "ids"),
             tags: strListArg(args, "tags"),
@@ -75,7 +74,13 @@ export async function handleNucleiTools(ctx, _role, phase, call, args) {
         if (res.refused)
             return { result: `DENIED by nuclei safety policy: ${res.refused}`, attackId, target: host };
         if (res.timedOut) {
-            return { result: `ABORTED: nuclei run timed out at the runner timeout — target ${host}. Partial results below.\n${res.output}`, attackId, target: host };
+            // Q-TOOLTIMEOUT §2.5 adoption: the executor-timeout path returns the
+            // typed TOOL_TIMEOUT result (budget = the executor's own spawn
+            // deadline), never the old ABORTED free text — a timeout of our own
+            // tool is not target distress. Partial output rides after the
+            // canonical text.
+            const t = toolTimeoutResult({ toolName: "nuclei_exec", timeoutMs: resolveNucleiTimeoutS() * 1000 + 15000, target: host });
+            return { ...t, result: res.output ? `${t.result} Partial results below.\n${res.output}` : t.result, attackId };
         }
         // Honest counting: template executions are variant-level checks, tracked
         // separately from the 418 intents (see nuclei/reporting.ts).
@@ -91,7 +96,6 @@ export async function handleNucleiTools(ctx, _role, phase, call, args) {
         return { result: `${res.summary}\n${res.output}${hintBlock}`, attackId, target: host };
     }
     finally {
-        ctx.hostKill.controllers.delete(ctrl);
     }
 }
 //# sourceMappingURL=nuclei.js.map

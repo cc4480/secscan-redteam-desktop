@@ -3,8 +3,9 @@
  *
  * Covers what the bridge needs: auth, module search, console-based module
  * execution WITH output capture (the evidence for "command execution
- * achieved"), and session hygiene (a validation payload must never leave a
- * session behind — any unexpected session is stopped immediately).
+ * achieved"), session read/write for registered sessions, and session
+ * hygiene (a session no validated run registered is stopped immediately;
+ * a Meterpreter run's own session is registered, never stopped by hygiene).
  *
  * All methods throw MsfTransportError / MsfAuthError on failure; callers
  * translate those into DENIED/failed results with redacted messages.
@@ -72,7 +73,7 @@ export class MsfClient {
             };
         });
     }
-    /** Current sessions (id → info). Used for hygiene: validation runs must not leave sessions. */
+    /** Current sessions (id → info). The executor diffs this list around a run: an unregistered newcomer is stopped by hygiene; a Meterpreter run's session is registered from it. */
     async sessionList() {
         const res = await this.call("session.list", []);
         const out = {};
@@ -84,6 +85,19 @@ export class MsfClient {
         await this.call("session.stop", [id]);
     }
     /**
+     * Write to a live Meterpreter session's command channel (W8 session
+     * interaction). Only the session manager calls this, and only for
+     * sessions it registered from a validated exploit run.
+     */
+    async sessionMeterpreterWrite(id, data) {
+        await this.call("session.meterpreter_write", [id, data]);
+    }
+    /** Drain a Meterpreter session's pending output. Returns "" when idle. */
+    async sessionMeterpreterRead(id) {
+        const res = await this.call("session.meterpreter_read", [id]);
+        return asString(res["data"]);
+    }
+    /**
      * Run a module in a throwaway console and capture its output.
      *
      * Flow: console.create → `use <type>/<fullname>` → `set` each option →
@@ -91,7 +105,7 @@ export class MsfClient {
      * (foreground, so output streams to the console) → poll console.read
      * until idle/timeout/abort → console.destroy (always).
      *
-     * The console is destroyed on abort — that is the kill switch for a
+     * The console is destroyed on abort — that is the call signal for a
      * running module: destroying the console kills whatever it was doing.
      */
     async runModuleConsole(args) {
@@ -136,7 +150,7 @@ export class MsfClient {
                 await write(`run\n`);
                 const deadline = Date.now() + args.timeoutMs;
                 // Race each poll against the abort signal: a hanging console.read
-                // must not delay the kill switch. The dangling read promise is
+                // must not delay the abort. The dangling read promise is
                 // harmless — we break out and destroy the console.
                 const abortedPromise = new Promise((resolve) => {
                     if (args.signal?.aborted)

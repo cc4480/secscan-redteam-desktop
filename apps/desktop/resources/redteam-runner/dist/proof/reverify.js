@@ -148,16 +148,12 @@ export async function reverifyBundle(bundle, runner, opts = {}) {
 /**
  * Production StepRunner: replays bundle steps through the real executors.
  * Scope is enforced by the executors themselves (fail closed); credentials
- * resolve fresh from env; the kill switch aborts via SIGINT wiring in the CLI.
+ * resolve fresh from env.
  */
 export function createReplayer(opts) {
     const env = opts.env ?? process.env;
     const hostExec = new HostExecutor({ env });
     const msfExec = new MsfExecutor({ env });
-    if (opts.killSwitch) {
-        hostExec.killSwitch = opts.killSwitch;
-        msfExec.killSwitch = opts.killSwitch;
-    }
     const scope = opts.scope;
     return async (step, marker) => {
         const replay = step.replay;

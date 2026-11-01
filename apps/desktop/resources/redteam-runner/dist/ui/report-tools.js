@@ -1,0 +1,166 @@
+/**
+ * The report half of the chat-shaped engagement surface
+ * (engagement-tools.ts owns launch + status): delivery of the finished
+ * report, and — the repair path the deliverables diagnosis required —
+ * regeneration of the deliverable set from an engagement's recorded
+ * state when a closing artifact is missing.
+ */
+import { join } from "node:path";
+import { engagementDir } from "./store.js";
+import { readEvents, readState } from "../events.js";
+import { findingSpeakers, reportAuthorSpeaker } from "./speaker.js";
+import { DELIVERABLE_FILES, deliverableToolFields, verifyDeliverables } from "../report/deliverables.js";
+import { regenerateReport } from "../report/regenerate.js";
+const ID_ONLY = () => ({
+    type: "object",
+    properties: { id: { type: "string", description: "Engagement id" } },
+    required: ["id"],
+    additionalProperties: false,
+});
+/**
+ * Per-finding speaker stamps from a report.json body: the recorded
+ * findings' producers, stamped by the runner at record time. An
+ * unreadable or absent report.json yields no stamps.
+ *
+ * @param raw - The report.json text, or null when absent.
+ * @returns Finding-id → speaker stamp, possibly empty.
+ */
+function reportJsonSpeakers(raw) {
+    if (!raw)
+        return {};
+    try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed.findings) ? findingSpeakers(parsed.findings) : {};
+    }
+    catch {
+        return {};
+    }
+}
+/** engagement_report — the finished report, for delivery in the thread. */
+export const reportTool = {
+    name: "engagement_report",
+    description: "The finished report for an engagement: the report content for delivery in the thread, plus the in-app artifact paths. " +
+        "Returns ready:false while the run is still going — keep polling engagement_status instead of treating that as an error. " +
+        "When the result names a speaker, that is the fleet seat whose recorded execution authored the report — attribute the delivery to that seat.",
+    inputSchema: ID_ONLY(),
+    run: async (store, a) => {
+        const id = String(a["id"] ?? "");
+        const content = store.readTextArtifact(id, "report.md");
+        if (content === null) {
+            // No report file: distinguish a run that has not finished from an id
+            // nothing knows. The store record or a state file proves existence.
+            const dir = engagementDir(store.engagementsDir, id);
+            const st = dir ? readState(dir) : null;
+            const rec = store.get(id);
+            if (!st && !rec)
+                return { status: 404, body: { error: "unknown engagement" } };
+            const status = st?.status ?? rec?.status ?? "starting";
+            return {
+                status: 200,
+                body: {
+                    id,
+                    ready: false,
+                    status,
+                    ...(st ? { phase: st.phase } : {}),
+                    summary: `Engagement ${id} has no report yet (status: ${status}). Keep polling engagement_status; the report lands when the run completes.`,
+                },
+            };
+        }
+        // report.md exists, so state.json does too (engagementDir requires it)
+        // and the directory join is safe. Q-DELIVERABLES-AUTOFIRE: deliverableToolFields.
+        const dir = engagementDir(store.engagementsDir, id);
+        // Speaker stamps (ui/speaker.ts): the report's author, present only
+        // when the reporter loop genuinely ran (a halted/blocked end's
+        // mechanical report names no author), and per-finding producers
+        // from the recorded report.json.
+        const st = readState(dir);
+        const speaker = st
+            ? reportAuthorSpeaker(readEvents(dir, Math.max(0, st.eventCount - 1000), 1000))
+            : undefined;
+        const speakers = reportJsonSpeakers(store.readTextArtifact(id, "report.json"));
+        return {
+            status: 200,
+            body: {
+                id,
+                ready: true,
+                reportPath: join(dir, "report.md"),
+                ...deliverableToolFields(dir),
+                ...(speaker ? { speaker } : {}),
+                ...(Object.keys(speakers).length > 0 ? { findingSpeakers: speakers } : {}),
+                content,
+                summary: `Report for engagement ${id} is ready. Deliver it in this thread — it lives in the app; do not link out to any external report.`,
+            },
+        };
+    },
+};
+/** Recorded ends regeneration may run on — a live run owns its own
+ * report phase and must never be re-fired underneath it. */
+const TERMINAL_STATUSES = new Set(["complete", "halted", "blocked"]);
+/** engagement_regenerate_report — re-fire report generation for a
+ * recorded engagement end whose deliverable set is incomplete. */
+export const regenerateTool = {
+    name: "engagement_regenerate_report",
+    description: "Re-fire report generation for a finished engagement whose deliverable set is incomplete (engagement_status names the " +
+        "missing files): reassembles report.html and the sibling artifacts from the engagement's recorded state and verifies " +
+        "the full set on disk. A complete set is a no-op success. Runs only on a recorded end (complete / halted / blocked) — " +
+        "never on a live run — and only on an engagement that exists.",
+    inputSchema: ID_ONLY(),
+    run: async (store, a) => {
+        const id = String(a["id"] ?? "");
+        const dir = engagementDir(store.engagementsDir, id);
+        if (!dir) {
+            if (store.get(id)) {
+                return {
+                    status: 409,
+                    body: { error: `engagement ${id} has no recorded state yet — there is nothing to regenerate from` },
+                };
+            }
+            return { status: 404, body: { error: "unknown engagement" } };
+        }
+        const st = readState(dir);
+        if (!st)
+            return { status: 404, body: { error: "unknown engagement" } };
+        if (store.get(id)?.running || !TERMINAL_STATUSES.has(st.status)) {
+            return {
+                status: 409,
+                body: {
+                    error: `engagement ${id} is ${store.get(id)?.running ? "still running" : `not at a recorded end (status: ${st.status})`} — ` +
+                        "regeneration runs on a recorded end; poll engagement_status instead",
+                },
+            };
+        }
+        const before = verifyDeliverables(dir);
+        if (before.ok && st.deliverableFailed !== true) {
+            return {
+                status: 200,
+                body: {
+                    id,
+                    regenerated: false,
+                    ...deliverableToolFields(dir),
+                    summary: `Engagement ${id}'s deliverable set is already complete (${DELIVERABLE_FILES.join(", ")}) — nothing to regenerate. ` +
+                        "Deliver it with engagement_report.",
+                },
+            };
+        }
+        try {
+            const outcome = regenerateReport(dir);
+            return {
+                status: 200,
+                body: {
+                    id,
+                    regenerated: true,
+                    ok: outcome.ok,
+                    ...deliverableToolFields(dir),
+                    ...(outcome.ok ? {} : { missing: outcome.missing }),
+                    summary: outcome.ok
+                        ? `Deliverable set for engagement ${id} regenerated from its recorded state and verified complete: ${DELIVERABLE_FILES.join(", ")}. Deliver it with engagement_report.`
+                        : `Regeneration for engagement ${id} ran but the set is still incomplete — missing: ${outcome.missing.join(", ")}. The gap is recorded on the engagement's deliverable_failed record.`,
+                },
+            };
+        }
+        catch (err) {
+            return { status: 500, body: { error: `report regeneration failed for engagement ${id}: ${err.message}` } };
+        }
+    },
+};
+//# sourceMappingURL=report-tools.js.map

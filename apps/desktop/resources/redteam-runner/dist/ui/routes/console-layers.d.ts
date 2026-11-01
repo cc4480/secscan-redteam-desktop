@@ -29,6 +29,6 @@
  *              baseRuns, candidateRuns }
  * (nullable fields above are `string | null` / `number | null` unless noted.)
  */
-import type { ServerResponse } from 'node:http'
-import type { UiStore } from '../store.js'
-export declare function handleConsoleLayers(store: UiStore, res: ServerResponse): void
+import type { ServerResponse } from 'node:http';
+import type { UiStore } from '../store.js';
+export declare function handleConsoleLayers(store: UiStore, res: ServerResponse): void;

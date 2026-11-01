@@ -16,6 +16,12 @@ export interface HostExecDeps {
     krb?: (env: NodeJS.ProcessEnv) => KrbTransport;
     nfs?: () => NfsTransport;
     env?: NodeJS.ProcessEnv;
+    /**
+     * TEST MODE (REDTEAM_TEST_MODE): preflight skips the destructive-command
+     * denylist. Set from the resolved runner config in phases/run.ts; the
+     * bypass is recorded by dispatch (dispatch/host.ts) per call. Default false.
+     */
+    testMode?: boolean;
 }
 export interface HostExecResult {
     ok: boolean;

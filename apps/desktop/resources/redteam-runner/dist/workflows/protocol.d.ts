@@ -36,7 +36,8 @@ export interface ReportContract {
         readonly required: boolean;
         readonly content: string;
     }[];
-    /** Rendered in addition to the Markdown twin. */
+    /** The deliverable set: the report twins, the findings sheet, the
+     * editable DOCX copy, and the package zip carrying them all. */
     readonly formats: readonly string[];
     readonly severityScale: readonly string[];
 }

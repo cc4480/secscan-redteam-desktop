@@ -1,60 +1,72 @@
-/**
- * Shared-state tool handlers: registry, target map, findings, verdicts, abort (v0.19.0 refactor — extracted from dispatch.ts).
- */
-import { HaltError } from "../context.js";
-import { queryRegistry, loadRegistryFile } from "../registry.js";
-import { redactPii } from "../safety/index.js";
-import { resolveItemKey, setDisposition } from "../coverage/items.js";
-import { syncLiveFindingsToState, writeFindingToRegistry, writeKilledToRegistry } from "./verdicts.js";
-import { closeVariantExpansion, startVariantExpansion } from "../variants/index.js";
-import { optStr } from "./prelude.js";
+import { queryRegistry, loadRegistryFile } from '../registry.js';
+import { redactPii } from '../safety/index.js';
+import { resolveItemKey, setDisposition } from '../coverage/items.js';
+import { syncLiveFindingsToState, writeFindingToRegistry, writeKilledToRegistry } from './verdicts.js';
+import { adjudicateRecordedClaim } from '../exploit-cell/live.js';
+import { closeVariantExpansion, startVariantExpansion } from '../variants/index.js';
+import { optStr } from './prelude.js';
+import { readSpill } from '../tool-spill.js';
 export async function handleBookkeepingTools(ctx, role, phase, call, args) {
-    if (!["query_registry", "update_target_map", "record_finding", "record_killed", "record_item_verdict", "abort_engagement", "variant_list"].includes(call.name))
+    if (!['query_registry', 'update_target_map', 'record_finding', 'record_killed', 'record_item_verdict', 'variant_list', 'read_spill'].includes(call.name))
         return null;
-    if (call.name === "query_registry") {
-        const limit = Math.min(Math.max(Number(args["limit"] ?? 5) || 5, 1), 10);
+    if (call.name === 'read_spill') {
+        // Sandbox lives in tool-spill.ts (mechanical, unit-tested): only this
+        // engagement's own spill/<file>.txt references resolve; everything else
+        // is a plain error result, never a throw into the loop.
+        const path = optStr(args['path']);
+        if (!path)
+            return { result: 'read_spill: a spill path is required — the observation notice names it (e.g. "spill/0007-http_probe.txt").', target: 'spill' };
+        const r = readSpill({
+            dir: ctx.events.dir,
+            path,
+            offsetChars: typeof args['offsetChars'] === 'number' ? args['offsetChars'] : undefined,
+            maxChars: typeof args['maxChars'] === 'number' ? args['maxChars'] : undefined,
+        });
+        return { result: r.ok ? r.text : r.error, target: 'spill' };
+    }
+    if (call.name === 'query_registry') {
+        const limit = Math.min(Math.max(Number(args['limit'] ?? 5) || 5, 1), 10);
         // Read the file, not the snapshot: a concurrent engagement's write-through
         // updates the file but not this ctx's copy, so the snapshot is stale.
         const registry = loadRegistryFile(ctx.registryPath) ?? ctx.registry;
         const hits = queryRegistry(registry, {
-            vulnClass: optStr(args["vulnClass"]),
-            stack: optStr(args["stack"]) ?? ctx.fingerprint.stack.join(","),
-            appType: optStr(args["appType"]) ?? ctx.fingerprint.appType,
-            attackId: optStr(args["attackId"]),
+            vulnClass: optStr(args['vulnClass']),
+            stack: optStr(args['stack']) ?? ctx.fingerprint.stack.join(','),
+            appType: optStr(args['appType']) ?? ctx.fingerprint.appType,
+            attackId: optStr(args['attackId']),
             limit,
         });
-        for (const h of hits) {
-            if (!ctx.registryHits.some((e) => e.id === h.id))
+        for (const h of hits)
+            if (!ctx.registryHits.some(e => e.id === h.id))
                 ctx.registryHits.push(h);
-        }
         if (hits.length === 0) {
             return {
-                result: "Registry: no relevant entries for this target profile — uncharted territory. Proceed from first principles and write back everything you learn.",
-                target: "registry",
+                result: 'Registry: no relevant entries for this target profile — uncharted territory. Proceed from first principles and write back everything you learn.',
+                target: 'registry',
             };
         }
-        const lines = hits.map((h) => h.kind === "confirmed"
-            ? `[CONFIRMED] ${h.vulnClass} (${h.attackId ?? "?"} ${h.technique}) — payload: ${h.payloadPattern} — ${h.engagementId} ${h.date}`
+        const lines = hits.map(h => h.kind === 'confirmed'
+            ? `[CONFIRMED] ${h.vulnClass} (${h.attackId ?? '?'} ${h.technique}) — payload: ${h.payloadPattern} — ${h.engagementId} ${h.date}`
             : `[KILLED — exact attempt dead; class still in play with a different angle] ${h.hypothesis} — killing observation: ${h.killingObservation} — ${h.engagementId} ${h.date}`);
-        return { result: `Registry hits (${hits.length}):\n${lines.join("\n")}`, target: "registry" };
+        return { result: `Registry hits (${hits.length}):\n${lines.join('\n')}`, target: 'registry' };
     }
-    if (call.name === "update_target_map") {
-        const entries = Array.isArray(args["entries"]) ? args["entries"] : [];
+    if (call.name === 'update_target_map') {
+        const entries = Array.isArray(args['entries']) ? args['entries'] : [];
         let added = 0;
         for (const e of entries) {
-            const area = String(e["area"] ?? "").slice(0, 200);
-            const method = (optStr(e["method"]) ?? "GET").toUpperCase().slice(0, 12);
+            const area = String(e['area'] ?? '').slice(0, 200);
+            const method = (optStr(e['method']) ?? 'GET').toUpperCase().slice(0, 12);
             if (!area)
                 continue;
-            if (ctx.targetMap.some((t) => t.method === method && t.area === area))
+            if (ctx.targetMap.some(t => t.method === method && t.area === area))
                 continue;
             ctx.targetMap.push({
                 area,
                 method,
-                params: optStr(e["params"])?.slice(0, 200),
-                authState: optStr(e["authState"])?.slice(0, 60),
-                attackId: optStr(e["attackId"])?.toUpperCase(),
-                notes: optStr(e["notes"])?.slice(0, 200),
+                params: optStr(e['params'])?.slice(0, 200),
+                authState: optStr(e['authState'])?.slice(0, 60),
+                attackId: optStr(e['attackId'])?.toUpperCase(),
+                notes: optStr(e['notes'])?.slice(0, 200),
             });
             added++;
         }
@@ -64,65 +76,69 @@ export async function handleBookkeepingTools(ctx, role, phase, call, args) {
         // fingerprint empty and the coordinator refusing sign-off over a gap it had
         // no way to close. Merged rather than replaced, so stack and appType may
         // arrive in either order or one at a time.
-        const fps = optStr(args["stack"]);
-        const fpa = optStr(args["appType"]);
-        let fpNote = "";
+        const fps = optStr(args['stack']);
+        const fpa = optStr(args['appType']);
+        let fpNote = '';
         if (fps !== undefined || fpa !== undefined) {
             const nextStack = fps === undefined
                 ? ctx.fingerprint.stack
-                : fps.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean).slice(0, 20);
+                : fps.split(',').map(x => x.trim().toLowerCase()).filter(Boolean).slice(0, 20);
             const nextAppType = fpa === undefined
                 ? ctx.fingerprint.appType
-                : (fpa.trim().toLowerCase().slice(0, 60) || "unknown");
+                : (fpa.trim().toLowerCase().slice(0, 60) || 'unknown');
             ctx.fingerprint = { ...ctx.fingerprint, stack: nextStack, appType: nextAppType };
             ctx.events.append({
                 phase,
-                actor: "runner",
-                action: "fingerprint",
+                actor: 'runner',
+                action: 'fingerprint',
                 result: JSON.stringify(ctx.fingerprint),
             });
-            fpNote = ` Fingerprint recorded: stack=[${nextStack.join(",")}] appType=${nextAppType}.`;
+            fpNote = ` Fingerprint recorded: stack=[${nextStack.join(',')}] appType=${nextAppType}.`;
         }
         return {
             result: `Target map updated: ${added} new entries (${ctx.targetMap.length} total) — the whole team sees this shared state.${fpNote}`,
-            target: "target-map",
+            target: 'target-map',
         };
     }
-    if (call.name === "record_finding") {
-        const attackId = (optStr(args["attackId"]) ?? "T1190").toUpperCase();
+    if (call.name === 'record_finding') {
+        const attackId = (optStr(args['attackId']) ?? 'T1190').toUpperCase();
         // v0.13.0 safety case: PII redaction applies to finding evidence too —
         // agents paste tool output into evidence, and it lands in reports.
         const lf = {
-            severity: optStr(args["severity"]) ?? "low",
-            title: redactPii(String(args["title"] ?? "untitled").slice(0, 200)),
-            vulnClass: optStr(args["vulnClass"]),
+            severity: optStr(args['severity']) ?? 'low',
+            title: redactPii(String(args['title'] ?? 'untitled').slice(0, 200)),
+            vulnClass: optStr(args['vulnClass']),
             attackId,
-            evidence: redactPii(String(args["evidence"] ?? "").slice(0, 800)),
-            payload: optStr(args["payload"])?.slice(0, 300),
+            evidence: redactPii(String(args['evidence'] ?? '').slice(0, 800)),
+            payload: optStr(args['payload'])?.slice(0, 300),
+            // Q-FLEET-XCHECK: the producer is the dispatch role, stamped by
+            // the runner — never a model-supplied argument.
+            producer: role,
         };
+        const cellNote = await adjudicateRecordedClaim(ctx, phase, lf, args);
         ctx.liveFindings.push(lf);
         syncLiveFindingsToState(ctx);
         writeFindingToRegistry(ctx, lf);
         // v0.18.0 per-item verdicts: tie the confirmed finding to its battery item.
-        const fItem = optStr(args["batteryItem"]);
+        const fItem = optStr(args['batteryItem']);
         if (fItem && ctx.input.fullBattery && ctx.itemLedger.size > 0) {
-            const fKey = resolveItemKey(fItem, optStr(args["targetProfile"]));
+            const fKey = resolveItemKey(fItem, optStr(args['targetProfile']));
             if (fKey && ctx.itemLedger.has(fKey)) {
                 try {
-                    setDisposition(ctx.itemLedger, fKey, "confirmed", {
+                    setDisposition(ctx.itemLedger, fKey, 'confirmed', {
                         reason: `[${lf.severity}] ${lf.title}`.slice(0, 300),
                     });
                     // v0.20.0 variants: a variant-tagged confirmation counts toward the
                     // item's variant progress (supplementary to the confirmed verdict).
                     const fvp = ctx.itemLedger.get(fKey)?.variants;
-                    if (fvp && typeof args["variantIndex"] === "number")
+                    if (fvp && typeof args['variantIndex'] === 'number')
                         fvp.confirmed++;
                 }
                 catch (e) {
                     ctx.events.append({
                         phase,
-                        actor: "runner",
-                        action: "item_verdict_refused",
+                        actor: 'runner',
+                        action: 'item_verdict_refused',
                         result: `record_finding for "${fItem}": ${e.message}`,
                     });
                 }
@@ -130,42 +146,42 @@ export async function handleBookkeepingTools(ctx, role, phase, call, args) {
             else {
                 ctx.events.append({
                     phase,
-                    actor: "runner",
-                    action: "item_tag_unresolved",
+                    actor: 'runner',
+                    action: 'item_tag_unresolved',
                     result: `record_finding batteryItem "${fItem}" did not resolve to a selected battery item — finding recorded, ledger untouched.`,
                 });
             }
         }
         return {
-            result: `Finding recorded to shared state + registry: [${lf.severity}] ${lf.title} (${attackId}). The reporter and all future engagements see it.`,
+            result: `Finding recorded to shared state + registry: [${lf.severity}] ${lf.title} (${attackId}). The reporter and all future engagements see it.${cellNote}`,
             attackId,
             target: ctx.domain,
         };
     }
-    if (call.name === "record_killed") {
+    if (call.name === 'record_killed') {
         const kl = {
-            hypothesis: String(args["hypothesis"] ?? "").slice(0, 300),
-            killingObservation: String(args["killingObservation"] ?? "").slice(0, 500),
-            attackId: optStr(args["attackId"])?.toUpperCase(),
-            vulnClass: optStr(args["vulnClass"]),
-            payload: optStr(args["payload"])?.slice(0, 300),
+            hypothesis: String(args['hypothesis'] ?? '').slice(0, 300),
+            killingObservation: String(args['killingObservation'] ?? '').slice(0, 500),
+            attackId: optStr(args['attackId'])?.toUpperCase(),
+            vulnClass: optStr(args['vulnClass']),
+            payload: optStr(args['payload'])?.slice(0, 300),
         };
         ctx.killedLive.push(kl);
         writeKilledToRegistry(ctx, kl);
         // v0.18.0 per-item verdicts: tie the killed hypothesis to its battery
         // item (negative intelligence — the class stays in play per the registry rule).
-        const kItem = optStr(args["batteryItem"]);
+        const kItem = optStr(args['batteryItem']);
         if (kItem && ctx.input.fullBattery && ctx.itemLedger.size > 0) {
-            const kKey = resolveItemKey(kItem, optStr(args["targetProfile"]));
+            const kKey = resolveItemKey(kItem, optStr(args['targetProfile']));
             if (kKey && ctx.itemLedger.has(kKey)) {
                 try {
-                    setDisposition(ctx.itemLedger, kKey, "killed", { reason: kl.killingObservation.slice(0, 500) });
+                    setDisposition(ctx.itemLedger, kKey, 'killed', { reason: kl.killingObservation.slice(0, 500) });
                 }
                 catch (e) {
                     ctx.events.append({
                         phase,
-                        actor: "runner",
-                        action: "item_verdict_refused",
+                        actor: 'runner',
+                        action: 'item_verdict_refused',
                         result: `record_killed for "${kItem}": ${e.message}`,
                     });
                 }
@@ -173,14 +189,14 @@ export async function handleBookkeepingTools(ctx, role, phase, call, args) {
             else {
                 ctx.events.append({
                     phase,
-                    actor: "runner",
-                    action: "item_tag_unresolved",
+                    actor: 'runner',
+                    action: 'item_tag_unresolved',
                     result: `record_killed batteryItem "${kItem}" did not resolve to a selected battery item — hypothesis recorded, ledger untouched.`,
                 });
             }
         }
         return {
-            result: "Killed hypothesis recorded to shared state + registry as negative intelligence — future engagements keep the full spectrum; the exact attempt is dead, the class stays in play.",
+            result: 'Killed hypothesis recorded to shared state + registry as negative intelligence — future engagements keep the full spectrum; the exact attempt is dead, the class stays in play.',
             attackId: kl.attackId,
             target: ctx.domain,
         };
@@ -189,31 +205,31 @@ export async function handleBookkeepingTools(ctx, role, phase, call, args) {
     // battery cannot report complete while any item is pending, so items with
     // no applicable surface must be declared here — with evidence, never a
     // bare flag. "na" without evidence is refused mechanically.
-    if (call.name === "record_item_verdict") {
-        const rawItem = optStr(args["batteryItem"]) ?? "";
-        const verdict = (optStr(args["verdict"]) ?? "").toLowerCase();
-        const evidence = optStr(args["evidence"]) ?? "";
+    if (call.name === 'record_item_verdict') {
+        const rawItem = optStr(args['batteryItem']) ?? '';
+        const verdict = (optStr(args['verdict']) ?? '').toLowerCase();
+        const evidence = optStr(args['evidence']) ?? '';
         if (!ctx.input.fullBattery || ctx.itemLedger.size === 0) {
             return {
-                result: "Item verdicts are tracked on full-battery engagements only — verdict not recorded.",
+                result: 'Item verdicts are tracked on full-battery engagements only — verdict not recorded.',
                 target: ctx.domain,
             };
         }
-        const key = resolveItemKey(rawItem, optStr(args["targetProfile"]));
+        const key = resolveItemKey(rawItem, optStr(args['targetProfile']));
         if (!key || !ctx.itemLedger.has(key)) {
             return {
                 result: `REFUSED: batteryItem "${rawItem}" did not resolve to a selected battery item.`,
                 target: ctx.domain,
             };
         }
-        if (verdict !== "na") {
+        if (verdict !== 'na') {
             return {
-                result: `REFUSED: record_item_verdict only records "na" (with evidence). Other verdicts land via record_finding / record_killed; attempts are recorded automatically from tagged actions.`,
+                result: 'REFUSED: record_item_verdict only records "na" (with evidence). Other verdicts land via record_finding / record_killed; attempts are recorded automatically from tagged actions.',
                 target: ctx.domain,
             };
         }
         try {
-            setDisposition(ctx.itemLedger, key, "na", { reason: evidence });
+            setDisposition(ctx.itemLedger, key, 'na', { reason: evidence });
         }
         catch (e) {
             return { result: `REFUSED: ${e.message}`, target: ctx.domain };
@@ -221,7 +237,7 @@ export async function handleBookkeepingTools(ctx, role, phase, call, args) {
         ctx.events.append({
             phase,
             actor: role,
-            action: "item_verdict_na",
+            action: 'item_verdict_na',
             target: key,
             result: `${key} marked not-applicable: ${evidence.slice(0, 200)}`,
         });
@@ -230,19 +246,19 @@ export async function handleBookkeepingTools(ctx, role, phase, call, args) {
     // v0.20.0 payload-variant expansion: curated payload lists per attack
     // class. Tier 0 bookkeeping — returns payloads, never fires. Opening
     // expansion reopens an executed-clean item to pending for deeper testing.
-    if (call.name === "variant_list") {
+    if (call.name === 'variant_list') {
         if (!ctx.input.fullBattery || ctx.itemLedger.size === 0) {
             return {
-                result: "Variant libraries are tracked on full-battery engagements only — nothing listed.",
+                result: 'Variant libraries are tracked on full-battery engagements only — nothing listed.',
                 target: ctx.domain,
             };
         }
-        const rawItem = optStr(args["batteryItem"]) ?? "";
-        const key = resolveItemKey(rawItem, optStr(args["targetProfile"]));
+        const rawItem = optStr(args['batteryItem']) ?? '';
+        const key = resolveItemKey(rawItem, optStr(args['targetProfile']));
         if (!key || !ctx.itemLedger.has(key)) {
             return { result: `REFUSED: batteryItem "${rawItem}" did not resolve to a selected battery item.`, target: ctx.domain };
         }
-        if (args["closeExpansion"] === true) {
+        if (args['closeExpansion'] === true) {
             return { result: closeVariantExpansion(ctx, key, phase), target: key };
         }
         let opened;
@@ -258,36 +274,16 @@ export async function handleBookkeepingTools(ctx, role, phase, call, args) {
                 target: key,
             };
         }
-        const lines = opened.variants.map((vt) => `[${vt.variantIndex}] (${vt.kind}) ${vt.payload} — tests: ${vt.whatItTests}`);
+        const lines = opened.variants.map(vt => `[${vt.variantIndex}] (${vt.kind}) ${vt.payload} — tests: ${vt.whatItTests}`);
         return {
             result: `Variants for ${key}: ${opened.variants.length} offered ` +
-                `(library ${opened.librarySize}, per-item cap ${opened.cap}, classes: ${opened.classes.join(", ")})` +
-                `${opened.reopened ? " — item reopened from executed-clean for deeper testing" : ""}.\n` +
-                `${lines.join("\n")}\n` +
+                `(library ${opened.librarySize}, per-item cap ${opened.cap}, classes: ${opened.classes.join(', ')})` +
+                `${opened.reopened ? ' — item reopened from executed-clean for deeper testing' : ''}.\n` +
+                `${lines.join('\n')}\n` +
                 `Execute each via the normal tools with batteryItem="${rawItem}" + variantIndex tagged. ` +
-                `The cap is enforced mechanically; close early with variant_list(closeExpansion: true).`,
+                'The cap is enforced mechanically; close early with variant_list(closeExpansion: true).',
             target: key,
         };
-    }
-    if (call.name === "abort_engagement") {
-        const reason = String(args["reason"] ?? "coordinator abort").slice(0, 500);
-        // KILL SWITCH: terminate every in-flight host execution across all
-        // parallel tasks (shared ctx), then refuse any new host work.
-        ctx.hostKill.aborted = true;
-        for (const c of ctx.hostKill.controllers) {
-            try {
-                c.abort();
-            }
-            catch {
-                /* best effort */
-            }
-        }
-        ctx.hostKill.controllers.clear();
-        // v0.13.0 safety case: count the kill-switch use for the manifest —
-        // the zero-disruption record is derived from these events.
-        ctx.safety.killSwitchAborts++;
-        ctx.events.append({ phase, actor: "coordinator", action: "abort_engagement", result: `ABORTED by coordinator: ${reason}` });
-        throw new HaltError(`aborted by coordinator: ${reason}`);
     }
     return null;
 }

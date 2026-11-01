@@ -7,10 +7,8 @@ export declare class ExecutorCore {
     readonly deps: Required<Pick<HostExecDeps, "ssh" | "smb" | "smbPth" | "winrm" | "rdp" | "ad" | "krb" | "nfs">> & {
         env: NodeJS.ProcessEnv;
     };
-    /** Kill-switch state, shared with the engagement context (phases.ts owns it). */
-    killSwitch: {
-        aborted: boolean;
-    };
+    /** TEST MODE: preflight skips the destructive-command denylist (see HostExecDeps.testMode). */
+    readonly testMode: boolean;
     bounded<T>(p: Promise<T>, ms: number, label: string, t: {
         close(): Promise<void>;
     }): Promise<T>;
@@ -23,7 +21,7 @@ export declare class ExecutorCore {
     };
     /**
      * Preflight for unauthenticated recon (WinRM probe, NFS enumeration):
-     * kill-switch → scope check, then done. No credential resolution —
+     * scope check, then done. No credential resolution —
      * these tools are unauthenticated by design, so no secrets exist and
      * redaction over [] is a no-op. No denylist either — no commands run.
      */

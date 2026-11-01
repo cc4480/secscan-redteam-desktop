@@ -6,39 +6,44 @@
  *  - every /api/* route needs the startup token (Bearer or auth cookie)
  *  - / serves the dashboard only when authed, else a token login page
  */
-import { createServer } from "node:http";
-import { readFileSync, existsSync } from "node:fs";
-import { join, extname } from "node:path";
-import { fileURLToPath } from "node:url";
-import { dirname } from "node:path";
-import { UiStore } from "./store.js";
-import { authCookie, generateToken, isAuthorized, tokensEqual, assertStrongToken } from "./auth.js";
-import { handleLaunch, handleList, handleDetail } from "./routes/engagements.js";
-import { handleFeed } from "./routes/feed.js";
-import { handleFindings, handleProof } from "./routes/findings.js";
-import { handleCoverage, handleCompliance } from "./routes/coverage.js";
-import { handleConsoleEngagements } from "./routes/console-engagements.js";
-import { handleConsoleLayers } from "./routes/console-layers.js";
-import { handleConsoleBenchmark } from "./routes/console-benchmark.js";
-import { handleConsoleScope } from "./routes/console-scope.js";
-import { handleAbort, handleEscalate, handleReverify, handleJob, handleWatchProfiles, handleWatchTrigger } from "./routes/actions.js";
-import { json, notFound, readJsonBody } from "./routes/http.js";
-import { handleMcp } from "./mcp-endpoint.js";
+import { createServer } from 'node:http';
+import { readFileSync, existsSync } from 'node:fs';
+import { join, extname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
+import { UiStore } from './store.js';
+import { authCookie, generateToken, isAuthorized, tokensEqual, assertStrongToken } from './auth.js';
+import { handleLaunch, handleList, handleDetail } from './routes/engagements.js';
+import { handleFeed } from './routes/feed.js';
+import { handleFindings, handleProof } from './routes/findings.js';
+import { handleDeliverable } from './routes/deliverables.js';
+import { handleCoverage, handleCompliance } from './routes/coverage.js';
+import { handleConsoleEngagements } from './routes/console-engagements.js';
+import { handleConsoleLayers } from './routes/console-layers.js';
+import { handleConsoleBenchmark } from './routes/console-benchmark.js';
+import { handleConsoleScope } from './routes/console-scope.js';
+import { handleEscalate, handleReverify, handleJob, handleWatchProfiles, handleWatchTrigger } from './routes/actions.js';
+import { json, badRequest, notFound, readJsonBody } from './routes/http.js';
+import { handleMcp } from './mcp-endpoint.js';
+import { resolveArsenalConfig } from '../arsenal/config.js';
+import { startArsenalRefreshTimer } from '../arsenal/refresh.js';
+import { handleModels } from './routes/models.js';
+import { handleFoundry, handleFoundryLoop, handleFoundryRunGold, handleFoundryVerify } from './routes/foundry.js';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MIME = {
-    ".html": "text/html; charset=utf-8",
-    ".js": "text/javascript; charset=utf-8",
-    ".css": "text/css; charset=utf-8",
-    ".json": "application/json",
-    ".svg": "image/svg+xml",
+    '.html': 'text/html; charset=utf-8',
+    '.js': 'text/javascript; charset=utf-8',
+    '.css': 'text/css; charset=utf-8',
+    '.json': 'application/json',
+    '.svg': 'image/svg+xml',
 };
 function servePublic(res, name) {
-    const safe = name === "" || name === "/" ? "index.html" : name.replace(/^\/+/, "");
-    if (!/^[A-Za-z0-9_./-]+$/.test(safe) || safe.includes("..")) {
+    const safe = name === '' || name === '/' ? 'index.html' : name.replace(/^\/+/, '');
+    if (!/^[A-Za-z0-9_./-]+$/.test(safe) || safe.includes('..')) {
         notFound(res);
         return;
     }
-    const p = join(HERE, "public", safe);
+    const p = join(HERE, 'public', safe);
     if (!existsSync(p)) {
         notFound(res);
         return;
@@ -46,9 +51,9 @@ function servePublic(res, name) {
     try {
         const body = readFileSync(p);
         res.writeHead(200, {
-            "Content-Type": MIME[extname(p)] ?? "application/octet-stream",
-            "Content-Length": body.length,
-            "Cache-Control": "no-store",
+            'Content-Type': MIME[extname(p)] ?? 'application/octet-stream',
+            'Content-Length': body.length,
+            'Cache-Control': 'no-store',
         });
         res.end(body);
     }
@@ -66,18 +71,39 @@ function loginPage() {
 <button type="submit" style="margin-top:12px;width:100%;background:#238636;color:#fff;border:0;border-radius:6px;padding:10px;font-size:15px;cursor:pointer">Unlock console</button>
 </form></body></html>`;
 }
+/** Sentinel returned by readBodyOrReject when it has already answered. */
+const BODY_REJECTED = Symbol('body-rejected');
+/**
+ * Read a JSON request body for a route that requires one. A malformed or
+ * oversized body is the caller's error, not the server's: answer 400 (413
+ * when the body exceeds the reader's cap) and return BODY_REJECTED so the
+ * route stops there instead of surfacing the failure as a 500.
+ */
+async function readBodyOrReject(req, res) {
+    try {
+        return await readJsonBody(req);
+    }
+    catch (err) {
+        const message = err.message;
+        if (message === 'body too large')
+            json(res, 413, { error: message });
+        else
+            badRequest(res, message);
+        return BODY_REJECTED;
+    }
+}
 async function route(store, token, req, res) {
-    const url = new URL(req.url ?? "/", "http://localhost");
+    const url = new URL(req.url ?? '/', 'http://localhost');
     const path = url.pathname;
-    const method = req.method ?? "GET";
+    const method = req.method ?? 'GET';
     // Token login: form posts urlencoded; accept JSON too.
-    if (path === "/api/auth" && method === "POST") {
-        const ct = req.headers["content-type"] ?? "";
+    if (path === '/api/auth' && method === 'POST') {
+        const ct = req.headers['content-type'] ?? '';
         let presented;
-        if (ct.includes("application/json")) {
+        if (ct.includes('application/json')) {
             try {
                 const b = (await readJsonBody(req));
-                presented = typeof b.token === "string" ? b.token : undefined;
+                presented = typeof b.token === 'string' ? b.token : undefined;
             }
             catch {
                 presented = undefined;
@@ -85,107 +111,130 @@ async function route(store, token, req, res) {
         }
         else {
             const raw = await new Promise((resolve) => {
-                let s = "";
-                req.on("data", (c) => {
-                    s += c.toString("utf8");
-                    if (s.length > 4096)
-                        req.destroy();
+                let s = '';
+                req.on('data', (c) => {
+                    // Cap the buffered form body without destroying the request:
+                    // the socket must survive so the 401 below can be delivered.
+                    // Past the cap the bytes are drained and discarded; the
+                    // truncated body simply fails the token comparison.
+                    if (s.length <= 4096)
+                        s += c.toString('utf8').slice(0, 4096);
                 });
-                req.on("end", () => resolve(s));
+                req.on('end', () => resolve(s));
+                // After destroy() (oversized body) 'end' never fires; settle on
+                // 'close' so the handler returns instead of hanging. A partial
+                // body simply fails the token comparison below.
+                req.on('close', () => resolve(s));
             });
-            presented = new URLSearchParams(raw).get("token") ?? undefined;
+            presented = new URLSearchParams(raw).get('token') ?? undefined;
         }
         if (presented && tokensEqual(presented, token)) {
-            res.writeHead(303, { "Set-Cookie": authCookie(token), Location: "/" });
+            res.writeHead(303, { 'Set-Cookie': authCookie(token), Location: '/' });
             res.end();
         }
         else {
-            await new Promise((r) => setTimeout(r, 500));
-            json(res, 401, { error: "bad token" });
+            await new Promise(r => setTimeout(r, 500));
+            json(res, 401, { error: 'bad token' });
         }
         return;
     }
     // MCP face (JSON-RPC over POST). Handled before the generic auth gate below,
     // because that gate answers a non-/api path with the HTML login page — an MCP
     // client needs a 401 it can parse. handleMcp does its own token check.
-    if (path === "/mcp") {
+    if (path === '/mcp') {
         return handleMcp(store, token, req, res);
     }
     // Everything else needs auth.
     if (!isAuthorized(req, token)) {
-        if (path === "/" || !path.startsWith("/api/")) {
-            res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+        if (path === '/' || !path.startsWith('/api/')) {
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
             res.end(loginPage());
             return;
         }
-        json(res, 401, { error: "unauthorized" });
+        json(res, 401, { error: 'unauthorized' });
         return;
     }
-    if (path === "/" || path === "/index.html") {
-        servePublic(res, "index.html");
+    if (path === '/' || path === '/index.html') {
+        servePublic(res, 'index.html');
         return;
     }
-    if (path.startsWith("/assets/")) {
+    if (path.startsWith('/assets/')) {
         servePublic(res, path);
         return;
     }
     // --- API ---
-    const seg = path.split("/").filter(Boolean); // ["api", ...]
-    if (seg[0] !== "api") {
+    const seg = path.split('/').filter(Boolean); // ["api", ...]
+    if (seg[0] !== 'api') {
         notFound(res);
         return;
     }
     try {
-        if (seg[1] === "engagements" && method === "GET" && seg.length === 2)
+        if (seg[1] === 'models' && method === 'GET' && seg.length === 2)
+            return handleModels(res);
+        if (seg[1] === 'engagements' && method === 'GET' && seg.length === 2)
             return handleList(store, res);
-        if (seg[1] === "engagements" && method === "POST" && seg.length === 2) {
-            const body = await readJsonBody(req);
+        if (seg[1] === 'engagements' && method === 'POST' && seg.length === 2) {
+            const body = await readBodyOrReject(req, res);
+            if (body === BODY_REJECTED)
+                return;
             return handleLaunch(store, req, res, body);
         }
-        if (seg[1] === "engagements" && seg[2] && method === "GET" && seg.length === 3)
+        if (seg[1] === 'engagements' && seg[2] && method === 'GET' && seg.length === 3)
             return handleDetail(store, res, decodeURIComponent(seg[2]));
-        if (seg[1] === "engagements" && seg[2] && seg[3] === "events" && method === "GET") {
+        if (seg[1] === 'engagements' && seg[2] && seg[3] === 'events' && method === 'GET' && seg.length === 4) {
             return handleFeed(store, req, res, decodeURIComponent(seg[2]), url.searchParams);
         }
-        if (seg[1] === "engagements" && seg[2] && seg[3] === "abort" && method === "POST") {
-            const body = await readJsonBody(req).catch(() => ({}));
-            return handleAbort(store, res, decodeURIComponent(seg[2]), body);
-        }
-        if (seg[1] === "engagements" && seg[2] && seg[3] === "escalate" && method === "POST") {
+        if (seg[1] === 'engagements' && seg[2] && seg[3] === 'escalate' && method === 'POST' && seg.length === 4) {
             const body = await readJsonBody(req).catch(() => ({}));
             return handleEscalate(store, res, decodeURIComponent(seg[2]), body);
         }
-        if (seg[1] === "engagements" && seg[2] && seg[3] === "findings" && method === "GET") {
+        if (seg[1] === 'engagements' && seg[2] && seg[3] === 'deliverables' && seg[4] && (method === 'GET' || method === 'HEAD') && seg.length === 5) {
+            return handleDeliverable(store, req, res, decodeURIComponent(seg[2]), decodeURIComponent(seg[4]));
+        }
+        if (seg[1] === 'engagements' && seg[2] && seg[3] === 'findings' && method === 'GET' && seg.length === 4) {
             return handleFindings(store, res, decodeURIComponent(seg[2]));
         }
-        if (seg[1] === "engagements" && seg[2] && seg[3] === "proof" && seg[4] && method === "GET") {
+        if (seg[1] === 'engagements' && seg[2] && seg[3] === 'proof' && seg[4] && method === 'GET' && seg.length === 5) {
             return handleProof(store, res, decodeURIComponent(seg[2]), decodeURIComponent(seg[4]));
         }
-        if (seg[1] === "engagements" && seg[2] && seg[3] === "coverage" && method === "GET") {
+        if (seg[1] === 'engagements' && seg[2] && seg[3] === 'coverage' && method === 'GET' && seg.length === 4) {
             return handleCoverage(store, res, decodeURIComponent(seg[2]));
         }
-        if (seg[1] === "engagements" && seg[2] && seg[3] === "compliance" && method === "GET") {
+        if (seg[1] === 'engagements' && seg[2] && seg[3] === 'compliance' && method === 'GET' && seg.length === 4) {
             return handleCompliance(store, res, decodeURIComponent(seg[2]));
         }
         // Operator console (Phase 5) — read-only views over on-disk artifacts.
-        if (seg[1] === "console" && seg[2] === "engagements" && method === "GET")
+        if (seg[1] === 'console' && seg[2] === 'engagements' && method === 'GET' && seg.length === 3)
             return handleConsoleEngagements(store, res);
-        if (seg[1] === "console" && seg[2] === "layers" && method === "GET")
+        if (seg[1] === 'console' && seg[2] === 'layers' && method === 'GET' && seg.length === 3)
             return handleConsoleLayers(store, res);
-        if (seg[1] === "console" && seg[2] === "benchmark" && method === "GET")
+        if (seg[1] === 'console' && seg[2] === 'benchmark' && method === 'GET' && seg.length === 3)
             return handleConsoleBenchmark(store, res);
-        if (seg[1] === "console" && seg[2] === "scope" && method === "GET")
+        if (seg[1] === 'console' && seg[2] === 'scope' && method === 'GET' && seg.length === 3)
             return handleConsoleScope(store, res);
-        if (seg[1] === "reverify" && method === "POST") {
-            const body = await readJsonBody(req);
+        // Foundry (D2) — store/loop state + gate actions for the chat view.
+        if (seg[1] === 'foundry' && method === 'GET' && seg.length === 2)
+            return handleFoundry(store, res);
+        if (seg[1] === 'foundry' && seg[2] === 'verify' && method === 'POST' && seg.length === 3)
+            return handleFoundryVerify(store, res);
+        if (seg[1] === 'foundry' && seg[2] === 'run-gold' && method === 'POST' && seg.length === 3)
+            return handleFoundryRunGold(store, res);
+        if (seg[1] === 'foundry' && seg[2] === 'loop' && method === 'POST' && seg.length === 3)
+            return handleFoundryLoop(store, res);
+        if (seg[1] === 'reverify' && method === 'POST' && seg.length === 2) {
+            const body = await readBodyOrReject(req, res);
+            if (body === BODY_REJECTED)
+                return;
             return handleReverify(store, res, body);
         }
-        if (seg[1] === "jobs" && seg[2] && method === "GET")
+        if (seg[1] === 'jobs' && seg[2] && method === 'GET' && seg.length === 3)
             return handleJob(store, res, decodeURIComponent(seg[2]));
-        if (seg[1] === "watch" && seg[2] === "profiles" && method === "GET")
+        if (seg[1] === 'watch' && seg[2] === 'profiles' && method === 'GET' && seg.length === 3)
             return handleWatchProfiles(res, url.searchParams);
-        if (seg[1] === "watch" && seg[2] === "trigger" && method === "POST") {
-            const body = await readJsonBody(req);
+        if (seg[1] === 'watch' && seg[2] === 'trigger' && method === 'POST' && seg.length === 3) {
+            const body = await readBodyOrReject(req, res);
+            if (body === BODY_REJECTED)
+                return;
             return handleWatchTrigger(store, res, body);
         }
     }
@@ -198,11 +247,11 @@ async function route(store, token, req, res) {
 /** Start the UI server. Resolves when listening; the process stays alive. */
 export async function startUiServer(opts = {}) {
     const port = opts.port ?? 8787;
-    const listen = opts.listen ?? "127.0.0.1";
+    const listen = opts.listen ?? '127.0.0.1';
     // v0.28.0: an explicitly-set REDTEAM_UI_TOKEN must clear a strength
     // floor — this console drives live pentest tooling. Fail fast at
     // startup rather than running with "password". Unset = strong random.
-    const explicitToken = process.env["REDTEAM_UI_TOKEN"];
+    const explicitToken = process.env['REDTEAM_UI_TOKEN'];
     if (explicitToken)
         assertStrongToken(explicitToken);
     const token = explicitToken || generateToken();
@@ -218,13 +267,13 @@ export async function startUiServer(opts = {}) {
         });
     });
     await new Promise((resolve, reject) => {
-        server.on("error", reject);
+        server.on('error', reject);
         server.listen(port, listen, () => resolve());
     });
     const addr = server.address();
-    const boundPort = typeof addr === "object" && addr ? addr.port : port;
-    const boundAddress = typeof addr === "object" && addr ? addr.address : listen;
-    if (listen !== "127.0.0.1" && listen !== "localhost" && listen !== "::1") {
+    const boundPort = typeof addr === 'object' && addr ? addr.port : port;
+    const boundAddress = typeof addr === 'object' && addr ? addr.address : listen;
+    if (listen !== '127.0.0.1' && listen !== 'localhost' && listen !== '::1') {
         console.error(`[ui] WARNING: listening on ${listen} (not loopback). This console drives live pentest tooling — bind it to 127.0.0.1 unless you know exactly what you are doing.`);
     }
     console.log(`[ui] RedTeam console listening on http://${listen}:${boundPort}`);
@@ -232,12 +281,27 @@ export async function startUiServer(opts = {}) {
     // CI, systemd all persist stdout) — it is already in the operator's env.
     // A generated token is printed because it is the only copy and the operator
     // needs it to log in.
-    console.log(explicitToken ? `[ui] UI token: using REDTEAM_UI_TOKEN from the environment (not logged).` : `[ui] UI token (do not share): ${token}`);
+    console.log(explicitToken ? '[ui] UI token: using REDTEAM_UI_TOKEN from the environment (not logged).' : `[ui] UI token (do not share): ${token}`);
     console.log(`[ui] engagements dir: ${store.engagementsDir}`);
+    // Arsenal refresh timer (spec §9.2): schedules one background refresh
+    // per configured interval and never attempts one at startup, so
+    // booting the console performs zero arsenal network activity. A
+    // misconfigured REDTEAM_ARSENAL_* variable is logged here and leaves
+    // the timer off — the /mcp endpoint still fails loud per request on
+    // the same misconfiguration.
+    let stopArsenalTimer = () => { };
+    try {
+        const arsenalConfig = resolveArsenalConfig(process.env, { engagementsDir: store.engagementsDir });
+        stopArsenalTimer = startArsenalRefreshTimer({ config: arsenalConfig });
+    }
+    catch (err) {
+        console.error(`[ui] arsenal refresh timer disabled: ${err.message}`);
+    }
     const close = () => new Promise((resolve) => {
+        stopArsenalTimer();
         server.close(() => resolve());
     });
-    process.on("SIGINT", () => {
+    process.on('SIGINT', () => {
         void close().then(() => process.exit(0));
     });
     return { port: boundPort, address: boundAddress, token, close };

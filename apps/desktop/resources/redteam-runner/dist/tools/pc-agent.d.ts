@@ -8,7 +8,7 @@
  */
 import type { JsonSchemaTool } from "@secscan/redteam-llm-router";
 /** Operations `pc_observe` may request; all map onto tier-0 pc-agent tools. */
-export declare const PC_OBSERVE_OPERATIONS: readonly ["screen_snapshot", "ui_windows", "ui_tree", "ui_describe", "ui_focused", "state_hash", "clipboard_get", "wait_idle", "wait_window"];
+export declare const PC_OBSERVE_OPERATIONS: readonly ["system_info", "list_processes", "list_dir", "read_file", "screen_snapshot", "ui_windows", "ui_tree", "ui_describe", "ui_focused", "state_hash", "clipboard_get", "wait_idle", "wait_window"];
 /** Operations `pc_act` may request; all map onto tier-1 pc-agent tools. */
 export declare const PC_ACT_OPERATIONS: readonly ["ui_invoke", "ui_set_value", "ui_toggle", "input_click", "input_type", "input_key", "input_scroll", "input_drag", "window_focus", "window_arrange", "window_close", "clipboard_set", "assert_element"];
 /** Operations `pc_run` may request; all map onto tier-2 pc-agent tools. */

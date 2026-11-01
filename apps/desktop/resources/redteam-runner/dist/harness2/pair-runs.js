@@ -3,8 +3,8 @@
  *
  * WINDOW: the most recent WINDOW_SIZE (50) USABLE runs of the class whose
  * harness_version is the current base harness version. A usable run has a
- * complete metrics row (steps_count > 0) and is not crashed (operator
- * kill-switch runs are not a harness signal). If that yields fewer than
+ * complete metrics row (steps_count > 0) and is not crashed (operator-
+ * halted runs are not a harness signal). If that yields fewer than
  * WINDOW_FALLBACK_MIN (10) usable runs the window falls back to the last
  * WINDOW_FALLBACK_DAYS (90) days of usable runs (any harness_version); the
  * fallback is named in windowMethod so the package can state it.

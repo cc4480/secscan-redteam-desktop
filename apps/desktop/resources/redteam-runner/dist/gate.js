@@ -2,7 +2,9 @@
  * Engagement-level gating. Every check fails closed: uncertainty → deny.
  *
  * Layers (all must pass before aggressive work):
- *  1. Server-authoritative ownership verification (auth-gate's isServerVerified).
+ *  1. Ownership verification: by default the engagement record's operator
+ *     attestation; server-authoritative (auth-gate's isServerVerified)
+ *     only when the operator opts into service verification.
  *  2. Scope: every probed/scanned URL's hostname must be an exact in-scope host.
  *  3. Technique exclusions: always-excluded + mode defaults + ROE exclusions.
  *  4. Blackout windows: the runner pauses, it does not skip.
@@ -75,15 +77,27 @@ export function inTestWindow(now, roe) {
     return t >= Date.parse(roe.testWindow.start) && t <= Date.parse(roe.testWindow.end);
 }
 /** True when the ATT&CK technique may be used in this engagement. */
-export function techniqueAllowed(attackId, mode, roe) {
+export function techniqueAllowed(attackId, mode, roe, opts) {
     if (!attackId)
         return true; // unmapped actions are allowed; the mapping is advisory
+    // TEST MODE (operator order): only the operator's own ROE exclusions
+    // apply — the always-excluded set (T1499) and the mode defaults are
+    // bypassed for testing. The bypass is engagement-level and recorded by
+    // the authorize phase's test_mode_active event.
+    if (opts?.testMode) {
+        const roeOnly = (roe.excludedTechniques ?? []).map((t) => t.toUpperCase());
+        return !roeOnly.includes(attackId.toUpperCase());
+    }
     const excluded = resolveExcludedTechniques(mode, roe.excludedTechniques);
     return !excluded.includes(attackId.toUpperCase());
 }
 /**
- * The authorization gate: the SecScan server must positively list the domain
- * as verified. Network errors, timeouts, missing token → denied (fail closed).
+ * The authorization gate. Default basis: the engagement record's operator
+ * attestation (opts.attestedProof) — allowed, with the attestation as the
+ * recorded proof, and no service call. When no attestation is supplied the
+ * caller opted into service verification: the SecScan server must positively
+ * list the domain as verified, and network errors, timeouts, missing
+ * token → denied (fail closed).
  * `verify` is injectable so unit tests never touch the network.
  */
 export async function checkAuthorization(domain, cfg, verify = (d, c) => authGateIsServerVerified(d, c), opts = {}) {
@@ -101,6 +115,9 @@ export async function checkAuthorization(domain, cfg, verify = (d, c) => authGat
                 `verification was skipped (no DNS TXT proof is possible for a loopback address). ` +
                 `This bypass never applies to a non-private domain.`,
         };
+    }
+    if (opts.attestedProof) {
+        return { allowed: true, reason: opts.attestedProof };
     }
     let verified = false;
     try {
@@ -136,7 +153,9 @@ export async function checkAuthorization(domain, cfg, verify = (d, c) => authGat
  *    never be combined with a public host in scope;
  *  - otherwise: the target needs no second call; an IP-literal scope entry is a
  *    host-engagement target authorized by the ROE (domain verification cannot
- *    apply to an address); every other host must be server-verified.
+ *    apply to an address); every other host must be verified — by the
+ *    engagement record's attestation on the default basis, or server-verified
+ *    when the operator opted into service verification.
  *
  * `verify` is injectable so unit tests never touch the network.
  */
@@ -180,6 +199,10 @@ export async function checkScopeAuthorization(hosts, cfg, verify = (d, c) => aut
         // An IP-literal scope entry is a host-engagement target: the client authorizes it
         // through the ROE and credentials, and domain verification cannot apply to an address.
         if (isIP(host) !== 0)
+            continue;
+        // Record basis: the operator's attestation covers every host they
+        // declared in scope; no server call is made for it.
+        if (opts.attestedProof)
             continue;
         let verified = false;
         try {

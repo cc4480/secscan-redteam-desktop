@@ -10,7 +10,7 @@
  * based NTLM is the safer path).
  *
  * HONEST LIMITATION, stated plainly: the library exposes no abort handle
- * for in-flight requests. The kill switch therefore RACES the abort signal
+ * for in-flight requests. The call therefore RACES the abort signal
  * against the request: on abort the runner abandons the promise and reports
  * termination, but the underlying HTTP request may run to the server-side
  * timeout. Commands are still bounded by timeoutMs, non-interactive, and
@@ -35,13 +35,13 @@ export function createWinrmTransport() {
     return {
         async exec(args) {
             if (args.signal?.aborted)
-                throw new Error("[winrm] aborted by kill switch before exec");
+                throw new Error("[winrm] aborted by call signal before exec");
             const timeoutMs = args.timeoutMs ?? HOST_EXEC_TIMEOUT_MS;
             const started = Date.now();
             const user = qualname(args.creds);
             const password = args.creds.password ?? "";
             const port = args.port ?? (args.useTls ? 5986 : 5985);
-            // The library has no abort handle: race the kill-switch signal against
+            // The library has no abort handle: race the call signal against
             // the request. On abort we abandon the promise (runner-side termination);
             // the request itself runs to the server-side timeout at worst.
             const run = (async () => {
@@ -56,7 +56,7 @@ export function createWinrmTransport() {
                 ...(args.signal
                     ? [
                         new Promise((_, reject) => {
-                            args.signal.addEventListener("abort", () => reject(new Error("[winrm] aborted by kill switch — request abandoned")), { once: true });
+                            args.signal.addEventListener("abort", () => reject(new Error("[winrm] aborted by call signal — request abandoned")), { once: true });
                         }),
                     ]
                     : []),
@@ -106,7 +106,7 @@ const WINRM_PROBE_BODY = '<?xml version="1.0" encoding="utf-8"?>' +
 export function defaultWinrmProbeRequest(req) {
     return new Promise((resolve, reject) => {
         if (req.signal?.aborted) {
-            reject(new Error("[winrm-probe] aborted by kill switch before request"));
+            reject(new Error("[winrm-probe] aborted by call signal before request"));
             return;
         }
         const body = Buffer.from(WINRM_PROBE_BODY, "utf8");
@@ -140,7 +140,7 @@ export function defaultWinrmProbeRequest(req) {
         };
         clientReq.on("error", (err) => fail(err));
         clientReq.on("timeout", () => fail(new Error(`[winrm-probe] ${req.host}:${req.port} timed out after ${req.timeoutMs}ms`)));
-        req.signal?.addEventListener("abort", () => fail(new Error("[winrm-probe] aborted by kill switch — request destroyed")), {
+        req.signal?.addEventListener("abort", () => fail(new Error("[winrm-probe] aborted by call signal — request destroyed")), {
             once: true,
         });
         clientReq.end(body);

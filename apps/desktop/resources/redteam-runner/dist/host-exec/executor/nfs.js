@@ -38,7 +38,7 @@ export async function nfsEnumImpl(core, args) {
 /**
  * SSH agent-forwarding audit (batteries LX-018/LX-019).
  *
- * Preflight order: kill-switch → scope → SSH credential resolution →
+ * Preflight order: scope → SSH credential resolution →
  * denylist on the FIXED audit command (mechanical backstop even though
  * the command is not agent-supplied) → local agent socket resolution
  * (fails fast when no agent is available).

@@ -4,7 +4,6 @@
 import { type Ctx } from "../context.js";
 import { type BatteryCategory } from "../battery.js";
 import { type TargetId } from "../targets.js";
-export declare function recheckVerified(ctx: Ctx): Promise<boolean>;
 /** Optional string arg: trimmed, or undefined when absent/blank. */
 export declare function optStr(v: unknown): string | undefined;
 /** Optional positive-number arg, or undefined when absent/invalid. */

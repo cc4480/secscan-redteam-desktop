@@ -137,7 +137,7 @@ export const LINUX_PART_5 = [
         id: "LX-108", category: "functionality", name: "CVE exploit validation via Metasploit",
         brief: "Coordinator-approved CVE modules fired with benign canary marker payloads.",
         owasp: "CIS-v8-4.4", attackId: "T1190", needs: NEEDS_MSFRPCD,
-        what: "For each coordinator-approved candidate from LX-107, run msf_exec run in the exploit phase: ONE module, generic cmd payload executing ONLY the runner-built canary marker (echo REDTEAM-MARKER-*). The marker echoing back IS the validation — command execution achieved. dos/destructive modules are refused by policy; stray sessions are stopped by hygiene. Tag attackId T1190 and put the CVE in the cve field — each validated CVE is recorded as its own report instance.",
+        what: "For each coordinator-approved candidate from LX-107, run msf_exec run in the exploit phase: ONE module. A generic cmd payload executes ONLY the runner-built canary marker (echo REDTEAM-MARKER-*); a Meterpreter session payload may land the run instead — the session registers to the run and the marker is proven through it before any session command. The marker echoing back IS the validation — command execution achieved. dos/destructive modules are refused by policy; sessions a run did not register are stopped by hygiene. Tag attackId T1190 and put the CVE in the cve field — each validated CVE is recorded as its own report instance.",
         blackNote: "One module per CVE; lowest-rank-sufficient module first; stop on first defender signal.",
     },
     {

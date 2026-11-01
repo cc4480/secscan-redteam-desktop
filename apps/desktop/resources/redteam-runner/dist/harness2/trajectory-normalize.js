@@ -1,7 +1,7 @@
 /** Why a run can still show 0 tokens: it made no model call (never estimated). */
-export const TOKEN_CAPTURE_STATUS = "captured: agents.ts agentLoop records every ChatResult.usage into the per-engagement meter and captureEngagementTrajectory sums it; 0 means no model response happened (or the run predates the P1 meter) - never an estimate";
+export const TOKEN_CAPTURE_STATUS = 'captured: agents.ts agentLoop records every ChatResult.usage into the per-engagement meter and captureEngagementTrajectory sums it; 0 means no model response happened (or the run predates the P1 meter) - never an estimate';
 /** Explicit zeroes-with-reason; the default when no response was recorded. */
-export const ZERO_TOKEN_TOTALS = { tokensIn: 0, tokensOut: 0, responses: 0 };
+export const ZERO_TOKEN_TOTALS = { tokensIn: 0, tokensOut: 0, cacheReadTokens: 0, responses: 0 };
 function nonNegativeInt(value) {
     return value !== undefined && Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
 }
@@ -9,6 +9,7 @@ function nonNegativeInt(value) {
 export function createTokenMeter() {
     let tokensIn = 0;
     let tokensOut = 0;
+    let cacheReadTokens = 0;
     let responses = 0;
     return {
         record(usage) {
@@ -16,10 +17,11 @@ export function createTokenMeter() {
                 return;
             tokensIn += nonNegativeInt(usage.promptTokens);
             tokensOut += nonNegativeInt(usage.completionTokens);
+            cacheReadTokens += nonNegativeInt(usage.cacheReadTokens);
             responses++;
         },
         get totals() {
-            return { tokensIn, tokensOut, responses };
+            return { tokensIn, tokensOut, cacheReadTokens, responses };
         },
     };
 }
@@ -41,13 +43,12 @@ export function tokenMeterFor(owner) {
 const TOOL_PREFIX = /^(scan_|probe_|http_|burst_|nmap_|nuclei_|msf_|john_|sqlmap_|ffuf_|gobuster_|nikto_|ssh_|smb_|winrm_|rdp_|ad_|krb_|nfs_|xtool_|browser_)/;
 /** Tools without a family prefix: the bookkeeping / verdict tools. */
 const TOOL_NAMES = new Set([
-    "query_registry",
-    "update_target_map",
-    "record_finding",
-    "record_killed",
-    "record_item_verdict",
-    "variant_list",
-    "abort_engagement",
+    'query_registry',
+    'update_target_map',
+    'record_finding',
+    'record_killed',
+    'record_item_verdict',
+    'variant_list',
 ]);
 /**
  * True when the event is a tool invocation: a known tool name/family prefix, or
@@ -58,7 +59,7 @@ export function isToolAction(action, attackId) {
 }
 /** Normalize the runner's EngagementEvent[] into contract TrajectoryEvent[]. */
 export function toTrajectoryEvents(events) {
-    return events.map((event) => ({
+    return events.map(event => ({
         ts: event.ts,
         phase: event.phase,
         actor: event.actor,

@@ -11,8 +11,6 @@
  *  - dosRefusals: DoS/destructive module or payload refusals (msf policy)
  *  - scopeRefusals: out-of-scope target refusals
  *  - policyRefusals: other ROE/policy refusals (technique excluded, phase-gated msf run, etc.)
- *  - autoHalts: per-target auto-halt events
- *  - killSwitchAborts: coordinator/operator aborts that terminated in-flight work
  *  - destructiveActionsFired: MUST be 0 — any event whose result claims a
  *    destructive action executed. The record states the count, never assumes.
  */
@@ -22,8 +20,6 @@ export interface ZeroDisruptionRecord {
     dosRefusals: number;
     scopeRefusals: number;
     policyRefusals: number;
-    autoHalts: number;
-    killSwitchAborts: number;
     /** Counted, never assumed — the record is only clean when this is 0. */
     destructiveActionsFired: number;
     /** Total safety interventions (all of the above except destructiveActionsFired). */

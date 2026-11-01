@@ -6,7 +6,7 @@
  *
  *   - Every cycle re-checks scopeValidUntil (fail closed past expiry).
  *   - Every cycle runs the full engagement pipeline — authorization,
- *     ownership verification, ROE, rate limits, kill switch, production
+ *     ownership verification, ROE, rate limits, production
  *     graduation — nothing is weakened because the run is scheduled.
  *   - "Remediated" requires a confirming reverify; anything else that
  *     can't be mechanically resolved stays open as needs-review.

@@ -3,7 +3,7 @@
  * gobuster_exec, nikto_exec.
  *
  * Same shape as the nuclei/nmap handlers: ROE technique check, explicit
- * targetProfile pinning, profile tier gate, kill-switch controller registration,
+ * targetProfile pinning, profile tier gate, per-call abort signal,
  * coverage counting.
  *
  * One difference that matters: `john_exec` is an OFFLINE tool. Its `host` is a
@@ -38,7 +38,7 @@ export async function handleXTool(ctx, _role, _phase, call, args) {
     const rawCat = (strArg(args, "category") ?? "").toLowerCase();
     const category = BATTERY_CATEGORIES.includes(rawCat) ? rawCat : undefined;
     const host = String(args["host"] ?? "");
-    if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe)) {
+    if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe, { testMode: ctx.config?.testMode === true })) {
         return { result: `DENIED by ROE: technique ${attackId} is excluded for this engagement.`, attackId, target: host };
     }
     // Refuse agent-supplied flags before anything else — this is the control that
@@ -49,7 +49,7 @@ export async function handleXTool(ctx, _role, _phase, call, args) {
     const action = args["action"] === "run" ? "run" : "probe";
     const profileId = strArg(args, "profile") ?? spec.profiles[0].id;
     if (action === "run" && !host) {
-        return { result: `DENIED: ${spec.id}_exec run requires 'host'${offline ? " — the path to a hash file" : ""}.`, attackId, target: "" };
+        return { result: `DENIED: ${spec.id}_exec run requires 'host'${offline ? " — the path to a hash file" : ""}.`, attackId, target: "", repairable: `${spec.id}_exec run requires a 'host' argument` };
     }
     const profile = spec.profiles.find((p) => p.id === profileId);
     if (action === "run" && !profile) {
@@ -57,6 +57,7 @@ export async function handleXTool(ctx, _role, _phase, call, args) {
             result: `DENIED: unknown profile ${JSON.stringify(profileId)} — available: ${spec.profiles.map((p) => p.id).join(", ")}.`,
             attackId,
             target: host,
+            repairable: `unknown profile ${JSON.stringify(profileId)} for ${spec.id}_exec`,
         };
     }
     if (action === "run" && profile && profile.minTier > ctx.tier.current) {
@@ -99,11 +100,7 @@ export async function handleXTool(ctx, _role, _phase, call, args) {
         ctx.probesUsed++;
     noteCategoryCoverage(ctx, category, rawTp ? rawTp : undefined);
     const ctrl = new AbortController();
-    ctx.hostKill.controllers.add(ctrl);
     try {
-        if (ctx.hostKill.aborted) {
-            return { result: "ABORTED by operator (kill switch) — no process started.", attackId, target: host };
-        }
         // Resolve through the shared resolver (arg → REDTEAM_WORDLIST → bundled
         // assets → operator override). A missing list is a returned setup message,
         // never one machine's hardcoded absolute path — the old default made every
@@ -140,7 +137,6 @@ export async function handleXTool(ctx, _role, _phase, call, args) {
         };
     }
     finally {
-        ctx.hostKill.controllers.delete(ctrl);
     }
 }
 //# sourceMappingURL=xtool.js.map

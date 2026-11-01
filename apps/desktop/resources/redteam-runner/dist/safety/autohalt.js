@@ -15,6 +15,7 @@
  * "Target distress" is classified by the caller (dispatch passes an explicit
  * boolean), not regex-guessed here — the classifier lives next to the tools.
  */
+import { TOOL_TIMEOUT } from "../dispatch/timeout.js";
 export const DEFAULT_AUTOHALT_CONFIG = {
     consecutiveThreshold: 5,
     windowSize: 20,
@@ -88,17 +89,35 @@ export class TargetAutoHalt {
     }
 }
 /**
+ * Lockout-signal phrasings (fleet charter spec §6): a target throttling
+ * or locking accounts. Exported as ONE shared constant because the
+ * credential lockout classifier (safety/lockout.ts) must read exactly
+ * the same set — two classifiers with drifting ideas of what a lockout
+ * reads like would be a fork, and the Q-LOCKOUT spec (§5.3) forbids it.
+ * Tested against lowercased result text.
+ */
+export const LOCKOUT_TEXT_PATTERN = /http 429|status 429|too many requests|account (?:is )?(?:temporarily )?locked|locked out|login locked|too many (?:failed )?(?:login|sign-in|authentication) attempts/;
+/**
  * Classify a dispatch result as target distress (true) or a clean outcome
  * (false). Distress = the target may be hurt: transport errors, timeouts,
  * connection refusals, 5xx. Clean = 404s, auth denials, vuln-absent, scope
- * denials, policy refusals — the target answered fine.
+ * denials, policy refusals — the target answered fine. A result carrying
+ * the TOOL_TIMEOUT error code is never distress: the timeout is our own
+ * tool's, and the machine-readable code outranks any timeout wording in
+ * the result text.
  */
-export function isTargetDistress(result) {
+export function isTargetDistress(result, errorCode) {
+    if (errorCode === TOOL_TIMEOUT)
+        return false; // our own tool timed out — no evidence about the target
     const r = result.toLowerCase();
     if (/^halted\b/.test(r))
         return false; // our own halt, not target distress
     return (/probe failed|connection refused|timed out|timeout|econnreset|econnrefused|enotfound|socket hang up/.test(r) ||
         /http 5\d\d/.test(r) ||
-        /\b5\d\d\b.*(error|from target)/.test(r));
+        /\b5\d\d\b.*(error|from target)/.test(r) ||
+        // A target throttling or locking accounts is a target under strain
+        // exactly like a 5xx storm — pushing harder against lockouts risks
+        // locking out real users.
+        LOCKOUT_TEXT_PATTERN.test(r));
 }
 //# sourceMappingURL=autohalt.js.map

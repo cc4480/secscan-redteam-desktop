@@ -27,5 +27,11 @@ export interface ToolDef {
     inputSchema: Record<string, unknown>;
     run: (store: UiStore, args: Record<string, unknown>) => Promise<Captured>;
 }
+/**
+ * The full cockpit surface: the CLI-shaped tools above plus the
+ * chat-shaped engagement trio (engagement-tools.ts). One list, so the
+ * console chat and the desktop host's chat — both fed by mcp-endpoint.ts —
+ * see the same registry.
+ */
 export declare const TOOLS: ToolDef[];
 export declare const TOOLS_BY_NAME: Map<string, ToolDef>;

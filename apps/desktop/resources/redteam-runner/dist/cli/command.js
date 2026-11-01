@@ -13,7 +13,7 @@
  */
 import { hostname } from "node:os";
 import { flag, arg, argAll } from "./args.js";
-import { COMMANDS, commandHelp, parseCommand, planCommand } from "../workflows/commands.js";
+import { buildLocalEngagementInput, COMMANDS, commandHelp, parseCommand, planCommand } from "../workflows/commands.js";
 import { runEngagement } from "../phases.js";
 /** Read the quoted command line: `command "<line>"`. */
 function commandLine() {
@@ -73,18 +73,33 @@ export async function runCommandCli() {
         console.error(`[runner] ${parsed.command.name} requires operator approval; re-run with --approve`);
         return 3;
     }
-    const isPc = parsed.command.name === "/pcscan";
-    const target = arg("--target") ?? (isPc ? hostname() : undefined);
-    if (target === undefined) {
-        console.error(`[runner] ${parsed.command.name} needs --target <host|url>`);
-        return 3;
-    }
-    const scopes = argAll("--scope");
     const mode = (arg("--mode") ?? "red");
     if (mode !== "red" && mode !== "black") {
         console.error(`[runner] --mode must be red|black (got ${mode})`);
         return 3;
     }
+    // Q-RP-11: a local command (/pcscan) assesses THIS machine — its input
+    // is built mechanically from the hostname with localHost set, and an
+    // explicit --target/--scope cannot re-aim it at another host.
+    if (parsed.command.local) {
+        const result = await runEngagement(buildLocalEngagementInput(parsed, hostname(), mode));
+        if (flag("--json"))
+            console.log(JSON.stringify({ command: parsed.command.name, engagementId: result.engagementId, status: result.status, findings: result.findings.length, reportPath: result.reportPath }, null, 2));
+        else {
+            console.log(`\n[runner] ${parsed.command.name} ${result.status} — ${String(result.findings.length)} finding(s)`);
+            if (result.reportPath !== undefined)
+                console.log(`[runner] report: ${result.reportPath}`);
+            if (result.blockedReason !== undefined)
+                console.log(`[runner] blocked: ${result.blockedReason}`);
+        }
+        return result.status === "complete" || result.status === "halted" ? 0 : 1;
+    }
+    const target = arg("--target");
+    if (target === undefined) {
+        console.error(`[runner] ${parsed.command.name} needs --target <host|url>`);
+        return 3;
+    }
+    const scopes = argAll("--scope");
     const outOfScope = argAll("--out-of-scope");
     const roe = {
         scope: scopes.length > 0 ? scopes : [target],
@@ -96,7 +111,6 @@ export async function runCommandCli() {
         objective: `${parsed.command.summary} (${parsed.command.name})`,
         roe,
         targets: [...parsed.targets],
-        ...isPc ? { environment: "production", confirmProduction: true } : {},
     };
     const result = await runEngagement(input);
     if (flag("--json"))

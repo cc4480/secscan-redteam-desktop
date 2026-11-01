@@ -17,23 +17,27 @@
  * Design rules: never throw, never touch a target, and keep every probe cheap
  * (one version spawn per binary, one 1s TCP connect for the RPC daemon).
  */
-import { execFileSync } from "node:child_process";
-import { connect as netConnect } from "node:net";
-import { existsSync } from "node:fs";
-import { XTOOLS } from "../xtool/registry.js";
-import { nmapBinaryPresent, resolveNmapCommand } from "../nmap/prereq.js";
-import { NUCLEI_SETUP_INSTRUCTIONS } from "../nuclei/policy.js";
-import { nucleiBinaryPresent, resolveNucleiCommand } from "../nuclei/prereq.js";
-import { binPresent } from "../xtool/executor.js";
-import { describeSource, resolveExternalBinary, toolsDir, TOOLS_DIR_ENV } from "../toolchain.js";
-import { resolveWordlist } from "../xtool/wordlist.js";
-import { pcAgentConfigured } from "../host-exec/pc-agent.js";
-import { browserConfigured, BROWSER_SETUP_GUIDANCE } from "../browser/cdp.js";
+import { execFileSync } from 'node:child_process';
+import { connect as netConnect } from 'node:net';
+import { existsSync } from 'node:fs';
+import { XTOOLS } from '../xtool/registry.js';
+import { nmapBinaryPresent, resolveNmapCommand } from '../nmap/prereq.js';
+import { NUCLEI_SETUP_INSTRUCTIONS } from '../nuclei/policy.js';
+import { nucleiBinaryPresent, resolveNucleiCommand } from '../nuclei/prereq.js';
+import { binPresent } from '../xtool/executor.js';
+import { describeSource, resolveExternalBinary, toolsDir, TOOLS_DIR_ENV } from '../toolchain.js';
+import { resolveWordlist } from '../xtool/wordlist.js';
+import { pcAgentConfigured } from '../host-exec/pc-agent.js';
+import { browserConfigured, BROWSER_SETUP_GUIDANCE } from '../browser/cdp.js';
+import { poolSnapshots } from '@secscan/redteam-llm-router';
+import { resolveArsenalConfig } from '../arsenal/config.js';
+import { readArsenalIndexMeta } from '../arsenal/index-store.js';
+import { ARSENAL_EMPTY_FIX } from '../arsenal/tools.js';
 /** One version probe. Returns the first output line, or undefined when not runnable. */
 export function probeBinary(bin, args) {
     try {
-        const out = execFileSync(bin, [...args], { stdio: "pipe", timeout: 8000, encoding: "utf8" });
-        return String(out).split("\n")[0]?.trim() || "present";
+        const out = execFileSync(bin, [...args], { stdio: 'pipe', timeout: 8000, encoding: 'utf8' });
+        return String(out).split('\n')[0]?.trim() || 'present';
     }
     catch {
         return undefined;
@@ -48,9 +52,9 @@ export function probeTcp(host, port, timeoutMs = 1000) {
             resolve(reachable);
         };
         socket.setTimeout(timeoutMs);
-        socket.once("connect", () => done(true));
-        socket.once("timeout", () => done(false));
-        socket.once("error", () => done(false));
+        socket.once('connect', () => done(true));
+        socket.once('timeout', () => done(false));
+        socket.once('error', () => done(false));
     });
 }
 /**
@@ -59,7 +63,7 @@ export function probeTcp(host, port, timeoutMs = 1000) {
  * env, the bundled tools directory or PATH was tried.
  */
 function resolvedDetail(resolved, present) {
-    return `${resolved.path} [from ${describeSource(resolved)}]${present ? "" : " -- not found"}`;
+    return `${resolved.path} [from ${describeSource(resolved)}]${present ? '' : ' -- not found'}`;
 }
 /**
  * Build the full readiness report.
@@ -76,10 +80,10 @@ export async function readinessReport(env = process.env) {
     const bundledDir = toolsDir(env);
     const bundledDirExists = Boolean(bundledDir && existsSync(bundledDir));
     items.push({
-        id: "tools_dir",
+        id: 'tools_dir',
         label: `bundled tools directory (${TOOLS_DIR_ENV})`,
-        state: bundledDirExists ? "ready" : bundledDir ? "missing" : "not-configured",
-        detail: bundledDir ?? "(unset -- external tools resolve from PATH)",
+        state: bundledDirExists ? 'ready' : bundledDir ? 'missing' : 'not-configured',
+        detail: bundledDir ?? '(unset -- external tools resolve from PATH)',
         fix: bundledDirExists
             ? undefined
             : `Optional: set ${TOOLS_DIR_ENV} to the directory laid out as <tool>/<exe> (the desktop app points it at its bundled resources/tools). Without it the bridges resolve binaries from PATH.`,
@@ -92,21 +96,21 @@ export async function readinessReport(env = process.env) {
     const nmapResolved = resolveNmapCommand(env);
     const nmapReady = nmapBinaryPresent(env);
     items.push({
-        id: "nmap",
-        label: "nmap (port/service discovery)",
-        state: nmapReady ? "ready" : "missing",
+        id: 'nmap',
+        label: 'nmap (port/service discovery)',
+        state: nmapReady ? 'ready' : 'missing',
         detail: resolvedDetail(nmapResolved, nmapReady),
         fix: nmapReady
             ? undefined
-            : "Install nmap and put it on PATH (or set REDTEAM_NMAP_BIN), or ship it in the bundled tools directory. Windows: the official build needs the VC++ 2015-2022 x86 runtime; SYN scans additionally need Npcap + elevation (the runner falls back to connect scans without them).",
+            : 'Install nmap and put it on PATH (or set REDTEAM_NMAP_BIN), or ship it in the bundled tools directory. Windows: the official build needs the VC++ 2015-2022 x86 runtime; SYN scans additionally need Npcap + elevation (the runner falls back to connect scans without them).',
         required: true,
     });
     const nucleiResolved = resolveNucleiCommand(env);
     const nucleiReady = nucleiBinaryPresent(env);
     items.push({
-        id: "nuclei",
-        label: "nuclei (template-based checks)",
-        state: nucleiReady ? "ready" : "missing",
+        id: 'nuclei',
+        label: 'nuclei (template-based checks)',
+        state: nucleiReady ? 'ready' : 'missing',
         detail: resolvedDetail(nucleiResolved, nucleiReady),
         fix: nucleiReady ? undefined : NUCLEI_SETUP_INSTRUCTIONS,
         required: false,
@@ -121,43 +125,43 @@ export async function readinessReport(env = process.env) {
         items.push({
             id: spec.id,
             label: `${spec.id} (${spec.purpose})`,
-            state: present ? "ready" : "missing",
+            state: present ? 'ready' : 'missing',
             detail: resolvedDetail(resolved, present),
-            fix: present ? undefined : spec.setup.join(" "),
+            fix: present ? undefined : spec.setup.join(' '),
             required,
         });
     }
     // --- wordlist ------------------------------------------------------------
     const wordlist = resolveWordlist(undefined, env);
     items.push({
-        id: "wordlist",
-        label: "content-discovery wordlist",
-        state: wordlist ? "ready" : "missing",
+        id: 'wordlist',
+        label: 'content-discovery wordlist',
+        state: wordlist ? 'ready' : 'missing',
         detail: wordlist,
         fix: wordlist
             ? undefined
-            : "The runner ships assets/wordlists/common.txt; if that file is absent set REDTEAM_WORDLIST to a wordlist path, or pass `wordlist` on the tool call.",
+            : 'The runner ships assets/wordlists/common.txt; if that file is absent set REDTEAM_WORDLIST to a wordlist path, or pass `wordlist` on the tool call.',
         required: true,
     });
     // --- Metasploit RPC daemon ----------------------------------------------
-    const rpcHost = (env["REDTEAM_MSFRPC_HOST"] ?? "127.0.0.1").trim() || "127.0.0.1";
-    const rpcPort = Number((env["REDTEAM_MSFRPC_PORT"] ?? "55553").trim() || 55553);
-    const rpcConfigured = Boolean((env["REDTEAM_MSFRPC_USER"] ?? "").trim() && (env["REDTEAM_MSFRPC_PASS"] ?? "").trim());
+    const rpcHost = (env['REDTEAM_MSFRPC_HOST'] ?? '127.0.0.1').trim() || '127.0.0.1';
+    const rpcPort = Number((env['REDTEAM_MSFRPC_PORT'] ?? '55553').trim() || 55553);
+    const rpcConfigured = Boolean((env['REDTEAM_MSFRPC_USER'] ?? '').trim() && (env['REDTEAM_MSFRPC_PASS'] ?? '').trim());
     if (!rpcConfigured) {
         items.push({
-            id: "msfrpcd",
-            label: "Metasploit RPC bridge (msfrpcd)",
-            state: "not-configured",
-            fix: "Start msfrpcd on loopback and set REDTEAM_MSFRPC_USER / REDTEAM_MSFRPC_PASS (plus HOST/PORT/TLS as needed). The MSF exploit arm is then available; without it the battery still runs.",
+            id: 'msfrpcd',
+            label: 'Metasploit RPC bridge (msfrpcd)',
+            state: 'not-configured',
+            fix: 'Start msfrpcd on loopback and set REDTEAM_MSFRPC_USER / REDTEAM_MSFRPC_PASS (plus HOST/PORT/TLS as needed). The MSF exploit arm is then available; without it the battery still runs.',
             required: false,
         });
     }
     else {
         const reachable = await probeTcp(rpcHost, rpcPort);
         items.push({
-            id: "msfrpcd",
-            label: "Metasploit RPC bridge (msfrpcd)",
-            state: reachable ? "ready" : "unreachable",
+            id: 'msfrpcd',
+            label: 'Metasploit RPC bridge (msfrpcd)',
+            state: reachable ? 'ready' : 'unreachable',
             detail: `${rpcHost}:${rpcPort}`,
             fix: reachable
                 ? undefined
@@ -168,61 +172,180 @@ export async function readinessReport(env = process.env) {
     // --- credentials the engine reads from the environment -------------------
     const secrets = [
         {
-            id: "secscan_token",
-            label: "SecScan MCP token (scan_url / get_report)",
-            state: (env["SECSCAN_MCP_TOKEN"] ?? "").trim() ? "ready" : "missing",
-            fix: "Set SECSCAN_MCP_TOKEN (Secure Vault → lands in the environment). Create one at https://secscan.us/settings.",
+            id: 'secscan_token',
+            label: 'SecScan MCP token (service verification opt-in only)',
+            state: (env['SECSCAN_MCP_TOKEN'] ?? '').trim() ? 'ready' : 'missing',
+            fix: 'Only needed with REDTEAM_VERIFY_VIA_SERVICE=1: ownership verification otherwise comes from the engagement record, in-house. Set SECSCAN_MCP_TOKEN (Secure Vault → lands in the environment) to use the service check.',
+            required: (env['REDTEAM_VERIFY_VIA_SERVICE'] ?? '').trim() === '1',
+        },
+        {
+            id: 'deepseek_key',
+            label: 'Model provider key (agent loops)',
+            state: (env['MODEL_API_KEY'] ?? '').trim() || (env['META_API_KEY'] ?? '').trim() || (env['DEEPSEEK_API_KEY'] ?? '').trim()
+                ? 'ready'
+                : 'missing',
+            fix: 'Set MODEL_API_KEY (Meta Model API, Secure Vault). No live engagement can run without a model provider key.',
             required: true,
         },
         {
-            id: "deepseek_key",
-            label: "DeepSeek API key (agent loops)",
-            state: (env["DEEPSEEK_API_KEY"] ?? "").trim() ? "ready" : "missing",
-            fix: "Set DEEPSEEK_API_KEY (Secure Vault). No live engagement can run without it.",
-            required: true,
-        },
-        {
-            id: "seclayer_key",
-            label: "Seclayer API key (Seclayer MCP / scans)",
-            state: (env["SECLAYER_API_KEY"] ?? "").trim() ? "ready" : "missing",
-            fix: "Optional: set SECLAYER_API_KEY to use the Seclayer MCP server and its scan tools.",
+            id: 'seclayer_key',
+            label: 'Seclayer API key (Seclayer MCP / scans)',
+            state: (env['SECLAYER_API_KEY'] ?? '').trim() ? 'ready' : 'missing',
+            fix: 'Optional: add the Seclayer API key in the MCP setup step, or set SECLAYER_API_KEY, to use the Seclayer MCP server and its scan tools.',
             required: false,
         },
     ];
     items.push(...secrets);
     // Optional channels: their absence degrades coverage but never blocks a run.
     items.push({
-        id: "pc_agent",
-        label: "Windows PC-agent channel (optional)",
-        state: pcAgentConfigured(env) ? "ready" : "not-configured",
-        fix: "Optional: set REDTEAM_PC_AGENT_URL / REDTEAM_PC_AGENT_TOKEN to enable the PC-agent host-exec backend (a Windows target with no SMB/WinRM/SSH available).",
+        id: 'pc_agent',
+        label: 'Windows PC-agent channel (optional)',
+        state: pcAgentConfigured(env) ? 'ready' : 'not-configured',
+        fix: 'Optional: set REDTEAM_PC_AGENT_URL / REDTEAM_PC_AGENT_TOKEN to enable the PC-agent host-exec backend (a Windows target with no SMB/WinRM/SSH available).',
         required: false,
     }, {
-        id: "browser",
-        label: "Browser / CDP driver (optional)",
-        state: browserConfigured(env) ? "ready" : "not-configured",
+        id: 'browser',
+        label: 'Browser / CDP driver (optional)',
+        state: browserConfigured(env) ? 'ready' : 'not-configured',
         fix: BROWSER_SETUP_GUIDANCE,
         required: false,
     });
-    const requiredItems = items.filter((i) => i.required);
-    const requiredMissing = requiredItems.filter((i) => i.state !== "ready");
+    // --- Arsenal knowledge index ----------------------------------------------
+    // Always present (arsenalIndexItem never throws): ready with the serving
+    // generation's stamp, missing with the §7.1 fix text until the operator's
+    // first `redteam-runner arsenal refresh` builds a generation.
+    items.push(arsenalIndexItem(env));
+    // --- LLM credential pool ---------------------------------------------------
+    // Optional and conditional: the item exists only when a key is dead or
+    // benched (credentialPoolItem returns undefined for a healthy pool, and
+    // a healthy pool takes no line in the report at all).
+    const poolItem = credentialPoolItem(poolSnapshots(), Date.now());
+    if (poolItem !== undefined)
+        items.push(poolItem);
+    const requiredItems = items.filter(i => i.required);
+    const requiredMissing = requiredItems.filter(i => i.state !== 'ready');
     const ok = requiredMissing.length === 0;
     return {
         ok,
         items,
-        summary: `${items.filter((i) => i.state === "ready").length} of ${items.length} ready — ` +
-            (ok ? "required items satisfied" : `${requiredMissing.length} required missing: ${requiredMissing.map((i) => i.id).join(", ")}`),
+        summary: `${items.filter(i => i.state === 'ready').length} of ${items.length} ready — ` +
+            (ok ? 'required items satisfied' : `${requiredMissing.length} required missing: ${requiredMissing.map(i => i.id).join(', ')}`),
+    };
+}
+/**
+ * The `arsenal_index` readiness item (arsenal spec §11): `ready` when a
+ * generation is serving, with the serving generation's stamp as the
+ * detail — `generation N · M entries · built <date>`; `missing` with
+ * the §7.1 fix text when no generation has been built yet. The state
+ * reflects the SERVING generation, so a failed refresh that kept the
+ * old index still reads `ready` with the old build date visible.
+ *
+ * Never throws (the report's standing rule): a misconfigured
+ * REDTEAM_ARSENAL_* variable or an unreadable index file degrades to
+ * `missing` with the error named in the detail — the /mcp endpoint
+ * still fails loud on the same misconfiguration per request. Pure over
+ * `env` + the index file, so tests point it at fixture homes.
+ */
+export function arsenalIndexItem(env) {
+    let dbPath;
+    try {
+        dbPath = resolveArsenalConfig(env).dbPath;
+    }
+    catch (err) {
+        return {
+            id: 'arsenal_index',
+            label: 'Arsenal knowledge index',
+            state: 'missing',
+            detail: err.message,
+            fix: 'Correct the REDTEAM_ARSENAL_* variable named in the detail and re-run doctor.',
+            required: false,
+        };
+    }
+    let meta;
+    try {
+        meta = readArsenalIndexMeta(dbPath);
+    }
+    catch (err) {
+        return {
+            id: 'arsenal_index',
+            label: 'Arsenal knowledge index',
+            state: 'missing',
+            detail: `${dbPath} — ${err.message}`,
+            fix: `${ARSENAL_EMPTY_FIX} — a successful refresh replaces the unreadable file on swap.`,
+            required: false,
+        };
+    }
+    if (meta === null) {
+        return {
+            id: 'arsenal_index',
+            label: 'Arsenal knowledge index',
+            state: 'missing',
+            detail: `${dbPath} (no generation built yet)`,
+            fix: ARSENAL_EMPTY_FIX,
+            required: false,
+        };
+    }
+    return {
+        id: 'arsenal_index',
+        label: 'Arsenal knowledge index',
+        state: 'ready',
+        detail: `generation ${meta.generation} · ${meta.entryCount} entries · built ${meta.builtAt}`,
+        required: false,
+    };
+}
+/** "~12m" / "~3h" for a bench's remaining time. */
+function formatBenchRemaining(remainingMs) {
+    const minutes = Math.max(1, Math.round(remainingMs / 60_000));
+    return minutes < 60 ? `${minutes}m` : `${Math.round(minutes / 60)}h`;
+}
+/**
+ * The `llm_credential_pool` readiness item (pool-persistence spec §1.6):
+ * rendered ONLY when some pool entry is dead or benched — a healthy or
+ * empty pool omits the item entirely rather than taking a green line.
+ * The detail names each affected key by fingerprint (never key material):
+ * dead keys with their recorded reason, benched (key, model) pairs with
+ * the time until they are eligible again, or "no automatic return" for
+ * permanent (entitlement) benches. Benches that have already lapsed by
+ * render time are skipped. Pure over the snapshots so tests feed it
+ * fixtures; the report builder passes the router's live poolSnapshots().
+ */
+export function credentialPoolItem(snapshots, nowMs) {
+    const segments = [];
+    for (const snap of snapshots) {
+        for (const entry of snap.entries) {
+            if (entry.dead) {
+                segments.push(`${snap.providerId}: key …${entry.fingerprint} dead${entry.deadReason !== undefined ? ` (${entry.deadReason})` : ''}`);
+            }
+            for (const bench of entry.benchedModels) {
+                if (bench.untilMs === null) {
+                    segments.push(`${snap.providerId}: key …${entry.fingerprint} benched for ${bench.model} — no automatic return`);
+                }
+                else if (bench.untilMs > nowMs) {
+                    segments.push(`${snap.providerId}: key …${entry.fingerprint} benched for ${bench.model} — eligible again in ~${formatBenchRemaining(bench.untilMs - nowMs)}`);
+                }
+            }
+        }
+    }
+    if (segments.length === 0)
+        return undefined;
+    return {
+        id: 'llm_credential_pool',
+        label: 'LLM credential pool (dead / benched keys)',
+        state: 'missing',
+        detail: segments.join('; '),
+        fix: 'A benched key returns on its own when the bench lapses; a dead key stays dead until the key is replaced (check the provider account, then update the key in the Secure Vault). To reset all pool bookkeeping, delete the pool state file (llm-pool-state.json — see REDTEAM_LLM_POOL_STATE_FILE / REDTEAM_HOME).',
+        required: false,
     };
 }
 /** Render a report as a plain-text table for the CLI. */
 export function formatReadiness(report) {
-    const lines = [`readiness: ${report.summary}`, ""];
+    const lines = [`readiness: ${report.summary}`, ''];
     for (const item of report.items) {
-        const mark = item.state === "ready" ? "OK  " : item.state === "missing" ? "MISS" : item.state === "unreachable" ? "DOWN" : "CFG ";
-        lines.push(`${mark} ${item.label.padEnd(48)} ${item.detail ?? ""}`.trimEnd());
-        if (item.fix && item.state !== "ready")
+        const mark = item.state === 'ready' ? 'OK  ' : item.state === 'paused' ? 'PAUS' : item.state === 'missing' ? 'MISS' : item.state === 'unreachable' ? 'DOWN' : 'CFG ';
+        lines.push(`${mark} ${item.label.padEnd(48)} ${item.detail ?? ''}`.trimEnd());
+        if (item.fix && item.state !== 'ready')
             lines.push(`     → ${item.fix}`);
     }
-    return lines.join("\n");
+    return lines.join('\n');
 }
 //# sourceMappingURL=readiness.js.map

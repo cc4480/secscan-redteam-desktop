@@ -1,13 +1,6 @@
 /**
- * Operator actions (v0.22.0): kill switch, reverify, watch triggers.
+ * Operator actions (v0.22.0): reverify, watch triggers, tier escalation.
  *
- * POST /api/engagements/:id/abort — the kill switch. Uses the abort handle
- * registered at launch for UI-started runs; for CLI-launched runs it writes
- * abort.json into the engagement dir, which the running dispatcher picks up
- * on its next dispatch cycle (v0.25.0 cross-process kill switch). Either
- * path terminates in-flight executions, refuses new work, and the next tool
- * dispatch throws HaltError so the engagement unwinds to "halted". 404 when
- * the engagement id is unknown.
  * POST /api/engagements/:id/escalate — v0.24.0 mid-run tier change. Same
  * rules as the CLI (`redteam-runner escalate`): raising the tier requires a
  * named operator + reason; lowering is logged freely; Tier 2 on production
@@ -20,58 +13,11 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import { engagementDir } from "../store.js";
-import { readState } from "../../events.js";
-import { writeAbortFile } from "../../safety/index.js";
 import { createReplayer, reverifyBundle } from "../../proof/index.js";
 import { loadTicketMapping, updateTicketsForReverify } from "../../integrations/index.js";
 import { loadWatchProfile, runWatchCycle } from "../../continuous/index.js";
 import { describeEscalation, escalateEngagement } from "../../accountability/index.js";
 import { json, badRequest } from "./http.js";
-/** POST /api/engagements/:id/abort { reason? } */
-export function handleAbort(store, res, id, body) {
-    const reason = typeof body?.reason === "string" ? String(body.reason).slice(0, 500) : "operator abort from UI";
-    // In-process: engagement launched by this UI server — direct handle.
-    const entry = store.get(id);
-    if (entry?.abort) {
-        try {
-            entry.abort(reason);
-        }
-        catch (err) {
-            json(res, 500, { error: `abort failed: ${err.message}` });
-            return;
-        }
-        json(res, 200, { ok: true, id, via: "in-process" });
-        return;
-    }
-    // v0.25.0 cross-process kill switch: CLI-launched engagements have no
-    // abort handle in this process. Write abort.json into the engagement dir
-    // instead — the running dispatcher checks for it on every dispatch cycle
-    // and runs the identical abort sequence (flag, controllers, audit event,
-    // HaltError → "halted"). engagementDir() refuses bad ids and path
-    // traversal; a dir without state.json is not an engagement → 404.
-    const dir = engagementDir(store.engagementsDir, id);
-    if (!dir) {
-        json(res, 404, { error: "unknown engagement" });
-        return;
-    }
-    try {
-        writeAbortFile(dir, { requestedAt: new Date().toISOString(), by: "ui-operator", reason });
-    }
-    catch (err) {
-        json(res, 500, { error: `abort signal failed: ${err.message}` });
-        return;
-    }
-    const status = readState(dir)?.status ?? "unknown";
-    json(res, 200, {
-        ok: true,
-        id,
-        via: "abort.json",
-        engagementStatus: status,
-        note: status === "running" || status === "authorizing"
-            ? "abort signal written — the running dispatcher acts on its next tool call"
-            : `abort signal written, but the engagement is ${status} — nothing left to stop`,
-    });
-}
 /**
  * POST /api/engagements/:id/escalate { tier, operator, reason?, confirmTier2Production? }
  * v0.24.0: mid-run tier change with the CLI's exact rules. Raising the tier
@@ -174,8 +120,7 @@ export async function handleReverify(store, res, body) {
     // linked tickets exactly like the CLI does.
     void (async () => {
         try {
-            const killSwitch = { aborted: false };
-            const report = await reverifyBundle(bundle, createReplayer({ scope: b.scope, killSwitch }));
+            const report = await reverifyBundle(bundle, createReplayer({ scope: b.scope }));
             let tickets = null;
             try {
                 const mapping = loadTicketMapping(dir);

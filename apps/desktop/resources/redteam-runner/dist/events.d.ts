@@ -32,6 +32,11 @@ export interface LiveState {
     /** PID of the process driving this run; absent on pre-v0.33 records. */
     ownerPid?: number;
     blockedReason?: string;
+    /** Q-DELIVERABLES-AUTOFIRE: absolute path per deliverable file verified
+     * on disk at close, stamped by finalizeDeliverables. */
+    deliverables?: Record<string, string>;
+    /** True when the closing deliverable set was incomplete. */
+    deliverableFailed?: boolean;
 }
 export declare class EventLog {
     readonly dir: string;

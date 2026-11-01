@@ -3,8 +3,8 @@
  *
  * `redteam-runner ui` starts a loopback-only, token-authenticated dashboard:
  * launch engagements, stream the operation feed, browse findings with proof
- * bundles, inspect coverage and compliance packs, trigger watch cycles, and
- * hit the kill switch — all calling the same functions the CLI calls.
+ * bundles, inspect coverage and compliance packs, and trigger watch
+ * cycles — all calling the same functions the CLI calls.
  */
 export { startUiServer } from "./server.js";
 export { UiStore, defaultEngagementsDir, isSafeEngagementId, engagementDir, generateEngagementId } from "./store.js";

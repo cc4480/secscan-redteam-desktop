@@ -19,7 +19,7 @@ class SocketConnection {
             this.ended = true;
             this.pump();
         });
-        signal?.addEventListener("abort", () => this.die(new Error("[nfs] aborted by kill switch")), { once: true });
+        signal?.addEventListener("abort", () => this.die(new Error("[nfs] aborted by call signal")), { once: true });
     }
     pump() {
         const w = this.waiters.splice(0);
@@ -88,7 +88,7 @@ class SocketConnection {
 export function defaultNfsDial(host, port, timeoutMs, signal) {
     return new Promise((resolve, reject) => {
         if (signal?.aborted) {
-            reject(new Error("[nfs] aborted by kill switch before dial"));
+            reject(new Error("[nfs] aborted by call signal before dial"));
             return;
         }
         const sock = connect({ host, port });
@@ -106,7 +106,7 @@ export function defaultNfsDial(host, port, timeoutMs, signal) {
             reject(err);
         };
         const timer = setTimeout(() => fail(new Error(`[nfs] connect to ${host}:${port} timed out after ${timeoutMs}ms`)), timeoutMs);
-        const onAbort = () => fail(new Error("[nfs] aborted by kill switch during dial"));
+        const onAbort = () => fail(new Error("[nfs] aborted by call signal during dial"));
         signal?.addEventListener("abort", onAbort, { once: true });
         sock.on("connect", () => {
             if (settled)

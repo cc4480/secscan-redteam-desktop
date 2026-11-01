@@ -7,18 +7,28 @@ import { EXPLOIT_TOOLS, RECON_TOOLS } from "../tools.js";
 import { agentLoop, promptCtx } from "../agents.js";
 import { lookupTechnique } from "../attack.js";
 import { mergeVerdictBlock } from "../dispatch.js";
+import { withBridgeTools } from "../dispatch/bridge-gate.js";
 import { taskPrompt } from "../prompts.js";
 import { techniqueAllowed } from "../gate.js";
+import { completeGraphSubtask, failGraphSubtask, graphSubtaskFor, startGraphSubtask, } from "../workgraph/wiring.js";
 /**
  * "Spawn a subagent": execute one discrete task as a bounded foundation loop
  * with a task-scoped specialist prompt. Fresh context, cyber task definition.
  */
 export async function runTask(ctx, task) {
     const role = task.kind === "recon" ? "recon" : "exploiter";
-    const tools = task.kind === "recon" ? RECON_TOOLS : EXPLOIT_TOOLS;
+    // Q-BRIDGE-TOOLS: bridge tools join the surface when the bridge
+    // is live on this machine (bridge-gate.ts).
+    const tools = await withBridgeTools(ctx, "exploit", task.kind === "recon" ? RECON_TOOLS : EXPLOIT_TOOLS);
     const probesBefore = ctx.probesUsed;
     const findingsBefore = ctx.liveFindings.length;
     const killedBefore = ctx.killedLive.length;
+    const actionsBefore = ctx.actions;
+    // A4 Deeper: this assignment is a work-graph Subtask (idempotent — a
+    // resumed run reuses the settled record instead of re-running it).
+    const graphSub = graphSubtaskFor(ctx, task);
+    if (graphSub)
+        startGraphSubtask(ctx, graphSub.id);
     ctx.events.append({
         phase: "exploit",
         actor: "coordinator",
@@ -27,8 +37,21 @@ export async function runTask(ctx, task) {
         attackId: task.attackId,
         result: `[${task.kind}] ${task.brief.slice(0, 200)}${task.category ? ` (${task.category})` : ""}`,
     });
-    const summary = await agentLoop(ctx, role, "exploit", taskPrompt(promptCtx(ctx), task), "Execute the task now.", tools, task.maxTurns);
-    mergeVerdictBlock(ctx, summary);
+    let summary;
+    try {
+        summary = await agentLoop(ctx, role, "exploit", taskPrompt(promptCtx(ctx), task), "Execute the task now.", tools, task.maxTurns);
+    }
+    catch (err) {
+        if (graphSub)
+            failGraphSubtask(ctx, graphSub.id, err.message);
+        throw err;
+    }
+    // A4 Deeper: settle the subtask, count its Actions, persist, and run
+    // the Refiner before the next assignment is planned.
+    if (graphSub) {
+        await completeGraphSubtask(ctx, graphSub.id, summary, ctx.actions - actionsBefore);
+    }
+    mergeVerdictBlock(ctx, summary, role);
     const verdictNote = `probes +${ctx.probesUsed - probesBefore}, ` +
         `confirmed +${ctx.liveFindings.length - findingsBefore}, killed +${ctx.killedLive.length - killedBefore}`;
     ctx.events.append({
@@ -102,7 +125,7 @@ export function validateTasks(ctx, raw, cap) {
         if (!brief)
             continue;
         let attackId = typeof r["attackId"] === "string" ? r["attackId"].toUpperCase() : undefined;
-        if (attackId && (!lookupTechnique(attackId) || !techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe))) {
+        if (attackId && (!lookupTechnique(attackId) || !techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe, { testMode: ctx.config?.testMode === true }))) {
             ctx.events.append({
                 phase: "exploit",
                 actor: "runner",

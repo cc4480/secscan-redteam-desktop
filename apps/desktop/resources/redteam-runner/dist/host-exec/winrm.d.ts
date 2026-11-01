@@ -10,7 +10,7 @@
  * based NTLM is the safer path).
  *
  * HONEST LIMITATION, stated plainly: the library exposes no abort handle
- * for in-flight requests. The kill switch therefore RACES the abort signal
+ * for in-flight requests. The call therefore RACES the abort signal
  * against the request: on abort the runner abandons the promise and reports
  * termination, but the underlying HTTP request may run to the server-side
  * timeout. Commands are still bounded by timeoutMs, non-interactive, and

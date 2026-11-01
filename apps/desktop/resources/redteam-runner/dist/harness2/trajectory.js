@@ -28,6 +28,8 @@ import { buildSpec5Rows } from "./spec5.js";
 import { countStepErrors, readSteps } from "./steps.js";
 import { toTrajectoryEvents, tokenMeterFor } from "./trajectory-normalize.js";
 import { writeTrajectory } from "./trajectory-write.js";
+import { captureFoundryCases } from "../foundry/capture.js";
+import { storeDirForEngagement } from "../foundry/store.js";
 export * from "./trajectory-normalize.js";
 export * from "./spec5.js";
 export { writeTrajectory } from "./trajectory-write.js";
@@ -64,8 +66,8 @@ export function deriveTargetClass(input) {
 // ---------------------------------------------------------------------------
 /**
  * Outcome rule (mechanical, from the recorded engagement status):
- *  - aborted: the kill switch fired (aborted flag or an "aborted by operator"
- *    halt reason);
+ *  - aborted: the run ended halted (a HaltError unwind), or its recorded
+ *    blocked reason names an abort (historical records);
  *  - success: completed with confirmed evidence (findings or proven exploits);
  *  - partial: completed clean, or halted while carrying confirmed evidence;
  *  - failure: halted with no confirmed evidence, or blocked before the run.
@@ -129,6 +131,8 @@ function recordedStatus(status) {
  * The single additive call site: called from runEngagement's finally block for
  * every outcome (complete, halted, blocked). Guarded so a capture problem can
  * never throw into an engagement run; returns null when nothing was captured.
+ * After the trajectory write it also feeds the Foundry store (see
+ * foundry/capture.ts) under the same isolation guarantee.
  */
 export function captureEngagementTrajectory(input) {
     try {
@@ -148,7 +152,12 @@ export function captureEngagementTrajectory(input) {
         // Real token totals from the per-engagement meter (agents.ts records every
         // router response); the explicit seam wins so tests can pin totals.
         const totals = input.tokens ?? tokenMeterFor(input.ctx).totals;
-        const aborted = input.ctx.hostKill.aborted || input.ctx.safety.killSwitchAborts > 0;
+        // "aborted" used to derive from the kill switch (hostKill /
+        // killSwitchAborts). That stop-signal class was removed on the
+        // operator's order (2026-11-01); the metric now reports a run that
+        // ended halted — the HaltError unwind (coordinator sign-off refusal
+        // or a mechanical cap), which is the only in-band early end left.
+        const aborted = state.status === "halted";
         const metrics = captureRunMetrics({
             engagementId: input.engagementId,
             target: input.target,
@@ -186,7 +195,38 @@ export function captureEngagementTrajectory(input) {
             stack: input.ctx.fingerprint.stack,
         });
         const record = { metrics, events: trajectoryEvents };
-        return writeTrajectory(input.engagementDir, record, { spec5 }).written ? metrics : null;
+        const written = writeTrajectory(input.engagementDir, record, { spec5 }).written;
+        // Foundry capture: every completed engagement feeds the app-data
+        // Foundry store. It runs after the trajectory write, is failure-
+        // isolated end to end (captureFoundryCases never throws), and records
+        // its outcome as an engagement event. A capture problem can never
+        // mask a halt, fail a run, or delay completion.
+        try {
+            const foundry = captureFoundryCases({
+                engagementId: input.engagementId,
+                target: input.target,
+                stateFindings: state.findings,
+                liveFindings: input.ctx.liveFindings,
+                techFingerprints: [input.ctx.fingerprint.appType, ...input.ctx.fingerprint.stack],
+                storeDir: storeDirForEngagement(input.engagementDir),
+                // The automatic Gold Loop enqueue can be stood down per process
+                // (REDTEAM_FOUNDRY_AUTO_LOOP=0) without touching capture itself.
+                autoLoop: input.environment?.["REDTEAM_FOUNDRY_AUTO_LOOP"] !== "0",
+            });
+            input.events.append({
+                phase: "done",
+                actor: "runner",
+                action: "foundry_capture",
+                result: foundry.error
+                    ? `Foundry capture failed (failure-isolated; the engagement is unaffected): ${foundry.error}`
+                    : `Foundry capture: ${foundry.added} case(s) added, ${foundry.skippedDuplicates} duplicate(s) skipped, ${foundry.dropped} dropped by the sanitizer.`,
+            });
+        }
+        catch {
+            // The event note is best-effort; capture itself already reported
+            // its outcome in its result value.
+        }
+        return written ? metrics : null;
     }
     catch {
         // Capture is observability, not part of the engagement contract: never let

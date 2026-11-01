@@ -6,10 +6,7 @@ import { RDP_SHADOW_PREP_PS, buildShadowHandoff, rdpValidateCredentials } from "
 export async function rdpValidateImpl(core, args) {
     const started = Date.now();
     // No shell command runs here, but the credential-bearing flow still goes
-    // through kill-switch + scope + credential resolution, fail closed.
-    if (core.killSwitch.aborted) {
-        return core.refusedResult("winrm", args.host, "kill switch active — coordinator aborted; no new host executions");
-    }
+    // through scope + credential resolution, fail closed.
     const v = validateHostTarget(args.host, args.scopeHosts);
     if (!v.ok)
         return core.refusedResult("winrm", args.host, v.reason);

@@ -53,6 +53,7 @@ function toEngagementInput(b) {
         client: b.client,
         operatorName: b.operatorName,
         fullBattery: b.fullBattery ?? true,
+        ...(b.localHost ? { localHost: true } : {}),
         targets,
         environment,
         confirmProduction: b.confirmProduction ?? false,
@@ -76,11 +77,18 @@ export async function handleLaunch(store, _req, res, body) {
     const dir = join(store.engagementsDir, id);
     store.register({ id, dir, status: "starting", startedAt: new Date().toISOString(), target: input.target, mode: input.mode });
     // Detached run — the request returns now; progress streams via SSE.
-    // onCtxReady fires synchronously inside runEngagement before any agent
-    // acts, so the kill-switch handle is registered while the run is live.
     try {
         const p = runEngagement(input, {
             engagementId: id,
+            // The run must write where this server reads. Left to resolveConfig,
+            // the writer falls back to REDTEAM_HOME or the process cwd — on the
+            // desktop the console is spawned with cwd = the runner payload dir
+            // while the store root is the --engagements-dir (userData), so state
+            // landed in the payload tree and every store read (detail, findings,
+            // scope, the console list's disk scan) found nothing. Pinning the
+            // store's root here unifies writer and readers at the one root this
+            // server was configured with, in source and packaged layouts alike.
+            engagementsDir: store.engagementsDir,
             dryRunAgents: dryRun,
             // The action cap is a RunnerOption, not an EngagementInput field, so it
             // crosses over here rather than riding along in `input`. Passing it in
@@ -89,7 +97,6 @@ export async function handleLaunch(store, _req, res, body) {
             // silently ignored it, leaving the operator to wonder why their cap had
             // no effect.
             ...(launch.maxActions === undefined ? {} : { maxActions: launch.maxActions }),
-            onCtxReady: (handle) => store.setAbort(id, handle.abort),
         });
         void p.then(() => store.complete(id), (err) => store.fail(id, err));
     }
@@ -122,7 +129,7 @@ export function handleDetail(store, res, id) {
         json(res, 200, {
             state: null,
             pending: true,
-            live: rec.abort !== undefined,
+            live: rec.running === true,
             status: rec.status,
             target: rec.target ?? null,
             mode: rec.mode ?? null,
@@ -142,7 +149,7 @@ export function handleDetail(store, res, id) {
     const live = store.get(id);
     json(res, 200, {
         state,
-        live: !!live?.abort,
+        live: !!live?.running,
         artifacts: {
             report: store.readTextArtifact(id, "report.md") !== null,
             compliancePack: store.readTextArtifact(id, "compliance-pack.md") !== null,

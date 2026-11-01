@@ -9,10 +9,12 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { readEvents } from '../events.js';
-import { buildNegativeProof, buildPocBundle, bundleFileName, bundleSummary } from '../proof/index.js';
+import { buildNegativeProof, buildPocBundle, bundleFileName, bundleSummary, stampBundleIntegrity } from '../proof/index.js';
 import { TARGET_PROFILES, activeTargets } from '../targets.js';
 export function buildProofSection(ctx, findings, pocBundleMap) {
     let section = '';
+    const noBundleReasons = new Map();
+    let negativeProofs = [];
     // v0.14.0 proof of exploitation: PoC bundles derived MECHANICALLY from the
     // audit log (events.jsonl) — one per CONFIRMED finding with a genuine
     // validation signal (marker echo = execution tier; read-only evidence
@@ -62,23 +64,53 @@ export function buildProofSection(ctx, findings, pocBundleMap) {
             if (f.status !== 'confirmed')
                 continue;
             const batteryItemId = f.attackIds.map(a => attackToItem.get(a.toUpperCase())).find(Boolean);
-            const { bundle, reason } = buildPocBundle({
+            const strict = buildPocBundle({
                 finding: f,
                 batteryItemId,
                 events: proofEvents,
                 engagement: proofMeta,
                 secrets: proofSecrets,
             });
+            let bundle = strict.bundle;
+            const reason = strict.reason;
+            let relaxedFallback = false;
+            // Q-PROVEN §5: reporter-JSON attackId drift can silently demote a
+            // genuinely demonstrated finding — buildPocBundle excludes events
+            // whose attackId does not match the finding's. On a strict no-bundle,
+            // retry ONCE with the attackIds relaxed (correlate by target only)
+            // and accept ONLY an execution-tier result: a marker echo on the same
+            // target is the mechanical proof the demonstration happened. The
+            // fallback is recorded in the bundle and in the report line, never
+            // silent. Skipped when attackIds is already empty — the strict call
+            // already took the target-only branch, so a retry would be identical.
+            if (!bundle && f.attackIds.length > 0) {
+                const retry = buildPocBundle({
+                    finding: { ...f, attackIds: [] },
+                    batteryItemId,
+                    events: proofEvents,
+                    engagement: proofMeta,
+                    secrets: proofSecrets,
+                });
+                if (retry.bundle && retry.bundle.validationTier === 'execution') {
+                    retry.bundle.proves += ' Correlated by target after reporter attackId drift (attackId-relaxed fallback).';
+                    // bundle.proves sits inside the sha256 integrity digest —
+                    // re-stamp so the recorded digest covers the bundle as written.
+                    bundle = stampBundleIntegrity(retry.bundle);
+                    relaxedFallback = true;
+                }
+            }
             if (bundle) {
                 writeFileSync(join(pocDir, bundleFileName(f.id)), JSON.stringify(bundle, null, 2));
                 pocBundleMap.set(f.id, bundle);
-                bundleLines.push(`- ${bundleSummary(bundle)}`);
+                bundleLines.push(`- ${bundleSummary(bundle)}${relaxedFallback ? ' — correlated by target after reporter attackId drift (attackId-relaxed fallback).' : ''}`);
             }
             else {
                 noBundleLines.push(`- **${f.id}** — ${f.title}: no PoC bundle — ${reason}`);
+                noBundleReasons.set(f.id, reason ?? 'no validation signal in the audit log');
             }
         }
         const negative = buildNegativeProof(ctx.killedLive, proofEvents, proofSecrets);
+        negativeProofs = negative;
         section += '\n\n---\n\n## Proof of exploitation (runner-computed)\n\n';
         section += 'Each bundle below was derived mechanically from the audit log (events.jsonl) — the exact ' +
             'redacted steps, in order, that validated the finding. Full bundles: `poc/<finding-id>.json`.\n\n';
@@ -120,6 +152,6 @@ export function buildProofSection(ctx, findings, pocBundleMap) {
             result: `PoC bundle generation failed (report.md unaffected): ${err.message}`,
         });
     }
-    return section;
+    return { markdown: section, noBundleReasons, negative: negativeProofs };
 }
 //# sourceMappingURL=proof.js.map

@@ -31,7 +31,7 @@ const require = createRequire(import.meta.url);
 const SMB2 = require("@marsaud/smb2");
 function checkAborted(signal) {
     if (signal?.aborted)
-        throw new Error("[smb] aborted by kill switch");
+        throw new Error("[smb] aborted by call signal");
 }
 /** Well-known administrative shares probed by list_shares (plus recon-supplied names). */
 export const WELL_KNOWN_SHARES = ["C$", "ADMIN$", "IPC$"];
@@ -55,7 +55,7 @@ function withTimeout(p, ms, what, signal) {
         const timer = setTimeout(() => reject(new Error(`[smb] ${what} timed out after ${ms}ms`)), ms);
         const onAbort = () => {
             clearTimeout(timer);
-            reject(new Error("[smb] aborted by kill switch"));
+            reject(new Error("[smb] aborted by call signal"));
         };
         signal?.addEventListener("abort", onAbort, { once: true });
         p.then((v) => {

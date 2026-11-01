@@ -1,5 +1,9 @@
 /** Operations `pc_observe` may request; all map onto tier-0 pc-agent tools. */
 export const PC_OBSERVE_OPERATIONS = [
+    "system_info",
+    "list_processes",
+    "list_dir",
+    "read_file",
     "screen_snapshot",
     "ui_windows",
     "ui_tree",
@@ -38,11 +42,12 @@ export const PC_RUN_OPERATIONS = [
 export const PC_AGENT_TOOL_NAMES = new Set(["pc_observe", "pc_act", "pc_run"]);
 const OBSERVE_TOOL = {
     name: "pc_observe",
-    description: "Observe the operator's Windows desktop through the paired local PC agent (read-only, tier 0). Use this before acting: screen_snapshot returns an image, ui_tree returns the accessibility tree with stable element refs (prefer it over pixels), ui_windows lists windows, state_hash cheaply detects change, wait_idle/wait_window wait for the UI to settle. Off-machine by default: only call it when the current task is about this workstation.",
+    description: "Observe the operator's Windows desktop through the paired local PC agent (read-only, tier 0). Use this before acting: screen_snapshot returns an image, ui_tree returns the accessibility tree with stable element refs (prefer it over pixels), ui_windows lists windows, state_hash cheaply detects change, wait_idle/wait_window wait for the UI to settle. Host inventory on the same paired machine: system_info (OS/host identity), list_processes, list_dir and read_file — the local-host collector's channel. Off-machine by default: only call it when the current task is about this workstation.",
     parameters: {
         type: "object",
         properties: {
             operation: { type: "string", enum: [...PC_OBSERVE_OPERATIONS] },
+            path: { type: "string", description: "list_dir/read_file: path on the paired machine." },
             window: { type: "string", description: "Window ref from ui_windows, when the operation is window-scoped." },
             ref: { type: "string", description: "Element ref from ui_tree, for ui_describe." },
             quietMs: { type: "number", description: "wait_idle: how long the UI must stay unchanged." },

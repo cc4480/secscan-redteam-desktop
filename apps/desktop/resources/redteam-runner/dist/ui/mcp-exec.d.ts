@@ -1,18 +1,23 @@
 /**
- * MCP surface for the runner's EXECUTOR tools (v0.30.0).
+ * MCP surface for the runner's EXECUTOR tools (v0.30.0; ungated v0.31.0).
  *
- * The 13 tools in mcp-tools.ts drive ENGAGEMENTS. These 32 drive the tools
- * INSIDE a running engagement: nuclei_exec, msf_exec, http_probe, ssh_exec,
- * ad_enum, query_registry, and the rest. Without them an operator could start
- * an engagement and read its results but never reach the tooling itself, which
- * is the whole point of a harness-connected red team.
+ * The 13 tools in mcp-tools.ts drive ENGAGEMENTS. These 27 are the tooling
+ * itself: nuclei_exec, msf_exec, http_probe, ssh_exec, ad_enum,
+ * query_registry, and the rest.
  *
- * Every tool requires an engagementId, and every call goes through
- * dispatchLiveTool -> dispatchTool, so the kill switch, the tier ladder,
- * auto-halt, the per-host rate limiter and the per-item variant cap all run
- * first. A Tier-1 call to `msf_exec run` is refused with the reason, exactly as
- * it would be for the engagement's own agents. This file adds reach, not
- * authority.
+ * engagementId is OPTIONAL, and the two modes are kept strictly apart:
+ *
+ *   - WITH the id of a running engagement, the call goes through
+ *     dispatchLiveTool -> dispatchTool and executes inside that
+ *     engagement's context, under exactly the machinery the engagement's
+ *     own agents run under. A non-live id is an honest error — it never
+ *     falls back to operator mode, because a call aimed at an engagement
+ *     must not silently retarget.
+ *   - WITHOUT an id, the call executes directly as an operator call
+ *     (src/operator.ts): the operator's own target, named in the call's
+ *     arguments, with no engagement to belong to and no liveness, tier or
+ *     scope gate in front of it. Carlos's order (2026-11-01): the tools
+ *     are not gated on an engagement existing.
  *
  * The schemas are NOT duplicated: they are the same JsonSchemaTool objects the
  * agents are given, with `engagementId` added. A tool that changes its
@@ -30,9 +35,10 @@ export declare const EXEC_TOOLS_BY_NAME: Map<string, ExecToolDef>;
 /** Just the names — used by the tests that pin the surface size. */
 export declare const EXEC_TOOL_NAMES: string[];
 /**
- * The discovery tool. An agent that cannot tell what is live cannot use any of
- * the 26, and "which engagement?" is the first question every one of them
- * requires answering.
+ * The discovery tool: which engagements are live in this process, for
+ * callers who want to aim an executor call at one. Pure discovery — no
+ * executor tool depends on it; every one of them also runs with no
+ * engagementId at all, as a direct operator call.
  */
 export declare const LIST_LIVE_TOOL: ExecToolDef;
 /** Guard used by the endpoint: does this tool drive a live engagement? */

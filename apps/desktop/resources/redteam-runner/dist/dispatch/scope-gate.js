@@ -38,9 +38,13 @@ export function checkScopeGate(ctx, phase, call, host) {
     if (host) {
         const verdict = guard.checkHost(host);
         if (!verdict.allowed) {
+            // The scope the denial names is the attested record scope once
+            // authorize has stamped it (ctx.verifiedScope governs the guard);
+            // before that, the launch ROE is the only declared scope there is.
+            const declaredScope = ctx.verifiedScope ?? ctx.input.roe.scope;
             const result = verdict.kind === "deny"
                 ? `DENIED by scope: ${verdict.reason}. This host must never be touched in this engagement — pivot to an in-scope target or report the block.`
-                : `DENIED by scope: ${verdict.reason}. Touch nothing outside the declared scope (scope: ${ctx.input.roe.scope.join(", ") || "(empty)"}) — pivot to an in-scope target or report the block.`;
+                : `DENIED by scope: ${verdict.reason}. Touch nothing outside the declared scope (scope: ${declaredScope.join(", ") || "(empty)"}) — pivot to an in-scope target or report the block.`;
             ctx.events.append({
                 phase,
                 actor: "runner",

@@ -49,8 +49,8 @@ export declare function deriveTargetClass(input: {
 }): string;
 /**
  * Outcome rule (mechanical, from the recorded engagement status):
- *  - aborted: the kill switch fired (aborted flag or an "aborted by operator"
- *    halt reason);
+ *  - aborted: the run ended halted (a HaltError unwind), or its recorded
+ *    blocked reason names an abort (historical records);
  *  - success: completed with confirmed evidence (findings or proven exploits);
  *  - partial: completed clean, or halted while carrying confirmed evidence;
  *  - failure: halted with no confirmed evidence, or blocked before the run.
@@ -104,5 +104,7 @@ export interface EngagementCaptureInput {
  * The single additive call site: called from runEngagement's finally block for
  * every outcome (complete, halted, blocked). Guarded so a capture problem can
  * never throw into an engagement run; returns null when nothing was captured.
+ * After the trajectory write it also feeds the Foundry store (see
+ * foundry/capture.ts) under the same isolation guarantee.
  */
 export declare function captureEngagementTrajectory(input: EngagementCaptureInput): RunMetrics | null;

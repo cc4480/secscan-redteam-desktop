@@ -18,12 +18,7 @@ export declare class McpClient {
     private unwrap;
     /** Call any MCP tool by name; returns the concatenated text content. Throws on isError. */
     callTool(name: string, args?: Record<string, unknown>): Promise<string>;
-    scanUrl(url: string, aggressive?: boolean): Promise<string>;
-    getScanStatus(scanId: string, waitSeconds?: number): Promise<string>;
-    getReport(scanId: string): Promise<string>;
-    listRecentScans(limit?: number): Promise<string>;
     listVerifiedDomains(): Promise<string>;
     startDomainVerification(domain: string): Promise<string>;
     checkDomainVerification(domain: string): Promise<string>;
-    getAccount(): Promise<string>;
 }

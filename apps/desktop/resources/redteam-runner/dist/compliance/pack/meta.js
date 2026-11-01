@@ -9,7 +9,7 @@ import { buildRetestEvidence } from "./findings.js";
 /** The tools the runner can put in play — named exactly as the agents know them. */
 export const METHODOLOGY_TOOLS = [
     "http_probe (web/API reconnaissance)",
-    "scan_url (SecScan assessment via MCP)",
+    "secscan_exec (SecScan assessment, embedded engine)",
     "ssh_exec (Linux command execution)",
     "smb_exec (SMB share/directory enumeration)",
     "winrm_exec (Windows command execution)",
@@ -21,7 +21,7 @@ export const METHODOLOGY_TOOLS = [
     "nfs_enum (userland NFS export enumeration)",
     "winrm_probe (unauthenticated WinRM listener probe)",
     "rdp_shadow_prep (RDP session enumeration for human handoff)",
-    "msf_exec (Metasploit module suggest/search/run — coordinator-approved, canary payloads only)",
+    "msf_exec (Metasploit module suggest/search/run + session actions — coordinator-approved; generic payloads run the runner-built canary marker only, Meterpreter session payloads open only on a validated run, credential dumps sealed to the evidence store)",
 ];
 /** What the runner never does — stated in the methodology so a QSA sees the boundary. */
 export const METHODOLOGY_EXCLUSIONS = [
@@ -73,7 +73,7 @@ export function buildCompliancePack(input) {
         },
         methodology: {
             approach: "Testing was performed by an autonomous AI agent team operating under mechanical safety rails. " +
-                "Four roles collaborate on shared operation state: the coordinator (plans the operation, owns phase sign-off gates and the kill switch), " +
+                "Four roles collaborate on shared operation state: the coordinator (plans the operation, owns phase sign-off gates), " +
                 "recon (maps the attack surface), the exploiter (forms hypotheses and executes probes — each probe is one reasoning step, never a blind scan), " +
                 "and the reporter (writes the client report; runner-computed facts are appended deterministically, never trusted to the model). " +
                 "Coordinator sign-off is required at every phase transition (plan→recon→exploit→report). " +
@@ -89,8 +89,11 @@ export function buildCompliancePack(input) {
             ],
             toolsUsed: METHODOLOGY_TOOLS,
             validationStandard: "Proof of execution, not assertion: every claimed exploitation is validated by a runner-built benign canary marker " +
-                "(e.g. echo REDTEAM-MARKER-<id>) whose echo back IS the validation. No destructive payloads, no real data exfiltration, " +
-                "no persistent changes to the target. Killed hypotheses are recorded with their killing observations as negative evidence.",
+                "(e.g. echo REDTEAM-MARKER-<id>) whose echo back IS the validation — echoed through the session itself when a " +
+                "Meterpreter session payload delivered the run. No destructive payloads, no persistent changes to the target. " +
+                "Credential material an authorized dump collects is sealed to the engagement evidence store; results and reports " +
+                "carry counts, types, and references only, never raw secrets. Killed hypotheses are recorded with their killing " +
+                "observations as negative evidence.",
             exclusions: METHODOLOGY_EXCLUSIONS,
             authorization: "Authorization was proven before any active testing via server-authoritative domain-ownership verification " +
                 `(proof reference: ${input.verificationProof ?? "not recorded"}). Testing stayed inside the declared ROE scope at all times ` +

@@ -5,9 +5,6 @@ import { HOST_EXEC_TIMEOUT_MS, capOutput, validateHostTarget } from "../common.j
 import { spnHostname } from "../krb.js";
 export async function krbPttImpl(core, args) {
     const started = Date.now();
-    if (core.killSwitch.aborted) {
-        return core.refusedResult("winrm", args.host, "kill switch active — coordinator aborted; no new host executions");
-    }
     const v = validateHostTarget(args.host, args.scopeHosts);
     if (!v.ok)
         return core.refusedResult("winrm", args.host, v.reason);

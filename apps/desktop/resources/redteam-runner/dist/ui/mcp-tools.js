@@ -12,8 +12,10 @@
 import { handleList, handleDetail, handleLaunch } from "./routes/engagements.js";
 import { handleFindings, handleProof } from "./routes/findings.js";
 import { handleCoverage, handleCompliance } from "./routes/coverage.js";
-import { handleAbort, handleEscalate, handleReverify, handleWatchProfiles, handleWatchTrigger } from "./routes/actions.js";
+import { handleEscalate, handleReverify, handleWatchProfiles, handleWatchTrigger } from "./routes/actions.js";
 import { engagementDir } from "./store.js";
+import { ENGAGEMENT_TOOLS } from "./engagement-tools.js";
+import { LOCAL_TOOLS } from "./local-tools.js";
 import { readEvents } from "../events.js";
 /** Stand in for ServerResponse. Handlers only ever call writeHead and end. */
 export function capture() {
@@ -68,7 +70,7 @@ function byId(fn) {
         return c.result();
     };
 }
-export const TOOLS = [
+const COCKPIT_TOOLS = [
     {
         name: "list_engagements",
         description: "List every engagement this console knows: live runs first, then history.",
@@ -188,21 +190,6 @@ export const TOOLS = [
         run: byId(handleCompliance),
     },
     {
-        name: "abort_engagement",
-        description: "Kill switch. Stops a live run; works on CLI-launched runs too.",
-        inputSchema: {
-            type: "object",
-            properties: { id: req("Engagement id"), reason: str("Why the run is being stopped") },
-            required: ["id"],
-            additionalProperties: false,
-        },
-        run: async (store, a) => {
-            const c = capture();
-            handleAbort(store, c.res, String(a["id"]), a);
-            return c.result();
-        },
-    },
-    {
         name: "escalate",
         description: "Change an engagement's autonomy tier mid-run. Raising it requires an operator name and a reason; lowering is free but logged. "
             + "Tier 2 on production additionally needs explicit confirmation.",
@@ -265,5 +252,12 @@ export const TOOLS = [
         },
     },
 ];
+/**
+ * The full cockpit surface: the CLI-shaped tools above plus the
+ * chat-shaped engagement trio (engagement-tools.ts). One list, so the
+ * console chat and the desktop host's chat — both fed by mcp-endpoint.ts —
+ * see the same registry.
+ */
+export const TOOLS = [...COCKPIT_TOOLS, ...ENGAGEMENT_TOOLS, ...LOCAL_TOOLS];
 export const TOOLS_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
 //# sourceMappingURL=mcp-tools.js.map

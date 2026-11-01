@@ -1,21 +1,22 @@
-/**
- * Planning phase (v0.19.0 refactor — extracted from phases.ts).
- */
-import { ABORT_TOOL, READ_TOOLS } from "../tools.js";
 import { agentLoop, promptCtx } from "../agents.js";
 import { coordinatorPrompt } from "../prompts.js";
 import { extractJsonBlock } from "../util.js";
 import { lookupTechnique } from "../attack.js";
 import { techniqueAllowed } from "../gate.js";
+import { ensureWorkGraph } from "../workgraph/wiring.js";
 export async function planPhase(ctx, critique) {
     if (ctx.config.dryRunAgents) {
         ctx.plan = { mode: ctx.input.mode, objective: ctx.input.objective, adversaryProfile: "dry-run", steps: [] };
         ctx.events.updateState({ plan: ctx.plan });
         ctx.events.append({ phase: "plan", actor: "coordinator", action: "plan", result: "dry-run: planning skipped." });
+        ensureWorkGraph(ctx);
         return;
     }
     const text = await agentLoop(ctx, "coordinator", "plan", coordinatorPrompt(promptCtx(ctx)), `Authorization is proven for ${ctx.domain} (${ctx.verificationProof}). Produce the operation plan as JSON now: { "adversaryProfile": "...", "steps": [{ "phase": "recon|exploit", "attackId": "Txxxx", "description": "...", "stealthNote": "..." }] }.` +
-        (critique ? `\n\nCOMMANDER REDIRECT on the previous plan: ${critique}. Revise the plan accordingly.` : ""), [...READ_TOOLS, ABORT_TOOL], 4);
+        (critique ? `\n\nCOMMANDER REDIRECT on the previous plan: ${critique}. Revise the plan accordingly.` : ""), [], 4, 
+    // Q-STRUCT A3: same adoption as directive — the plan text is parsed as
+    // JSON below, so the loop runs under object mode.
+    { responseFormat: { type: "json_object" } });
     const parsed = extractJsonBlock(text);
     const steps = [];
     if (parsed && Array.isArray(parsed.steps)) {
@@ -25,7 +26,7 @@ export async function planPhase(ctx, critique) {
                 ctx.events.append({ phase: "plan", actor: "runner", action: "plan_step_rejected", attackId, result: `Unknown ATT&CK ID ${attackId} — step rejected.` });
                 continue;
             }
-            if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe)) {
+            if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe, { testMode: ctx.config?.testMode === true })) {
                 ctx.events.append({ phase: "plan", actor: "runner", action: "plan_step_rejected", attackId, result: `Technique ${attackId} excluded by ROE/mode — step rejected.` });
                 continue;
             }
@@ -46,6 +47,9 @@ export async function planPhase(ctx, critique) {
         steps,
     };
     ctx.events.updateState({ plan: ctx.plan });
+    // A4 Deeper: the plan is the work-graph's Generator decomposition —
+    // persisted now, resumed (not rebuilt) on a relaunch of this engagement.
+    ensureWorkGraph(ctx);
 }
 // ---------------------------------------------------------------------------
 // Coordinator command authority: sign-offs, redirects, abort (Megazord protocol)

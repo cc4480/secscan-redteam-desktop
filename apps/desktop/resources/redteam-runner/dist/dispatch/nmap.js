@@ -2,8 +2,8 @@
  * Nmap bridge tool handler: nmap_exec (v0.31.0).
  *
  * Mirrors the nuclei_exec dispatcher shape: ROE technique check, explicit
- * targetProfile pinning (windows|linux, never inferred), kill-switch controller
- * registration, coverage counting.
+ * targetProfile pinning (windows|linux, never inferred), per-call abort
+ * signal, coverage counting.
  *
  * Two deliberate differences from nuclei_exec:
  *
@@ -34,7 +34,7 @@ export async function handleNmapTools(ctx, _role, _phase, call, args) {
     const rawCat = (strArg(args, "category") ?? "").toLowerCase();
     const category = BATTERY_CATEGORIES.includes(rawCat) ? rawCat : undefined;
     const host = String(args["host"] ?? "");
-    if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe)) {
+    if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe, { testMode: ctx.config?.testMode === true })) {
         return { result: `DENIED by ROE: technique ${attackId} is excluded for this engagement.`, attackId, target: host };
     }
     const rawTp = (strArg(args, "targetProfile") ?? "").toLowerCase();
@@ -46,7 +46,7 @@ export async function handleNmapTools(ctx, _role, _phase, call, args) {
         };
     }
     if (!host)
-        return { result: "DENIED: nmap_exec requires a host.", attackId, target: "" };
+        return { result: "DENIED: nmap_exec requires a host.", attackId, target: "", repairable: "nmap_exec requires a 'host' argument" };
     const action = args["action"] === "scan" ? "scan" : "profiles";
     const profileId = strArg(args, "profile") ?? "quick";
     const profile = findProfile(profileId);
@@ -55,6 +55,7 @@ export async function handleNmapTools(ctx, _role, _phase, call, args) {
             result: `DENIED: unknown profile ${JSON.stringify(profileId)} — available: ${NMAP_PROFILES.map((p) => p.id).join(", ")}.`,
             attackId,
             target: host,
+            repairable: `unknown profile ${JSON.stringify(profileId)} for nmap_exec`,
         };
     }
     // Profile tier gate — see the header. A profile above the declared tier is
@@ -69,7 +70,7 @@ export async function handleNmapTools(ctx, _role, _phase, call, args) {
     // Scope gate — fail closed BEFORE any packet. The executor deliberately does
     // NOT re-check (its contract says the dispatch layer owns the ROE host check),
     // so this is the one and only place it happens. Every other host-touching
-    // tool (prober, scan_url, host-exec, nuclei, msf) validates here; nmap must
+    // tool (prober, secscan_exec, host-exec, nuclei, msf) validates here; nmap must
     // not be the exception, or an agent can point a port sweep at any host/CIDR.
     if (action === "scan") {
         const scope = validateHostTarget(host, ctx.hosts);
@@ -80,7 +81,6 @@ export async function handleNmapTools(ctx, _role, _phase, call, args) {
     ctx.probesUsed++;
     noteCategoryCoverage(ctx, category, rawTp);
     const ctrl = new AbortController();
-    ctx.hostKill.controllers.add(ctrl);
     try {
         if (ctx.input.mode === "black")
             await sleep(Math.random() * 2500); // jitter
@@ -116,7 +116,6 @@ export async function handleNmapTools(ctx, _role, _phase, call, args) {
         return { result: `${res.message}\n${lines.join("\n")}`, attackId, target: host };
     }
     finally {
-        ctx.hostKill.controllers.delete(ctrl);
     }
 }
 //# sourceMappingURL=nmap.js.map

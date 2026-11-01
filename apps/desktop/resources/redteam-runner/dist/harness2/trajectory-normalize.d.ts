@@ -5,7 +5,11 @@
  *
  * TOKEN CAPTURE (H2-P1):
  *   The llm-router exposes usage: ChatResult.usage = { promptTokens,
- *   completionTokens, totalTokens } (packages/redteam/llm-router/src/types.ts).
+ *   completionTokens, totalTokens, cacheReadTokens? } (packages/redteam/
+ *   llm-router/src/types.ts). On the OpenAI-shaped wire promptTokens is the
+ *   gross prompt, cached tokens included; cacheReadTokens is the cached
+ *   subset when the provider reports the split, so fresh input is
+ *   tokensIn - cacheReadTokens.
  *   agents.ts agentLoop now records EVERY response into the per-engagement
  *   meter below (`tokenMeterFor(ctx).record(res.usage)` right after the
  *   complete() call), and captureEngagementTrajectory reads `meter.totals`, so
@@ -14,17 +18,25 @@
  *   A recorded 0 therefore means "no model response happened (or the run
  *   predates the meter)", never an estimate: nothing here guesses token counts.
  */
-import type { EngagementEvent } from "../types.js";
-import type { TrajectoryEvent } from "./contract.js";
+import type { EngagementEvent } from '../types.js';
+import type { TrajectoryEvent } from './contract.js';
 /** One provider response's token usage, as ChatResult.usage reports it. */
 export interface LlmTokenUsage {
     readonly promptTokens?: number;
     readonly completionTokens?: number;
     readonly totalTokens?: number;
+    /** Cached subset of promptTokens, present only when the provider reports the split. */
+    readonly cacheReadTokens?: number;
 }
 export interface TokenTotals {
     readonly tokensIn: number;
     readonly tokensOut: number;
+    /**
+     * Cached-input tokens summed over the responses that reported the split;
+     * a subset of tokensIn, so fresh input is tokensIn - cacheReadTokens.
+     * Responses whose provider reports no split contribute 0.
+     */
+    readonly cacheReadTokens: number;
     /** Provider responses recorded, so a 0 is distinguishable from "no calls". */
     readonly responses: number;
 }

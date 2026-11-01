@@ -14,13 +14,6 @@ import { realNmapSpawn, parseNmapXml } from "./runner.js";
 import { connectScanArgv, isNmapPrivilegeFailure } from "./privilege.js";
 import { NMAP_PROFILES, buildNmapRunArgv, buildNmapProfileListArgv, checkNmapFlags, checkNmapScriptCategories, findProfile, resolveNmapBinary, resolveNmapTimeoutS, } from "./policy.js";
 export class NmapExecutor {
-    /**
-     * Kill switch, same contract as NucleiExecutor: the dispatcher hands the
-     * engagement's hostKill here, and a scan refuses to start once aborted. The
-     * scan already receives the controller's AbortSignal, so an IN-FLIGHT nmap is
-     * killed too — this flag is what stops the next one from starting.
-     */
-    killSwitch = { aborted: false };
     spawn;
     env;
     constructor(deps = {}) {
@@ -69,9 +62,6 @@ export class NmapExecutor {
      * reports what happened, including a refusal from policy.
      */
     async scan(args) {
-        if (this.killSwitch.aborted) {
-            return { ok: false, action: "scan", message: "ABORTED by operator (kill switch) — no scan started." };
-        }
         const profile = findProfile(args.profile);
         if (!profile) {
             return {

@@ -19,13 +19,6 @@ import { krbPttImpl } from "./executor/krb.js";
 export { parseAgentSocketCheck, parseAgentAbusePath } from "./executor/agent-audit.js";
 export class HostExecutor {
     core;
-    /** Kill-switch state, shared with the engagement context (phases.ts owns it). */
-    get killSwitch() {
-        return this.core.killSwitch;
-    }
-    set killSwitch(v) {
-        this.core.killSwitch = v;
-    }
     constructor(deps = {}) {
         this.core = new ExecutorCore(deps);
     }

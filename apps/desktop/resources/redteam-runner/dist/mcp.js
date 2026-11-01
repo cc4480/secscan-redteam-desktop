@@ -19,13 +19,17 @@ export class McpClient {
     token;
     timeoutMs;
     constructor(cfg) {
-        if (!cfg.token)
-            throw new Error("[mcp] SECSCAN_MCP_TOKEN is not set.");
+        // An empty token is constructible: in-house engagements carry no
+        // SecScan token at all, and the context builds this client before the
+        // authorize basis is known. The missing-token error surfaces at call
+        // time instead — the only place a token is actually needed.
         this.endpoint = cfg.endpoint.replace(/\/+$/, "");
         this.token = cfg.token;
         this.timeoutMs = cfg.timeoutMs ?? 30_000;
     }
     async post(body) {
+        if (!this.token)
+            throw new Error("[mcp] SECSCAN_MCP_TOKEN is not set.");
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
         try {
@@ -93,6 +97,13 @@ export class McpClient {
             method: "tools/call",
             params: { name, arguments: args },
         });
+        // A JSON-RPC error reply is a protocol failure, not an empty result:
+        // without this check it unwraps to a content-less object and the caller
+        // reads a server failure as a successful empty string.
+        const rpcError = raw?.error;
+        if (rpcError) {
+            throw new Error(`[mcp] ${name}: JSON-RPC error ${String(rpcError.code ?? "unknown")}: ${String(rpcError.message ?? "no message")}`);
+        }
         const result = this.unwrap(raw);
         if (!result)
             throw new Error(`[mcp] ${name}: empty result`);
@@ -105,19 +116,8 @@ export class McpClient {
             .map((c) => c.text)
             .join("\n");
     }
-    // Convenience wrappers (all read-only except scan_url / start_domain_verification).
-    scanUrl(url, aggressive = false) {
-        return this.callTool("scan_url", aggressive ? { url, aggressive: true } : { url });
-    }
-    getScanStatus(scanId, waitSeconds = 60) {
-        return this.callTool("get_scan_status", { scan_id: scanId, wait_seconds: waitSeconds });
-    }
-    getReport(scanId) {
-        return this.callTool("get_report", { scan_id: scanId });
-    }
-    listRecentScans(limit = 10) {
-        return this.callTool("list_recent_scans", { limit });
-    }
+    // Convenience wrappers for the domain-verification surface (all read-only
+    // except start_domain_verification, which opens a verification challenge).
     listVerifiedDomains() {
         return this.callTool("list_verified_domains", {});
     }
@@ -126,9 +126,6 @@ export class McpClient {
     }
     checkDomainVerification(domain) {
         return this.callTool("check_domain_verification", { domain });
-    }
-    getAccount() {
-        return this.callTool("get_account", {});
     }
 }
 //# sourceMappingURL=mcp.js.map

@@ -52,12 +52,12 @@
  * benchmark dir itself and in its benchmark-results/ subdir (score.py's
  * default --out). "Newest" is by file mtime, name as tiebreak.
  */
-import type { ServerResponse } from 'node:http'
-import type { UiStore } from '../store.js'
+import type { ServerResponse } from 'node:http';
+import type { UiStore } from '../store.js';
 /**
  * Handle GET /api/console/benchmark.
  * @param store - the UI store (paths resolve through consolePaths)
  * @param res - the HTTP response to write
  * @returns nothing; the response is written to res
  */
-export declare function handleConsoleBenchmark(store: UiStore, res: ServerResponse): void
+export declare function handleConsoleBenchmark(store: UiStore, res: ServerResponse): void;

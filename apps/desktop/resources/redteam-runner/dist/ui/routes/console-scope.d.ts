@@ -41,12 +41,14 @@
  *   latest: [{ ts, engagementId, kind, target, reason }],   // newest 50
  *   notes: string[],
  * }
- * or { available: false, reason } when no engagement dirs exist.
+ * An engagements root with no engagement dirs yet answers the same
+ * aggregate with every count zero and engagementsScanned 0 — an empty
+ * history is a valid state, not an error.
  * `denials` counts refused calls: each was refused inside dispatch,
  * before any handler ran — zero packets left the machine for them.
  * `halts` = targetAutoHalts + engagementHalts (aborts are counted
  * separately; an abort normally also produces an engagement_halted).
  */
-import type { ServerResponse } from 'node:http'
-import type { UiStore } from '../store.js'
-export declare function handleConsoleScope(store: UiStore, res: ServerResponse): void
+import type { ServerResponse } from 'node:http';
+import type { UiStore } from '../store.js';
+export declare function handleConsoleScope(store: UiStore, res: ServerResponse): void;

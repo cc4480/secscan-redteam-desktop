@@ -6,8 +6,8 @@
  *  - every /api/* route needs the startup token (Bearer or auth cookie)
  *  - / serves the dashboard only when authed, else a token login page
  */
-import { UiStore } from "./store.js";
-import type { UiServerOptions } from "./types.js";
+import { UiStore } from './store.js';
+import type { UiServerOptions } from './types.js';
 export interface UiServerHandle {
     port: number;
     /** The address the socket actually bound to (asserted 127.0.0.1 in tests). */

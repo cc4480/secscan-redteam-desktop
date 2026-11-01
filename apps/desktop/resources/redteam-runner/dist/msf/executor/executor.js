@@ -3,33 +3,43 @@
  * (Module doc comment preserved on the msf/executor.ts barrel.)
  *
  * Preflight order (mirrors host-exec/executor.ts):
- *   1. kill-switch check (refuse new work when the coordinator aborted)
- *   2. ROE scope check (exact hostname match, fail closed, before any packet)
- *   3. module/payload policy (dos + destructive modules refused; only
- *      generic single-command payloads; the command is always the runner-built
- *      canary marker and additionally passes the destructive denylist)
+ *   1. ROE scope check (exact hostname match, fail closed, before any packet)
+ *   2. module/payload policy (dos + destructive modules refused; generic
+ *      single-command payloads run the runner-built canary marker, which
+ *      additionally passes the destructive denylist; Meterpreter payloads
+ *      open a session — see 6)
  *   4. credential resolution (REDTEAM_MSFRPC_* env/Secure Vault only, fail
  *      fast with setup instructions)
  *   5. execution with timeout + abort signal; the console is destroyed on
- *      abort (that IS the kill switch for a running module)
- *   6. session hygiene: a validation run must not leave sessions behind —
- *      any session that wasn't there before is stopped immediately
+ *      abort (the call signal is what stops a running module)
+ *   6. session hygiene: a generic-payload validation run must not leave
+ *      sessions behind — any session that wasn't there before is stopped
+ *      immediately. A Meterpreter-payload run is the one exception (W8):
+ *      the session it produces is registered as the mechanical
+ *      follow-through of the validated run (executor/session-ops.ts) and
+ *      stays open under a runner-issued handle
  *   7. redaction of every secret from every string that leaves
  *
  * The request function is injectable so tests run against a fake msfrpcd.
  */
 import { capOutput, checkDestructive, redactSecrets, validateHostTarget } from "../../host-exec/common.js";
 import { MsfAuthError } from "../client.js";
-import { buildMarkerCommand, checkMsfModule, checkMsfPayload, } from "../policy.js";
+import { buildMarkerCommand, checkMsfModule, checkMsfPayload, isMsfSessionPayload, } from "../policy.js";
+import { MsfSessionManager } from "../sessions.js";
 import { filterAndRank, suggestModules } from "../suggest.js";
 import { authedClient } from "./auth.js";
+import { closeSession as closeMsfSession, finishSessionRun, sessionCommand as runSessionCommand, } from "./session-ops.js";
+import { credentialDump as runCredentialDump } from "./credential-dump.js";
 export const MSF_TIMEOUT_MS = 120_000; // exploits get longer than 30s host-exec
 export class MsfExecutor {
     deps;
-    /** Kill-switch state, shared with the engagement context (phases.ts owns it). */
-    killSwitch = { aborted: false };
+    /** TEST MODE: policy checks bypassed (see MsfDeps.testMode). */
+    testMode;
+    /** Live Meterpreter sessions opened by validated runs on this executor (W8). */
+    sessions = new MsfSessionManager();
     constructor(deps = {}) {
         this.deps = { request: deps.request, env: deps.env ?? process.env, endpoint: deps.endpoint };
+        this.testMode = deps.testMode === true;
     }
     refusedResult(host, refused, secrets = []) {
         return {
@@ -43,9 +53,6 @@ export class MsfExecutor {
         };
     }
     preflight(host, scopeHosts) {
-        if (this.killSwitch.aborted) {
-            return { refused: "kill switch active — coordinator aborted; no new msf executions" };
-        }
         const v = validateHostTarget(host, scopeHosts);
         if (!v.ok)
             return { refused: v.reason };
@@ -139,10 +146,13 @@ export class MsfExecutor {
         }
     }
     /**
-     * Run ONE module with a benign canary marker as the only payload action.
-     * Exploits use a generic cmd payload running `echo REDTEAM-MARKER-<id>` —
-     * the marker echoing back IS the validation ("command execution
-     * achieved"). No sessions, no post-exploitation, no destructive modules.
+     * Run ONE module. With a generic cmd payload, the only payload action is
+     * the benign canary marker: `echo REDTEAM-MARKER-<id>` echoing back IS
+     * the validation ("command execution achieved"). With a Meterpreter
+     * session payload (W8), the session the run produces is registered and
+     * the same marker is proven through the session — the session opens as
+     * the mechanical follow-through of the validated run, never before it.
+     * No destructive modules in either path.
      */
     async run(args) {
         const started = Date.now();
@@ -150,12 +160,15 @@ export class MsfExecutor {
         if ("refused" in pre)
             return this.refusedResult(args.host, pre.refused);
         // Policy first — before credentials, before any packet to msfrpcd.
-        const deniedModule = checkMsfModule(args.module, args.moduleType);
+        // TEST MODE: module/payload policy and the canary destructive check
+        // are bypassed (structural module validation inside checkMsfModule
+        // still applies); dispatch/msf.ts logs the would-be denials.
+        const deniedModule = checkMsfModule(args.module, args.moduleType, { testMode: this.testMode });
         if (deniedModule)
             return this.refusedResult(args.host, deniedModule);
         const payload = args.payload ?? (args.moduleType === "exploit" ? "cmd/unix/generic" : undefined);
         if (payload) {
-            const deniedPayload = checkMsfPayload(payload);
+            const deniedPayload = checkMsfPayload(payload, { testMode: this.testMode });
             if (deniedPayload)
                 return this.refusedResult(args.host, deniedPayload);
         }
@@ -164,7 +177,7 @@ export class MsfExecutor {
             return this.refusedResult(args.host, `marker command refused: ${deniedCmd}`);
         // The marker is fixed, but run it through the destructive denylist
         // anyway — defense in depth on the one command we ever fire.
-        const denied = checkDestructive(markerCmd);
+        const denied = this.testMode ? null : checkDestructive(markerCmd);
         if (denied)
             return this.refusedResult(args.host, `destructive-command denylist: ${denied}`);
         try {
@@ -187,6 +200,25 @@ export class MsfExecutor {
                 timeoutMs,
                 signal: args.signal,
             });
+            // W8: a Meterpreter payload's session is the mechanical
+            // follow-through of this validated run — register it and prove the
+            // marker through it instead of hygiene-stopping it.
+            if (payload && isMsfSessionPayload(payload)) {
+                return finishSessionRun(this, {
+                    client,
+                    secrets,
+                    before,
+                    console: res,
+                    targetHost: args.host,
+                    module: args.module,
+                    payload,
+                    marker: args.marker,
+                    markerCmd,
+                    timeoutMs,
+                    signal: args.signal,
+                    started,
+                });
+            }
             // Session hygiene: validation must not leave sessions behind.
             const after = await client.sessionList().catch(() => ({}));
             const strays = Object.keys(after).filter((id) => !before.has(id));
@@ -195,7 +227,7 @@ export class MsfExecutor {
             }
             const markerHit = res.output.includes(`REDTEAM-MARKER-`);
             const verdict = res.aborted
-                ? "ABORTED by kill switch (console destroyed)"
+                ? "ABORTED by call signal (console destroyed)"
                 : res.timedOut
                     ? "timed out (console destroyed)"
                     : markerHit
@@ -224,6 +256,18 @@ export class MsfExecutor {
                 refused: err instanceof MsfAuthError ? refused : undefined,
             };
         }
+    }
+    /** Run ONE command through a session a validated run opened (W8). See executor/session-ops.ts. */
+    async sessionCommand(args) {
+        return runSessionCommand(this, args);
+    }
+    /** Close a session a validated run opened (W8). See executor/session-ops.ts. */
+    async sessionClose(args) {
+        return closeMsfSession(this, args);
+    }
+    /** Dump credential material through an open session, sealed to evidence (W8). See executor/credential-dump.ts. */
+    async credentialDump(args) {
+        return runCredentialDump(this, args);
     }
 }
 //# sourceMappingURL=executor.js.map

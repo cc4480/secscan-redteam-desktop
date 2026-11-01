@@ -103,7 +103,7 @@ export function createRdpTransport() {
     return {
         async open(host, port, timeoutMs, signal) {
             if (signal?.aborted)
-                throw new Error("[rdp] aborted by kill switch before connect");
+                throw new Error("[rdp] aborted by call signal before connect");
             const sock = netConnect({ host, port });
             await new Promise((resolve, reject) => {
                 const timer = setTimeout(() => {
@@ -113,7 +113,7 @@ export function createRdpTransport() {
                 const onAbort = () => {
                     clearTimeout(timer);
                     sock.destroy();
-                    reject(new Error("[rdp] aborted by kill switch"));
+                    reject(new Error("[rdp] aborted by call signal"));
                 };
                 signal?.addEventListener("abort", onAbort, { once: true });
                 sock.once("connect", () => {

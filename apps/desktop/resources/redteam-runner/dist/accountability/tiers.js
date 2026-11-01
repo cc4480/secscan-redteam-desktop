@@ -30,7 +30,7 @@ export const TIER_NAMES = {
 export const TIER_DESCRIPTIONS = {
     0: "Read-only recon/enumeration. No exploitation tool fires.",
     1: "Single-step validated exploitation with canary markers only — one validated step per target; chaining needs Tier 2.",
-    2: "Multi-step attack chains toward critical assets (still non-destructive, still no-DoS).",
+    2: "Multi-step attack chains toward critical assets (still non-destructive). Tier 2 also unlocks the net_exec flood primitive — bounded load generation under executor-enforced rate/duration/concurrency hard caps, exploit phase only, production confirmation required on production.",
 };
 /** Default tier per environment: staging runs the full battery, production validates carefully. */
 export function defaultTier(environment) {
@@ -80,10 +80,6 @@ export function requireTier2ProductionApproval(tier, environment, confirmed) {
 // ---------------------------------------------------------------------------
 /** Tool names that never touch a target: pure bookkeeping / control. */
 const TIER0_TOOLS = new Set([
-    "get_scan_status",
-    "get_report",
-    "list_recent_scans",
-    "get_account",
     "query_registry",
     "update_target_map",
     "record_finding",
@@ -92,8 +88,12 @@ const TIER0_TOOLS = new Set([
     "variant_list", // v0.20.0: pure bookkeeping — returns curated payloads, never fires
     "http_probe",
     "burst_probe",
-    // abort_engagement is always allowed — the kill switch must work at every tier.
-    "abort_engagement",
+    // Web research (the deep-research-osint skill's execution layer):
+    // read-only lookups against public sources, never target traffic.
+    // The skill's scope law for target-named queries is enforced in the
+    // research handler, not by the tier ladder.
+    "research_search",
+    "research_fetch",
 ]);
 /** Single validated exploit steps (one command, canary marker). Never chains by itself. */
 const TIER1_TOOLS = new Set([
@@ -108,12 +108,25 @@ const TIER1_TOOLS = new Set([
     "krb_ptt",
     "ssh_agent_audit",
     "nfs_enum",
+    // Native Seclayer modules: active single-target web app tests (exploit
+    // attempts, authenticated probes) — validated steps, and every call is
+    // additionally refused without owner verification on the record.
+    "seclayer_redteam",
+    "seclayer_bola",
+    "seclayer_api",
+    "seclayer_webhook",
+    "seclayer_dast",
+    "seclayer_aggressive",
 ]);
 /**
  * Minimum tier for a tool call. Three tools are argument-sensitive:
- *  - scan_url: passive scan is Tier 0; aggressive=true runs the active test
- *    tier (injection, XSS, SSRF) → Tier 1.
- *  - msf_exec: search/suggest never fire → Tier 1; run fires exploits → Tier 2.
+ *  - secscan_exec: depth=passive is Tier 0; depth=deep runs the embedded
+ *    engine's verification-gated active web app tests → Tier 1 (the ladder
+ *    the retired scan_url wrapper used; the verification-record refusal
+ *    itself lives in the dispatch handler, which can name what is missing).
+ *  - msf_exec: search/suggest never fire → Tier 1; run fires exploits and
+ *    the session actions (session_command / credential_dump /
+ *    session_close) act through a live session on the target → Tier 2.
  *  - nuclei_exec: templates never fires (local template listing) → Tier 1;
  *    run executes templates against the target → Tier 2.
  *  - nmap_exec: profiles touches no target (it runs `nmap --version`) → Tier 0;
@@ -122,13 +135,16 @@ const TIER1_TOOLS = new Set([
  *    would be as reachable at Tier 0 as a top-100 sweep. The same gate is
  *    enforced again in the nmap dispatch handler, which is where the refusal
  *    can name the tier that would allow it.
+ *  - net_exec: caps touches no target → Tier 0; socket/packet/flood actions
+ *    fire raw traffic → Tier 2 (see the branch below).
  */
 export function toolMinTier(toolName, args = {}) {
-    if (toolName === "scan_url") {
-        return args["aggressive"] === true ? 1 : 0;
+    if (toolName === "secscan_exec") {
+        return args["depth"] === "deep" ? 1 : 0;
     }
     if (toolName === "msf_exec") {
-        return args["action"] === "run" ? 2 : 1;
+        const a = args["action"];
+        return a === "run" || a === "session_command" || a === "credential_dump" || a === "session_close" ? 2 : 1;
     }
     if (toolName === "nuclei_exec") {
         return args["action"] === "run" ? 2 : 1;
@@ -138,6 +154,14 @@ export function toolMinTier(toolName, args = {}) {
             return 0;
         const id = typeof args["profile"] === "string" ? args["profile"] : "quick";
         return (findProfile(id)?.minTier ?? 0);
+    }
+    // net_exec: caps touches no target → Tier 0. Every target action is
+    // Tier 2 — a raw byte channel, crafted packets, and load generation are
+    // chain-level capabilities, never single validated steps. The flood's
+    // own caps (rate/duration/concurrency, executor-enforced) and its
+    // production-confirmation gate live in the net dispatch handler.
+    if (toolName === "net_exec") {
+        return args["action"] === "caps" ? 0 : 2;
     }
     // v0.32.0 external-tool bridge: probe runs nothing -> Tier 0; a run takes the
     // SELECTED PROFILE's tier, same reasoning as nmap_exec — all profiles of one
@@ -163,10 +187,10 @@ export function toolMinTier(toolName, args = {}) {
  * ad_enum, nfs_enum, ssh_agent_audit, rdp_shadow_prep) observe; they don't
  * execute against the target, so they don't consume the budget.
  */
-const EXPLOIT_STEP_TOOLS = new Set(["ssh_exec", "smb_exec", "winrm_exec", "smb_pth", "krb_ptt", "rdp_auth"]);
+const EXPLOIT_STEP_TOOLS = new Set(["ssh_exec", "smb_exec", "winrm_exec", "smb_pth", "krb_ptt", "rdp_auth", "seclayer_redteam", "seclayer_bola", "seclayer_api", "seclayer_webhook", "seclayer_dast", "seclayer_aggressive"]);
 export function isExploitStepTool(toolName, args = {}) {
-    if (toolName === "scan_url")
-        return args["aggressive"] === true;
+    if (toolName === "secscan_exec")
+        return args["depth"] === "deep";
     return EXPLOIT_STEP_TOOLS.has(toolName);
 }
 /** Tier 1 chain budget: validated exploit steps allowed per target per engagement. */

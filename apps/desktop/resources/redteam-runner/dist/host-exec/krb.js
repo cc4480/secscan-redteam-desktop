@@ -93,7 +93,7 @@ export function createKrbTransport(deps) {
             args.signal?.addEventListener("abort", cleanup, { once: true });
             try {
                 if (args.signal?.aborted)
-                    throw new Error("[krb] aborted by kill switch");
+                    throw new Error("[krb] aborted by call signal");
                 for (const t of ["klist", "kvno"]) {
                     if (!(await haveTool(t))) {
                         return {

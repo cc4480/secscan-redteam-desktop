@@ -11,8 +11,8 @@ import { createSshTransport } from "../ssh.js";
 import { createWinrmTransport } from "../winrm.js";
 export class ExecutorCore {
     deps;
-    /** Kill-switch state, shared with the engagement context (phases.ts owns it). */
-    killSwitch = { aborted: false };
+    /** TEST MODE: preflight skips the destructive-command denylist (see HostExecDeps.testMode). */
+    testMode;
     async bounded(p, ms, label, t) {
         let timer;
         try {
@@ -44,16 +44,14 @@ export class ExecutorCore {
             nfs: deps.nfs ?? createNfsTransport,
             env: deps.env ?? process.env,
         };
+        this.testMode = deps.testMode === true;
     }
     preflight(transport, host, scopeHosts, command) {
-        if (this.killSwitch.aborted) {
-            return { refused: "kill switch active — coordinator aborted; no new host executions" };
-        }
         const v = validateHostTarget(host, scopeHosts);
         if (!v.ok)
             return { refused: v.reason };
         if (command) {
-            const denied = checkDestructive(command);
+            const denied = this.testMode ? null : checkDestructive(command);
             if (denied)
                 return { refused: `destructive-command denylist: ${denied}` };
         }
@@ -71,14 +69,11 @@ export class ExecutorCore {
     }
     /**
      * Preflight for unauthenticated recon (WinRM probe, NFS enumeration):
-     * kill-switch → scope check, then done. No credential resolution —
+     * scope check, then done. No credential resolution —
      * these tools are unauthenticated by design, so no secrets exist and
      * redaction over [] is a no-op. No denylist either — no commands run.
      */
     preflightNoCreds(_transport, host, scopeHosts) {
-        if (this.killSwitch.aborted) {
-            return { refused: "kill switch active — coordinator aborted; no new host executions" };
-        }
         const v = validateHostTarget(host, scopeHosts);
         if (!v.ok)
             return { refused: v.reason };
