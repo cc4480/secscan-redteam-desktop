@@ -5,7 +5,7 @@
 # and before the profile's own cordis.patch.yml - so a person can still override
 # or disable any row by id in their own patch layer.
 #
-# Seven rows:
+# Twelve rows:
 #   1. mcp-secscan      - the harness-NATIVE MCP client
 #                         (@deepseek-ai/dsh-mcp-client) over Streamable HTTP.
 #                         Tools appear namespaced mcp__secscan__scan_url,
@@ -33,6 +33,22 @@
 #   8. command-redteam  - @secscan/redteam-command: the operator's RedTeam
 #                         slash commands (/scan, /status, /report, /stop,
 #                         /use) over the harness command registry.
+#   9. speech-to-text   - the dictation provider registry
+#                         (@deepseek-ai/dsh-experimental-speech-to-text):
+#                         exact provider routing with no fallback; its
+#                         volatile Settings (provider, language) are the
+#                         operator's audio options.
+#  10. speech-to-text-sensevoice - the local SenseVoice recognizer
+#                         (provider id sensevoice-local): ONNX inference in
+#                         a managed subprocess; models download only on the
+#                         operator's explicit preparation, never on mount.
+#  11. api-speech-to-text - the authenticated loopback channel carrying
+#                         complete recordings from the client to the Host
+#                         provider.
+#  12. ui-voice-input   - the composer microphone control: record on click,
+#                         transcribe on Stop, insert the text into the draft.
+#                         Nothing reaches the model until the operator
+#                         submits the draft as ordinary text.
 #
 # Secrets are cordis-native: schemastery Config with env fallbacks.
 # NEVER put a raw key in this file.
@@ -300,3 +316,29 @@
 
     - id: ui-agent-team
       name: '@deepseek-ai/dsh-experimental-client-ui-agent-team'
+
+    # Voice input: the composer's microphone, restored as shipped product
+    # rows. These four rows mirror the experimental voice-input bundle's own
+    # patch verbatim (same ids, names and config), the same way the Team
+    # rows above mirror the agent-team profile: the voice bundle itself is
+    # an optional bundle no shipped template selects, so without these rows
+    # the desktop product has no dictation at all. Mounting allocates
+    # nothing - the SenseVoice models download only when the operator
+    # explicitly prepares them from the voice setup surface - and routing
+    # stays exact: the registry never falls back to another provider, so a
+    # local failure can never silently upload speech anywhere.
+    - id: speech-to-text
+      name: '@deepseek-ai/dsh-experimental-speech-to-text'
+      config:
+        defaultProvider: sensevoice-local
+
+    - id: speech-to-text-sensevoice
+      name: '@deepseek-ai/dsh-experimental-speech-to-text-sensevoice'
+      config:
+        dataRoot: !!js dshHomePath('speech-to-text', 'sensevoice')
+
+    - id: api-speech-to-text
+      name: '@deepseek-ai/dsh-experimental-api-speech-to-text'
+
+    - id: ui-voice-input
+      name: '@deepseek-ai/dsh-experimental-client-ui-voice-input'
