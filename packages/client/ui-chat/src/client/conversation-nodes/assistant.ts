@@ -199,6 +199,10 @@ function finalNode(
       step: state.step,
       blocks: toAssistantBlocks(event.data.message.content),
       usage: event.data.usage,
+      providerMetadata: {
+        provider: event.data.message.source.provider,
+        model: event.data.message.source.model,
+      },
       timing: {
         stepStartTime: context.start?.event.time ?? null,
         firstTokenTime: state.firstTokenTime ?? null,
@@ -274,6 +278,7 @@ function projectAssistant(context: ConversationNodeContext<AssistantState>): Ass
       time,
       ...state.usage === undefined ? {} : { usage: state.usage },
       ...settled === undefined ? {} : { finalNode: settled },
+      ...settled?.providerMetadata === undefined ? {} : { model: settled.providerMetadata.model },
     },
   }
 }

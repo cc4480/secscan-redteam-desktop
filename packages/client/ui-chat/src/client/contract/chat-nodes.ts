@@ -26,6 +26,21 @@ export type ChatNode<Kind extends ChatNodeKind = ChatNodeKind> = {
   }
 }[Kind]
 
+/** Fleet seat an identified Assistant speaker spoke from; role words are locale copy. */
+export type AssistantSpeakerRole = 'lead' | 'recon' | 'exploiter' | 'architect' | 'reporter'
+
+/**
+ * Recorded identity of the fleet agent that produced one Assistant step.
+ * The name is data recorded by the producing layer and renders verbatim;
+ * the Chat projection never invents one.
+ */
+export interface AssistantSpeaker {
+  /** Agent name as recorded (for example `NEO`). */
+  readonly name: string
+  /** Fleet seat the agent spoke from. */
+  readonly role: AssistantSpeakerRole
+}
+
 /** Final Assistant row payload shared by streaming and settled states. */
 export interface AssistantChatData {
   readonly status: 'running' | 'settled' | 'interrupted'
@@ -35,6 +50,17 @@ export interface AssistantChatData {
   readonly time: number
   readonly usage?: unknown
   readonly finalNode?: AssistantMessageNode
+  /**
+   * Model id recorded on the settled message's source (`assistant/message`);
+   * absent while the step is streaming or on interruption fallbacks, which
+   * have no settled message to read it from.
+   */
+  readonly model?: string
+  /**
+   * Fleet speaker recorded for this step; absent when no layer recorded one.
+   * Ordinary turns carry no speaker and the chip falls back to {@link model}.
+   */
+  readonly speaker?: AssistantSpeaker
 }
 
 /** Settled or interrupted Assistant payload with its durable presentation node. */

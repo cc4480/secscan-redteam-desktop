@@ -4,7 +4,9 @@ import type { ReactNode } from 'react'
 import { JsonBlock, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MarkdownFileMentions, MarkdownPathImages } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatNodeOwnerProps, ChatViewSlotProps, UseDisclosure, UsePresentation } from '../contract/slots.ts'
+import type { AssistantSpeaker, AssistantSpeakerRole } from '../contract/chat-nodes.ts'
 import type { AssistantBlock } from '../contract/snapshot.ts'
+import type { ChatKey } from '../locale.ts'
 import { markdownLabels } from '../markdown-labels.ts'
 import { ReasoningRow } from './ReasoningRow.tsx'
 import { ThreadItem } from './ThreadItem.tsx'
@@ -47,14 +49,33 @@ export interface AssistantMarkdownProps {
   revealProcess?: (() => void) | undefined
   /** Resolved prose file mentions for this Assistant's closing turn. */
   mentions?: MarkdownFileMentions | undefined
+  /**
+   * Fleet speaker recorded for this step. When present, the card chip names
+   * the agent (`NAME · Role`) instead of the generic model label.
+   */
+  speaker?: AssistantSpeaker | undefined
+  /**
+   * Model id recorded for this step; the card chip shows it when no fleet
+   * speaker is recorded, so a settled turn never reads as a bare `Model`.
+   */
+  model?: string | undefined
   /** The owning view's locale seat, passed down as a plain prop. */
   t: ChatViewSlotProps['t']
+}
+
+/** Locale key of one fleet seat's role word; agent names are data, roles are copy. */
+const SPEAKER_ROLE_KEYS: Readonly<Record<AssistantSpeakerRole, ChatKey>> = {
+  lead: 'thread.speaker.lead',
+  recon: 'thread.speaker.recon',
+  exploiter: 'thread.speaker.exploiter',
+  architect: 'thread.speaker.architect',
+  reporter: 'thread.speaker.reporter',
 }
 
 /** Reasoning block as the Think variant summary row (figma 39:28304). */
 export const AssistantMarkdown = memo(function AssistantMarkdown({
   blocks, streaming, interrupted, renderMessageImages, groupPart, useDisclosure,
-  reasoningHidden = false, usePresentation, revealProcess, mentions, t,
+  reasoningHidden = false, usePresentation, revealProcess, mentions, speaker, model, t,
 }: AssistantMarkdownProps) {
   // Stable per locale revision (t identity changes on switch): a fresh object
   // per render would rebuild MarkdownText's component table every chunk.
@@ -156,10 +177,19 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
   const onlyHiddenReasoning = reasoningHidden
     && !blocks.some(block => block.kind !== 'reasoning' && block.kind !== 'tool-call')
   if (onlyHiddenReasoning) return inner
+  // The chip names the actual speaker when one is recorded: the fleet agent
+  // (`NAME · Role`) first, then the model that produced the settled message.
+  // The generic type label remains only for steps carrying no identity at
+  // all (a streaming first paint or an interruption fallback).
+  const chipLabel = groupPart === 'reasoning'
+    ? t('thread.reasoning')
+    : speaker !== undefined
+      ? `${speaker.name} · ${t(SPEAKER_ROLE_KEYS[speaker.role])}`
+      : model ?? t('thread.model')
   return (
     <ThreadItem
       family={groupPart === 'reasoning' ? 'reasoning' : 'model'}
-      label={t(groupPart === 'reasoning' ? 'thread.reasoning' : 'thread.model')}
+      label={chipLabel}
       running={streaming}
     >
       {inner}

@@ -2746,3 +2746,65 @@ describe('built-in conversation node Definitions', () => {
     })
   })
 })
+
+describe('Assistant speaker identity projection', () => {
+  it('records the settled message source as the step model identity', () => {
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'assistant/message', {
+        turn: 1,
+        step: 1,
+        message: {
+          id: 'assistant-meta',
+          role: 'assistant',
+          content: [{ type: 'text', text: 'scan complete' }],
+          source: { kind: 'model', provider: 'meta', model: 'muse-spark-1.3' },
+        },
+      }, { surfaceOp: 'append' }),
+      at(4, 'step/end', { turn: 1, step: 1 }),
+    ])
+    const settled = node(snapshot(value), 'assistant-step')
+    const data = settled?.data as AssistantChatData
+    expect(data.status).toBe('settled')
+    expect(data.model).toBe('muse-spark-1.3')
+    expect(data.speaker).toBeUndefined()
+    expect(data.finalNode?.providerMetadata).toEqual({ provider: 'meta', model: 'muse-spark-1.3' })
+  })
+
+  it('leaves model identity absent while a step has only streamed', () => {
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'assistant/live-chunk', {
+        turn: 1,
+        step: 1,
+        chunk: { type: 'text-delta', index: 0, text: 'working' },
+      }),
+    ])
+    const running = node(snapshot(value), 'assistant-step')
+    const data = running?.data as AssistantChatData
+    expect(data.status).toBe('running')
+    expect(data.model).toBeUndefined()
+    expect(data.speaker).toBeUndefined()
+  })
+
+  it('leaves model identity absent on the interruption fallback', () => {
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'assistant/live-chunk', {
+        turn: 1,
+        step: 1,
+        chunk: { type: 'text-delta', index: 0, text: 'partial' },
+      }),
+      at(4, 'step/end', { turn: 1, step: 1 }),
+    ])
+    const interrupted = node(snapshot(value), 'assistant-step')
+    const data = interrupted?.data as AssistantChatData
+    expect(data.status).toBe('interrupted')
+    expect(data.model).toBeUndefined()
+    expect(data.speaker).toBeUndefined()
+    expect(data.finalNode?.providerMetadata).toBeUndefined()
+  })
+})
