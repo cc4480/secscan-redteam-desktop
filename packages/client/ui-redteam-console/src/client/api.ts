@@ -216,7 +216,7 @@ export function createConsoleApi(formatHttpStatus?: (status: number) => string):
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ reason }),
-        signal,
+        ...(signal ? { signal } : {}),
       }).then(r => readJson<AbortOutcome>(r, httpStatus)))
     },
     escalate(id, input, signal) {
@@ -232,7 +232,7 @@ export function createConsoleApi(formatHttpStatus?: (status: number) => string):
           // confirm happens here before this call is made.
           confirmTier2Production: input.tier === '2',
         }),
-        signal,
+        ...(signal ? { signal } : {}),
       }).then(r => readJson<EscalateOutcome>(r, httpStatus)))
     },
     findings(id, signal) {
