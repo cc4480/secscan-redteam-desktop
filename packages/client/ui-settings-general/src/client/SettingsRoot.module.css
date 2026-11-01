@@ -56,12 +56,15 @@
   white-space: nowrap;
 }
 
-/* Full-viewport layer (figma Mask 501:29946 #000@24%): mask tokens match the
-   Modal primitive (--dsw-alias-bg-mask-1 + --dsw-mask-blur). */
+/* Layer filling the shell's overlay layer (figma Mask 501:29946 #000@24%):
+   mask tokens match the Modal primitive (--dsw-alias-bg-mask-1 +
+   --dsw-mask-blur). The shell overlay layer (ui-layout's .overlayLayer,
+   z-index 20 in AppFrame.module.css) is the positioned, frame-sized box
+   this anchors to, so the layer is absolute against it — the columns stay
+   mounted behind it in the frame's stacking context, under the layer. */
 .overlay {
-  position: fixed;
+  position: absolute;
   inset: 0;
-  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -76,9 +79,9 @@
 
 /* Settings uses a shared 800×800 panel; longer sections scroll
    inside the options column; the navigation scrolls independently. One height for
-   every section, taken from the viewport rather than the content, because a
+   every section, taken from the overlay layer's box rather than the content, because a
    content-sized panel would resize under the pointer on every nav click.
-   The viewport height leaves 24px of air above and below, widened to the
+   The layer height leaves 24px of air above and below, widened to the
    frame's published top clearance (the macOS window strip, where clicks drag
    the window) on both sides, so the panel sits centered and clear of the
    strip. */
@@ -87,8 +90,8 @@
   z-index: 1;
   display: flex;
   width: 800px;
-  height: min(800px, calc(100vh - 2 * max(24px, var(--dsh-frame-top-clearance, 24px))));
-  max-width: calc(100vw - 48px);
+  height: min(800px, calc(100% - 2 * max(24px, var(--dsh-frame-top-clearance, 24px))));
+  max-width: calc(100% - 48px);
   border-radius: 32px;
   overflow: hidden;
   background: var(--dsw-alias-bg-layer-2);
@@ -220,17 +223,15 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-/* Options area (figma Options 501:29983): pad (24,0,24,24), scrolls. The
-   panel clips its own overflow for the rounded corners, so this pane is
-   the only scroll surface a section has: it scrolls on both axes, so
-   content wider than the pane stays reachable instead of stranding off
-   the panel's right edge. */
+/* Options area (figma Options 501:29983): pad (24,0,24,24), scrolls. This
+   pane is every section's shared scroll surface and scrolls vertically
+   only: horizontal overflow belongs to the card that produces it, which
+   carries its own axis (the Models editor does), so one wide section
+   cannot push this pane sideways for the others. */
 .options {
   flex: 1;
-  min-width: 0;
   min-height: 0;
   padding: 0 24px 24px;
-  overflow-x: auto;
   overflow-y: auto;
 }
 
@@ -250,16 +251,18 @@
   -webkit-app-region: no-drag;
 }
 
-/* Narrow viewports: below 700px the 188px nav rail beside the content
-   leaves the sections a sliver, so the panel stacks — the nav becomes a
-   band above the content with its cells in a wrapping row — and takes the
-   full viewport instead of the centered dialog size. */
-@media (max-width: 700px) {
+/* Narrow frames: at the shared 720px narrow-panel breakpoint (the value
+   the sibling panel sheets use, e.g. ui-user-questions) the 188px nav rail
+   beside the content leaves the sections a sliver, so the panel stacks —
+   the nav becomes a band above the content with its cells in a wrapping
+   row — and takes the overlay layer's full box instead of the centered
+   dialog size. */
+@media (max-width: 720px) {
   .panel {
     flex-direction: column;
-    width: calc(100vw - 16px);
+    width: calc(100% - 16px);
     max-width: none;
-    height: calc(100dvh - 16px);
+    height: calc(100% - 16px);
     border-radius: 20px;
   }
 

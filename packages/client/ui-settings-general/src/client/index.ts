@@ -1,11 +1,11 @@
 /**
  * Settings shell and ownerless-copy plugin, browser half: renders the
- * `sidebar.settings` occupant — panel chrome, section navigation, and the
- * onboarding stage — and registers everything on the Settings pages that
- * belongs to no single feature: the trigger/header chrome content,
- * local-document action, General section, and `settings` dictionaries.
- * Feature-owned rows and sections stay with their features.
- * Export discipline: packages/client/AGENTS.md.
+ * `sidebar.settings` occupant — the trigger row and the onboarding stage —
+ * plus the settings panel as a `shell.overlay` occupant, and registers
+ * everything on the Settings pages that belongs to no single feature: the
+ * trigger/header chrome content, local-document action, General section,
+ * and `settings` dictionaries. Feature-owned rows and sections stay with
+ * their features. Export discipline: packages/client/AGENTS.md.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // Type-only: pulls the ctx.remote merge and its fixed Host facts.
@@ -24,6 +24,8 @@ import type {
   SettingsOnboardingStep, SettingsRootInjected, SettingsSectionRow,
 } from './shell-contract.ts'
 import { SettingsRoot } from './SettingsRoot.tsx'
+import { SettingsOverlay } from './SettingsOverlay.tsx'
+import { createSettingsShellStore } from './shell-store.ts'
 import { DesktopUpdateBadge } from './DesktopUpdateIndicator.tsx'
 import type { DesktopUpdateBridge } from '../types.ts'
 import { DesktopUpdateSource } from './desktop-update-source.ts'
@@ -168,20 +170,40 @@ export function apply(ctx: ClientContext): void {
       },
     },
   })
+  // One shell store handle for both settings registrations: the framework
+  // caches one instance per handle, so the trigger row and the panel read
+  // and write the same open/active state.
+  const shellStore = createSettingsShellStore()
   ctx.slots.inject('sidebar.settings', () => ctx.slots.register({
     name: 'sidebar.settings',
     locale: NS,
     children: {
       'settings.launcher': { kind: 'single', scope: 'root' },
       'settings.trigger': { kind: 'single', scope: 'root' },
+      'settings.onboarding': { kind: 'list', scope: 'root' },
+    },
+    inject: shellInjected,
+    store: shellStore,
+  }, SettingsRoot))
+
+  // The panel lives in the frame's overlay layer, not in the sidebar
+  // column: the layer is above every column and outside their scroll
+  // containers, so the panel is sized and positioned by the frame while
+  // the app stays mounted behind it. It declares the panel's own seats;
+  // the sections themselves stay registered by their features.
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+    name: 'shell.overlay',
+    id: 'settings.panel',
+    locale: NS,
+    children: {
       'settings.header': { kind: 'single', scope: 'root' },
       'settings.action': { kind: 'list', scope: 'root' },
       'settings.close': { kind: 'single', scope: 'root' },
       'settings.section': { kind: 'list', scope: 'root' },
-      'settings.onboarding': { kind: 'list', scope: 'root' },
     },
     inject: shellInjected,
-  }, SettingsRoot))
+    store: shellStore,
+  }, SettingsOverlay))
 
   ctx.slots.inject('settings.trigger', () =>
     ctx.slots.register({ name: 'settings.trigger', locale: NS }, TriggerContent))

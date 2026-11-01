@@ -91,34 +91,44 @@ describe('ModelsSection theme styles', () => {
   })
 })
 
-describe('ModelsSection narrow widths', () => {
-  it('makes the section a size container, so narrow rules key off the width it actually gets', () => {
-    // The settings panel decides how wide this section is — a trapped or
-    // shrunken panel hands it a few hundred pixels regardless of the window.
-    // Rules keyed off the viewport would never fire in that state; the
-    // section's own width is the one that crushes its rows.
-    expect(block('.section')).toContain('container-type: inline-size')
-    expect(block('.section')).toContain('min-width: 0')
+describe('ModelsSection narrow widths and containment', () => {
+  it('keeps horizontal overflow inside the editor card that produces it', () => {
+    // The editor is the card that can outgrow its column (long values, the
+    // catalog grid). Its overflow scrolls inside the card; the shared
+    // options pane above it carries no horizontal axis, so one wide editor
+    // cannot push the settings surface sideways.
+    expect(block('.editor')).toContain('overflow-x: auto')
   })
 
-  it('lets the provider header actions wrap instead of squeezing the row identity', () => {
-    // `.rowHead` is a space-between flex row with no wrap: when the section
-    // narrows, the identity and the Edit/Delete pair crush into each other
-    // instead of the actions dropping to their own line.
+  it('wraps long rendered values instead of clipping them', () => {
+    // Errors and endpoint hints render as text and can carry URLs and key
+    // fragments longer than the card. Wrapping anywhere keeps them fully
+    // readable inside the card instead of running under its edge.
+    expect(block('.error')).toContain('overflow-wrap: anywhere')
+    expect(block('.advancedHint')).toContain('overflow-wrap: anywhere')
+  })
+
+  it('lets the provider header actions wrap when the head runs out of width', () => {
+    // `.rowHead` is a flex row: without wrap, a narrow head forces the
+    // identity and the Edit/Delete actions to share one line at whatever
+    // width remains. With wrap, the actions take a line of their own.
     expect(block('.rowHead')).toContain('flex-wrap: wrap')
   })
 
-  it('stacks the model row and the advanced grid under the narrow container width', () => {
-    // At a few hundred pixels the four-track model row leaves each input a
-    // ~22px sliver — an unreadable black box with the value clipped away.
-    // The narrow layout gives the model id a full row of its own and puts
-    // the name beside the row's icon buttons; the advanced two-column grid
-    // collapses to one column so its fields stop truncating.
-    const narrow = css.slice(css.indexOf('@container (max-width: 540px)'))
-    expect(css).toContain('@container (max-width: 540px)')
+  it('stacks the model row and the advanced grid under the shared narrow breakpoint', () => {
+    // 720px is the narrow-panel breakpoint the sibling sheets already use
+    // (ui-user-questions' panels) and this section's own design width.
+    // Under it the model id takes a full row of its own and the name sits
+    // beside the row's icon buttons, so both inputs keep a readable track;
+    // the advanced two-column grid collapses to one column, and the
+    // add-provider block drops its desktop minimum width.
+    expect(css).toContain('@media (max-width: 720px)')
+    const narrow = css.slice(css.indexOf('@media (max-width: 720px)'))
     expect(narrow).toMatch(/\.modelRow\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\) auto auto/)
     expect(narrow).toMatch(/\.modelRow > :first-child\s*\{[^}]*grid-column: 1 \/ -1/)
     expect(narrow).toMatch(/\.modelAdvanced\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\)/)
     expect(narrow).toMatch(/\.addButton\s*\{[^}]*min-width: 0/)
+    expect(css).not.toContain('@container')
+    expect(css).not.toContain('container-type')
   })
 })

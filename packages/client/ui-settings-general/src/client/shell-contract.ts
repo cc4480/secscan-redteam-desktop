@@ -8,14 +8,18 @@
  */
 import type { ConnectionState } from '@deepseek-ai/dsh-client-connection/client'
 import type {
-  HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime,
+  HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore,
 } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: pulls ui-sidebar's SlotMap merge (the 'sidebar.settings' entry)
 // into every program that sees this contract.
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
+// Type-only: pulls ui-layout's SlotMap merge (the 'shell.overlay' entry the
+// panel registers into) into every program that sees this contract.
+import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 // Type-only: pulls the settings slot declarations the shell renders into.
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { DesktopUpdateView } from '../types.ts'
+import type { createSettingsShellStore } from './shell-store.ts'
 
 /** One nav row projected from a settings.section registration's options. */
 export interface SettingsSectionRow {
@@ -55,19 +59,35 @@ export type SettingsRootInjected = {
 /**
  * Full component props of the settings shell root: the sidebar owner share
  * (wide/rail state) plus the declared render shares and the injected face
- * (hooks compartment bound to useSections). No store is registered — modal
- * open state and active section id are component-local viewing state.
+ * (hooks compartment bound to useSections). Open state and the active
+ * section id are NOT local to this component: they live in the shell store
+ * this registration shares with the panel's `shell.overlay` registration,
+ * because the trigger, the onboarding coordinator, and the panel all write
+ * them from different seats.
  */
 export type SettingsRootComponentProps =
   PropsRuntime<'sidebar.settings'>
   & PropsRenderSlots<
     | 'settings.launcher'
     | 'settings.trigger'
+    | 'settings.onboarding'
+  >
+  & InjectFace<SettingsRootInjected>
+  & PropsStore<ReturnType<typeof createSettingsShellStore>>
+  & PropsLocale<'settings'>
+
+/**
+ * Full component props of the settings panel: the shell overlay owner share
+ * plus the render shares for the panel's own seats, the same injected face
+ * as the root (the nav rows projection), and the shared shell store.
+ */
+export type SettingsOverlayComponentProps =
+  PropsRuntime<'shell.overlay'>
+  & PropsRenderSlots<
     | 'settings.header'
     | 'settings.action'
     | 'settings.close'
     | 'settings.section'
-    | 'settings.onboarding'
   >
   & InjectFace<SettingsRootInjected>
-  & PropsLocale<'settings'>
+  & PropsStore<ReturnType<typeof createSettingsShellStore>>

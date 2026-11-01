@@ -3,11 +3,13 @@ import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useEffect, useState } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { SettingsRootComponentProps } from '../src/client/shell-contract.ts'
+import type { SettingsOverlayComponentProps, SettingsRootComponentProps } from '../src/client/shell-contract.ts'
 import { SettingsRoot } from '../src/client/SettingsRoot.tsx'
+import { SettingsOverlay } from '../src/client/SettingsOverlay.tsx'
+import { createSettingsShellStore } from '../src/client/shell-store.ts'
 import { en, zh } from '../src/client/locales.ts'
 import type { DesktopUpdateView } from '../src/types.ts'
 
@@ -91,6 +93,10 @@ function mount({
     phase: 'ready', projectionsBySession: {},
   }
   const unusedHook = (() => { throw new Error('unused by SettingsRoot') }) as never
+  // One shell store instance shared by both registrations, as apply wires
+  // it: the trigger writes open state, the overlay reads it.
+  const shellInstance = createSettingsShellStore().create()
+  const useShellStore = bindSnapshotSelector(shellInstance)
   const props: SettingsRootComponentProps = {
     useSessions: select => select(sessions),
     useSessionStatus,
@@ -121,8 +127,33 @@ function mount({
       return select(current)
     },
     renderSlot,
+    useStore: useShellStore,
+    actions: shellInstance.actions,
   }
-  const view = render(<SettingsRoot {...props} />)
+  const overlayProps: SettingsOverlayComponentProps = {
+    useSessions: props.useSessions,
+    useSessionStatus: props.useSessionStatus,
+    usePanelInfo: props.usePanelInfo,
+    useSessionRetainInfo: props.useSessionRetainInfo,
+    useResource: props.useResource,
+    useWorkspaces: props.useWorkspaces,
+    reconnect,
+    openDesktopUpdate: () => {},
+    useDesktopUpdate: props.useDesktopUpdate,
+    useConnectionState: props.useConnectionState,
+    useOnboardingSteps: props.useOnboardingSteps,
+    useSections: props.useSections,
+    useStore: useShellStore,
+    actions: shellInstance.actions,
+    renderSlot: renderSlot as SettingsOverlayComponentProps['renderSlot'],
+  }
+  const tree = () => (
+    <>
+      <SettingsRoot {...props} />
+      <SettingsOverlay {...overlayProps} />
+    </>
+  )
+  const view = render(tree())
   const bump = (next: Row[]) => {
     act(() => {
       current = next
@@ -137,7 +168,7 @@ function mount({
   }
   const setDesktopUpdate = (next: DesktopUpdateView) => {
     desktopUpdate = next
-    view.rerender(<SettingsRoot {...props} />)
+    view.rerender(tree())
   }
   return { view, renderSlot, bump, listeners, reconnect, setConnectionState, setDesktopUpdate }
 }

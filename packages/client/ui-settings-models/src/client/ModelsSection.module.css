@@ -9,10 +9,6 @@
   gap: 12px;
   max-width: 720px;
   min-width: 0;
-  /* The panel decides how wide this section gets, so the narrow rules at
-     the end of this sheet key off the section's own width, not the
-     viewport's. */
-  container-type: inline-size;
   color: var(--dsw-alias-label-primary);
 }
 
@@ -234,6 +230,9 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  /* The editor is the card that can outgrow its column; its overflow
+     scrolls inside the card instead of reaching an ancestor's clip edge. */
+  overflow-x: auto;
 }
 
 .editorHeader {
@@ -297,6 +296,8 @@
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
+  /* Hints name endpoints; a long URL wraps inside the card. */
+  overflow-wrap: anywhere;
 }
 
 .editorActions {
@@ -632,6 +633,8 @@ select.input {
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-state-error-primary);
+  /* Errors can carry URLs and key fragments longer than the card. */
+  overflow-wrap: anywhere;
 }
 
 .deleteDialog {
@@ -729,13 +732,15 @@ select.input {
   text-align: center;
 }
 
-/* Narrow section (the panel, not the viewport, decides this width — see
-   `.section`): the model row's two inputs each keep a readable track by
-   giving the model id a full row of its own and setting the name beside
-   the row's icon buttons, and the advanced grid's two columns collapse to
-   one so its fields stop truncating. The add-provider block drops its
-   desktop minimum width so it fits the same space. */
-@container (max-width: 540px) {
+/* Narrow frames, at the shared 720px narrow-panel breakpoint (the value
+   the sibling panel sheets use, e.g. ui-user-questions; also this
+   section's own design width): the model row's two inputs each keep a
+   readable track by giving the model id a full row of its own and setting
+   the name beside the row's icon buttons, and the advanced grid's two
+   columns collapse to one so its fields stop truncating. The
+   add-provider block drops its desktop minimum width so it fits the same
+   space. */
+@media (max-width: 720px) {
   .modelRow {
     grid-template-columns: minmax(0, 1fr) auto auto;
   }
