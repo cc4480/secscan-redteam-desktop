@@ -14,7 +14,7 @@ import { HostExecutor } from './host-exec/index.js'
 import { TargetAutoHalt, TargetRateLimiter, type CredentialAttemptGuard, type TestEnvironment } from './safety/index.js'
 import { ApprovalLog, type TierState } from './accountability/index.js'
 import { type RegistryEntry, type TargetFingerprint, type VulnerabilityRegistry } from './registry.js'
-import { type EngagementInput, type OperationPlan, type ResolvedRunnerConfig } from './types.js'
+import { type ActorRole, type EngagementInput, type OperationPlan, type PeerReviewStamp, type ResolvedRunnerConfig } from './types.js'
 import { type BatteryCategory } from './battery.js'
 import { type TargetId } from './targets.js'
 import { MsfExecutor } from './msf/index.js'
@@ -96,6 +96,17 @@ export interface LiveFinding {
   cvss?: number
   /** Engine-recorded CWE id (Q-RP-3), same provenance rule as cvss. */
   cwe?: string
+  /**
+   * Q-FLEET-XCHECK: the fleet seat that recorded this finding, stamped
+   * by the RUNNER from the dispatch role at record time (or, for the
+   * exploiter's VERDICTS-block backstop, from the block's owner) — never
+   * a model-supplied tool argument. The reviewer pass challenges each
+   * finding with a different seat; without a recorded producer that
+   * rule has nothing to bite on. Absent = recorded before the stamp.
+   */
+  producer?: ActorRole
+  /** Q-FLEET-XCHECK peer-review stamp (types.ts PeerReviewStamp). Stamped by the reviewer pass only. */
+  peerReview?: PeerReviewStamp
 }
 
 /** A killed hypothesis recorded live during exploitation (shared state). */
@@ -236,6 +247,14 @@ export interface Ctx {
   /** Verdicts as they land — exploiter writes, reporter + registry consume. */
   liveFindings: LiveFinding[]
   killedLive: KilledLive[]
+  /**
+   * Q-FLEET-XCHECK: findings the reviewer pass removed from the
+   * confirmed flow, kept with their peer-review stamps for the report
+   * join (a parsed finding matching a killed/deferred entry is stamped
+   * out/down, never silently dropped from the record).
+   */
+  peerKilledLive: LiveFinding[]
+  peerDeferredLive: LiveFinding[]
   /** Coordinator re-recon redirections used this engagement (max 2). */
   redirects: number
   /** Consecutive denied/cooled-down/OPSEC-signaled probes — wall detection. */

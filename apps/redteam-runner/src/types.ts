@@ -178,6 +178,26 @@ export interface OperationPlan {
   steps: PlanStep[]
 }
 
+/**
+ * Q-FLEET-XCHECK peer-review stamp: before the report, a DIFFERENT fleet
+ * seat than the producer challenged this finding (spec:
+ * fleet-peer-cross-check-2026-10-31.md). `verdict` is what the checker
+ * seat answered; `disposition` is what the RUNNER mechanically did with
+ * it. The two differ only when a stronger mechanical verdict already
+ * stands: a PROVEN cell verdict outranks a peer kill (proven wins), and
+ * a downgrade proposed at the severity floor cannot move the severity.
+ * Stamped by the runner only, from the parsed verdict — never model-set.
+ */
+export interface PeerReviewStamp {
+  checker: ActorRole
+  verdict: 'upheld' | 'downgraded' | 'needs-evidence' | 'killed'
+  rationale: string
+  disposition: 'flows' | 'downgraded' | 'deferred' | 'killed'
+  /** Severity ladder move, present when disposition is 'downgraded'. */
+  fromSeverity?: string
+  toSeverity?: string
+}
+
 export interface Finding {
   id: string // F-1, F-2…
   severity: 'critical' | 'high' | 'medium' | 'low' | 'info'
@@ -207,6 +227,15 @@ export interface Finding {
    */
   cvss?: number
   cwe?: string
+  /**
+   * Q-FLEET-XCHECK: the fleet seat that produced this finding, stamped
+   * by the RUNNER at record time and carried by the report join — the
+   * producer claim the checker stamp sits beside. Absent when the live
+   * finding carried none (recorded before producer stamps existed).
+   */
+  producer?: ActorRole
+  /** Q-FLEET-XCHECK peer-review stamp (PeerReviewStamp). Absent = never challenged (e.g. the run halted before the reviewer pass). */
+  peerReview?: PeerReviewStamp
   /** Named human operator accountable for this finding (v0.17.0). Stamped by the runner at report time. */
   accountableOperator?: string
 }

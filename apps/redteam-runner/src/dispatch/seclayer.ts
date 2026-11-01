@@ -145,6 +145,9 @@ export function recordSeclayerFindings(
   raw: RawSeclayerFinding[],
   pre: SeclayerPrelude,
   vulnClass: string,
+  // Q-FLEET-XCHECK: the seat that ran the probe tool, stamped as the
+  // findings' producer. Optional so direct callers (tests) keep working.
+  producer?: ActorRole,
 ): DispatchResult {
   ctx.probesUsed++;
   noteCategoryCoverage(ctx, pre.category, pre.targetProfile);
@@ -155,7 +158,7 @@ export function recordSeclayerFindings(
     let evidence = redactPii(live.evidence);
     if (title.length > 200) title = title.slice(0, 197) + "...";
     if (evidence.length > 800) evidence = evidence.slice(0, 797) + "...";
-    const stored: LiveFinding = { ...live, title, evidence };
+    const stored: LiveFinding = { ...live, title, evidence, ...(producer ? { producer } : {}) };
     ctx.liveFindings.push(stored);
     writeFindingToRegistry(ctx, stored);
     recorded.push(stored);
@@ -206,7 +209,7 @@ export async function handleSeclayerTools(
   try {
     if (call.name === "seclayer_redteam") {
       const findings = await runRedTeamProbes(url, headers, {});
-      return recordSeclayerFindings(ctx, call.name, url, findings as RawSeclayerFinding[], pre, "redteam-probe");
+      return recordSeclayerFindings(ctx, call.name, url, findings as RawSeclayerFinding[], pre, "redteam-probe", _role);
     }
     if (call.name === "seclayer_bola") {
       const identities = bolaIdentitiesFromArgs(args);
@@ -214,16 +217,16 @@ export async function handleSeclayerTools(
         return { result: "DENIED: seclayer_bola needs both test identities — aAuthHeader/aOwnResource and bAuthHeader/bOwnResource.", attackId: pre.attackId, target: url, repairable: "seclayer_bola requires both test identities (aAuthHeader/aOwnResource and bAuthHeader/bOwnResource)" };
       }
       const findings = await bolaProbe(new URL(url).origin, identities, headers);
-      return recordSeclayerFindings(ctx, call.name, url, findings as RawSeclayerFinding[], pre, "bola-idor");
+      return recordSeclayerFindings(ctx, call.name, url, findings as RawSeclayerFinding[], pre, "bola-idor", _role);
     }
     if (call.name === "seclayer_api") {
       const identities = bolaIdentitiesFromArgs(args);
       const findings = await runApiSecProbes(url, new URL(url).host, headers, identities ? { bolaIdentities: identities } : {});
-      return recordSeclayerFindings(ctx, call.name, url, findings as RawSeclayerFinding[], pre, "api-sec");
+      return recordSeclayerFindings(ctx, call.name, url, findings as RawSeclayerFinding[], pre, "api-sec", _role);
     }
     if (call.name === "seclayer_webhook") {
       const finding = await probeWebhookSignatureBypass(url, strListArg(args, "postUrls") ?? [], headers);
-      return recordSeclayerFindings(ctx, call.name, url, finding ? [finding] : [], pre, "webhook-signature");
+      return recordSeclayerFindings(ctx, call.name, url, finding ? [finding] : [], pre, "webhook-signature", _role);
     }
     // seclayer_aggressive
     const probeName = (strArg(args, "probe") ?? "").toLowerCase();
@@ -232,7 +235,7 @@ export async function handleSeclayerTools(
       return { result: `DENIED: seclayer_aggressive probe must be one of ${Object.keys(AGGRESSIVE_PROBES).join(", ")} — got ${JSON.stringify(args["probe"] ?? null)}.`, attackId: pre.attackId, target: url, repairable: `seclayer_aggressive probe must be one of ${Object.keys(AGGRESSIVE_PROBES).join(", ")}` };
     }
     const finding = await probe({ url, fuzzHeaders: headers });
-    return recordSeclayerFindings(ctx, call.name, url, finding ? [finding] : [], pre, `aggressive-${probeName}`);
+    return recordSeclayerFindings(ctx, call.name, url, finding ? [finding] : [], pre, `aggressive-${probeName}`, _role);
   } catch (e) {
     return {
       result: `${call.name} vs ${url} — engine error, no findings recorded: ${e instanceof Error ? e.message : String(e)}`,

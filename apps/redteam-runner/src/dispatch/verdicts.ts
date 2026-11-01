@@ -76,6 +76,10 @@ export function syncLiveFindingsToState(ctx: Ctx): void {
       cellState: f.cellState,
       provenClaim: f.provenClaim,
       cellDetail: f.cellDetail,
+      // Q-FLEET-XCHECK: producer + peer-review stamp ride along on the
+      // same rule — the console shows the checker beside the claim.
+      producer: f.producer,
+      peerReview: f.peerReview,
     })),
   });
 }
@@ -140,6 +144,9 @@ export function mergeVerdictBlock(ctx: Ctx, text: string): void {
         attackId: (optStr(v["attackId"]) ?? "T1190").toUpperCase(),
         evidence: redactPii(String(v["evidence"] ?? "").slice(0, 800)),
         payload: optStr(v["payloadPattern"]),
+        // Q-FLEET-XCHECK: this block is the exploiter's own verdicts —
+        // the producer is the exploiter by construction.
+        producer: "exploiter",
       };
       if (ctx.liveFindings.some((f) => f.title === lf.title && f.attackId === lf.attackId)) continue;
       ctx.liveFindings.push(lf);

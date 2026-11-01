@@ -118,6 +118,9 @@ export async function handleBookkeepingTools(ctx: Ctx, role: ActorRole, phase: E
       attackId,
       evidence: redactPii(String(args['evidence'] ?? '').slice(0, 800)),
       payload: optStr(args['payload'])?.slice(0, 300),
+      // Q-FLEET-XCHECK: the producer is the dispatch role, stamped by
+      // the runner — never a model-supplied argument.
+      producer: role,
     }
     const cellNote = await adjudicateRecordedClaim(ctx, phase, lf, args)
     ctx.liveFindings.push(lf)

@@ -110,6 +110,8 @@ export async function handleSecscanTools(
       ...mapped,
       title: redactPii(mapped.title.slice(0, 200)),
       evidence: redactPii(mapped.evidence.slice(0, 800)),
+      // Q-FLEET-XCHECK: producer = the seat that ran the scan tool.
+      producer: _role,
     }
     ctx.liveFindings.push(lf)
     writeFindingToRegistry(ctx, lf)
