@@ -199,6 +199,14 @@ export interface Finding {
   provenClaim?: { expectedMarker: string; targetUrl: string }
   /** The cell adjudication's one-line detail, carried with the claim. */
   cellDetail?: string
+  /**
+   * Engine-recorded CVSS base score + CWE id (Q-RP-3), stamped by the
+   * RUNNER at report time from the source live finding (applyFindingRefs)
+   * — never model-set: a value the reporter JSON carries is overwritten
+   * by the stamp or removed. Absent when the engine recorded none.
+   */
+  cvss?: number
+  cwe?: string
   /** Named human operator accountable for this finding (v0.17.0). Stamped by the runner at report time. */
   accountableOperator?: string
 }

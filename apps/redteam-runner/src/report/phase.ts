@@ -31,7 +31,8 @@ import { writeComplianceArtifacts } from "./compliance.js";
 import { extractNarrative } from "./narrative.js";
 import { buildEngagementMeta, type ReportMeta } from "./html.js";
 import { renderEngagementReportHtml } from "./html/render.js";
-import { buildEngagementReportInput, buildFindingMeta } from "./html/wire.js";
+import { applyFindingRefs, buildEngagementReportInput, buildFindingMeta } from "./html/wire.js";
+import { emitFindingsCsv } from "./csv.js";
 import { buildDetailInput, recordReportMeta } from "./predecessor.js";
 import { type DetailInput } from "./detail.js";
 import { buildGradeSection, gradeFindings } from "./grading.js";
@@ -154,6 +155,9 @@ export async function reportPhase(
     const accountable = resolveOperatorName(ctx.input.operatorName, process.env) ?? "(operator name not supplied — set REDTEAM_OPERATOR)";
     for (const f of findings) f.accountableOperator = accountable;
   }
+  // Q-RP-3: engine-recorded CVSS/CWE join the final findings mechanically
+  // (corroborated live-finding match; unproven values are removed).
+  applyFindingRefs(findings, ctx.liveFindings);
   // The unified operation narrative ("Megazord"): the reporter writes it first
   // as plain paragraphs; the runner extracts it for the console header.
   const narrative = extractNarrative(reportMd);
@@ -229,6 +233,9 @@ export async function reportPhase(
   reportMd += buildActivitySection(reportEvents);
   reportMd += await buildIntegrationsSection(ctx, findings, pocBundleMap);
   writeFileSync(join(ctx.events.dir, "report.md"), reportMd);
+  // Q-RP-1: the findings sheet of the deliverable package, from the same
+  // model the HTML renders (own try/catch inside — never breaks the report).
+  emitFindingsCsv(ctx, findings, pocBundleMap);
   // The HTML twin is the human-facing deliverable — self-contained, severity
   // colour-coded, print/PDF-ready. report.md stays as the diffable, greppable
   // record and the input to other tooling; this is the thing a person opens.
@@ -252,7 +259,7 @@ export async function reportPhase(
       recordReportMeta(ctx, gradeFindings(findings));
       const assembled = buildDetailInput({
         ctx, findings, bundles: pocBundleMap, totals, cells,
-        findingMeta: buildFindingMeta(pocBundleMap),
+        findingMeta: buildFindingMeta(pocBundleMap, findings),
         planOnly: fbPlanOnly, events: reportEvents,
       });
       detailInput = assembled.input;

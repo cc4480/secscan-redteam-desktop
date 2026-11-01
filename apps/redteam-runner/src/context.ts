@@ -87,6 +87,15 @@ export interface LiveFinding {
   provenClaim?: { expectedMarker: string; targetUrl: string }
   /** The adjudication outcome's one-line detail, retained with the claim. */
   cellDetail?: string
+  /**
+   * Engine-recorded CVSS base score (Q-RP-3), copied verbatim from the
+   * producing engine's record (the SecScan scanner's cvssScore) at the
+   * dispatch seam. Absent when the engine recorded none — never derived
+   * from severity, never estimated.
+   */
+  cvss?: number
+  /** Engine-recorded CWE id (Q-RP-3), same provenance rule as cvss. */
+  cwe?: string
 }
 
 /** A killed hypothesis recorded live during exploitation (shared state). */

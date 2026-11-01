@@ -7,7 +7,7 @@
  * stays a thin call site. Nothing here invents data: a field the records
  * do not carry stays absent and the design degrades around it.
  */
-import { type Ctx } from "../../context.js";
+import { type Ctx, type LiveFinding } from "../../context.js";
 import { type EngagementEvent, type Finding } from "../../types.js";
 import { BATTERY_CATEGORIES } from "../../battery.js";
 import { TARGET_PROFILES } from "../../targets.js";
@@ -74,12 +74,43 @@ export function stripFindingsJson(md: string): string {
   return md;
 }
 
+/** Q-RP-3 report-phase join: stamp each final finding's engine-recorded
+ * CVSS/CWE from its source live finding. Matching is corroborated, never
+ * positional-only: the positional candidate (the halted path's map and
+ * the reporter's list both preserve live order) must agree on attackId or
+ * title; failing that, a unique attackId+title match across the live set
+ * wins. Ambiguous or unmatched ⇒ the fields are REMOVED, so a value the
+ * reporter JSON invented cannot survive into the report. */
+export function applyFindingRefs(findings: Finding[], liveFindings: readonly LiveFinding[]): void {
+  const corroborates = (f: Finding, lf: LiveFinding): boolean =>
+    f.attackIds.includes(lf.attackId) || f.title === lf.title;
+  for (const f of findings) {
+    const idx = Number.parseInt(f.id.replace(/^F-/, ""), 10);
+    const positional = Number.isInteger(idx) && idx >= 1 ? liveFindings[idx - 1] : undefined;
+    let source = positional && corroborates(f, positional) ? positional : undefined;
+    if (!source) {
+      const strong = liveFindings.filter((lf) => f.attackIds.includes(lf.attackId) && f.title === lf.title);
+      if (strong.length === 1) source = strong[0];
+    }
+    if (source?.cvss !== undefined) f.cvss = source.cvss;
+    else delete f.cvss;
+    if (source?.cwe !== undefined) f.cwe = source.cwe;
+    else delete f.cwe;
+  }
+}
+
 /** Per-finding reference data from the PoC bundle's battery item: the
  * item's battery category and OWASP reference are recorded data (the
  * battery definitions carry both), resolved through the same profile the
  * proof section attributed the bundle to. Findings without a bundle have
- * no recorded category — the map simply has no entry for them. */
-export function buildFindingMeta(bundles: ReadonlyMap<string, PocBundle>): Map<string, FindingMeta> {
+ * no recorded category — the map simply has no entry for them. Q-RP-3:
+ * engine-recorded CVSS/CWE stamped onto the final findings by
+ * applyFindingRefs merge into the same map, so the reference chips and
+ * findings.csv read one model. */
+export function buildFindingMeta(
+  bundles: ReadonlyMap<string, PocBundle>,
+  findings: readonly Finding[] = [],
+): Map<string, FindingMeta> {
   const out = new Map<string, FindingMeta>();
   for (const [findingId, bundle] of bundles) {
     if (!bundle.batteryItemId) continue;
@@ -91,6 +122,13 @@ export function buildFindingMeta(bundles: ReadonlyMap<string, PocBundle>): Map<s
     const profile = TARGET_PROFILES[tid as keyof typeof TARGET_PROFILES];
     const item = profile.battery.find((b) => b.id === itemId);
     if (item) out.set(findingId, { category: item.category, owasp: item.owasp });
+  }
+  for (const f of findings) {
+    if (f.cvss === undefined && f.cwe === undefined) continue;
+    const meta = out.get(f.id) ?? {};
+    if (f.cvss !== undefined) meta.cvss = f.cvss;
+    if (f.cwe !== undefined) meta.cwe = f.cwe;
+    out.set(f.id, meta);
   }
   return out;
 }
@@ -150,7 +188,7 @@ export function buildEngagementReportInput(deps: WireDeps): EngagementReportInpu
     bundles: deps.bundles,
     noBundleReasons: deps.proof.noBundleReasons,
     negativeProof: deps.proof.negative,
-    findingMeta: buildFindingMeta(deps.bundles),
+    findingMeta: buildFindingMeta(deps.bundles, deps.findings),
     detail: deps.detailInput ? buildReportDetail(deps.detailInput) : undefined,
     inventory: readHostInventory(deps.ctx.events.dir),
     coverage: buildCoverage(deps),

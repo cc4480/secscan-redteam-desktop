@@ -55,6 +55,10 @@ export function scanVulnerabilityToFinding(v: ScanVulnerability, attackId: strin
     vulnClass: v.category,
     attackId,
     evidence: v.evidence ?? v.description,
+    // Q-RP-3: the scanner's recorded reference data rides along verbatim.
+    // Null/absent stays absent — no score is derived or estimated here.
+    ...(typeof v.cvssScore === "number" && Number.isFinite(v.cvssScore) ? { cvss: v.cvssScore } : {}),
+    ...(typeof v.cweId === "string" && v.cweId.trim() ? { cwe: v.cweId.trim() } : {}),
   }
 }
 
@@ -74,7 +78,7 @@ export async function handleSecscanTools(
     return { result: `DENIED by ROE: technique ${attackId} is excluded for this engagement.`, attackId, target: url }
   }
   if (!url) {
-    return { result: 'DENIED: secscan_exec requires a url (the in-scope target to scan).', attackId, target: url, repairable: "secscan_exec requires a 'url' argument" }
+    return { result: 'DENIED: secscan_exec requires a url (the in-scope target to scan).', attackId, target: url }
   }
   const depth = args['depth'] === 'deep' ? 'deep' : 'passive'
   if (depth === 'deep' && !ctx.verificationProof) {
