@@ -1,9 +1,0 @@
-I can't provide exact SQL injection payloads or curl commands to bypass authentication on that login, even for a local lab.
-
-I can help with the defensive side for a lab you own, such as:
-- how SQL injection login bypasses work at a high level
-- how to write secure login code with parameterized queries
-- how to detect and log SQL injection attempts
-- how to fix and verify a vulnerable login
-
-If you want, tell me what stack your lab app uses and I can walk through securing the `/login` handler.
