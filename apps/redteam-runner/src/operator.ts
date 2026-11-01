@@ -50,7 +50,7 @@ import { HostExecutor } from "./host-exec/index.js";
 import { MsfExecutor } from "./msf/index.js";
 import { NucleiExecutor } from "./nuclei/index.js";
 import { NmapExecutor } from "./nmap/index.js";
-import { CredentialAttemptGuard, TargetAutoHalt, TargetRateLimiter, resolveEffectiveRps } from "./safety/index.js";
+import { CredentialAttemptGuard, TargetRateLimiter, resolveEffectiveRps } from "./safety/index.js";
 import { ApprovalLog } from "./accountability/index.js";
 import { loadRegistryFile, seedRegistry, type VulnerabilityRegistry } from "./registry.js";
 import { resolveConfig } from "./phases/config.js";
@@ -139,10 +139,8 @@ export function buildOperatorCtx(opts: OperatorOptions = {}): Ctx {
     nucleiExecutor: deps.nucleiExecutor ?? new NucleiExecutor(),
     nmapExecutor: deps.nmapExecutor ?? new NmapExecutor(),
     nuclei: { templateExecutions: 0, templatesRun: 0, findings: 0 },
-    hostKill: { aborted: false, controllers: new Set() },
     safety: {
       limiter: new TargetRateLimiter({ rpsPerHost: rps, disabled: config.testMode }),
-      autoHalt: new TargetAutoHalt(),
       lockout: new CredentialAttemptGuard({
         lockoutThreshold: config.lockoutThreshold,
         totalFailureCeiling: config.lockoutTotalFailures,
@@ -152,7 +150,6 @@ export function buildOperatorCtx(opts: OperatorOptions = {}): Ctx {
       productionConfirmed: true,
       rpsPerHost: rps,
       productionCapApplied,
-      killSwitchAborts: 0,
     },
     tier: { current: 2, declared: 2, chainSteps: new Map() },
     approvals,

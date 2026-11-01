@@ -25,7 +25,7 @@
  */
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { runEngagement } from "../src/phases.js";
@@ -36,7 +36,7 @@ import { TargetRateLimiter } from "../src/safety/ratelimit.js";
 import { CredentialAttemptGuard } from "../src/safety/lockout.js";
 import type { Ctx } from "../src/context.js";
 import type { ToolCallRequest } from "@secscan/redteam-llm-router";
-import { EXECUTOR_TOOLS, handleExecCall } from "../src/ui/mcp-exec.js";
+import { EXEC_TOOLS_BY_NAME } from "../src/ui/mcp-exec.js";
 import { createOperatorDispatcher, installOperatorDispatcher } from "../src/operator.js";
 
 const savedEstopPath = process.env["REDTEAM_ESTOP_PATH"];
@@ -179,11 +179,10 @@ describe("kill switch removed — operator mode under engaged ESTOP", () => {
         },
       });
       installOperatorDispatcher(dispatcher);
-      const tool = EXECUTOR_TOOLS.find((t) => t.name === "http_probe");
+      const tool = EXEC_TOOLS_BY_NAME.get("http_probe");
       assert.ok(tool, "http_probe is on the executor surface");
-      const res = await handleExecCall(tool, { method: "GET", url: "http://op.example.com/" });
-      assert.equal(res.isError, undefined);
-      assert.match(res.content[0]?.text ?? "", /HTTP 200/);
+      const text = await tool.run({ method: "GET", url: "http://op.example.com/" });
+      assert.match(text, /HTTP 200/);
       assert.equal(probes, 1, "the probe executed — ESTOP state has no effect");
     } finally {
       rmSync(home, { recursive: true, force: true });
