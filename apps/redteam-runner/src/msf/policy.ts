@@ -93,7 +93,9 @@ export function msfSecrets(creds: MsfCredentials): string[] {
  */
 const GENERIC_PAYLOAD_RE = /^cmd\/[^/]+\/generic$/;
 
-export function checkMsfPayload(payload: string): string | null {
+export function checkMsfPayload(payload: string, opts?: { testMode?: boolean }): string | null {
+  // TEST MODE (operator order): payload policy is bypassed entirely.
+  if (opts?.testMode) return null;
   const p = (payload ?? "").trim();
   if (!p) return "empty payload";
   if (GENERIC_PAYLOAD_RE.test(p)) return null;
@@ -114,15 +116,20 @@ const MODULE_DENY: ModuleDenyPattern[] = [
 ];
 
 /** Refuses dos/destructive modules. Returns the label, or null when allowed. */
-export function checkMsfModule(fullname: string, moduleType?: string): string | null {
+export function checkMsfModule(fullname: string, moduleType?: string, opts?: { testMode?: boolean }): string | null {
   const name = (fullname ?? "").trim();
   if (!name) return "empty module name";
   const t = (moduleType ?? "").trim().toLowerCase();
   if (t && t !== "exploit" && t !== "auxiliary") {
     return `module type not allowed — only exploit/auxiliary modules may run; got ${JSON.stringify(moduleType)}`;
   }
-  for (const d of MODULE_DENY) {
-    if (d.re.test(name)) return `module denylist: ${d.label}`;
+  // TEST MODE (operator order): the module denylist (dos/destructive) is
+  // bypassed; the structural validation above (non-empty name, module
+  // type) still applies.
+  if (!opts?.testMode) {
+    for (const d of MODULE_DENY) {
+      if (d.re.test(name)) return `module denylist: ${d.label}`;
+    }
   }
   return null;
 }

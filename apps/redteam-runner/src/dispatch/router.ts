@@ -21,6 +21,7 @@ import { toolTargetHost } from "./target-host.js";
 export { RATE_LIMITED_TOOLS } from "./target-host.js";
 import { duplicateRefusal, recordCallOutcome } from "./duplicate-guard.js";
 import { dispatchToolInner } from "./handlers.js";
+import { noteTestModeBypass, testModeOn } from "./test-mode.js";
 
 /**
  * v0.24.0: mid-run tier changes. The operator may raise/lower the tier via
@@ -115,7 +116,12 @@ export async function dispatchTool(ctx: Ctx, role: ActorRole, phase: EngagementP
   refreshTierFromDisk(ctx, phase);
   const tierDenial = checkTierAllows(ctx.tier, call.name, args, host);
   if (tierDenial) {
-    return { result: tierDenial, target: host };
+    // TEST MODE (operator order): tier enforcement is bypassed and the
+    // bypass is event-logged; the call proceeds to the remaining gates.
+    if (!testModeOn(ctx)) {
+      return { result: tierDenial, target: host };
+    }
+    noteTestModeBypass(ctx, phase, host, `autonomy-tier denial for ${call.name} would have refused this call: ${tierDenial}`);
   }
   // Scope gate: the central target-scope choke point (deny-beats-allow,
   // plus the deny-list scan of command text). Runs before the limiter for
@@ -151,7 +157,15 @@ export async function dispatchTool(ctx: Ctx, role: ActorRole, phase: EngagementP
     // out-of-scope / auto-halted hosts refused above never touch the
     // budget. The refusal is a result string, never a throw.
     lockoutCls = classifyCredentialAttempt(call);
-    if (lockoutCls.kind !== "none") {
+    // TEST MODE (operator order): the lockout interlock is skipped
+    // entirely — no admission check here and no outcome recording below
+    // (lockoutCls is cleared so the outcome block stays inert). The
+    // skip is event-logged once per classified call.
+    if (lockoutCls.kind !== "none" && testModeOn(ctx)) {
+      noteTestModeBypass(ctx, phase, host, `credential lockout interlock skipped for ${call.name} (${lockoutCls.kind} credential attempt)`);
+      lockoutCls = undefined;
+    }
+    if (lockoutCls && lockoutCls.kind !== "none") {
       const verdict = lockoutGuardFor(ctx).check(host, lockoutCls, call.name);
       if (!verdict.allowed) {
         if (verdict.refusalKind === "budget" || verdict.refusalKind === "opaque") {
@@ -182,7 +196,12 @@ export async function dispatchTool(ctx: Ctx, role: ActorRole, phase: EngagementP
   // item can't spray the target.
   const variantDenial = checkVariantCap(ctx.itemLedger, args);
   if (variantDenial) {
-    return { result: variantDenial, target: host };
+    // TEST MODE (operator order): the variant cap is bypassed and the
+    // bypass is event-logged; the call proceeds.
+    if (!testModeOn(ctx)) {
+      return { result: variantDenial, target: host };
+    }
+    noteTestModeBypass(ctx, phase, host, `per-item variant cap denial for ${call.name} would have refused this call: ${variantDenial}`);
   }
   // v0.34.0 operator controls: policy (deny-wins) and pre-execute hooks, then
   // post-hooks — all audited individually. A denial sends nothing.

@@ -41,7 +41,7 @@ export async function planPhase(ctx: Ctx, critique?: string): Promise<void> {
         ctx.events.append({ phase: "plan", actor: "runner", action: "plan_step_rejected", attackId, result: `Unknown ATT&CK ID ${attackId} — step rejected.` });
         continue;
       }
-      if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe)) {
+      if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe, { testMode: ctx.config?.testMode === true })) {
         ctx.events.append({ phase: "plan", actor: "runner", action: "plan_step_rejected", attackId, result: `Technique ${attackId} excluded by ROE/mode — step rejected.` });
         continue;
       }

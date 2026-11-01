@@ -43,6 +43,8 @@ export interface RunOptions {
   dryRunAgents?: boolean;
   /** LOCAL SANDBOX MODE ONLY. See ResolvedRunnerConfig.localSandbox. Default false. */
   localSandbox?: boolean;
+  /** TEST MODE. See ResolvedRunnerConfig.testMode. Env REDTEAM_TEST_MODE=1. Default false. */
+  testMode?: boolean;
   deps?: RunnerDeps;
   /**
    * v0.22.0 UI kill switch: called with the operator abort handle once the

@@ -87,8 +87,17 @@ export function techniqueAllowed(
   attackId: string | undefined,
   mode: EngagementMode,
   roe: RulesOfEngagement,
+  opts?: { testMode?: boolean },
 ): boolean {
   if (!attackId) return true; // unmapped actions are allowed; the mapping is advisory
+  // TEST MODE (operator order): only the operator's own ROE exclusions
+  // apply — the always-excluded set (T1499) and the mode defaults are
+  // bypassed for testing. The bypass is engagement-level and recorded by
+  // the authorize phase's test_mode_active event.
+  if (opts?.testMode) {
+    const roeOnly = (roe.excludedTechniques ?? []).map((t) => t.toUpperCase());
+    return !roeOnly.includes(attackId.toUpperCase());
+  }
   const excluded = resolveExcludedTechniques(mode, roe.excludedTechniques);
   return !excluded.includes(attackId.toUpperCase());
 }

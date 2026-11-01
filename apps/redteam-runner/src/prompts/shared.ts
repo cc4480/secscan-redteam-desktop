@@ -30,6 +30,13 @@ export interface PromptContext {
    */
   localSandbox?: boolean
   /**
+   * TEST MODE ONLY (REDTEAM_TEST_MODE, operator order). True when the
+   * engagement runs with the mechanical restraints bypassed for testing
+   * (see ResolvedRunnerConfig.testMode). roeBlock states the posture to
+   * the fleet; the operator ROE exclusions still bind. Never widens scope.
+   */
+  testMode?: boolean
+  /**
    * Q-MEMTIER: the rendered recall start pack for this engagement
    * (agents.ts promptCtx reads it from the memory state). Absent when
    * no memory was recalled; memoryBlock renders nothing then.
@@ -57,6 +64,11 @@ export function roeBlock(ctx: PromptContext): string {
     `- Mode: ${ctx.mode.toUpperCase()}${ctx.mode === 'black' ? ' (covert-ops tier: stealth-prioritized, black-box, OPSEC-strict, undeclared to blue team)' : ' (overt: aggressive breadth)'}`,
     `- Excluded ATT&CK techniques (never use): ${excluded.join(', ')}`,
   ]
+  if (ctx.testMode) {
+    lines.push(
+      '- TEST MODE (operator order, REDTEAM_TEST_MODE): the mechanical restraints of the runner are bypassed for this test engagement — ownership verification, tier enforcement, the credential lockout interlock, rate limiting, the variant cap, and the built-in technique exclusions — and every bypass is recorded in the engagement log. The operator ROE exclusions listed above still bind, as do scope, the kill switch, and the stop conditions.',
+    )
+  }
   if (ctx.roe.blackoutWindows?.length) {
     lines.push(`- Blackout windows (runner pauses automatically): ${ctx.roe.blackoutWindows.map(w => `${w.start}-${w.end}${w.tz ? ` ${w.tz}` : ''}`).join(', ')}`)
   }

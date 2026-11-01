@@ -46,7 +46,7 @@ export async function handleNmapTools(
   const category = (BATTERY_CATEGORIES as string[]).includes(rawCat) ? (rawCat as BatteryCategory) : undefined;
   const host = String(args["host"] ?? "");
 
-  if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe)) {
+  if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe, { testMode: ctx.config?.testMode === true })) {
     return { result: `DENIED by ROE: technique ${attackId} is excluded for this engagement.`, attackId, target: host };
   }
   const rawTp = (strArg(args, "targetProfile") ?? "").toLowerCase();

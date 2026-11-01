@@ -28,7 +28,7 @@ export async function handleNucleiTools(ctx: Ctx, _role: ActorRole, phase: Engag
   const attackId = strArg(args, "attackId")?.toUpperCase();
   const rawCat = (strArg(args, "category") ?? "").toLowerCase();
   const category = (BATTERY_CATEGORIES as string[]).includes(rawCat) ? (rawCat as BatteryCategory) : undefined;
-  if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe)) {
+  if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe, { testMode: ctx.config?.testMode === true })) {
     return { result: `DENIED by ROE: technique ${attackId} is excluded for this engagement.`, attackId, target: String(args["host"] ?? "") };
   }
   const rawTp = (strArg(args, "targetProfile") ?? "").toLowerCase();

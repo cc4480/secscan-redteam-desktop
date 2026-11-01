@@ -337,6 +337,18 @@ export interface ResolvedRunnerConfig {
    */
   localSandbox: boolean
   /**
+   * TEST MODE — explicit operator opt-in (REDTEAM_TEST_MODE=1). While
+   * testing, the mechanical restraints are bypassed: ownership/scope
+   * authorization (the record carries an honest operator self-attestation,
+   * never a fabricated proof), tier enforcement, the credential lockout
+   * interlock, rate limiting, the variant cap, always/mode technique
+   * exclusions, and the destructive/DoS denylists. Every bypass is
+   * recorded in the engagement event log. The kill switch, ESTOP,
+   * auto-halt and the out-of-scope deny list are NOT bypassed. Default
+   * false; off means every gate behaves exactly as before.
+   */
+  testMode: boolean
+  /**
    * Operator-configured per-host rate limit (requests/sec) for the v0.13.0
    * safety rate limiter. Env REDTEAM_MAX_RPS. Production caps it at 2
    * mechanically regardless. Undefined = environment default (5 staging,

@@ -13,6 +13,8 @@ import { type HostExecResult, type HostExecDeps } from "./types.js";
 
 export class ExecutorCore {
   readonly deps: Required<Pick<HostExecDeps, "ssh" | "smb" | "smbPth" | "winrm" | "rdp" | "ad" | "krb" | "nfs">> & { env: NodeJS.ProcessEnv };
+  /** TEST MODE: preflight skips the destructive-command denylist (see HostExecDeps.testMode). */
+  readonly testMode: boolean;
   /** Kill-switch state, shared with the engagement context (phases.ts owns it). */
   killSwitch: { aborted: boolean } = { aborted: false };
 
@@ -46,6 +48,7 @@ export class ExecutorCore {
       nfs: deps.nfs ?? createNfsTransport,
       env: deps.env ?? process.env,
     };
+    this.testMode = deps.testMode === true;
   }
 
 
@@ -61,7 +64,7 @@ export class ExecutorCore {
     const v = validateHostTarget(host, scopeHosts);
     if (!v.ok) return { refused: v.reason };
     if (command) {
-      const denied = checkDestructive(command);
+      const denied = this.testMode ? null : checkDestructive(command);
       if (denied) return { refused: `destructive-command denylist: ${denied}` };
     }
     try {

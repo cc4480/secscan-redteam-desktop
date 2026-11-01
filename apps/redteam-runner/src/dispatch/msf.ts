@@ -10,6 +10,8 @@ import { type ActorRole, type EngagementPhase } from "../types.js";
 import type { ToolCallRequest } from "@secscan/redteam-llm-router";
 import { type DispatchResult } from "./types.js";
 import { noteCategoryCoverage, optStr } from "./prelude.js";
+import { checkMsfModule, checkMsfPayload } from "../msf/policy.js";
+import { noteTestModeBypass, testModeOn } from "./test-mode.js";
 
 export async function handleMsfTools(ctx: Ctx, _role: ActorRole, phase: EngagementPhase, call: ToolCallRequest, args: Record<string, unknown>): Promise<DispatchResult | null> {
   if (call.name !== "msf_exec") return null;
@@ -17,7 +19,7 @@ if (call.name === "msf_exec") {
   const attackId = typeof args["attackId"] === "string" ? (args["attackId"] as string).toUpperCase() : undefined;
   const rawCat = typeof args["category"] === "string" ? (args["category"] as string).toLowerCase() : "";
   const category = (BATTERY_CATEGORIES as string[]).includes(rawCat) ? (rawCat as BatteryCategory) : undefined;
-  if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe)) {
+  if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe, { testMode: ctx.config?.testMode === true })) {
     return { result: `DENIED by ROE: technique ${attackId} is excluded for this engagement.`, attackId, target: String(args["host"] ?? "") };
   }
   const rawTp = typeof args["targetProfile"] === "string" ? (args["targetProfile"] as string).toLowerCase() : "";
@@ -41,6 +43,23 @@ if (call.name === "msf_exec") {
   noteCategoryCoverage(ctx, category, rawTp as TargetId);
   const ctrl = new AbortController();
   ctx.hostKill.controllers.add(ctrl);
+  // TEST MODE (operator order): the executor will skip module/payload
+  // policy — pre-compute the would-be denials (policy evaluated WITHOUT
+  // test mode) so the bypass lands in the engagement log with its labels.
+  if (action === "run" && testModeOn(ctx)) {
+    const moduleType = args["moduleType"] === "auxiliary" ? "auxiliary" : "exploit";
+    const wouldModule = checkMsfModule(String(args["module"] ?? ""), moduleType);
+    if (wouldModule) {
+      noteTestModeBypass(ctx, phase, host, `msf module policy would refuse msf_exec: ${wouldModule}`);
+    }
+    const wouldPayloadValue = optStr(args["payload"]) ?? (moduleType === "exploit" ? "cmd/unix/generic" : undefined);
+    if (wouldPayloadValue) {
+      const wouldPayload = checkMsfPayload(wouldPayloadValue);
+      if (wouldPayload) {
+        noteTestModeBypass(ctx, phase, host, `msf payload policy would refuse msf_exec: ${wouldPayload}`);
+      }
+    }
+  }
   try {
     if (ctx.input.mode === "black") await sleep(Math.random() * 2500); // jitter
     const exec = ctx.msfExecutor;

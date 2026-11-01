@@ -465,6 +465,7 @@ export function promptCtx(ctx: Ctx): {
   fullBattery?: boolean
   targets?: TargetId[]
   localSandbox?: boolean
+  testMode?: boolean
   memoryBrief?: string
 } {
   return {
@@ -479,6 +480,8 @@ export function promptCtx(ctx: Ctx): {
     // loopback/private — matches the gate's invariant exactly. Leaving
     // --local-sandbox on does nothing against a real domain.
     localSandbox: ctx.config.localSandbox && ctx.hosts.every(h => isPrivateOrLoopbackHost(h)),
+    // TEST MODE: posture flag for the role prompts (roeBlock states it).
+    testMode: ctx.config.testMode,
     // Q-MEMTIER (§7.1): the recall start pack, when memory was opened
     // and the pack assembled (post-authorize). It reaches the system
     // prompts through memoryBlock and is journaled with them.

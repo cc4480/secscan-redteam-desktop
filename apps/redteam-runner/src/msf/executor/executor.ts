@@ -36,6 +36,13 @@ export interface MsfDeps {
   env?: NodeJS.ProcessEnv;
   /** Override msfrpcd endpoint (tests). */
   endpoint?: { host: string; port: number; useTls: boolean };
+  /**
+   * TEST MODE (REDTEAM_TEST_MODE): module/payload policy and the canary
+   * destructive check are bypassed. Set from the resolved runner config
+   * in phases/run.ts; the bypass is recorded by dispatch (dispatch/msf.ts)
+   * per call. Default false.
+   */
+  testMode?: boolean;
 }
 
 export interface MsfResult {
@@ -55,11 +62,14 @@ export const MSF_TIMEOUT_MS = 120_000; // exploits get longer than 30s host-exec
 
 export class MsfExecutor {
   private readonly deps: { request?: MsfRequestFn; env: NodeJS.ProcessEnv; endpoint?: { host: string; port: number; useTls: boolean } };
+  /** TEST MODE: policy checks bypassed (see MsfDeps.testMode). */
+  readonly testMode: boolean;
   /** Kill-switch state, shared with the engagement context (phases.ts owns it). */
   killSwitch: { aborted: boolean } = { aborted: false };
 
   constructor(deps: MsfDeps = {}) {
     this.deps = { request: deps.request, env: deps.env ?? process.env, endpoint: deps.endpoint };
+    this.testMode = deps.testMode === true;
   }
 
   private refusedResult(host: string, refused: string, secrets: string[] = []): MsfResult {
@@ -220,18 +230,21 @@ export class MsfExecutor {
     const pre = this.preflight(args.host, args.scopeHosts);
     if ("refused" in pre) return this.refusedResult(args.host, pre.refused);
     // Policy first — before credentials, before any packet to msfrpcd.
-    const deniedModule = checkMsfModule(args.module, args.moduleType);
+    // TEST MODE: module/payload policy and the canary destructive check
+    // are bypassed (structural module validation inside checkMsfModule
+    // still applies); dispatch/msf.ts logs the would-be denials.
+    const deniedModule = checkMsfModule(args.module, args.moduleType, { testMode: this.testMode });
     if (deniedModule) return this.refusedResult(args.host, deniedModule);
     const payload = args.payload ?? (args.moduleType === "exploit" ? "cmd/unix/generic" : undefined);
     if (payload) {
-      const deniedPayload = checkMsfPayload(payload);
+      const deniedPayload = checkMsfPayload(payload, { testMode: this.testMode });
       if (deniedPayload) return this.refusedResult(args.host, deniedPayload);
     }
     const { command: markerCmd, refused: deniedCmd } = buildMarkerCommand(args.marker);
     if (deniedCmd) return this.refusedResult(args.host, `marker command refused: ${deniedCmd}`);
     // The marker is fixed, but run it through the destructive denylist
     // anyway — defense in depth on the one command we ever fire.
-    const denied = checkDestructive(markerCmd);
+    const denied = this.testMode ? null : checkDestructive(markerCmd);
     if (denied) return this.refusedResult(args.host, `destructive-command denylist: ${denied}`);
     try {
       const { client, secrets } = await authedClient(this.deps, MSF_TIMEOUT_MS, args.signal);

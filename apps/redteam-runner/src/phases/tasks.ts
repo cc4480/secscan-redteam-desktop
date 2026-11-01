@@ -159,7 +159,7 @@ export function validateTasks(ctx: Ctx, raw: Array<Record<string, unknown>>, cap
     const brief = String(r["brief"] ?? "").trim().slice(0, 800);
     if (!brief) continue;
     let attackId = typeof r["attackId"] === "string" ? r["attackId"].toUpperCase() : undefined;
-    if (attackId && (!lookupTechnique(attackId) || !techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe))) {
+    if (attackId && (!lookupTechnique(attackId) || !techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe, { testMode: ctx.config?.testMode === true }))) {
       ctx.events.append({
         phase: "exploit",
         actor: "runner",

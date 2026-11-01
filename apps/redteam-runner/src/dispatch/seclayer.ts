@@ -75,7 +75,7 @@ export function seclayerPrelude(ctx: Ctx, call: ToolCallRequest, args: Record<st
   const url = strArg(args, "url") ?? "";
   const rawCat = (strArg(args, "category") ?? "").toLowerCase();
   const category = (BATTERY_CATEGORIES as string[]).includes(rawCat) ? (rawCat as BatteryCategory) : undefined;
-  if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe)) {
+  if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe, { testMode: ctx.config?.testMode === true })) {
     return { result: `DENIED by ROE: technique ${attackId} is excluded for this engagement.`, attackId, target: url };
   }
   if (!ctx.verificationProof) {

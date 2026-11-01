@@ -164,7 +164,7 @@ redteam-runner ui [--port 8787] [--listen <addr>] [--engagements-dir <dir>]
     # and prints a warning. Env: REDTEAM_UI_TOKEN (use your own token),
     # REDTEAM_HOME or engagements default like the CLI.
 
-Env: MODEL_API_KEY (the fleet's model key; DEEPSEEK_API_KEY also supported), QWEN_API_KEY (optional since v0.6), SECSCAN_MCP_TOKEN + SECSCAN_MCP_URL (optional, service-verification opt-in only), REDTEAM_LOCAL_SANDBOX=1.
+Env: MODEL_API_KEY (the fleet's model key; DEEPSEEK_API_KEY also supported), QWEN_API_KEY (optional since v0.6), SECSCAN_MCP_TOKEN + SECSCAN_MCP_URL (optional, service-verification opt-in only), REDTEAM_LOCAL_SANDBOX=1, REDTEAM_TEST_MODE=1 (TESTING ONLY — operator order: bypasses the mechanical restraints — ownership verification, tier enforcement, lockout interlock, rate limiting, variant cap, technique exclusions, destructive/DoS denylists — for declared in-scope targets; every bypass is event-logged and the record carries an operator self-attestation, never a fabricated proof. Kill switch, ESTOP, auto-halt, scope and the out-of-scope deny list stay in force).
 Host-exec (v0.9.0, Windows/Linux batteries): REDTEAM_SSH_USER + one of
 REDTEAM_SSH_PASSWORD / REDTEAM_SSH_KEY / REDTEAM_SSH_KEY_PATH;
 REDTEAM_SMB_USER + REDTEAM_SMB_PASSWORD (+ optional REDTEAM_SMB_DOMAIN);

@@ -17,7 +17,7 @@ if (call.name === "http_probe") {
   const attackId = typeof args["attackId"] === "string" ? (args["attackId"] as string).toUpperCase() : undefined;
   const rawCat = typeof args["category"] === "string" ? (args["category"] as string).toLowerCase() : "";
   const category = (BATTERY_CATEGORIES as string[]).includes(rawCat) ? (rawCat as BatteryCategory) : undefined;
-  if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe)) {
+  if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe, { testMode: ctx.config?.testMode === true })) {
     return { result: `DENIED by ROE: technique ${attackId} is excluded for this engagement.`, attackId, target: String(args["url"] ?? "") };
   }
   const url = String(args["url"] ?? "");
@@ -79,7 +79,7 @@ if (call.name === "http_probe") {
 
 if (call.name === "burst_probe") {
   const attackId = typeof args["attackId"] === "string" ? (args["attackId"] as string).toUpperCase() : undefined;
-  if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe)) {
+  if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe, { testMode: ctx.config?.testMode === true })) {
     return { result: `DENIED by ROE: technique ${attackId} is excluded for this engagement.`, attackId, target: String(args["url"] ?? "") };
   }
   const url = String(args["url"] ?? "");

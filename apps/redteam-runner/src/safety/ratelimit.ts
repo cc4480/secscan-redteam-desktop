@@ -16,6 +16,13 @@ export interface RateLimitConfig {
   rpsPerHost: number;
   /** Burst allowance (tokens available immediately). Defaults to rpsPerHost. */
   burst?: number;
+  /**
+   * TEST MODE (REDTEAM_TEST_MODE): the limiter admits every acquire
+   * immediately — no tokens, no waiting. Set from the resolved runner
+   * config in phases/run.ts; the bypass is recorded by the engagement's
+   * test_mode_active event. Default false.
+   */
+  disabled?: boolean;
 }
 
 export const DEFAULT_STAGING_RPS = 5;
@@ -35,6 +42,8 @@ interface Bucket {
 export class TargetRateLimiter {
   readonly rpsPerHost: number;
   readonly burst: number;
+  /** TEST MODE: admits immediately, never waits (see RateLimitConfig.disabled). */
+  readonly disabled: boolean;
   private buckets = new Map<string, Bucket>();
   private now: () => number;
   /** Total ms agents spent waiting on the limiter this engagement (manifest). */
@@ -48,6 +57,7 @@ export class TargetRateLimiter {
     }
     this.rpsPerHost = cfg.rpsPerHost;
     this.burst = cfg.burst && cfg.burst > 0 ? cfg.burst : cfg.rpsPerHost;
+    this.disabled = cfg.disabled === true;
     this.now = now;
   }
 
@@ -68,6 +78,10 @@ export class TargetRateLimiter {
 
   /** Non-blocking: true when a token is available right now. */
   tryAcquire(host: string): boolean {
+    if (this.disabled) {
+      this.acquires++;
+      return true;
+    }
     const b = this.bucket(host);
     this.refill(b, this.now());
     if (b.tokens >= 1) {

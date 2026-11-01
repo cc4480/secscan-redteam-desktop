@@ -46,6 +46,8 @@ export function resolveConfig(env: NodeJS.ProcessEnv, opts: {
   memoryRoot?: string
   dryRunAgents?: boolean
   localSandbox?: boolean
+  /** TEST MODE. See ResolvedRunnerConfig.testMode. Env REDTEAM_TEST_MODE=1. Default false. */
+  testMode?: boolean
   /** Per-host rate limit override (requests/sec). Env REDTEAM_MAX_RPS. Production caps at 2 mechanically. */
   maxRpsPerHost?: number
   /** v0.20.0: per-item variant cap override. Env REDTEAM_MAX_VARIANTS. Undefined = env default (25 staging, 10 production). */
@@ -130,6 +132,7 @@ export function resolveConfig(env: NodeJS.ProcessEnv, opts: {
     estopPaths: resolveEstopPaths(env, { registryPath }),
     dryRunAgents: opts.dryRunAgents ?? false,
     localSandbox: opts.localSandbox ?? env['REDTEAM_LOCAL_SANDBOX'] === '1',
+    testMode: opts.testMode ?? env['REDTEAM_TEST_MODE'] === '1',
     maxRpsPerHost: opts.maxRpsPerHost ?? parseEnvPositiveNumber(env['REDTEAM_MAX_RPS'], 'REDTEAM_MAX_RPS'),
     maxVariantsPerItem: opts.maxVariantsPerItem ?? parseEnvPositiveNumber(env['REDTEAM_MAX_VARIANTS'], 'REDTEAM_MAX_VARIANTS'),
     lockoutThreshold: opts.lockoutThreshold ?? parseEnvPositiveNumber(env['REDTEAM_LOCKOUT_THRESHOLD'], 'REDTEAM_LOCKOUT_THRESHOLD'),

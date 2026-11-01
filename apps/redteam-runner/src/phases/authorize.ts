@@ -22,7 +22,71 @@ function operatorAttestation(ctx: Ctx): string {
   );
 }
 
+/**
+ * The verification proof recorded in TEST MODE (REDTEAM_TEST_MODE=1,
+ * operator order): an honest self-attestation that names the bypass.
+ * It is deliberately NOT shaped like a DNS/service proof — anything
+ * reading the record can tell no ownership verification happened.
+ */
+export const TEST_MODE_ATTESTATION =
+  "TEST MODE: operator self-attested — ownership verification bypassed by operator order (REDTEAM_TEST_MODE)";
+
+/** The scope-guard audit event, appended on every authorize path. */
+function appendScopeGuardEvent(ctx: Ctx): void {
+  const guard = scopeGuardFor(ctx);
+  ctx.events.append({
+    phase: "authorize",
+    actor: "runner",
+    action: "scope_guard",
+    target: ctx.domain,
+    result:
+      `Scope guard armed: ${guard.describe()}` +
+      (guard.skippedEntries.length > 0
+        ? `. SKIPPED unclassifiable entries (not enforced, fix the ROE): ${guard.skippedEntries.join(", ")}`
+        : ""),
+  });
+}
+
 export async function authorizePhase(ctx: Ctx): Promise<GateVerdict> {
+  // TEST MODE (operator order, REDTEAM_TEST_MODE=1): the authorization
+  // gates are bypassed for testing and the bypass is the first thing in
+  // the engagement log — the test_mode_active event names every gate it
+  // lifts, and the recorded proof is the honest self-attestation above,
+  // never a fabricated verification. The scope guard still arms (the
+  // out-of-scope deny list stays in force), and the kill switch, ESTOP
+  // and auto-halt are untouched.
+  if (ctx.config.testMode) {
+    ctx.events.append({
+      phase: "authorize",
+      actor: "runner",
+      action: "test_mode_active",
+      target: ctx.domain,
+      result:
+        "TEST MODE ACTIVE (REDTEAM_TEST_MODE=1, operator order): ownership verification and scope " +
+        "authorization are bypassed for this engagement, and with them the mechanical restraints that " +
+        "key off them — autonomy-tier enforcement, credential lockout interlock, per-host rate limiting, " +
+        "variant cap, always/mode technique exclusions, host-exec destructive-command denylist, and msf " +
+        "module/payload policy. The verification proof on record is the operator's self-attestation, " +
+        "not a DNS or service proof. Kill switch, ESTOP, auto-halt and the out-of-scope deny list remain in force.",
+    });
+    appendScopeGuardEvent(ctx);
+    ctx.verifiedAt = new Date().toISOString();
+    ctx.verificationProof = TEST_MODE_ATTESTATION;
+    ctx.events.append({
+      phase: "authorize",
+      actor: "coordinator",
+      action: "authorization_basis",
+      target: ctx.domain,
+      result: `${ctx.verificationProof} Mode: ${ctx.input.mode.toUpperCase()}. Objective: ${ctx.input.objective}. Scope: ${ctx.hosts.join(", ")}.`,
+    });
+    ctx.events.updateState({
+      status: "running",
+      verified: true,
+      verificationTs: ctx.verifiedAt,
+      verificationProof: ctx.verificationProof,
+    });
+    return { allowed: true };
+  }
   // Verification basis: an explicitly injected verifier (tests, embedded
   // callers) or the REDTEAM_VERIFY_VIA_SERVICE=1 opt-in uses the SecScan
   // service check. Otherwise — the default — verification comes from the
@@ -66,18 +130,7 @@ export async function authorizePhase(ctx: Ctx): Promise<GateVerdict> {
   // classified (an operator typo must be visible, never a silent
   // narrowing of scope). Building it here also caches it on the context
   // for the dispatch scope gate.
-  const guard = scopeGuardFor(ctx);
-  ctx.events.append({
-    phase: "authorize",
-    actor: "runner",
-    action: "scope_guard",
-    target: ctx.domain,
-    result:
-      `Scope guard armed: ${guard.describe()}` +
-      (guard.skippedEntries.length > 0
-        ? `. SKIPPED unclassifiable entries (not enforced, fix the ROE): ${guard.skippedEntries.join(", ")}`
-        : ""),
-  });
+  appendScopeGuardEvent(ctx);
   ctx.verifiedAt = new Date().toISOString();
   ctx.verificationProof = verdict.reason
     ? `${verdict.reason} (${ctx.verifiedAt})`

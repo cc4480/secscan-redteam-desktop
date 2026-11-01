@@ -59,7 +59,7 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
   if (!input.target) throw new Error("[runner] target is required");
   if (!["red", "black"].includes(input.mode)) throw new Error(`[runner] mode must be red|black, got ${input.mode}`);
   if (!input.roe?.scope?.length) throw new Error("[runner] ROE scope is required (exact hosts).");
-  if (!inTestWindow(new Date(), input.roe)) {
+  if (!config.testMode && !inTestWindow(new Date(), input.roe)) {
     throw new Error("[runner] current time is outside the ROE test window — refusing to run.");
   }
 
@@ -68,7 +68,7 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
   // fail fast, before the engagement directory is even created.
   const environment = input.environment ?? parseEnvironment(process.env["REDTEAM_ENV"]);
   const prodConfirmed = input.confirmProduction ?? productionConfirmed(process.env);
-  requireGraduation(environment, prodConfirmed);
+  if (!config.testMode) requireGraduation(environment, prodConfirmed);
   const { rps, productionCapApplied } = resolveEffectiveRps(environment, config.maxRpsPerHost);
 
   // v0.17.0 accountability: autonomy tiers + named human operator.
@@ -79,9 +79,9 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
   // All fail fast, before the engagement directory is even created.
   const tier = input.tier ?? parseTier(process.env[TIER_ENV]) ?? defaultTier(environment);
   const tier2ProdConfirmed = input.confirmTier2Production ?? tier2ProductionConfirmed(process.env);
-  requireTier2ProductionApproval(tier, environment, tier2ProdConfirmed);
+  if (!config.testMode) requireTier2ProductionApproval(tier, environment, tier2ProdConfirmed);
   const operator = resolveOperatorName(input.operatorName, process.env);
-  requireNamedOperator(environment, operator);
+  if (!config.testMode) requireNamedOperator(environment, operator);
 
   const hosts = scopeHosts(input.roe);
   if (hosts.length === 0) throw new Error("[runner] ROE scope produced no parseable hosts — refusing to run.");
@@ -134,16 +134,16 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
     deps,
     events,
     mcp: deps.mcp ?? new McpClient({ endpoint: config.mcpEndpoint, token: config.mcpToken }),
-    prober: deps.prober ?? new WebProber({ scopeHosts: hosts, minDelayMs: config.probeDelayMs, allowPrivateHosts: config.localSandbox && allHostsPrivateOrLoopback(hosts) }),
-    hostExecutor: deps.hostExecutor ?? new HostExecutor(),
-    msfExecutor: deps.msfExecutor ?? new MsfExecutor(),
+    prober: deps.prober ?? new WebProber({ scopeHosts: hosts, minDelayMs: config.probeDelayMs, allowPrivateHosts: (config.localSandbox && allHostsPrivateOrLoopback(hosts)) || config.testMode }),
+    hostExecutor: deps.hostExecutor ?? new HostExecutor({ testMode: config.testMode }),
+    msfExecutor: deps.msfExecutor ?? new MsfExecutor({ testMode: config.testMode }),
     nucleiExecutor: deps.nucleiExecutor ?? new NucleiExecutor(),
     nmapExecutor: deps.nmapExecutor ?? new NmapExecutor(),
     nuclei: { templateExecutions: 0, templatesRun: 0, findings: 0 },
     hostKill: { aborted: false, controllers: new Set() },
     // v0.13.0 safety case: mechanical protections, armed from engagement start.
     safety: {
-      limiter: new TargetRateLimiter({ rpsPerHost: rps }),
+      limiter: new TargetRateLimiter({ rpsPerHost: rps, disabled: config.testMode }),
       autoHalt: new TargetAutoHalt(),
       // Q-LOCKOUT: the credential-attempt interlock, armed from engagement
       // start with the operator-declared lockout policy (defaults: threshold

@@ -10,6 +10,8 @@ import { type ActorRole, type EngagementPhase } from "../types.js";
 import type { ToolCallRequest } from "@secscan/redteam-llm-router";
 import { type DispatchResult } from "./types.js";
 import { noteCategoryCoverage, numArg, optStr } from "./prelude.js";
+import { checkDestructive } from "../host-exec/common.js";
+import { noteTestModeBypass, testModeOn } from "./test-mode.js";
 
 /** Host-exec tools landed after the ssh/smb/winrm trio. Exported so
  *  test/tool-family-consistency.test.ts can pin the family against the
@@ -45,7 +47,7 @@ function hostExecPrelude(
   category: BatteryCategory | undefined,
   wantTp: "linux" | "windows",
 ): { refused: DispatchResult } | { host: string; ctrl: AbortController } {
-  if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe)) {
+  if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe, { testMode: ctx.config?.testMode === true })) {
     return { refused: { result: `DENIED by ROE: technique ${attackId} is excluded for this engagement.`, attackId, target: String(args["host"] ?? "") } };
   }
   const rawTp = typeof args["targetProfile"] === "string" ? (args["targetProfile"] as string).toLowerCase() : "";
@@ -70,7 +72,7 @@ function hostExecPrelude(
   return { host, ctrl };
 }
 
-export async function handleHostTools(ctx: Ctx, _role: ActorRole, _phase: EngagementPhase, call: ToolCallRequest, args: Record<string, unknown>): Promise<DispatchResult | null> {
+export async function handleHostTools(ctx: Ctx, _role: ActorRole, phase: EngagementPhase, call: ToolCallRequest, args: Record<string, unknown>): Promise<DispatchResult | null> {
   if (call.name !== "ssh_exec" && call.name !== "smb_exec" && call.name !== "winrm_exec" && !WAVE2_TOOLS.has(call.name)) return null;
 if (call.name === "ssh_exec" || call.name === "smb_exec" || call.name === "winrm_exec") {
   const attackId = typeof args["attackId"] === "string" ? (args["attackId"] as string).toUpperCase() : undefined;
@@ -79,6 +81,15 @@ if (call.name === "ssh_exec" || call.name === "smb_exec" || call.name === "winrm
   const pre = hostExecPrelude(ctx, call, args, attackId, category, call.name === "ssh_exec" ? "linux" : "windows");
   if ("refused" in pre) return pre.refused;
   const { host, ctrl } = pre;
+  // TEST MODE (operator order): the executor's preflight will skip the
+  // destructive-command denylist — pre-compute the would-be refusal here
+  // so the bypass lands in the engagement log with its label.
+  if ((call.name === "ssh_exec" || call.name === "winrm_exec") && testModeOn(ctx)) {
+    const deniedLabel = checkDestructive(String(args["command"] ?? ""));
+    if (deniedLabel) {
+      noteTestModeBypass(ctx, phase, host, `host-exec destructive-command denylist would refuse ${call.name}: ${deniedLabel}`);
+    }
+  }
   try {
     if (ctx.input.mode === "black") await sleep(Math.random() * 2500); // jitter
     const exec = ctx.hostExecutor;
