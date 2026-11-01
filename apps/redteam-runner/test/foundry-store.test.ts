@@ -3,7 +3,7 @@
  */
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
@@ -94,6 +94,18 @@ describe('foundry store', () => {
     const notes = readSanitizerNotes(store, 10)
     assert.equal(notes.length, 1)
     assert.deepEqual(notes[0]?.reasons, ['dlp:email'])
+  })
+
+  it('fails loud on a corrupt registry instead of reading it as empty', () => {
+    const store = tmpStore()
+    assert.equal(registerCase(store, sampleCase('eng-1')), true)
+    const registryPath = join(store, 'registry.json')
+    const torn = '{"version":1,"entries":[{"id":"case-x"'
+    writeFileSync(registryPath, torn)
+    assert.throws(() => loadRegistry(store), /not valid JSON/)
+    // Registration must not rewrite the damaged file from an empty read.
+    assert.throws(() => registerCase(store, sampleCase('eng-2')), /not valid JSON/)
+    assert.equal(readFileSync(registryPath, 'utf8'), torn)
   })
 
   it('reads an absent registry as empty', () => {

@@ -11,13 +11,15 @@
  */
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { EventLog, readEvents } from "../src/events.js";
+import { EventLog, readEvents, readState } from "../src/events.js";
 import {
   emptyRegistry,
   loadRegistryFile,
+  saveRegistryFile,
+  seedRegistry,
   transactRegistryFile,
   type VulnerabilityRegistry,
 } from "../src/registry.js";
@@ -76,6 +78,19 @@ describe("EventLog per-instance sequencing", () => {
     assert.equal(b.snapshot.eventCount, 5);
   });
 
+  it("state.json is a complete parseable document after every append, with no tmp litter", () => {
+    const log = makeLog("eng-state");
+    for (let i = 0; i < 25; i++) {
+      log.append({ phase: "recon", actor: "recon", action: `s${i}`, result: "ok" });
+      // persistState publishes via tmp + rename, so a reader at any moment
+      // sees the old complete state or the new one — never a torn file.
+      const st = readState(log.dir);
+      assert.ok(st !== null, `state.json unparseable after append ${i}`);
+      assert.equal(st.eventCount, i + 1);
+    }
+    assert.deepEqual(readdirSync(log.dir).filter((f) => f.includes(".tmp-")), []);
+  });
+
   it("EventLog.open resumes the counter from the file's own eventCount", () => {
     const dir = join(tmp, "eng-c");
     const log = new EventLog(dir, "eng-c", { target: "t", mode: "red", objective: "o" });
@@ -120,6 +135,21 @@ describe("registry atomic transactions", () => {
     writeFindingToRegistry(ctx, f);
     writeFindingToRegistry(ctx, { ...f });
     assert.equal(loadRegistryFile(path)!.confirmed.length, 1);
+  });
+
+  it("transactRegistryFile refuses to overwrite an existing unreadable registry", () => {
+    const path = join(tmp, "registry.json");
+    saveRegistryFile(path, seedRegistry());
+    const whole = readFileSync(path, "utf8");
+    // The torn file a crash mid-write used to be able to leave behind.
+    const torn = whole.slice(0, Math.floor(whole.length / 2));
+    writeFileSync(path, torn);
+    assert.throws(
+      () => transactRegistryFile(path, () => undefined),
+      /exists but could not be loaded/,
+    );
+    // The damaged file is left exactly as found — never silently zeroed.
+    assert.equal(readFileSync(path, "utf8"), torn);
   });
 
   it("transactRegistryFile runs read-modify-write atomically", () => {

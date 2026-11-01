@@ -5,8 +5,9 @@
  * query.ts. (Module doc comment preserved on the registry.ts barrel.)
  */
 
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { MemoryError } from "../memory/errors.js";
 
 export interface TargetFingerprint {
   host: string;
@@ -110,10 +111,31 @@ export function loadRegistryFile(path: string): VulnerabilityRegistry | null {
   }
 }
 
+/**
+ * Write the registry atomically (tmp file + rename): a crash mid-write
+ * leaves the old registry or the new one, never a truncated file — a
+ * truncated registry is exactly the corruption the transaction guard
+ * below refuses to overwrite, so the write path must never produce one.
+ */
+function writeRegistryFile(path: string, reg: VulnerabilityRegistry): void {
+  const tmp = `${path}.tmp-${process.pid}-${Date.now().toString(36)}`;
+  try {
+    writeFileSync(tmp, JSON.stringify(reg, null, 2));
+    try {
+      renameSync(tmp, path);
+    } catch {
+      rmSync(path, { force: true });
+      renameSync(tmp, path);
+    }
+  } finally {
+    if (existsSync(tmp)) rmSync(tmp, { force: true });
+  }
+}
+
 /** Persist the registry (creates parent dirs). Called after every verdict write-through and at engagement end. */
 export function saveRegistryFile(path: string, reg: VulnerabilityRegistry): void {
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(reg, null, 2));
+  writeRegistryFile(path, reg);
 }
 
 /**
@@ -132,9 +154,22 @@ export function saveRegistryFile(path: string, reg: VulnerabilityRegistry): void
  */
 export function transactRegistryFile<T>(path: string, fn: (reg: VulnerabilityRegistry) => T): T {
   mkdirSync(dirname(path), { recursive: true });
-  const reg = loadRegistryFile(path) ?? emptyRegistry();
+  const loaded = loadRegistryFile(path);
+  // Same guard as engagement start (run.ts, Q-MEMTIER §8 row 1), on the
+  // write path: loadRegistryFile returns null for an absent file AND for
+  // a corrupt or wrong-version one, and only the absent case may start
+  // from empty. Seeding over an existing-but-unreadable file would
+  // silently replace the whole accumulated registry with this one
+  // transaction's entries — fail loud instead, leaving the file intact.
+  if (loaded === null && existsSync(path)) {
+    throw new MemoryError(
+      "REGISTRY_UNREADABLE",
+      `findings registry at ${path} exists but could not be loaded (corrupt or wrong version) — refusing to overwrite it`,
+    );
+  }
+  const reg = loaded ?? emptyRegistry();
   const out = fn(reg);
-  writeFileSync(path, JSON.stringify(reg, null, 2));
+  writeRegistryFile(path, reg);
   return out;
 }
 

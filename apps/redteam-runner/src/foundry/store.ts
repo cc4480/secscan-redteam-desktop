@@ -150,20 +150,34 @@ export function atomicWriteFile(path: string, body: string): void {
 }
 
 /**
- * Load the registry; an absent registry reads as empty.
+ * Load the registry; an absent registry reads as empty. A registry that
+ * exists but cannot be read, parsed, or recognized fails loud instead:
+ * reading it as empty lets the next registerCase rewrite the file with
+ * only its own entry, silently dropping every registered case from the
+ * index (the bundle files stay on disk, orphaned).
  *
  * @param storeDir - the foundry store directory
- * @returns the registry (empty when missing or unparseable)
+ * @returns the registry (empty when the file is absent)
  */
 export function loadRegistry(storeDir: string): FoundryRegistry {
   const path = join(storeDir, 'registry.json')
+  let text: string
   try {
-    const raw = JSON.parse(readFileSync(path, 'utf8')) as Partial<FoundryRegistry>
-    if (raw && Array.isArray(raw.entries)) return { version: 1, entries: raw.entries as RegistryEntry[] }
-  } catch {
-    /* absent or unreadable — an empty registry is the honest read */
+    text = readFileSync(path, 'utf8')
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return { version: 1, entries: [] }
+    throw new Error(`[foundry] registry at ${path} could not be read: ${err instanceof Error ? err.message : String(err)}`)
   }
-  return { version: 1, entries: [] }
+  let raw: Partial<FoundryRegistry>
+  try {
+    raw = JSON.parse(text) as Partial<FoundryRegistry>
+  } catch (err) {
+    throw new Error(`[foundry] registry at ${path} is not valid JSON — refusing to read it as empty: ${err instanceof Error ? err.message : String(err)}`)
+  }
+  if (!raw || !Array.isArray(raw.entries)) {
+    throw new Error(`[foundry] registry at ${path} has an unrecognized shape (no entries array) — refusing to read it as empty`)
+  }
+  return { version: 1, entries: raw.entries as RegistryEntry[] }
 }
 
 /**
