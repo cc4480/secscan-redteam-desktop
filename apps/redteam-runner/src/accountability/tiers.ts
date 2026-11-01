@@ -35,7 +35,7 @@ export const TIER_NAMES: Record<AutonomyTier, string> = {
 export const TIER_DESCRIPTIONS: Record<AutonomyTier, string> = {
   0: "Read-only recon/enumeration. No exploitation tool fires.",
   1: "Single-step validated exploitation with canary markers only — one validated step per target; chaining needs Tier 2.",
-  2: "Multi-step attack chains toward critical assets (still non-destructive, still no-DoS).",
+  2: "Multi-step attack chains toward critical assets (still non-destructive). Tier 2 also unlocks the net_exec flood primitive — bounded load generation under executor-enforced rate/duration/concurrency hard caps, exploit phase only, production confirmation required on production.",
 };
 
 /** Default tier per environment: staging runs the full battery, production validates carefully. */
@@ -149,6 +149,8 @@ const TIER1_TOOLS = new Set([
  *    would be as reachable at Tier 0 as a top-100 sweep. The same gate is
  *    enforced again in the nmap dispatch handler, which is where the refusal
  *    can name the tier that would allow it.
+ *  - net_exec: caps touches no target → Tier 0; socket/packet/flood actions
+ *    fire raw traffic → Tier 2 (see the branch below).
  */
 export function toolMinTier(toolName: string, args: Record<string, unknown> = {}): AutonomyTier {
   if (toolName === "secscan_exec") {
@@ -165,6 +167,14 @@ export function toolMinTier(toolName: string, args: Record<string, unknown> = {}
     if (args["action"] !== "scan") return 0;
     const id = typeof args["profile"] === "string" ? args["profile"] : "quick";
     return (findProfile(id)?.minTier ?? 0) as AutonomyTier;
+  }
+  // net_exec: caps touches no target → Tier 0. Every target action is
+  // Tier 2 — a raw byte channel, crafted packets, and load generation are
+  // chain-level capabilities, never single validated steps. The flood's
+  // own caps (rate/duration/concurrency, executor-enforced) and its
+  // production-confirmation gate live in the net dispatch handler.
+  if (toolName === "net_exec") {
+    return args["action"] === "caps" ? 0 : 2;
   }
   // v0.32.0 external-tool bridge: probe runs nothing -> Tier 0; a run takes the
   // SELECTED PROFILE's tier, same reasoning as nmap_exec — all profiles of one

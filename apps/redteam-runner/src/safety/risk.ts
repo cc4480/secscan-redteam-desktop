@@ -93,6 +93,7 @@ export const RISK_PROFILES: Record<string, RiskProfile> = {
   krb_ptt: p("session", 5, ["ticket cache written"], "clear the ticket cache", ["host", "auth"]),
   msf_exec: p("system", 2, ["exploit module may fire"], "stop the session; revert target state manually", ["host", "exploit"]),
   nmap_exec: p("external", 10, ["port probes sent"], "no rollback needed", ["network"]),
+  net_exec: p("system", 2, ["raw socket bytes and crafted packets sent to the target", "bounded load generation under hard caps"], "stop the tool — in-flight work halts on the kill switch; close socket handles", ["network", "exploit"]),
   nuclei_exec: p("external", 9, ["template requests sent"], "no rollback needed", ["network"]),
   ffuf_exec: p("external", 9, ["fuzz requests sent"], "no rollback needed", ["network"]),
   gobuster_exec: p("external", 9, ["discovery requests sent"], "no rollback needed", ["network"]),

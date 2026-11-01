@@ -16,6 +16,7 @@ import { handleBridgeTools } from "./bridge.js";
 import { handleHostTools } from "./host.js";
 import { handleMsfTools } from "./msf.js";
 import { handleNmapTools } from "./nmap.js";
+import { handleNetTools } from "./net.js";
 import { handleNucleiTools } from "./nuclei.js";
 import { handlePcAgentTools } from "./pc-agent.js";
 import { handleResearchTools } from "./research.js";
@@ -32,6 +33,7 @@ const HANDLERS = [
   handleMsfTools,
   handleNucleiTools,
   handleNmapTools,
+  handleNetTools,
   handleXTool,
   handlePcAgentTools,
   handleBridgeTools,

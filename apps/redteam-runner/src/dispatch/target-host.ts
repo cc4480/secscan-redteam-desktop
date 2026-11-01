@@ -41,6 +41,7 @@ export const RATE_LIMITED_TOOLS = new Set([
   "msf_exec",
   "nuclei_exec",
   "nmap_exec",
+  "net_exec",
   "sqlmap_exec",
   "ffuf_exec",
   "gobuster_exec",
@@ -63,6 +64,8 @@ export function toolTargetHost(call: ToolCallRequest): string | undefined {
   // v0.31.0: nmap_exec profiles runs `nmap --version` locally — no target
   // traffic, so no limiter and no auto-halt applies.
   if (call.name === "nmap_exec" && args["action"] !== "scan") return undefined;
+  // net_exec caps lists routes and caps locally — no target traffic.
+  if (call.name === "net_exec" && args["action"] === "caps") return undefined;
   // v0.32.0: an xtool probe runs nothing; john_exec is offline entirely.
   //
   // The xtool names are listed EXPLICITLY rather than matched with an `_exec`
