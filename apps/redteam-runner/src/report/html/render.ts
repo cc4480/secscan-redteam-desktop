@@ -107,6 +107,7 @@ function groupFindings(o: EngagementReportInput): { groups: TierGroup[]; counts:
         bundle: o.bundles.get(f.id),
         noBundleReason: o.noBundleReasons.get(f.id),
         meta: o.findingMeta.get(f.id),
+        impact: o.detail?.findingImpacts[f.id],
       }),
     );
     if (tier === "ruled-out") {

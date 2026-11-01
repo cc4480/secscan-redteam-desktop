@@ -4,16 +4,19 @@
  * statement selection, and priority ranking. No rendering, no I/O —
  * every string is slot-filled here from the engagement record; the
  * renderer (html/detail-sections.ts) adds markup only. Fixed tables
- * live in detail-tables.ts, section-data builders in detail-blocks.ts.
- * Honesty rules bind: a fact the record does not carry stays absent,
- * and an unclassifiable finding fails loud (§7.4), never drops out.
+ * live in detail-tables.ts, section-data builders in detail-blocks.ts,
+ * the impact derivations (band + per-finding, Q-RP-4) in
+ * detail-impact.ts. Honesty rules bind: a fact the record does not
+ * carry stays absent, and an unclassifiable finding fails loud (§7.4),
+ * never drops out.
  */
 import {
-  AREA_IMPACT, ARM_AREA, ARM_PILLAR, DEDUCTION_WEIGHT, ENGINE_ARM,
+  ARM_AREA, ARM_PILLAR, DEDUCTION_WEIGHT, ENGINE_ARM,
   FAMILY_AREA, SEVERITY_RANK, TIER_RANK, armOf, byRankThenId, compareIds,
-  familyClass, isActionable, normalizeLabel, plural, req,
+  familyClass, isActionable, normalizeLabel, req,
 } from './detail-tables.js'
 import { buildBreakdown, buildPillars, buildSurface, coverageLine, diffFindings } from './detail-blocks.js'
+import { buildFindingImpacts, buildImpact } from './detail-impact.js'
 
 export { diffFindings } from './detail-blocks.js'
 
@@ -131,6 +134,9 @@ export interface ReportDetail {
   riskAreas: RiskArea[]
   deferredCount: number
   impact: { level: 'critical' | 'high' | 'medium' | 'low' | 'none'; text: string }
+  /** Q-RP-4 — the per-finding Impact statements (detail-impact.ts),
+   * keyed by finding id; findings of record only (PROVEN + CONFIRMED). */
+  findingImpacts: Record<string, string>
   priority: { actions: PriorityEntry[]; verifyNext: PriorityEntry[]; zeroNote?: string }
   pillars: PillarCard[]
   surfaceNetwork: { label: string; value: string }[] | null
@@ -194,47 +200,6 @@ const toEntry = (f: DetailFindingInput): PriorityEntry => ({
   id: f.id, title: f.title, severity: f.severity, tier: f.tier, fixSentence: firstSentence(f.fix),
 })
 
-/** §5 — the impact band selects the first matching fixed statement. */
-function buildImpact(actionable: DetailFindingInput[], areaOf: Map<string, string>): ReportDetail['impact'] {
-  if (actionable.length === 0) {
-    return {
-      level: 'none',
-      text: 'No material business risk identified from this pass; continued monitoring is still recommended as the application evolves.',
-    }
-  }
-  const ranked = priorityOrder(actionable)
-  const clause = (f: DetailFindingInput): string =>
-    req(AREA_IMPACT[req(areaOf.get(f.id), `risk area for ${f.id}`)], 'impact clause')
-  const critical = ranked.find(f => f.severity === 'critical')
-  if (critical) {
-    const area = req(areaOf.get(critical.id), `risk area for ${critical.id}`)
-    const incident = area === 'API & Object Access' || area === 'Credential & Secret Exposure'
-      ? ' Treat as an incident until the fix is verified by retest.' : ''
-    return {
-      level: 'critical',
-      text: `Material business risk: ${critical.id} (${critical.title}) is confirmed against the live target. ${clause(critical)}${incident}`,
-    }
-  }
-  const highs = ranked.filter(f => f.severity === 'high')
-  if (highs.length > 0) {
-    const top = req(highs[0], 'high finding')
-    return {
-      level: 'high',
-      text: `Elevated business risk: ${highs.length} high-severity ${plural(highs.length, 'finding', 'findings')} confirmed, the most serious being ${top.title} (${req(areaOf.get(top.id), 'risk area')}). ${clause(top)} Remediate on the priority order in §6 before the next release.`,
-    }
-  }
-  if (ranked.some(f => f.severity === 'medium')) {
-    return {
-      level: 'medium',
-      text: `Moderate business risk: the confirmed findings are exploitable weaknesses without a demonstrated path to data loss in this pass. ${clause(req(ranked[0], 'actionable finding'))}`,
-    }
-  }
-  return {
-    level: 'low',
-    text: `Low material risk from this pass: the confirmed items are hardening and exposure-reduction items. ${actionable.length} ${plural(actionable.length, 'item', 'items')} listed under Priority Actions.`,
-  }
-}
-
 /** Assemble every detail derivation for one report. */
 export function buildReportDetail(input: DetailInput): ReportDetail {
   const actionable = input.findings.filter(isActionable)
@@ -258,6 +223,7 @@ export function buildReportDetail(input: DetailInput): ReportDetail {
     riskAreas,
     deferredCount: deferred.length,
     impact: buildImpact(actionable, areaOf),
+    findingImpacts: buildFindingImpacts(actionable, areaOf),
     priority: {
       actions: priorityOrder(actionable).map(toEntry),
       verifyNext: [...deferred]

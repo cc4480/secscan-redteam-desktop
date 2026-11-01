@@ -719,6 +719,9 @@ importers:
       '@secscan/redteam-llm-router':
         specifier: workspace:*
         version: link:../../packages/redteam/llm-router
+      fflate:
+        specifier: ^0.8.2
+        version: 0.8.2
       js-md4:
         specifier: ^0.3.2
         version: 0.3.2

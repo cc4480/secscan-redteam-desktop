@@ -109,6 +109,9 @@ export interface CardInput {
   /** Runner-computed reason a confirmed finding has no bundle. */
   noBundleReason?: string;
   meta?: FindingMeta;
+  /** Q-RP-4 — the mechanically derived per-finding Impact statement
+   * (report/detail-impact.ts), present only for findings of record. */
+  impact?: string;
 }
 
 /** One finding card (D6): chip row, evidence body, proof block or the
@@ -154,6 +157,9 @@ export function findingCard(o: CardInput): string {
     `<span class="card-title">${esc(f.title)}</span>` +
     `<span class="card-id">${esc(f.id)}</span></div>` +
     (f.evidence ? `<div class="ev-body">${esc(f.evidence)}</div>` : "") +
+    (o.impact
+      ? `<div class="fixblock impactblock"><div class="fb-head">Impact</div><div class="fb-body">${esc(o.impact)}</div></div>`
+      : "") +
     body +
     (foot.length ? `<div class="card-foot">${foot.join(" · ")}</div>` : "") +
     `</article>`

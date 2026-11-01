@@ -137,6 +137,7 @@ mark{background:color-mix(in srgb,var(--secure) 35%,transparent);color:var(--fg)
 .fixblock{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px;margin-top:14px}
 .fixblock .fb-head{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:7px}
 .fixblock .fb-body{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13.5px}
+.fixblock.impactblock{border-left:3px solid var(--amber)}
 .retest{font-size:13px;color:var(--muted);margin-top:10px}
 .retest strong{color:var(--fg)}
 .fixprompt{font-family:var(--mono);font-size:12px;line-height:1.55;background:var(--panel);border:1px solid var(--line);

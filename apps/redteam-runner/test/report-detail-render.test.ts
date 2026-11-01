@@ -261,6 +261,62 @@ describe("report detail — baseline render", () => {
   });
 });
 
+describe("report detail — per-finding Impact blocks (Q-RP-4)", () => {
+  function card(htmlText: string, id: string): string {
+    const start = htmlText.indexOf(`id="finding-${id}"`);
+    assert.ok(start >= 0, `card ${id} present`);
+    return htmlText.slice(start, htmlText.indexOf("</article>", start));
+  }
+
+  it("each finding of record renders its mechanically derived Impact block", () => {
+    for (const id of ["F-1", "F-2", "F-3"]) {
+      assert.ok(
+        card(html, id).includes('<div class="fb-head">Impact</div>'),
+        `${id} carries an Impact block`,
+      );
+    }
+    assert.match(
+      card(html, "F-1"),
+      /Confirmed against the target in this engagement \(critical severity\)\. Per-user data can be reached across account boundaries/,
+    );
+    assert.match(
+      card(html, "F-2"),
+      /Confirmed against the target in this engagement \(low severity\)\. Browser-enforced protections are weaker/,
+    );
+  });
+
+  it("the Impact block sits between Evidence and Remediation (exemplar anatomy)", () => {
+    const f1 = card(html, "F-1");
+    const ev = f1.indexOf("ev-body");
+    const imp = f1.indexOf('<div class="fb-head">Impact</div>');
+    const fix = f1.indexOf("Remediation Fix");
+    assert.ok(ev >= 0 && imp > ev && fix > imp, "Evidence → Impact → Remediation");
+  });
+
+  it("a deferred finding's card carries no Impact block", () => {
+    const deferred: Finding = {
+      id: "F-9", severity: "high", title: "Unverified session flaw", attackIds: [],
+      evidence: "Flagged, awaiting verification.", fix: "Verify first.", retest: "n/a",
+      status: "deferred", accountableOperator: "Carlos",
+    };
+    const rendered = renderEngagementReportHtml(
+      parityRenderInput({
+        findings: [...parityFindings, deferred],
+        detail: buildReportDetail(
+          parityDetailInput({
+            tierCounts: { proven: 0, confirmed: 3, deferred: 1 },
+            findings: [
+              ...parityDetailInput().findings,
+              { id: "F-9", title: "Unverified session flaw", severity: "high", tier: "deferred", attackIds: [], sourceLabel: "weak-session", signals: [], fix: "Verify first." },
+            ],
+          }),
+        ),
+      }),
+    );
+    assert.ok(!card(rendered, "F-9").includes("Impact"), "no Impact asserted before verification");
+  });
+});
+
 describe("report detail — zero findings", () => {
   const zero = renderEngagementReportHtml(
     parityRenderInput({

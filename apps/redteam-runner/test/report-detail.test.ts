@@ -240,6 +240,60 @@ describe('detail impact (§12.6)', () => {
       'No material business risk identified from this pass; continued monitoring is still recommended as the application evolves.',
     )
   })
+
+  it('rule 3 takes its clause from the WORST finding (spec §5 is severity-first)', () => {
+    // A PROVEN low outranks a CONFIRMED medium in §6's tier-first order;
+    // the impact clause must still come from the medium — the worst
+    // finding — per the spec's selection rule.
+    const d = buildReportDetail(input({
+      findings: [
+        f({ id: 'F-1', severity: 'low', tier: 'proven', sourceLabel: 'csrf' }),
+        f({ id: 'F-2', severity: 'medium', sourceLabel: 'bola' }),
+      ],
+    }))
+    assert.equal(d.impact.level, 'medium')
+    assert.match(d.impact.text, /Per-user data can be reached across account boundaries/)
+    assert.ok(!/Content or session material/.test(d.impact.text), "not the proven low's area clause")
+  })
+})
+
+describe('detail per-finding impact (Q-RP-4)', () => {
+  it('every finding of record gains the statement for its own area', () => {
+    const d = buildReportDetail(input({
+      findings: [
+        f({ id: 'F-1', severity: 'critical', tier: 'proven', sourceLabel: 'bola' }),
+        f({ id: 'F-2', severity: 'low', sourceLabel: 'Injection Defense', signals: ['WSTG-CONF-12'] }),
+      ],
+    }))
+    assert.deepEqual(Object.keys(d.findingImpacts).sort(), ['F-1', 'F-2'])
+    assert.equal(
+      d.findingImpacts['F-1'],
+      'Demonstrated live against the target in this engagement (critical severity). ' +
+      'Per-user data can be reached across account boundaries, which is a direct confidentiality breach for the users whose objects are exposed.',
+    )
+    assert.match(
+      d.findingImpacts['F-2']!,
+      /^Confirmed against the target in this engagement \(low severity\)\. Browser-enforced protections are weaker/,
+    )
+  })
+
+  it('deferred findings gain no statement — no consequence before verification', () => {
+    const d = buildReportDetail(input({
+      findings: [
+        f({ id: 'F-1', severity: 'high', tier: 'deferred', sourceLabel: 'bola' }),
+        f({ id: 'F-2', severity: 'info' }),
+      ],
+    }))
+    assert.equal(d.findingImpacts['F-1'], undefined)
+    assert.deepEqual(Object.keys(d.findingImpacts), ['F-2'])
+  })
+
+  it('an unclassified area still resolves through the family/General path', () => {
+    const d = buildReportDetail(input({
+      findings: [f({ id: 'F-1', severity: 'high', sourceLabel: 'Mystery Category' })],
+    }))
+    assert.match(d.findingImpacts['F-1']!, /The confirmed weakness is documented with its evidence under Findings\./)
+  })
 })
 
 describe('detail priority (§12.7)', () => {

@@ -30,7 +30,8 @@ import { writeSafetyArtifacts } from "./safety.js";
 import { writeComplianceArtifacts } from "./compliance.js";
 import { extractNarrative } from "./narrative.js";
 import { buildEngagementMeta, type ReportMeta } from "./html.js";
-import { renderEngagementReportHtml } from "./html/render.js";
+import { renderEngagementReportHtml, type EngagementReportInput } from "./html/render.js";
+import { writeDocxArtifact } from "./docx.js";
 import { buildEngagementReportInput, buildFindingMeta } from "./html/wire.js";
 import { emitFindingsSheet, stampFindingRefs, stampPeerVerdicts } from "./finding-refs.js";
 import { buildDetailInput, recordReportMeta } from "./predecessor.js";
@@ -238,6 +239,7 @@ export async function reportPhase(
   // colour-coded, print/PDF-ready. report.md stays as the diffable, greppable
   // record and the input to other tooling; this is the thing a person opens.
   // Its own try/catch: a rendering problem must not break the report itself.
+  let reportInput: EngagementReportInput | undefined;
   try {
     const totals = {
       total: lsum.total,
@@ -267,30 +269,28 @@ export async function reportPhase(
     }
     const meta = buildEngagementMeta(ctx, findings, totals);
     if (baselineMeta) meta.baseline = baselineMeta;
-    writeFileSync(
-      join(ctx.events.dir, "report.html"),
-      renderEngagementReportHtml(
-        buildEngagementReportInput({
-          ctx,
-          meta,
-          title: "Penetration Test Report",
-          findings,
-          narrativeMd: narrativeSource,
-          bundles: pocBundleMap,
-          proof: proofData,
-          cells,
-          totals,
-          planOnly: fbPlanOnly,
-          events: reportEvents,
-          haltedReason: opts.haltedReason,
-          detailInput,
-        }),
-      ),
-    );
+    reportInput = buildEngagementReportInput({
+      ctx,
+      meta,
+      title: "Penetration Test Report",
+      findings,
+      narrativeMd: narrativeSource,
+      bundles: pocBundleMap,
+      proof: proofData,
+      cells,
+      totals,
+      planOnly: fbPlanOnly,
+      events: reportEvents,
+      haltedReason: opts.haltedReason,
+      detailInput,
+    });
+    writeFileSync(join(ctx.events.dir, "report.html"), renderEngagementReportHtml(reportInput));
     ctx.events.append({ phase: "report", actor: "runner", action: "report_html_written", result: "HTML report written alongside report.md." });
   } catch (err) {
     ctx.events.append({ phase: "report", actor: "runner", action: "report_html_failed", result: `HTML report generation failed (report.md unaffected): ${(err as Error).message}` });
   }
+  // Q-RP-2: the editable DOCX copy, from the same assembled input (own try/catch inside).
+  if (reportInput) writeDocxArtifact(ctx, reportInput);
   ctx.events.append({ phase: "report", actor: "reporter", action: "report_written", result: `Report written (${findings.length} findings parsed).` });
   const safetyManifest = writeSafetyArtifacts(ctx);
   writeComplianceArtifacts(ctx, findings, batteryLine, safetyManifest);
