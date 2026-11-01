@@ -58,6 +58,7 @@ import {
 } from './mcp-credentials.ts'
 import { DesktopUpdateJournal } from './update-journal.ts'
 import { DesktopRedteamRunner, redteamRunnerResources } from './redteam-runner.ts'
+import { provisionArsenalIndex } from './arsenal-provisioning.ts'
 import { DesktopMetasploit, findMetasploitHome } from './redteam-msf.ts'
 import { runRunnerReadiness } from './readiness.ts'
 import { DesktopUpdatePreparationError } from './update-error.ts'
@@ -405,6 +406,20 @@ async function main(): Promise<void> {
    * failure this child exists to remove. An operator who pointed the product at their
    * own console is visible in that same environment, and there the runner stays off.
    */
+  /**
+   * The bundled Arsenal census seed, materialized before the runner starts.
+   *
+   * The runner serves the Arsenal index from this installation's userData and
+   * its refresh timer first ticks a week out, so a first run with no index
+   * would leave the Arsenal page on its empty-index state until then. The
+   * provisioning is one existence check on every later launch, never
+   * overwrites an index the installation already has, and reports its own
+   * failures instead of failing the launch.
+   */
+  provisionArsenalIndex({
+    userDataDir: app.getPath('userData'),
+    location: { packaged: app.isPackaged, resourcesPath: process.resourcesPath, appPath: app.getAppPath() },
+  })
   const engagementRunner = new DesktopRedteamRunner(
     redteamRunnerResources({
       packaged: app.isPackaged,

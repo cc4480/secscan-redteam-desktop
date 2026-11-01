@@ -78,6 +78,27 @@ function llamaPayloadDirectory(env) {
 }
 
 /**
+ * Directory holding the bundled Arsenal census seed (`arsenal.db`). Unlike the
+ * llama and tools payloads the seed is committed data — one reviewed index built
+ * by the runner's refresh — so it is present in every checkout and ships
+ * unconditionally; `apps/desktop/src/arsenal-provisioning.ts` copies it into
+ * `<userData>/arsenal/arsenal.db` on first run.
+ * @returns {string} Absolute seed directory.
+ */
+function arsenalSeedDirectory() {
+  return fileURLToPath(new URL('../resources/arsenal', import.meta.url))
+}
+
+/**
+ * Manifest pinning the Arsenal seed's SHA-256, shipped beside the seed so the
+ * desktop can verify the seed before provisioning it.
+ * @returns {string} Absolute manifest path.
+ */
+function arsenalManifestPath() {
+  return fileURLToPath(new URL('../resources/arsenal-manifest.json', import.meta.url))
+}
+
+/**
  * A Windows x64 build must ship the llama.cpp runtime beside the app because the
  * local-model manager starts `llama-server.exe` from disk. A thin launcher with
  * no shared libraries is as broken as no launcher, so both are required.
@@ -247,6 +268,14 @@ export function createElectronBuilderConfig(
       ...(llamaPayloadDirectory(env) === undefined
         ? []
         : [{ from: llamaPayloadDirectory(env), to: 'llama', filter: ['**/*'] }]),
+      // The bundled Arsenal census seed and the manifest pinning it. Committed
+      // data, not build output — materialized into the tree by
+      // `node apps/desktop/scripts/vendor-arsenal.mjs` — and
+      // `apps/desktop/src/arsenal-provisioning.ts` copies the seed into the
+      // installation's userData on first run, so a fresh install opens the
+      // Arsenal page on the real census instead of the empty-index state.
+      { from: arsenalSeedDirectory(), to: 'arsenal', filter: ['**/*'] },
+      { from: arsenalManifestPath(), to: 'arsenal-manifest.json' },
     ],
     mac: {
       icon: fileURLToPath(new URL('../resources/icon-macos.png', import.meta.url)),
@@ -283,6 +312,13 @@ export function createElectronBuilderConfig(
         if (llamaFailure !== undefined) {
           throw new Error(`desktop package: ${llamaFailure}; run node apps/desktop/scripts/vendor-llama.mjs`)
         }
+      }
+      // The Arsenal seed is committed data, so its absence means the checkout
+      // itself is incomplete; an installer without it leaves every fresh
+      // install on the Arsenal page's empty-index state.
+      const arsenalSeed = join(arsenalSeedDirectory(), 'arsenal.db')
+      if (!existsSync(arsenalSeed) || !existsSync(arsenalManifestPath())) {
+        throw new Error(`desktop package: the bundled Arsenal census seed is missing (${arsenalSeed}); restore it with node apps/desktop/scripts/vendor-arsenal.mjs --source <reviewed.db>`)
       }
       const office = await officePackageDirectories(buildPaths.dsh, { platform: resolvedPlatform, arch: resolvedArch })
       const patterns = office.map(directory => `**/${relative(buildPaths.dsh, directory).split(sep).join('/')}/**/*`)

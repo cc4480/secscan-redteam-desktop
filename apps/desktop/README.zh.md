@@ -447,3 +447,7 @@ Desktop 自带 llama.cpp CPU 运行时，下载的 GGUF 模型无需单独安装
 该端点兼容 OpenAI，因此本地诊断客户端可以调用 runner 所用的同一服务器：`GET /v1/models` 列出配置的 `--alias` 模型 id，`/v1/chat/completions` 为之提供服务，且不依赖该功能的 IPC 表面。
 
 安全性：llama-server 只绑定 `127.0.0.1` 上的临时端口，就绪判定使用其自身的 `/health` 路由，对没有该路由的构建以 `/v1/models` 作为后备。环回跳转不跨越任何凭据；只有模型 id 与基础 URL 进入 runner 环境，Hugging Face token 则保留在下载请求的 `Authorization` 头内，失败消息既不引用 token，也不引用 URL 的查询字符串。集成与打包行为由 `apps/desktop/tests/llama-integration.spec.ts` 与 `apps/desktop/tests/llama-packaging.spec.ts` 固定，各个模块由其旁边的 `llama-*.spec.ts` 套件固定。
+
+## Arsenal 普查种子
+
+Desktop 随附一份经过审核的 Arsenal 普查构建，使全新安装打开 Arsenal 页面时呈现真实索引，而不是空索引状态。该种子是已提交的数据，而非构建产物：`resources/arsenal/arsenal.db` 是 runner 的 `arsenal refresh` 从其固定源仓库构建的一份索引，`resources/arsenal-manifest.json` 固定了它的 SHA-256、大小与普查计数（当前记录的构建为 1,039 条条目、82 个集合）。启动时，在 engagement runner 启动之前，`src/arsenal-provisioning.ts` 仅当 `<userData>/arsenal/arsenal.db` 处尚无索引时才把种子复制过去：复制前后都按固定哈希校验种子，复制通过临时文件加改名落地，已有索引永不覆盖，任何失败只记录日志且启动继续（页面会继续报告其空索引状态，直到一次刷新构建出索引）。之后 runner 自身的刷新会接管该已置备文件。`scripts/electron-builder-config.mjs` 将种子及其清单作为 `arsenal` 与 `arsenal-manifest.json` extraResources 加入安装程序，`beforePack` 会拒绝检出中缺少它们的安装程序构建。刷新普查的方法：用 runner 构建新索引、审核后运行 `node apps/desktop/scripts/vendor-arsenal.mjs --record-hashes --source <reviewed.db>`；不带 `--record-hashes` 的 `--source` 形式仅在构建已与固定哈希一致时才复制进去，`--check` 是针对已分发种子的打包门禁。

@@ -1,0 +1,11 @@
+{
+  "id": "arsenal-census",
+  "sha256": "e304c529c0e717cc3fddd27200871e073a6a7f04233872ac3a01f07fcd8439aa",
+  "sizeBytes": 569344,
+  "entries": 1039,
+  "collections": 82,
+  "sourceRepo": "https://github.com/hack-with-github/awesome-hacking.git",
+  "sourceCommit": "440486fd08b0a0d9ad9a041a0bb234dcdf65dee2",
+  "builtAt": "2026-10-31T20:24:56.396Z",
+  "vendoredAt": "2026-11-01T21:12:16.312Z"
+}
