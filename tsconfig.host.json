@@ -456,6 +456,7 @@
     { "path": "./packages/redteam/console-share" },
     { "path": "./packages/redteam/desktop-bundle" },
     { "path": "./packages/redteam/foundry-gate" },
+    { "path": "./packages/redteam/fleet-skills" },
     { "path": "./packages/redteam/command-redteam" },
     { "path": "./apps/cli" },
     { "path": "./apps/desktop-host" },
