@@ -246,7 +246,37 @@ export function createMcpToolDefinition(
   }
 }
 
-/** Build the canonical result schema and existing Native text projection. */
+/**
+ * Project a result's speaker stamp into `tool/result` meta. A server
+ * that stamps its structured result with the seat that produced it
+ * (the RedTeam runner's engagement tools stamp the fleet member whose
+ * recorded execution the result reports) gets the stamp persisted with
+ * the session log, where the producing surface's consumers read it
+ * back on replay. The projection is shape-only: a non-empty `name` and
+ * a `role` word, length-capped; the role vocabulary belongs to the
+ * consuming surface, which narrows it. Anything else — no structured
+ * content, no stamp, a malformed stamp — projects `null`, the
+ * framework's nothing-to-project value (a declared projection must
+ * return lossless JSON; consumers narrow absent and null identically),
+ * and the result renders exactly as it did before this projection
+ * existed.
+ *
+ * @param value - The canonical result value.
+ * @returns The meta record carrying the stamp, or null.
+ */
+function speakerMeta(value: JsonValue): JsonValue {
+  if (!isRecord(value)) return null
+  const structured = value.structuredContent
+  if (structured === undefined || !isRecord(structured)) return null
+  const speaker = structured.speaker
+  if (speaker === undefined || !isRecord(speaker)) return null
+  const { name, role } = speaker
+  if (typeof name !== 'string' || name.length === 0 || name.length > 64) return null
+  if (typeof role !== 'string' || role.length === 0 || role.length > 32) return null
+  return { redteamSpeaker: { name, role } }
+}
+
+/** Build the canonical result schema, the Native text projection, and the speaker-stamp meta projection. */
 function createOutput(rawName: string, structuredSchema: JsonSchemaNode | undefined): ToolDefinition['output'] {
   return {
     schema: {
@@ -261,6 +291,9 @@ function createOutput(rawName: string, structuredSchema: JsonSchemaNode | undefi
     render(_args: unknown, value: JsonValue) {
       const result = value as McpResult
       return [{ type: 'text', text: extractText(result.content, rawName) }]
+    },
+    presentationMeta(_args: unknown, value: JsonValue) {
+      return speakerMeta(value)
     },
   }
 }

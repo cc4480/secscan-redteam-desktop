@@ -206,6 +206,99 @@ describe("engagement_report", () => {
   });
 });
 
+/** Write an events.jsonl beside a canned state, in the EventLog's shape. */
+function cannedEvents(id: string, events: Array<Record<string, unknown>>): void {
+  writeFileSync(
+    join(tmp, id, "events.jsonl"),
+    events.map((e) => JSON.stringify({ ts: "2026-10-28T10:01:00Z", engagementId: id, result: "", ...e })).join("\n") + "\n",
+  );
+}
+
+describe("speaker stamps", () => {
+  it("names the seat that executed most recently on engagement_status", async () => {
+    cannedState("eng-2026-10-28-spe1", "running", false);
+    cannedEvents("eng-2026-10-28-spe1", [
+      { seq: 1, phase: "plan", actor: "coordinator", action: "reasoning" },
+      { seq: 2, phase: "exploit", actor: "exploiter", action: "reasoning" },
+      { seq: 3, phase: "exploit", actor: "runner", action: "tool_repair" },
+    ]);
+    const out = await tool("engagement_status").run(store, { id: "eng-2026-10-28-spe1" });
+    assert.equal(out.status, 200);
+    const b = out.body as Record<string, unknown>;
+    assert.deepEqual(b["speaker"], { name: "NEO", role: "exploiter" });
+  });
+
+  it("adds no speaker keys when the record names no seat", async () => {
+    cannedState("eng-2026-10-28-spe2", "complete", true);
+    const out = await tool("engagement_status").run(store, { id: "eng-2026-10-28-spe2" });
+    const b = out.body as Record<string, unknown>;
+    assert.equal("speaker" in b, false);
+    assert.equal("findingSpeakers" in b, false);
+  });
+
+  it("names the report author and per-finding producers on engagement_report", async () => {
+    const id = "eng-2026-10-28-spe3";
+    cannedState(id, "complete", true);
+    cannedEvents(id, [
+      { seq: 1, phase: "exploit", actor: "exploiter", action: "reasoning" },
+      { seq: 2, phase: "report", actor: "reporter", action: "reasoning" },
+    ]);
+    writeFileSync(
+      join(tmp, id, "report.json"),
+      JSON.stringify({
+        findings: [
+          { id: "F-1", producer: "exploiter" },
+          { id: "F-2", producer: "runner" },
+          { id: "F-3" },
+        ],
+      }),
+    );
+    const out = await tool("engagement_report").run(store, { id });
+    assert.equal(out.status, 200);
+    const b = out.body as Record<string, unknown>;
+    assert.deepEqual(b["speaker"], { name: "ARCHITECT", role: "reporter" });
+    assert.deepEqual(b["findingSpeakers"], { "F-1": { name: "NEO", role: "exploiter" } });
+  });
+
+  it("names no report author when the reporter loop never ran (mechanical end)", async () => {
+    const id = "eng-2026-10-28-spe4";
+    cannedState(id, "complete", true);
+    cannedEvents(id, [{ seq: 1, phase: "report", actor: "runner", action: "report_grade" }]);
+    const out = await tool("engagement_report").run(store, { id });
+    const b = out.body as Record<string, unknown>;
+    assert.equal("speaker" in b, false);
+  });
+
+  it("rides the stamp as structuredContent over /mcp, and only when stamped", async () => {
+    cannedState("eng-2026-10-28-spe5", "running", false);
+    cannedEvents("eng-2026-10-28-spe5", [
+      { seq: 1, phase: "recon", actor: "recon", action: "reasoning" },
+    ]);
+    cannedState("eng-2026-10-28-spe6", "running", false);
+    const srv = await startUiServer({ port: 0, engagementsDir: tmp });
+    try {
+      const base = `http://127.0.0.1:${srv.port}`;
+      const rpc = async (method: string, params?: Record<string, unknown>) => {
+        const res = await fetch(`${base}/mcp`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${srv.token}`, "content-type": "application/json" },
+          body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, ...(params ? { params } : {}) }),
+        });
+        return (await res.json()) as Record<string, unknown>;
+      };
+      await rpc("initialize", { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "test", version: "0" } });
+      const stamped = await rpc("tools/call", { name: "engagement_status", arguments: { id: "eng-2026-10-28-spe5" } });
+      const stampedResult = stamped["result"] as { structuredContent?: Record<string, unknown> };
+      assert.deepEqual(stampedResult.structuredContent?.["speaker"], { name: "OPERATOR", role: "recon" });
+      const plain = await rpc("tools/call", { name: "engagement_status", arguments: { id: "eng-2026-10-28-spe6" } });
+      const plainResult = plain["result"] as { structuredContent?: unknown };
+      assert.equal("structuredContent" in plainResult, false);
+    } finally {
+      await srv.close();
+    }
+  });
+});
+
 describe("the MCP surface a chat host consumes", () => {
   it("lists the trio over /mcp and answers a status call", async () => {
     cannedState("eng-2026-10-28-eeee", "complete", true);

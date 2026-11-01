@@ -145,6 +145,7 @@ export async function reportPhase(
     );
     const parsed = extractJsonBlock(reportMd) as { findings?: Finding[] } | null;
     findings = Array.isArray(parsed?.findings) ? parsed.findings : [];
+    for (const f of findings) { delete f.producer; delete f.peerReview; } // attribution is runner-stamped by the joins below, never model-set
     // Q-PROVEN: join the parsed findings back to the live findings so the
     // cell verdict reaches the report (before the accountable stamp below).
     applyCellVerdicts(findings, ctx.liveFindings);

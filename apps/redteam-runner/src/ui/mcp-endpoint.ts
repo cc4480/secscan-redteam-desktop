@@ -128,7 +128,19 @@ async function dispatch(
         const text = typeof out.body === 'string' ? out.body : JSON.stringify(out.body, null, 2)
         // A 4xx from a handler is a tool-level failure the model should see and
         // reason about, not a transport error — so it rides in the result.
-        return rpcOk(r.id, { content: [{ type: 'text', text }], isError: out.status >= 400 })
+        // A body carrying a speaker stamp (ui/speaker.ts) also rides as
+        // structuredContent — the same data as the text, in machine form —
+        // so the harness can persist the stamp with the session record.
+        // The JSON round-trip keeps it identical to what the text shows.
+        const structured =
+          out.status < 400 && typeof out.body === 'object' && out.body !== null && 'speaker' in out.body
+            ? (JSON.parse(text) as Record<string, unknown>)
+            : undefined
+        return rpcOk(r.id, {
+          content: [{ type: 'text', text }],
+          ...(structured ? { structuredContent: structured } : {}),
+          isError: out.status >= 400,
+        })
       } catch (err) {
         return rpcOk(r.id, {
           content: [{ type: 'text', text: `tool failed: ${(err as Error).message}` }],

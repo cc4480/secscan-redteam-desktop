@@ -42,6 +42,39 @@ describe('MCP result callback adaptation', () => {
     }
   })
 
+  it.each([
+    [{ speaker: { name: 'NEO', role: 'exploiter' } }, { redteamSpeaker: { name: 'NEO', role: 'exploiter' } }],
+    [{ window: 7 }, null],
+    [{ speaker: { name: '', role: 'exploiter' } }, null],
+    [{ speaker: { name: 'NEO' } }, null],
+    [{ speaker: 'NEO' }, null],
+    [undefined, null],
+  ])(
+    'projects the speaker stamp into result meta (%j → %j)', async (structuredContent, expectedMeta) => {
+      const ctx = new Context()
+      try {
+        await ctx.plugin(SystemPrompt)
+        await ctx.plugin(ToolRuntime)
+        ctx.tools.register(createMcpToolDefinition(ctx, {
+          name: 'stamped_tool', rawName: 'stamped', description: 'Stamped result fixture.',
+          inputSchema: { type: 'object' },
+          call: async () => ({
+            content: [{ type: 'text', text: 'result' }],
+            ...(structuredContent === undefined ? {} : { structuredContent }),
+          }),
+        }))
+        const result = await ctx.tools.execute({
+          name: 'stamped_tool', callId: ToolCallId('stamped-call'), arguments: {},
+          signal: new AbortController().signal,
+        })
+        expect(result.isError).toBe(false)
+        expect(result.meta).toEqual(expectedMeta)
+      } finally {
+        await ctx.fiber.dispose()
+      }
+    },
+  )
+
   it.each([null, { content: [42] }, { content: [{ type: 'image' }] }])(
     'rejects invalid external results before exposing content (%j)', async (invalid) => {
       const ctx = new Context()

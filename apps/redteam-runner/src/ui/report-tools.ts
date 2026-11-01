@@ -8,7 +8,9 @@
 import { join } from "node:path";
 import { type Captured, type ToolDef } from "./mcp-tools.js";
 import { engagementDir } from "./store.js";
-import { readState } from "../events.js";
+import { readEvents, readState } from "../events.js";
+import type { Finding } from "../types.js";
+import { findingSpeakers, reportAuthorSpeaker, type SpeakerStamp } from "./speaker.js";
 import { DELIVERABLE_FILES, deliverableToolFields, verifyDeliverables } from "../report/deliverables.js";
 import { regenerateReport } from "../report/regenerate.js";
 
@@ -19,12 +21,31 @@ const ID_ONLY = (): Record<string, unknown> => ({
   additionalProperties: false,
 });
 
+/**
+ * Per-finding speaker stamps from a report.json body: the recorded
+ * findings' producers, stamped by the runner at record time. An
+ * unreadable or absent report.json yields no stamps.
+ *
+ * @param raw - The report.json text, or null when absent.
+ * @returns Finding-id → speaker stamp, possibly empty.
+ */
+function reportJsonSpeakers(raw: string | null): Record<string, SpeakerStamp> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as { findings?: Finding[] };
+    return Array.isArray(parsed.findings) ? findingSpeakers(parsed.findings) : {};
+  } catch {
+    return {};
+  }
+}
+
 /** engagement_report — the finished report, for delivery in the thread. */
 export const reportTool: ToolDef = {
   name: "engagement_report",
   description:
     "The finished report for an engagement: the report content for delivery in the thread, plus the in-app artifact paths. " +
-    "Returns ready:false while the run is still going — keep polling engagement_status instead of treating that as an error.",
+    "Returns ready:false while the run is still going — keep polling engagement_status instead of treating that as an error. " +
+    "When the result names a speaker, that is the fleet seat whose recorded execution authored the report — attribute the delivery to that seat.",
   inputSchema: ID_ONLY(),
   run: async (store, a): Promise<Captured> => {
     const id = String(a["id"] ?? "");
@@ -51,6 +72,15 @@ export const reportTool: ToolDef = {
     // report.md exists, so state.json does too (engagementDir requires it)
     // and the directory join is safe. Q-DELIVERABLES-AUTOFIRE: deliverableToolFields.
     const dir = engagementDir(store.engagementsDir, id)!;
+    // Speaker stamps (ui/speaker.ts): the report's author, present only
+    // when the reporter loop genuinely ran (a halted/blocked end's
+    // mechanical report names no author), and per-finding producers
+    // from the recorded report.json.
+    const st = readState(dir);
+    const speaker = st
+      ? reportAuthorSpeaker(readEvents(dir, Math.max(0, st.eventCount - 1000), 1000))
+      : undefined;
+    const speakers = reportJsonSpeakers(store.readTextArtifact(id, "report.json"));
     return {
       status: 200,
       body: {
@@ -58,6 +88,8 @@ export const reportTool: ToolDef = {
         ready: true,
         reportPath: join(dir, "report.md"),
         ...deliverableToolFields(dir),
+        ...(speaker ? { speaker } : {}),
+        ...(Object.keys(speakers).length > 0 ? { findingSpeakers: speakers } : {}),
         content,
         summary: `Report for engagement ${id} is ready. Deliver it in this thread — it lives in the app; do not link out to any external report.`,
       },

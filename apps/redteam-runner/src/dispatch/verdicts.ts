@@ -2,7 +2,7 @@
  * Finding/verdict helpers: live-finding sync, registry writes, verdict-block merge (v0.19.0 refactor — extracted from dispatch.ts).
  */
 import { type Ctx, type KilledLive, type LiveFinding } from "../context.js";
-import { type EngagementPhase, type Finding } from "../types.js";
+import { type ActorRole, type EngagementPhase, type Finding } from "../types.js";
 import { ensureCveEntry, markAttempted, resolveItemKey } from "../coverage/items.js";
 import { hasActiveVariantExpansion } from "../variants/index.js";
 import { extractJsonBlock } from "../util.js";
@@ -130,8 +130,16 @@ export function writeKilledToRegistry(ctx: Ctx, kl: KilledLive): void {
   if (created) ctx.registry.killed.push(created);
 }
 
-/** Merge the exploiter's final VERDICTS JSON block into shared state + registry (backstop for verdicts never recorded live). */
-export function mergeVerdictBlock(ctx: Ctx, text: string): void {
+/**
+ * Merge a task loop's final VERDICTS JSON block into shared state +
+ * registry (backstop for verdicts never recorded live). The block is
+ * model-authored text, so the producer stamp is NEVER read from it:
+ * the caller passes the role its own loop executed as — an
+ * execution-side variable — and every confirmed verdict merged here is
+ * stamped with exactly that role (a recon task's block stamps recon,
+ * an exploiter task's stamps exploiter).
+ */
+export function mergeVerdictBlock(ctx: Ctx, text: string, producer: ActorRole): void {
   const parsed = extractJsonBlock(text) as { verdicts?: Array<Record<string, unknown>> } | null;
   const verdicts = parsed && Array.isArray(parsed.verdicts) ? parsed.verdicts : [];
   let merged = 0;
@@ -144,9 +152,10 @@ export function mergeVerdictBlock(ctx: Ctx, text: string): void {
         attackId: (optStr(v["attackId"]) ?? "T1190").toUpperCase(),
         evidence: redactPii(String(v["evidence"] ?? "").slice(0, 800)),
         payload: optStr(v["payloadPattern"]),
-        // Q-FLEET-XCHECK: this block is the exploiter's own verdicts —
-        // the producer is the exploiter by construction.
-        producer: "exploiter",
+        // Q-FLEET-XCHECK: stamped with the role that executed the
+        // task loop, passed by the caller — never parsed from the
+        // model-authored block itself.
+        producer,
       };
       if (ctx.liveFindings.some((f) => f.title === lf.title && f.attackId === lf.attackId)) continue;
       ctx.liveFindings.push(lf);

@@ -84,7 +84,7 @@ export async function runTask(ctx: Ctx, task: TaskDef): Promise<TaskResult> {
   if (graphSub) {
     await completeGraphSubtask(ctx, graphSub.id, summary, ctx.actions - actionsBefore);
   }
-  mergeVerdictBlock(ctx, summary);
+  mergeVerdictBlock(ctx, summary, role);
   const verdictNote =
     `probes +${ctx.probesUsed - probesBefore}, ` +
     `confirmed +${ctx.liveFindings.length - findingsBefore}, killed +${ctx.killedLive.length - killedBefore}`;

@@ -1,12 +1,14 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {
-  AssistantBlock, AssistantMessageNode, ConversationLocation, ConversationMatch,
-  ConversationNodeContext, ConversationNodeDefinition,
+  AssistantBlock, AssistantMessageNode, ConversationContextReader, ConversationLocation,
+  ConversationMatch, ConversationNodeContext, ConversationNodeDefinition,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-llm-retry/types'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
-import type { AssistantChatData } from '../contract/chat-nodes.ts'
+import type {
+  AssistantChatData, AssistantSpeaker, AssistantSpeakerRole,
+} from '../contract/chat-nodes.ts'
 import { CHAT_SYNTHETIC_SEQ_OFFSETS, chatNode } from './common.ts'
 import {
   emptyAssistantBlock, isTokenDelta, toAssistantBlock, toAssistantBlocks,
@@ -36,9 +38,14 @@ interface AssistantState {
   readonly firstTokenTime: number | undefined
   readonly final: ConversationMatch | undefined
   readonly usage: unknown
+  readonly speaker: AssistantSpeaker | undefined
 }
 
-function initialState(turn: number, step: number): AssistantState {
+function initialState(
+  turn: number,
+  step: number,
+  speaker?: AssistantSpeaker,
+): AssistantState {
   return {
     turn,
     step,
@@ -49,7 +56,90 @@ function initialState(turn: number, step: number): AssistantState {
     firstTokenTime: undefined,
     final: undefined,
     usage: undefined,
+    speaker,
   }
+}
+
+const SPEAKER_ROLES: ReadonlySet<string> = new Set<AssistantSpeakerRole>([
+  'lead', 'recon', 'exploiter', 'architect', 'reporter',
+])
+
+/**
+ * Engagement tool names whose results can carry a speaker stamp. MCP
+ * tools surface as `mcp__<server>__<raw name>`, so the fold matches the
+ * raw-name suffix and never depends on the server's configured name.
+ */
+const ENGAGEMENT_TOOL_SUFFIXES: readonly string[] = ['__engagement_status', '__engagement_report']
+
+function isMetaRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * Narrow one `tool/result` meta payload to a speaker stamp. The meta is
+ * opaque JSON persisted with the session log; only the exact stamped
+ * shape — the `redteamSpeaker` record the MCP bridge projected from
+ * the runner's execution-side stamp, with a non-empty name and a role
+ * in the chip vocabulary — is accepted. Anything else names no speaker.
+ *
+ * @param meta - The result event's meta payload, when present.
+ * @returns The recorded speaker, or undefined when unstamped.
+ */
+function speakerFromMeta(meta: unknown): AssistantSpeaker | undefined {
+  if (!isMetaRecord(meta)) return undefined
+  const stamp = meta['redteamSpeaker']
+  if (!isMetaRecord(stamp)) return undefined
+  const { name, role } = stamp
+  if (typeof name !== 'string' || name.length === 0) return undefined
+  if (typeof role !== 'string' || !SPEAKER_ROLES.has(role)) return undefined
+  return { name, role: role as AssistantSpeakerRole }
+}
+
+/** The fields of a predecessor Tool Context's State the fold reads. */
+interface PredecessorToolState {
+  readonly root: {
+    readonly kind: string
+    readonly call?: { readonly name: string } | null
+    readonly meta?: unknown
+  }
+}
+
+/**
+ * The speaker recorded for one Assistant step: the stamp on the
+ * settled result of the tool call the step narrates — the call made in
+ * the immediately preceding step of the same turn, read from that Tool
+ * Context's recorded result at this step's start. The read happens
+ * only for steps after the first: a first step has no in-turn
+ * predecessor, so it never records a predecessor dependency and window
+ * operations (prepends filling older turns) never invalidate it. A
+ * predecessor in another turn or step, one that is not an engagement
+ * tool, an unsettled or unstamped result, or a malformed stamp all
+ * yield no speaker: a conservative miss renders the model id, never a
+ * guess.
+ *
+ * @param reader - The start hook's strictly-backward Context lookup.
+ * @param turn - This step's turn.
+ * @param step - This step's index within its turn.
+ * @returns The recorded speaker, or undefined when none is proven.
+ */
+function speakerFromPredecessor(
+  reader: ConversationContextReader,
+  turn: number,
+  step: number,
+): AssistantSpeaker | undefined {
+  if (step <= 1) return undefined
+  const previous = reader.previous<PredecessorToolState>('tool-call')
+  if (previous === undefined) return undefined
+  const callEvent = previous.matches[0]?.event
+  if (callEvent?.type !== 'tool/call') return undefined
+  const callData = callEvent.data as { turn?: unknown; step?: unknown }
+  if (callData.turn !== turn || callData.step !== step - 1) return undefined
+  const root = previous.state.root
+  if (root.kind !== 'tool-result') return undefined
+  const callName = root.call?.name
+  if (callName === undefined) return undefined
+  if (!ENGAGEMENT_TOOL_SUFFIXES.some(suffix => callName.endsWith(suffix))) return undefined
+  return speakerFromMeta(root.meta)
 }
 
 function compactBlocks(blocks: readonly (AssistantBlock | undefined)[]): AssistantBlock[] {
@@ -81,7 +171,7 @@ function hasInterruptionEvidence(blocks: readonly AssistantBlock[]): boolean {
 
 function resetForRetry(state: AssistantState): AssistantState {
   return {
-    ...initialState(state.turn, state.step),
+    ...initialState(state.turn, state.step, state.speaker),
     firstTokenTime: state.firstTokenTime,
   }
 }
@@ -279,6 +369,7 @@ function projectAssistant(context: ConversationNodeContext<AssistantState>): Ass
       ...state.usage === undefined ? {} : { usage: state.usage },
       ...settled === undefined ? {} : { finalNode: settled },
       ...settled?.providerMetadata === undefined ? {} : { model: settled.providerMetadata.model },
+      ...state.speaker === undefined ? {} : { speaker: state.speaker },
     },
   }
 }
@@ -305,9 +396,10 @@ export const assistantDefinition: ConversationNodeDefinition<AssistantState> = {
     }
     return null
   },
-  start: (_context, match) => {
+  start: (_context, match, reader) => {
     if (match.event.type !== 'step/start') throw new Error('assistant-step start requires step/start')
-    return initialState(match.event.data.turn, match.event.data.step)
+    const { turn, step } = match.event.data
+    return initialState(turn, step, speakerFromPredecessor(reader, turn, step))
   },
   update: (context, match) => {
     if (match.event.type === 'assistant/live-chunk') {

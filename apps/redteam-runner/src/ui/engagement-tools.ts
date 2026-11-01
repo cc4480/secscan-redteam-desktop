@@ -34,9 +34,10 @@
 import { capture, type Captured, type ToolDef } from "./mcp-tools.js";
 import { handleDetail, handleLaunch } from "./routes/engagements.js";
 import { engagementDir } from "./store.js";
-import { type LiveState } from "../events.js";
+import { readEvents, type LiveState } from "../events.js";
 import { verifyDeliverables } from "../report/deliverables.js";
 import { regenerateTool, reportTool } from "./report-tools.js";
+import { currentSeatSpeaker, findingSpeakers } from "./speaker.js";
 import type { UiLaunchRequest } from "./types.js";
 
 const str = (d: string): Record<string, unknown> => ({ type: "string", description: d });
@@ -193,7 +194,8 @@ const statusTool: ToolDef = {
   name: "engagement_status",
   description:
     "Progress snapshot for one engagement, shaped for narrating in chat: status, current phase, event count, findings so far, " +
-    "whether it is live, and the reason when it blocked or halted. Poll this after engagement_launch and report each phase change.",
+    "whether it is live, and the reason when it blocked or halted. Poll this after engagement_launch and report each phase change. " +
+    "When the snapshot names a speaker, that is the fleet seat whose recorded execution the snapshot reports — attribute the narration to that seat.",
   inputSchema: ID_ONLY(),
   run: async (store, a): Promise<Captured> => {
     const id = String(a["id"] ?? "");
@@ -226,11 +228,19 @@ const statusTool: ToolDef = {
     }
     const s = b["state"] as LiveState;
     const findings = Array.isArray(s.findings) ? s.findings.length : 0;
+    // Speaker stamps (ui/speaker.ts): the seat that executed most
+    // recently, from the tail of the event log's loop-stamped records,
+    // and per-finding producers. Absent when the record names no seat —
+    // the body is then exactly what it was before the wire existed.
+    const stateDir = engagementDir(store.engagementsDir, id);
+    const speaker = stateDir
+      ? currentSeatSpeaker(readEvents(stateDir, Math.max(0, s.eventCount - 1000), 1000))
+      : undefined;
+    const speakers = findingSpeakers(Array.isArray(s.findings) ? s.findings : []);
     // Q-DELIVERABLES-AUTOFIRE follow-up (diag-html-report 2026-11-01):
     // a deliverable-failed end must never summarize as plain "complete"
     // in the chat surface — name the missing files where the operator
     // actually looks, and point at the repair tool.
-    const stateDir = engagementDir(store.engagementsDir, id);
     const missingDeliverables =
       s.deliverableFailed === true && stateDir ? verifyDeliverables(stateDir).missing : [];
     const deliverableNote =
@@ -259,6 +269,8 @@ const statusTool: ToolDef = {
         startedAt: s.startedAt,
         updatedAt: s.updatedAt,
         ...(s.blockedReason ? { blockedReason: s.blockedReason } : {}),
+        ...(speaker ? { speaker } : {}),
+        ...(Object.keys(speakers).length > 0 ? { findingSpeakers: speakers } : {}),
         ...(missingDeliverables.length > 0
           ? { deliverableFailed: true, missingDeliverables }
           : {}),

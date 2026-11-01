@@ -2808,3 +2808,99 @@ describe('Assistant speaker identity projection', () => {
     expect(data.finalNode?.providerMetadata).toBeUndefined()
   })
 })
+
+describe('Assistant speaker wire fold', () => {
+  function assistantData(value: ConversationNodeAssembler): AssistantChatData[] {
+    return snapshot(value).nodes.values()
+      .filter(candidate => candidate.kind === 'assistant-step')
+      .map(candidate => candidate.data as AssistantChatData)
+      .sort((left, right) => left.turn - right.turn || left.step - right.step)
+  }
+
+  /** One turn: step 1 polls an engagement tool, step 2 narrates its result. */
+  function stampedTurn(meta: unknown, name = 'mcp__redteam__engagement_status') {
+    return [
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'assistant/message', {
+        turn: 1, step: 1, message: assistantMessage('a-1', 'Polling the engagement.'),
+      }, { surfaceOp: 'append' }),
+      at(4, 'tool/call', { turn: 1, step: 1, callId: 'call-1', name, arguments: '{}' }),
+      at(5, 'tool/result', {
+        turn: 1, step: 1, message: toolResult('call-1', 'status body'),
+        ...(meta === undefined ? {} : { meta }),
+      }, { surfaceOp: 'append' }),
+      at(6, 'step/end', { turn: 1, step: 1 }),
+      at(7, 'step/start', { turn: 1, step: 2 }),
+      at(8, 'assistant/message', {
+        turn: 1, step: 2, message: assistantMessage('a-2', 'The exploiter confirmed the finding.'),
+      }, { surfaceOp: 'append' }),
+      at(9, 'step/end', { turn: 1, step: 2 }),
+    ]
+  }
+
+  it('folds a stamped engagement result into the narrating step speaker', () => {
+    const [first, second] = assistantData(assembler(stampedTurn({
+      redteamSpeaker: { name: 'NEO', role: 'exploiter' },
+    })))
+    expect(first?.speaker).toBeUndefined()
+    expect(second?.speaker).toEqual({ name: 'NEO', role: 'exploiter' })
+    expect(second?.model).toBe('fake')
+  })
+
+  it('leaves the narrating step unstamped when the result carries no meta', () => {
+    const [, second] = assistantData(assembler(stampedTurn(undefined)))
+    expect(second?.speaker).toBeUndefined()
+    expect(second?.model).toBe('fake')
+  })
+
+  it('ignores a stamp riding a non-engagement tool result', () => {
+    const [, second] = assistantData(assembler(stampedTurn({
+      redteamSpeaker: { name: 'NEO', role: 'exploiter' },
+    }, 'read')))
+    expect(second?.speaker).toBeUndefined()
+  })
+
+  it('ignores a stamp whose role is outside the chip vocabulary', () => {
+    const [, second] = assistantData(assembler(stampedTurn({
+      redteamSpeaker: { name: 'NEO', role: 'demigod' },
+    })))
+    expect(second?.speaker).toBeUndefined()
+  })
+
+  it('does not carry a stamp across turns', () => {
+    const entries = [
+      ...stampedTurn({ redteamSpeaker: { name: 'NEO', role: 'exploiter' } }),
+      at(10, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+      at(11, 'turn/start', { turn: 2 }),
+      at(12, 'step/start', { turn: 2, step: 1 }),
+      at(13, 'assistant/message', {
+        turn: 2, step: 1, message: assistantMessage('a-3', 'New question, plain answer.'),
+      }, { surfaceOp: 'append' }),
+      at(14, 'step/end', { turn: 2, step: 1 }),
+    ]
+    const turnTwo = assistantData(assembler(entries)).filter(data => data.turn === 2)
+    expect(turnTwo).toHaveLength(1)
+    expect(turnTwo[0]?.speaker).toBeUndefined()
+  })
+
+  it('keeps the speaker across an llm retry of the narrating step', () => {
+    const entries = [
+      ...stampedTurn({ redteamSpeaker: { name: 'OPERATOR', role: 'recon' } }).slice(0, 7),
+      at(8, 'assistant/live-chunk', {
+        turn: 1, step: 2, chunk: { type: 'text-delta', index: 0, text: 'draft' },
+      }),
+      at(9, 'llm/retry', {
+        retryId: 'retry-1', turn: 1, step: 2, provider: 'fake', mode: 'normal',
+        policyKey: 'fake-normal', retry: 1, maxRetries: 2, delayMs: 10,
+        failure: { code: 'TRANSPORT', message: 'temporary' },
+      }),
+      at(10, 'assistant/message', {
+        turn: 1, step: 2, message: assistantMessage('a-2', 'Recon mapped the surface.'),
+      }, { surfaceOp: 'append' }),
+      at(11, 'step/end', { turn: 1, step: 2 }),
+    ]
+    const [, second] = assistantData(assembler(entries))
+    expect(second?.speaker).toEqual({ name: 'OPERATOR', role: 'recon' })
+  })
+})
