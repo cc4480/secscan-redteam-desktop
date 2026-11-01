@@ -195,6 +195,31 @@
           # random token it prints. It must be >= the strength floor.
           Authorization: !!js "'Bearer ' + (process.env.REDTEAM_UI_TOKEN || '')"
 
+    # The console's data channel into the chat client (Q-CONSOLE-MERGE
+    # Phase 0). The console's /api surface — the A4 engagement views, the
+    # live SSE feed, scope tallies, Foundry state — exists only as
+    # token-gated HTTP on loopback, and the browser must hold neither the
+    # endpoint nor the token. This host plugin registers same-origin share
+    # routes on the Host's webServer and proxies them to the console with
+    # the bearer attached inside the Host process; the client package
+    # (@deepseek-ai/dsh-client-ui-redteam-console) calls only those routes.
+    # Its Arsenal bridge forwards exactly the console's three read-only
+    # Arsenal MCP tools; engagement-driving tools stay model-facing.
+    #
+    # The address and token are the very values the desktop supervisor
+    # installs into this Host process's environment when it starts the
+    # bundled console (the same publish mechanism the mcp-redteam-runner
+    # row above reads) — no new credential plumbing. The plugin derives
+    # the console base URL from the MCP form by stripping the /mcp suffix.
+    # An operator-supplied console (REDTEAM_MCP_URL/REDTEAM_UI_TOKEN set)
+    # is shared the same way. Secrets travel by environment name only —
+    # never a raw token in this file.
+    - id: redteam-console-share
+      name: '@secscan/redteam-console-share'
+      config:
+        baseUrl: !!js "process.env.REDTEAM_MCP_URL || 'http://127.0.0.1:8787/mcp'"
+        token: !!js "process.env.REDTEAM_UI_TOKEN || ''"
+
     # The team itself. Durable session storage is the activation requirement and
     # is already mounted by dsh-base (row `session-persistence-jsonl`), so the
     # roster, mailbox and task board survive a crash, reload or restart.

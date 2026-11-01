@@ -543,6 +543,8 @@
       "@secscan/redteam-auth-gate": ["./packages/redteam/auth-gate/src"],
       "@secscan/redteam-llm-router": ["./packages/redteam/llm-router/src"],
       "@secscan/redteam-harness-plugin": ["./packages/redteam/harness-plugin/src"],
+      "@secscan/redteam-console-share": ["./packages/redteam/console-share/src"],
+      "@secscan/redteam-console-share/shared": ["./packages/redteam/console-share/src/shared.ts"],
       "@secscan/redteam-desktop-bundle": ["./packages/redteam/desktop-bundle/src"]
       // END generated package aliases
     }

@@ -16,6 +16,7 @@
     "@deepseek-ai/dsh-experimental-client-ui-agent-team": "workspace:*",
     "@deepseek-ai/dsh-experimental-tool-agent-team": "workspace:*",
     "@deepseek-ai/dsh-mcp-client": "workspace:*",
+    "@secscan/redteam-console-share": "workspace:*",
     "@secscan/redteam-harness-plugin": "workspace:*"
   },
   "peerDependencies": {
