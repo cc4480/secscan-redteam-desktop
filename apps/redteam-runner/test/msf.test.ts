@@ -455,6 +455,7 @@ describe("msf_exec wiring", () => {
       deepseekApiKey: "test",
       qwenApiKey: "test",
       engagementsDir: dir,
+      registryPath: join(dir, "registry.json"),
       deps: {
         verify: async () => true,
         completeForRole: scriptedLlm(action, outOfScope) as never,
@@ -530,6 +531,7 @@ describe("msf_exec wiring", () => {
         deepseekApiKey: "test",
         qwenApiKey: "test",
         engagementsDir: dir,
+        registryPath: join(dir, "registry.json"),
         deps: { verify: async () => true, completeForRole: llm as never },
       });
       assert.ok(sawTools.includes("msf_exec"), "agent tool list includes msf_exec");

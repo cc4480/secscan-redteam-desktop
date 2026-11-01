@@ -443,6 +443,7 @@ describe("nuclei_exec engagement wiring", () => {
       deepseekApiKey: "test",
       qwenApiKey: "test",
       engagementsDir: dir,
+      registryPath: join(dir, "registry.json"),
       deps: { verify: async () => true, completeForRole: scriptedLlm() as never, nucleiExecutor },
     });
     assert.equal(res.status, "complete");

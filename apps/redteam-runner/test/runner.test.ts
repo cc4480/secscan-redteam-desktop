@@ -211,6 +211,7 @@ describe("runEngagement gating (dry-run agents, fake gate)", () => {
     deepseekApiKey: "test",
     qwenApiKey: "test",
     engagementsDir: dir,
+    registryPath: join(dir, "registry.json"),
     dryRunAgents: true,
     deps: { verify },
   });
@@ -243,7 +244,16 @@ describe("runEngagement gating (dry-run agents, fake gate)", () => {
     for (let i = 1; i < events.length; i++) {
       assert.ok(events[i]!.seq > events[i - 1]!.seq);
     }
-    assert.equal(events[0]!.action, "engagement_start");
+    // A fresh per-test memory store bootstraps on first use, so a
+    // memory_store_initialized event may precede engagement_start; nothing
+    // else may. (On the old shared store the bootstrap had already happened
+    // in another test, which is what let this assert index 0 directly.)
+    const startIdx = events.findIndex((e) => e.action === "engagement_start");
+    assert.ok(startIdx >= 0, "engagement_start recorded");
+    assert.ok(
+      events.slice(0, startIdx).every((e) => e.action === "memory_store_initialized"),
+      "only memory-store bootstrap precedes engagement_start",
+    );
     assert.ok(events.some((e) => e.action === "authorization_basis"));
     assert.ok(events.some((e) => e.phase === "done"));
     // tail-after-seq works (console polling)
@@ -257,6 +267,7 @@ describe("runEngagement gating (dry-run agents, fake gate)", () => {
     const res = await runEngagement(inp, {
       modelApiKey: "test",
       engagementsDir: dir,
+      registryPath: join(dir, "registry.json"),
       dryRunAgents: true,
       verifyViaService: false,
       deps: {},

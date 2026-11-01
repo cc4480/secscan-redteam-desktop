@@ -357,6 +357,7 @@ describe("safety case end-to-end (dry-run engagement)", () => {
     deepseekApiKey: "test",
     qwenApiKey: "test",
     engagementsDir: dir,
+    registryPath: join(dir, "registry.json"),
     dryRunAgents: true,
     deps: { verify: yesVerify },
   });
