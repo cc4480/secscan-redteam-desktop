@@ -8,6 +8,7 @@
  * an invalid value throws at resolution naming the exact variable — never
  * default-and-continue.
  */
+import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 
 /** Resolved Arsenal configuration; every field validated at load. */
@@ -121,4 +122,48 @@ export function resolveArsenalConfig(
       DEFAULT_ARSENAL_MAX_ENTRIES_PER_COLLECTION,
     ),
   }
+}
+
+/**
+ * Resolve the config the SERVING surface (the console's Arsenal tools)
+ * reads through.
+ *
+ * The primary resolution ({@link resolveArsenalConfig}) names the
+ * canonical index path — the one a refresh creates and writes. When no
+ * index exists there yet, an index that DOES exist at the runner's other
+ * data-home conventions is the real one to serve: `$REDTEAM_HOME/arsenal/
+ * arsenal.db` (where the production census is built and where a
+ * standalone console with no engagements dir resolves its index), then
+ * `<cwd>/arsenal/arsenal.db` (the remaining data-home fallback in
+ * resolveEngagementsDir/resolveConfig). Serving the primary path in that
+ * situation renders an empty census while a real index sits one
+ * convention away. When no index exists anywhere, the primary config
+ * stands unchanged, so the tools keep answering the typed
+ * ARSENAL_INDEX_EMPTY result and a later refresh still lands at the
+ * canonical path. Refresh and the CLI always use the primary resolution —
+ * this fallback never redirects a write.
+ *
+ * @param env - The process environment to resolve from.
+ * @param opts - The console's engagements dir, when the caller holds one.
+ * @returns The primary config, or that config re-pointed at the first
+ * existing index found at a fallback convention.
+ */
+export function resolveArsenalServingConfig(
+  env: NodeJS.ProcessEnv,
+  opts: { engagementsDir?: string } = {},
+): ArsenalConfig {
+  const primary = resolveArsenalConfig(env, opts)
+  if (existsSync(primary.dbPath)) return primary
+  const candidates: string[] = []
+  const home = env['REDTEAM_HOME']
+  if (home) candidates.push(join(home, 'arsenal', 'arsenal.db'))
+  candidates.push(join(process.cwd(), 'arsenal', 'arsenal.db'))
+  for (const dbPath of candidates) {
+    if (dbPath === primary.dbPath) continue
+    if (existsSync(dbPath)) {
+      const arsenalDir = dirname(dbPath)
+      return { ...primary, dbPath, arsenalDir, cacheDir: join(arsenalDir, 'cache', 'awesome-hacking') }
+    }
+  }
+  return primary
 }

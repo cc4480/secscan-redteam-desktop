@@ -83,6 +83,15 @@ export async function handleLaunch(store: UiStore, _req: IncomingMessage, res: S
   try {
     const p = runEngagement(input, {
       engagementId: id,
+      // The run must write where this server reads. Left to resolveConfig,
+      // the writer falls back to REDTEAM_HOME or the process cwd — on the
+      // desktop the console is spawned with cwd = the runner payload dir
+      // while the store root is the --engagements-dir (userData), so state
+      // landed in the payload tree and every store read (detail, findings,
+      // scope, the console list's disk scan) found nothing. Pinning the
+      // store's root here unifies writer and readers at the one root this
+      // server was configured with, in source and packaged layouts alike.
+      engagementsDir: store.engagementsDir,
       dryRunAgents: dryRun,
       // The action cap is a RunnerOption, not an EngagementInput field, so it
       // crosses over here rather than riding along in `input`. Passing it in

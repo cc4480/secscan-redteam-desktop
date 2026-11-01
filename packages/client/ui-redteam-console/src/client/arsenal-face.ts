@@ -49,6 +49,21 @@ export interface ArsenalController {
 }
 
 /**
+ * The message for a tool answer that carries the tools' typed failure
+ * envelope instead of data — the empty-index answer is the live case: the
+ * bridge delivers it as a successful payload, so without this check the
+ * page rendered it as a census with zero topics. The envelope's fix
+ * string is the operator's next step; surface it verbatim.
+ * @param value - A browse or results answer.
+ * @returns The failure message, or undefined when the answer carries data.
+ */
+function toolErrorMessage(value: ArsenalBrowse | ArsenalResults): string | undefined {
+  const error = value.error
+  if (error === undefined) return undefined
+  return error.fix ?? error.code
+}
+
+/**
  * Build the Arsenal controller over a console API.
  * @param api - the console calls.
  * @returns the controller.
@@ -64,8 +79,13 @@ export function createArsenalController(api: ConsoleApi): ArsenalController {
     actions.browseLoading()
     void api.arsenal<ArsenalBrowse>('arsenal_browse', category === undefined ? {} : { category }).then((result) => {
       if (!started || mine !== generation) return
-      if (result.ok) actions.browseLoaded(result.value, category)
-      else actions.browseFailed(result.message)
+      if (!result.ok) {
+        actions.browseFailed(result.message)
+        return
+      }
+      const failure = toolErrorMessage(result.value)
+      if (failure !== undefined) actions.browseFailed(failure)
+      else actions.browseLoaded(result.value, category)
     })
   }
 
@@ -77,8 +97,13 @@ export function createArsenalController(api: ConsoleApi): ArsenalController {
     const args = tool === 'arsenal_search' ? { query: trimmed, limit: 25 } : { task: trimmed, limit: 25 }
     void api.arsenal<ArsenalResults>(tool, args).then((result) => {
       if (!started || mine !== generation) return
-      if (result.ok) actions.resultsLoaded(result.value)
-      else actions.resultsFailed(result.message)
+      if (!result.ok) {
+        actions.resultsFailed(result.message)
+        return
+      }
+      const failure = toolErrorMessage(result.value)
+      if (failure !== undefined) actions.resultsFailed(failure)
+      else actions.resultsLoaded(result.value)
     })
   }
 

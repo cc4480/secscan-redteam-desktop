@@ -41,7 +41,9 @@
  *   latest: [{ ts, engagementId, kind, target, reason }],   // newest 50
  *   notes: string[],
  * }
- * or { available: false, reason } when no engagement dirs exist.
+ * An engagements root with no engagement dirs yet answers the same
+ * aggregate with every count zero and engagementsScanned 0 — an empty
+ * history is a valid state, not an error.
  * `denials` counts refused calls: each was refused inside dispatch,
  * before any handler ran — zero packets left the machine for them.
  * `halts` = targetAutoHalts + engagementHalts (aborts are counted
@@ -203,10 +205,6 @@ function readEvents(dir: string): Rec[] {
 export function handleConsoleScope(store: UiStore, res: ServerResponse): void {
   const paths = consolePaths(store)
   const engagements = discoverEngagements(paths.engagementsDir)
-  if (engagements.length === 0) {
-    json(res, 200, { available: false, reason: 'no engagement directories under the console engagements dir' })
-    return
-  }
 
   const totals = emptyCounts()
   const haltReasonCounts = new Map<string, number>()
@@ -247,6 +245,9 @@ export function handleConsoleScope(store: UiStore, res: ServerResponse): void {
     perEngagement,
     latest: latest.slice(0, MAX_LATEST),
     notes: [
+      ...(engagements.length === 0
+        ? ['No engagements recorded yet under the console engagements dir — every count here is a true zero, not a read failure.']
+        : []),
       'Autonomy-tier denials, variant-cap denials, and halted-host refusals are returned by dispatch without an events.jsonl record, so they are not counted here.',
       'Events do not record a tool name; records show the target host and the recorded reason only.',
       "Counts cover each engagement's current events.jsonl (first 8 MiB); rotated archives are not read.",

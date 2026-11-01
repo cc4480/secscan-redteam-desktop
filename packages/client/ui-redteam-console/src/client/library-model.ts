@@ -195,6 +195,14 @@ export interface ArsenalResults {
   readonly results: readonly ArsenalItem[]
   readonly total: number
   readonly index: unknown
+  /** The tools' typed failure envelope (e.g. ARSENAL_INDEX_EMPTY), when the call answered one instead of results. */
+  readonly error?: ArsenalToolError
+}
+
+/** A typed Arsenal tool failure, carried in the tool's own JSON answer. */
+export interface ArsenalToolError {
+  readonly code: string
+  readonly fix?: string
 }
 
 /** One browse topic row (the census form). */
@@ -219,6 +227,8 @@ export interface ArsenalBrowse {
   readonly topics?: readonly ArsenalTopic[]
   readonly collections?: readonly ArsenalCollection[]
   readonly index: unknown
+  /** The tools' typed failure envelope (e.g. ARSENAL_INDEX_EMPTY), when the call answered one instead of a census. */
+  readonly error?: ArsenalToolError
 }
 
 /* ------------------------------------------------------------------ */

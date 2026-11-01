@@ -25,7 +25,7 @@
  * process env per call (the REDTEAM_ARSENAL_DB_PATH fixture path).
  */
 import type { DatabaseSync } from 'node:sqlite'
-import { resolveArsenalConfig, type ArsenalConfig } from './config.js'
+import { resolveArsenalServingConfig, type ArsenalConfig } from './config.js'
 import {
   openArsenalServingStore,
   type ArsenalIndexMeta,
@@ -58,9 +58,9 @@ let servingStore: ArsenalServingStore | undefined
 
 /**
  * Bind the config the endpoint resolved for this server (ARS-1's seam calls
- * this with `resolveArsenalConfig(process.env, { engagementsDir })`, so the
- * DB path follows the console's real engagements dir — brief §1.4). Until
- * bound, handlers resolve from the process env on every call.
+ * this with `resolveArsenalServingConfig(process.env, { engagementsDir })`,
+ * so the DB path follows the console's real engagements dir — brief §1.4).
+ * Until bound, handlers resolve from the process env on every call.
  */
 export function bindArsenalConfig(config: ArsenalConfig): void {
   boundConfig = config
@@ -68,7 +68,7 @@ export function bindArsenalConfig(config: ArsenalConfig): void {
 }
 
 function currentConfig(): ArsenalConfig {
-  return boundConfig ?? resolveArsenalConfig(process.env)
+  return boundConfig ?? resolveArsenalServingConfig(process.env)
 }
 
 /** The serving generation's handle + meta, or null when no index exists. */

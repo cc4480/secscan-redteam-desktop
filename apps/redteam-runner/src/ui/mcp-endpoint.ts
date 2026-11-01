@@ -23,7 +23,7 @@ import type { UiStore } from './store.js'
 import { json, readJsonBody } from './routes/http.js'
 import { TOOLS, TOOLS_BY_NAME } from './mcp-tools.js'
 import { EXEC_TOOLS, EXEC_TOOLS_BY_NAME, LIST_LIVE_TOOL } from './mcp-exec.js'
-import { resolveArsenalConfig } from '../arsenal/config.js'
+import { resolveArsenalServingConfig } from '../arsenal/config.js'
 import { ARSENAL_TOOLS, ARSENAL_TOOLS_BY_NAME, bindArsenalConfig } from '../arsenal/tools.js'
 
 const PROTOCOL_VERSION = '2025-03-26'
@@ -165,12 +165,14 @@ export async function handleMcp(
     return
   }
 
-  // Arsenal surface: resolve the config for THIS server's engagements dir
-  // and bind it for the tool handlers, so the index path follows the
-  // console's real data home. Resolution throws on a misconfigured
-  // REDTEAM_ARSENAL_* variable — fail loud rather than serve a misbound
-  // index (the server's route catch turns the throw into a 500).
-  const arsenalConfig = resolveArsenalConfig(process.env, { engagementsDir: store.engagementsDir })
+  // Arsenal surface: resolve the serving config for THIS server's
+  // engagements dir and bind it for the tool handlers, so the index path
+  // follows the console's real data home — including an existing index at
+  // the REDTEAM_HOME convention when the canonical desktop path has none
+  // yet. Resolution throws on a misconfigured REDTEAM_ARSENAL_* variable —
+  // fail loud rather than serve a misbound index (the server's route
+  // catch turns the throw into a 500).
+  const arsenalConfig = resolveArsenalServingConfig(process.env, { engagementsDir: store.engagementsDir })
   bindArsenalConfig(arsenalConfig)
 
   // Batch: an array of requests gets an array of responses.
