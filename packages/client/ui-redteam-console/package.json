@@ -68,5 +68,5 @@
   },
   "type": "module",
   "types": "lib/types/index.d.ts",
-  "version": "0.1.7-rc.9"
+  "version": "0.1.7-rc.7"
 }

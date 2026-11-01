@@ -28,7 +28,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json"
   },
   "type": "module",
-  "version": "0.2.0",
+  "version": "0.1.7-rc.7",
   "types": "lib/types/index.d.ts",
   "exports": {
     ".": {

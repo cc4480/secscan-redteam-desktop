@@ -1,6 +1,6 @@
 {
   "name": "@secscan/redteam-runner",
-  "version": "0.1.7-rc.9",
+  "version": "0.1.7-rc.7",
   "private": true,
   "description": "Live engagement runner for the secscan red-team: authorize -> plan -> recon -> exploit -> report, with streaming event logs.",
   "license": "UNLICENSED",
