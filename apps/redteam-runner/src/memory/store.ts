@@ -355,10 +355,37 @@ export class MemoryStore {
     }
     this.lockDepth = 1;
     try {
+      this.assertManifestFresh();
       return fn();
     } finally {
       this.lockDepth = 0;
       rmSync(this.paths.lockPath, { force: true });
+    }
+  }
+
+  /**
+   * Concurrency guard, run inside the lock before every mutation: this
+   * instance mutates from the state it loaded at open, so if another
+   * instance (in this or another process) has mutated the store since,
+   * the on-disk manifest hash no longer matches the loaded one. Refuse
+   * loudly instead of persisting counts derived from stale state —
+   * that is what leaves the manifest disagreeing with the ledger
+   * (STORE_CORRUPT at the next open) after two writers race.
+   */
+  private assertManifestFresh(): void {
+    let disk: MemoryManifest;
+    try {
+      disk = validateManifest(JSON.parse(readFileSync(this.paths.manifestPath, "utf8")), this.paths.manifestPath);
+    } catch (err) {
+      if (err instanceof MemoryError) throw err;
+      throw new MemoryError("STORE_CORRUPT", `${this.paths.manifestPath}: manifest unreadable inside the store lock`, { cause: err });
+    }
+    if (disk.hash !== this.state.manifest.hash) {
+      throw new MemoryError(
+        "STORE_CONCURRENT_MODIFICATION",
+        `memory store at ${this.paths.root} changed on disk since this instance opened it ` +
+          `(manifest hash mismatch) — reopen the store and retry; refusing to persist stale state`,
+      );
     }
   }
 
