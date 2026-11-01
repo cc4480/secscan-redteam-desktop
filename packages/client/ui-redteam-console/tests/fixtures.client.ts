@@ -431,7 +431,7 @@ export function scriptedConsole(): ScriptedConsole {
           return { ok: true, value: args['category'] === undefined ? ARSENAL_CENSUS : ARSENAL_CATEGORY }
         }
         return { ok: true, value: ARSENAL_RESULTS }
-      }),
+      }) as ConsoleApi['arsenal'],
       scope: vi.fn(async () => ({ ok: true, value: SCOPE_AGGREGATE }) as ConsoleResult<ScopeAggregate>),
       openFeed: vi.fn((id: string, after: number, handlers: FeedHandlers): FeedConnection => {
         const feed: ScriptedFeed = {

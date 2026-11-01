@@ -76,8 +76,9 @@ describe('phase 3 controllers', () => {
     const state = () => controller.face.hooks.reports.getSnapshot()
     expect(state().selectedId).toBe(DONE_ENGAGEMENT.id)
     expect(state().detail).toMatchObject({ kind: 'ready' })
-    if (state().detail?.kind === 'ready') {
-      expect(Object.keys(state().detail.value.state?.deliverables ?? {})).toContain('report.md')
+    const detail = state().detail
+    if (detail?.kind === 'ready') {
+      expect(Object.keys(detail.value.state?.deliverables ?? {})).toContain('report.md')
     }
     controller.face.select(LIVE_ENGAGEMENT.id)
     await flush()
