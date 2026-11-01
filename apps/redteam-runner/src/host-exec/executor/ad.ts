@@ -22,9 +22,6 @@ export async function adEnumImpl(core: ExecutorCore, args: {
   if (operations.length === 0) {
     return core.refusedResult("winrm", args.host, "ad_enum requires at least one valid operation");
   }
-  if (core.killSwitch.aborted) {
-    return core.refusedResult("winrm", args.host, "kill switch active — coordinator aborted; no new host executions");
-  }
   const v = validateHostTarget(args.host, args.scopeHosts);
   if (!v.ok) return core.refusedResult("winrm", args.host, v.reason);
   let creds: HostCredentials;

@@ -4,7 +4,7 @@
  * close. Credential dumping lives in executor/credential-dump.ts and runs
  * on the gate exported here.
  *
- * Perimeter (unchanged from the rest of the bridge): kill switch + exact
+ * Perimeter (unchanged from the rest of the bridge): exact
  * scope preflight before any daemon contact, sessions addressable only by
  * runner-issued handles bound to the exploited host, destructive-command
  * denylist on session commands, and dumped credential material SEALED to
@@ -113,10 +113,10 @@ export async function finishSessionRun(
     ms: Date.now() - input.started,
   };
   if (input.console.aborted || input.console.timedOut) {
-    // Kill switch / timeout: no session is kept — hygiene stops them all.
+    // Call abort / timeout: no session is kept — hygiene stops them all.
     for (const id of newIds) await client.sessionStop(id).catch(() => undefined);
     const verdict = input.console.aborted
-      ? "ABORTED by kill switch (console destroyed; session stopped)"
+      ? "ABORTED by call signal (console destroyed; session stopped)"
       : "timed out (console destroyed; session stopped)";
     return {
       ...base,

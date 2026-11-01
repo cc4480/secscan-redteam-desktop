@@ -52,12 +52,7 @@ async function runReverify(): Promise<void> {
     console.error(`[runner] --execute requires --scope <host> (exact hosts; enforced mechanically)`);
     process.exit(3);
   }
-  const killSwitch = { aborted: false };
-  process.on("SIGINT", () => {
-    killSwitch.aborted = true;
-    console.error(`\n[runner] SIGINT â€” kill switch set; in-flight step will abort`);
-  });
-  const report = await reverifyBundle(bundle, createReplayer({ scope: scopes, killSwitch }));
+  const report = await reverifyBundle(bundle, createReplayer({ scope: scopes }));
   const outDir = arg("--out") ?? dirname(resolve(bundlePath));
   mkdirSync(outDir, { recursive: true });
   const outPath = join(outDir, `${bundle.findingId}.reverify-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);

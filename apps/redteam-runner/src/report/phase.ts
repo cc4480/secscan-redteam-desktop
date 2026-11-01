@@ -115,7 +115,7 @@ export async function reportPhase(
   let reportMd: string;
   let findings: Finding[];
   if (opts.haltedReason || opts.blockedReason) {
-    // Halt path (action/duration cap, 5xx auto-halt, kill switch, aborted
+    // Halt path (action/duration cap, aborted
     // sign-off, unexpected error) and blocked path (authorization denied;
     // Q-DELIVERABLES-AUTOFIRE P3): NEVER run the reporter LLM here — it could
     // re-hit the same cap and we would lose the accountability record exactly

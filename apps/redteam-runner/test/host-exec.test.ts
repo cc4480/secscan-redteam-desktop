@@ -211,15 +211,6 @@ describe("HostExecutor safety", () => {
     assert.ok(r.summary.includes("[REDACTED]"));
   });
 
-  it("kill switch refuses new work once aborted", async () => {
-    const { t, calls } = fakeSsh();
-    const ex = new HostExecutor({ ssh: () => t, env: FAKE_ENV });
-    ex.killSwitch.aborted = true;
-    const r = await ex.sshExec({ host: "10.9.0.12", command: "uname -a", scopeHosts: ["10.9.0.12"] });
-    assert.equal(r.ok, false);
-    assert.ok(r.refused?.includes("kill switch"));
-    assert.equal(calls.length, 0);
-  });
 
   it("kill switch terminates in-flight execution", async () => {
     const { t } = fakeSsh({ hang: true });

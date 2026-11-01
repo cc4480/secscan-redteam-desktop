@@ -146,7 +146,7 @@ export function createSshTransport(): SshTransport {
 
   return {
     async exec(args: SshExecArgs): Promise<SshExecResult> {
-      if (args.signal?.aborted) throw new Error("[ssh] aborted by kill switch before exec");
+      if (args.signal?.aborted) throw new Error("[ssh] aborted by call signal before exec");
       const c = await ensureConnected(args);
       const timeoutMs = args.timeoutMs ?? HOST_EXEC_TIMEOUT_MS;
       const started = Date.now();
@@ -171,7 +171,7 @@ export function createSshTransport(): SshTransport {
             /* already gone */
           }
           client = null;
-          done(() => reject(new Error("[ssh] aborted by kill switch — session destroyed")));
+          done(() => reject(new Error("[ssh] aborted by call signal — session destroyed")));
         };
         args.signal?.addEventListener("abort", onAbort, { once: true });
         c.exec(args.command.slice(0, 4000), (err, stream) => {

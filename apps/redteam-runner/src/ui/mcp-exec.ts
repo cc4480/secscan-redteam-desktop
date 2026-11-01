@@ -32,7 +32,6 @@ import { NUCLEI_EXEC_TOOL } from "../tools/nuclei.js";
 import { NMAP_EXEC_TOOL } from "../tools/nmap.js";
 import { XTOOL_DEFS } from "../tools/xtool.js";
 import {
-  ABORT_TOOL,
   QUERY_REGISTRY_TOOL,
   RECORD_FINDING_TOOL,
   RECORD_ITEM_VERDICT_TOOL,
@@ -116,11 +115,10 @@ function bindToEngagement(t: JsonSchemaTool): ExecToolDef {
  * Exposing a name twice makes tools/call ambiguous (whichever Map entry was
  * written last silently wins) and reports a tool count that is not real.
  *
- * Names already served by the COCKPIT surface are also dropped. abort_engagement
- * exists in both: the cockpit one takes any engagement id and works cross-process
- * via abort.json, while the executor one would need a live Ctx. The cockpit
- * version is strictly more capable, and shadowing it would quietly downgrade an
- * operator's kill switch — the one tool that must never behave surprisingly.
+ * Names already served by the COCKPIT surface are also dropped: the
+ * cockpit serves the engagement-management tools (status, findings,
+ * reports) for any engagement id, and shadowing one of those names with
+ * an executor-side definition would quietly change what the name does.
  */
 const COCKPIT_OWNED = new Set(TOOLS.map((t) => t.name));
 
@@ -141,7 +139,6 @@ function collect(): JsonSchemaTool[] {
     RECORD_KILLED_TOOL,
     RECORD_ITEM_VERDICT_TOOL,
     VARIANT_LIST_TOOL,
-    ABORT_TOOL,
   ]) {
     if (seen.has(t.name) || COCKPIT_OWNED.has(t.name)) continue;
     seen.add(t.name);

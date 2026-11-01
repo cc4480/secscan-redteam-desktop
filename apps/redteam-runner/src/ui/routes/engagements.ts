@@ -78,8 +78,6 @@ export async function handleLaunch(store: UiStore, _req: IncomingMessage, res: S
   const dir = join(store.engagementsDir, id);
   store.register({ id, dir, status: "starting", startedAt: new Date().toISOString(), target: input.target, mode: input.mode });
   // Detached run — the request returns now; progress streams via SSE.
-  // onCtxReady fires synchronously inside runEngagement before any agent
-  // acts, so the kill-switch handle is registered while the run is live.
   try {
     const p = runEngagement(input, {
       engagementId: id,
@@ -100,7 +98,6 @@ export async function handleLaunch(store: UiStore, _req: IncomingMessage, res: S
       // silently ignored it, leaving the operator to wonder why their cap had
       // no effect.
       ...(launch.maxActions === undefined ? {} : { maxActions: launch.maxActions }),
-      onCtxReady: (handle) => store.setAbort(id, handle.abort),
     });
     void p.then(
       () => store.complete(id),
@@ -137,7 +134,7 @@ export function handleDetail(store: UiStore, res: ServerResponse, id: string): v
     json(res, 200, {
       state: null,
       pending: true,
-      live: rec.abort !== undefined,
+      live: rec.running === true,
       status: rec.status,
       target: rec.target ?? null,
       mode: rec.mode ?? null,
@@ -157,7 +154,7 @@ export function handleDetail(store: UiStore, res: ServerResponse, id: string): v
   const live = store.get(id);
   json(res, 200, {
     state,
-    live: !!live?.abort,
+    live: !!live?.running,
     artifacts: {
       report: store.readTextArtifact(id, "report.md") !== null,
       compliancePack: store.readTextArtifact(id, "compliance-pack.md") !== null,

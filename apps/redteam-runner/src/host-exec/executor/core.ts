@@ -15,8 +15,6 @@ export class ExecutorCore {
   readonly deps: Required<Pick<HostExecDeps, "ssh" | "smb" | "smbPth" | "winrm" | "rdp" | "ad" | "krb" | "nfs">> & { env: NodeJS.ProcessEnv };
   /** TEST MODE: preflight skips the destructive-command denylist (see HostExecDeps.testMode). */
   readonly testMode: boolean;
-  /** Kill-switch state, shared with the engagement context (phases.ts owns it). */
-  killSwitch: { aborted: boolean } = { aborted: false };
 
   async bounded<T>(p: Promise<T>, ms: number, label: string, t: { close(): Promise<void> }): Promise<T> {
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -58,9 +56,6 @@ export class ExecutorCore {
     scopeHosts: string[],
     command?: string,
   ): { creds: HostCredentials; secrets: string[] } | { refused: string } {
-    if (this.killSwitch.aborted) {
-      return { refused: "kill switch active — coordinator aborted; no new host executions" };
-    }
     const v = validateHostTarget(host, scopeHosts);
     if (!v.ok) return { refused: v.reason };
     if (command) {
@@ -82,7 +77,7 @@ export class ExecutorCore {
 
   /**
    * Preflight for unauthenticated recon (WinRM probe, NFS enumeration):
-   * kill-switch → scope check, then done. No credential resolution —
+   * scope check, then done. No credential resolution —
    * these tools are unauthenticated by design, so no secrets exist and
    * redaction over [] is a no-op. No denylist either — no commands run.
    */
@@ -92,9 +87,6 @@ export class ExecutorCore {
     host: string,
     scopeHosts: string[],
   ): { secrets: string[] } | { refused: string } {
-    if (this.killSwitch.aborted) {
-      return { refused: "kill switch active — coordinator aborted; no new host executions" };
-    }
     const v = validateHostTarget(host, scopeHosts);
     if (!v.ok) return { refused: v.reason };
     return { secrets: [] };

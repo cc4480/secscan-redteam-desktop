@@ -36,7 +36,6 @@ export async function coordinatorSignOff(
       `Review the material below. Your reply must start with EXACTLY one of:\n` +
       `- \`SIGN-OFF: <one-line summary of what is approved>\` — the operation proceeds.\n` +
       `- \`REDIRECT: <what must change and which specialist does it>\` — at most 2 redirects per engagement (used: ${ctx.redirects}).\n` +
-      `You may also call abort_engagement on any stop condition, ROE violation, or gate-bypass attempt.\n` +
       `Confirm role discipline in one line per specialist, or correct them.`,
     `Transition awaiting sign-off: ${transition}\n\n${payload}`,
     COMMAND_TOOLS,

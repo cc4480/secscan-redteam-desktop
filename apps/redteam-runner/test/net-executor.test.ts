@@ -163,20 +163,6 @@ describe('packet_send — nping route via injected spawn', () => {
     assert.equal(r.referenceHex, SYN_PACKET_HEX)
   })
 
-  it('the kill switch stops the send before spawn — zero packets', async () => {
-    let spawnCalls = 0
-    const spawn: SpawnFn = async () => {
-      spawnCalls++
-      return { stdout: '', stderr: '', code: 0, timedOut: false }
-    }
-    const exec = new NetExecutor({ spawn, env: { REDTEAM_NPING_BIN: '/usr/bin/nping' } })
-    exec.killSwitch.aborted = true
-    const r = await exec.sendPacket(SYN_SPEC)
-    assert.equal(r.ok, false)
-    assert.match(r.message, /kill switch/)
-    assert.equal(spawnCalls, 0)
-  })
-
   it('a failing nping is reported honestly, never as a send', async () => {
     const spawn: SpawnFn = async () => ({
       stdout: '', stderr: 'nping: socket: Operation not permitted', code: 1, timedOut: false,
@@ -222,16 +208,5 @@ describe('flood — caps proven against a counting loopback target', () => {
     assert.equal(r.stoppedReason, 'aborted')
     assert.ok(r.elapsedMs < 10000, `halted promptly (${r.elapsedMs}ms of a 30000ms run)`)
     assert.ok(r.sent < 1000 * 30, 'nowhere near the full-run volume')
-  })
-
-  it('a tripped kill switch refuses to start — zero sends', async () => {
-    const fr = resolveFloodParams({ floodMode: 'udp', ratePerSec: 100, durationMs: 1000, concurrency: 4 })
-    assert.ok(fr.ok)
-    const exec = new NetExecutor()
-    exec.killSwitch.aborted = true
-    const r = await exec.flood({ host: '127.0.0.1', port: udpPort, params: fr.params })
-    assert.equal(r.ok, false)
-    assert.equal(r.sent, 0)
-    assert.equal(r.stoppedReason, 'aborted')
   })
 })

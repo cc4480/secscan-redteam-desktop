@@ -18,8 +18,6 @@ import { tmpdir } from "node:os";
 import {
   TargetRateLimiter,
   resolveEffectiveRps,
-  TargetAutoHalt,
-  isTargetDistress,
   buildZeroDisruptionRecord,
   disruptionVerdict,
   buildSafetyManifest,
@@ -170,62 +168,6 @@ describe("staging→production graduation", () => {
 // Auto-halt
 // ---------------------------------------------------------------------------
 
-describe("TargetAutoHalt", () => {
-  it("halts after N consecutive distress outcomes", () => {
-    const ah = new TargetAutoHalt({ consecutiveThreshold: 3, windowSize: 20, windowFailureRate: 0.5 });
-    assert.equal(ah.recordOutcome("h", true), null);
-    assert.equal(ah.recordOutcome("h", true), null);
-    const reason = ah.recordOutcome("h", true);
-    assert.ok(reason && reason.includes("consecutive"));
-    assert.equal(ah.isHalted("h"), true);
-    assert.deepEqual(ah.haltedHosts(), ["h"]);
-  });
-
-  it("clean outcomes reset the consecutive counter", () => {
-    const ah = new TargetAutoHalt({ consecutiveThreshold: 3, windowSize: 20, windowFailureRate: 0.5 });
-    ah.recordOutcome("h", true);
-    ah.recordOutcome("h", true);
-    ah.recordOutcome("h", false);
-    assert.equal(ah.recordOutcome("h", true), null);
-    assert.equal(ah.isHalted("h"), false);
-  });
-
-  it("halts on window failure rate", () => {
-    const ah = new TargetAutoHalt({ consecutiveThreshold: 100, windowSize: 4, windowFailureRate: 0.5 });
-    ah.recordOutcome("h", true);
-    ah.recordOutcome("h", false);
-    ah.recordOutcome("h", true);
-    const reason = ah.recordOutcome("h", false); // 2/4 = 50%
-    assert.ok(reason && reason.includes("50%"));
-    assert.equal(ah.isHalted("h"), true);
-  });
-
-  it("other hosts are unaffected; reset clears a halt", () => {
-    const ah = new TargetAutoHalt({ consecutiveThreshold: 2, windowSize: 20, windowFailureRate: 0.5 });
-    ah.recordOutcome("a", true);
-    ah.recordOutcome("a", true);
-    assert.equal(ah.isHalted("a"), true);
-    assert.equal(ah.isHalted("b"), false);
-    ah.reset("a");
-    assert.equal(ah.isHalted("a"), false);
-  });
-});
-
-describe("isTargetDistress", () => {
-  it("classifies transport/target errors as distress", () => {
-    assert.equal(isTargetDistress("probe failed: connection refused"), true);
-    assert.equal(isTargetDistress("HTTP 500 in 120ms. Snippet: error"), true);
-    assert.equal(isTargetDistress("ssh_exec timed out after 30s"), true);
-  });
-
-  it("classifies clean negatives as not distress", () => {
-    assert.equal(isTargetDistress("DENIED by ROE: technique T1110 is excluded"), false);
-    assert.equal(isTargetDistress("HTTP 404 in 40ms. Snippet: not found"), false);
-    assert.equal(isTargetDistress("DENIED: unparseable URL"), false);
-    assert.equal(isTargetDistress("HALTED: target h was auto-halted"), false);
-  });
-});
-
 // ---------------------------------------------------------------------------
 // Zero-disruption record + manifest
 // ---------------------------------------------------------------------------
@@ -258,10 +200,11 @@ describe("buildZeroDisruptionRecord", () => {
     assert.equal(rec.dosRefusals, 1);
     assert.equal(rec.scopeRefusals, 1);
     assert.equal(rec.policyRefusals, 1);
-    assert.equal(rec.autoHalts, 1);
-    assert.equal(rec.killSwitchAborts, 1);
+    // The target_auto_halt / abort_engagement events above are historical
+    // (pre-removal logs): the record no longer counts stop-signal events —
+    // the kill-switch class was removed on the operator's order (2026-11-01).
     assert.equal(rec.destructiveActionsFired, 0);
-    assert.equal(rec.totalInterventions, 6);
+    assert.equal(rec.totalInterventions, 4);
     assert.match(disruptionVerdict(rec), /^CLEAN/);
   });
 
@@ -286,16 +229,18 @@ describe("buildSafetyManifest", () => {
       productionCapApplied: false,
       throttledMs: 120,
       acquires: 40,
-      killSwitchAborts: 0,
       operator: "Test Operator",
-      autoHalt: { consecutiveThreshold: 5, windowSize: 20, windowFailureRate: 0.5, haltedTargets: [], haltCount: 0 },
       zeroDisruption: zero,
       disruptionVerdict: disruptionVerdict(zero),
     });
     assert.equal(m.environment, "staging");
     assert.deepEqual(m.scopeAllowlist, ["secscan.us"]);
     assert.equal(m.rateLimit.rpsPerHost, 5);
-    assert.equal(m.killSwitch.armed, true);
+    // The kill-switch class was removed (operator order, 2026-11-01): the
+    // manifest carries no killSwitch / autoHalt sections at all.
+    assert.equal("killSwitch" in m, false);
+    assert.equal("autoHalt" in m, false);
+    assert.equal(m.manifestVersion, "v0.18.0");
     assert.equal(m.payloadPolicy, "canary-or-gated-session");
     assert.equal(m.dosPolicy, "excluded-always");
     assert.ok(m.destructiveDenylist.patternCount > 0);
@@ -316,17 +261,16 @@ describe("buildSafetyManifest", () => {
       productionCapApplied: true,
       throttledMs: 0,
       acquires: 0,
-      killSwitchAborts: 0,
       operator: "Op",
-      autoHalt: { consecutiveThreshold: 5, windowSize: 20, windowFailureRate: 0.5, haltedTargets: ["db.example"], haltCount: 1 },
       zeroDisruption: zero,
       disruptionVerdict: disruptionVerdict(zero),
     });
     assert.equal(m.environment, "production");
     assert.equal(m.productionConfirmed, true);
     assert.equal(m.rateLimit.productionCapApplied, true);
-    assert.deepEqual(m.autoHalt.haltedTargets, ["db.example"]);
     const md = renderSafetyManifestMarkdown(m);
+    assert.ok(!md.includes("Kill switch"), "no kill-switch line in the rendered manifest");
+    assert.ok(!md.includes("Auto-halt"), "no auto-halt line in the rendered manifest");
     assert.ok(md.includes("# Safety manifest"));
     assert.ok(md.includes("Residual risks"));
     assert.ok(md.includes("**0**"));

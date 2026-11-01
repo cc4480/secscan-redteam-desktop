@@ -78,7 +78,7 @@ export const PROTOCOL_RULES: readonly string[] = [
   "Stay inside the ROE scope: out-of-scope hosts are refused before the packet, not after.",
   "Honest limits beat fake coverage: declare not-covered items with a reason code.",
   "The report is written from the ledger only; nothing enters it that was not observed.",
-  "Stop conditions are absolute: auth-gate attempt, ROE breach, production impact, kill switch.",
+  "Stop conditions are absolute: auth-gate attempt, ROE breach, production impact.",
 ] as const;
 
 /** The report contract: every engagement ends with this, or it is not finished. */

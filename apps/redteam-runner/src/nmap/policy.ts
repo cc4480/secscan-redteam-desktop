@@ -206,7 +206,7 @@ export interface NmapRunOptions {
 export function buildNmapRunArgv(binary: string, opts: NmapRunOptions): string[] {
   const argv = [binary, ...opts.profile.args];
   // -oX - streams XML to stdout: one parser, no temp files to clean up, and no
-  // half-written file if the run is killed by the kill switch mid-scan.
+  // half-written file if the run is killed mid-scan.
   argv.push("-oX", "-");
   argv.push("--max-rate", String(Math.max(1, Math.floor(opts.rateLimit))));
   argv.push("--host-timeout", `${Math.max(10, Math.floor(opts.timeoutS))}s`);

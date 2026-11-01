@@ -79,8 +79,6 @@ function waitOrAbort(ms: number, signal?: AbortSignal): Promise<void> {
 
 /** The net_exec executor: socket sessions + crafted packets + bounded flood. */
 export class NetExecutor {
-  /** Kill switch — the dispatch handler binds this to the engagement's hostKill. */
-  killSwitch: { aborted: boolean } = { aborted: false };
   readonly sessions = new SocketSessions();
   private readonly spawn: SpawnFn;
   private readonly env: NodeJS.ProcessEnv;
@@ -149,9 +147,6 @@ export class NetExecutor {
    */
   async sendPacket(spec: PacketSpec, signal?: AbortSignal): Promise<PacketSendResult> {
     const referenceHex = this.referencePacket(spec).toString("hex");
-    if (this.killSwitch.aborted) {
-      return { ok: false, message: "ABORTED by operator (kill switch) — no packet sent.", referenceHex, replies: [], sentLines: 0 };
-    }
     const argv = buildNpingArgv(resolveNpingBinary(this.env), spec);
     let r: Awaited<ReturnType<SpawnFn>>;
     try {
@@ -193,8 +188,8 @@ export class NetExecutor {
   async flood(args: { host: string; port: number; params: FloodParams; signal?: AbortSignal }): Promise<FloodRunResult> {
     const p = args.params;
     const started = Date.now();
-    if (this.killSwitch.aborted || args.signal?.aborted) {
-      return { ok: false, message: "ABORTED by operator (kill switch) — flood not started.", sent: 0, errors: 0, elapsedMs: 0, stoppedReason: "aborted", params: p };
+    if (args.signal?.aborted) {
+      return { ok: false, message: "ABORTED by call signal — flood not started.", sent: 0, errors: 0, elapsedMs: 0, stoppedReason: "aborted", params: p };
     }
     const payload = Buffer.alloc(p.payloadBytes, 0x41);
     const deadline = started + p.durationMs;
@@ -202,7 +197,7 @@ export class NetExecutor {
     let nextSlot = started;
     let sent = 0;
     let errors = 0;
-    const aborted = (): boolean => this.killSwitch.aborted || args.signal?.aborted === true;
+    const aborted = (): boolean => args.signal?.aborted === true;
     const claimSlot = (): number => {
       const slot = Math.max(Date.now(), nextSlot);
       nextSlot = slot + interval;

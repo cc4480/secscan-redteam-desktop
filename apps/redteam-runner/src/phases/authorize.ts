@@ -68,8 +68,7 @@ export async function authorizePhase(ctx: Ctx): Promise<GateVerdict> {
   // the engagement log — the test_mode_active event names every gate it
   // lifts, and the recorded proof is the honest self-attestation above,
   // never a fabricated verification. The scope guard still arms (the
-  // out-of-scope deny list stays in force), and the kill switch, ESTOP
-  // and auto-halt are untouched.
+  // out-of-scope deny list stays in force).
   if (ctx.config.testMode) {
     ctx.events.append({
       phase: "authorize",
@@ -82,7 +81,7 @@ export async function authorizePhase(ctx: Ctx): Promise<GateVerdict> {
         "key off them — autonomy-tier enforcement, credential lockout interlock, per-host rate limiting, " +
         "variant cap, always/mode technique exclusions, host-exec destructive-command denylist, and msf " +
         "module/payload policy. The verification proof on record is the operator's self-attestation, " +
-        "not a DNS or service proof. Kill switch, ESTOP, auto-halt and the out-of-scope deny list remain in force.",
+        "not a DNS or service proof. The out-of-scope deny list remains in force.",
     });
     stampVerifiedScope(ctx);
     appendScopeGuardEvent(ctx);

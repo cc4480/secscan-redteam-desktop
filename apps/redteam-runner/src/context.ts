@@ -11,7 +11,7 @@ import { EventLog } from './events.js'
 import { McpClient } from './mcp.js'
 import { ProberLike } from './prober.js'
 import { HostExecutor } from './host-exec/index.js'
-import { TargetAutoHalt, TargetRateLimiter, type CredentialAttemptGuard, type TestEnvironment } from './safety/index.js'
+import { TargetRateLimiter, type CredentialAttemptGuard, type TestEnvironment } from './safety/index.js'
 import { ApprovalLog, type TierState } from './accountability/index.js'
 import { type RegistryEntry, type TargetFingerprint, type VulnerabilityRegistry } from './registry.js'
 import { type ActorRole, type EngagementInput, type OperationPlan, type PeerReviewStamp, type ResolvedRunnerConfig } from './types.js'
@@ -179,20 +179,14 @@ export interface Ctx {
    */
   nuclei: { templateExecutions: number; templatesRun: number; findings: number }
   /**
-   * Kill switch: coordinator abort sets `aborted` and aborts every registered
-   * controller, terminating in-flight host executions across all parallel
-   * tasks (they share this ctx). New host work is refused once aborted.
-   */
-  hostKill: { aborted: boolean; controllers: Set<AbortController> }
-  /**
    * v0.13.0 production safety case — mechanical, runner-enforced.
-   * The rate limiter gates every probe/exec tool per target host; the
-   * auto-halt tracker refuses targets showing distress; environment drives
-   * staging→production graduation.
+   * The rate limiter gates every probe/exec tool per target host;
+   * environment drives staging→production graduation. (The stop-signal
+   * class that used to live here — the kill switch and the auto-halt
+   * tracker — was removed on the operator's order, 2026-11-01.)
    */
   safety: {
     limiter: TargetRateLimiter
-    autoHalt: TargetAutoHalt
     /**
      * Q-LOCKOUT credential-attempt interlock: per-(host, protocol-class)
      * failed-validation budget of lockoutThreshold − 1, enforced in
@@ -208,8 +202,6 @@ export interface Ctx {
     productionConfirmed: boolean
     rpsPerHost: number
     productionCapApplied: boolean
-    /** Kill-switch aborts this engagement (operator/coordinator override count). */
-    killSwitchAborts: number
   }
   /**
    * v0.17.0 accountability — graduated autonomy, mechanically enforced.

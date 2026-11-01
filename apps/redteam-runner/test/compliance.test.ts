@@ -213,9 +213,7 @@ describe("compliance evidence pack", () => {
       productionCapApplied: false,
       throttledMs: 0,
       acquires: 0,
-      killSwitchAborts: 0,
       operator: "Test Op",
-      autoHalt: { consecutiveThreshold: 5, windowSize: 20, windowFailureRate: 0.5, haltedTargets: [], haltCount: 0 },
       zeroDisruption: buildZeroDisruptionRecord([]),
       disruptionVerdict: disruptionVerdict(buildZeroDisruptionRecord([])),
     });

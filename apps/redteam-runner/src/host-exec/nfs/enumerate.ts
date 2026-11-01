@@ -99,7 +99,7 @@ export function createNfsTransport(dial: NfsDialFn = defaultNfsDial): NfsTranspo
 
   return {
     async enumerateExports(args: NfsEnumerateArgs): Promise<NfsExport[]> {
-      if (args.signal?.aborted) throw new Error("[nfs] aborted by kill switch before enumerate");
+      if (args.signal?.aborted) throw new Error("[nfs] aborted by call signal before enumerate");
       const timeoutMs = args.timeoutMs ?? HOST_EXEC_TIMEOUT_MS;
 
       const mountdPort = await getMountdPort(dial, args.host, timeoutMs, args.signal);

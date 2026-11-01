@@ -1,7 +1,7 @@
 /**
- * Shared-state tool handlers: registry, target map, findings, verdicts, abort (v0.19.0 refactor — extracted from dispatch.ts).
+ * Shared-state tool handlers: registry, target map, findings, verdicts (v0.19.0 refactor — extracted from dispatch.ts).
  */
-import { HaltError, type Ctx, type KilledLive, type LiveFinding } from '../context.js'
+import { type Ctx, type KilledLive, type LiveFinding } from '../context.js'
 import { queryRegistry, loadRegistryFile } from '../registry.js'
 import { redactPii } from '../safety/index.js'
 import { resolveItemKey, setDisposition } from '../coverage/items.js'
@@ -16,7 +16,7 @@ import { readSpill } from '../tool-spill.js'
 
 export async function handleBookkeepingTools(ctx: Ctx, role: ActorRole, phase: EngagementPhase,
   call: ToolCallRequest, args: Record<string, unknown>): Promise<DispatchResult | null> {
-  if (!['query_registry','update_target_map','record_finding','record_killed','record_item_verdict','abort_engagement','variant_list','read_spill'].includes(call.name)) return null
+  if (!['query_registry','update_target_map','record_finding','record_killed','record_item_verdict','variant_list','read_spill'].includes(call.name)) return null
   if (call.name === 'read_spill') {
     // Sandbox lives in tool-spill.ts (mechanical, unit-tested): only this
     // engagement's own spill/<file>.txt references resolve; everything else
@@ -290,26 +290,6 @@ export async function handleBookkeepingTools(ctx: Ctx, role: ActorRole, phase: E
       'The cap is enforced mechanically; close early with variant_list(closeExpansion: true).',
       target: key,
     }
-  }
-
-  if (call.name === 'abort_engagement') {
-    const reason = String(args['reason'] ?? 'coordinator abort').slice(0, 500)
-    // KILL SWITCH: terminate every in-flight host execution across all
-    // parallel tasks (shared ctx), then refuse any new host work.
-    ctx.hostKill.aborted = true
-    for (const c of ctx.hostKill.controllers) {
-      try {
-        c.abort()
-      } catch {
-      /* best effort */
-      }
-    }
-    ctx.hostKill.controllers.clear()
-    // v0.13.0 safety case: count the kill-switch use for the manifest —
-    // the zero-disruption record is derived from these events.
-    ctx.safety.killSwitchAborts++
-    ctx.events.append({ phase, actor: 'coordinator', action: 'abort_engagement', result: `ABORTED by coordinator: ${reason}` })
-    throw new HaltError(`aborted by coordinator: ${reason}`)
   }
 
   return null

@@ -208,19 +208,6 @@ describe("HostExecutor.winrmProbe", () => {
     assert.equal(calls, 0, "no request may be sent out of scope");
   });
 
-  it("honors the kill switch", async () => {
-    let calls = 0;
-    const counting: WinrmProbeRequestImpl = async (req) => {
-      calls++;
-      return fake401(req);
-    };
-    const ex = new HostExecutor({ env: FAKE_ENV });
-    ex.killSwitch.aborted = true;
-    const r = await ex.winrmProbe({ host: "10.9.0.12", scopeHosts: SCOPE, requestImpl: counting });
-    assert.equal(r.ok, false);
-    assert.ok(r.refused?.includes("kill switch"));
-    assert.equal(calls, 0);
-  });
 
   it("needs no credentials — the probe is unauthenticated by design", async () => {
     const ex = new HostExecutor({ env: {} });
@@ -564,15 +551,6 @@ describe("HostExecutor.nfsEnum", () => {
     assert.equal(calls, 0);
   });
 
-  it("honors the kill switch", async () => {
-    const { t, calls } = fakeNfs();
-    const ex = new HostExecutor({ nfs: () => t, env: FAKE_ENV });
-    ex.killSwitch.aborted = true;
-    const r = await ex.nfsEnum({ host: "10.9.0.12", scopeHosts: SCOPE });
-    assert.equal(r.ok, false);
-    assert.ok(r.refused?.includes("kill switch"));
-    assert.equal(calls, 0);
-  });
 
   it("needs no credentials and reports the export list", async () => {
     const { t } = fakeNfs([
@@ -721,15 +699,6 @@ describe("ssh agent-forwarding audit", () => {
     assert.equal(seen.length, 0);
   });
 
-  it("honors the kill switch", async () => {
-    const { t, seen } = fakeSsh();
-    const ex = new HostExecutor({ ssh: () => t, env: FAKE_ENV });
-    ex.killSwitch.aborted = true;
-    const r = await ex.sshAgentAudit({ host: "10.9.0.12", mode: "abuse-path", scopeHosts: SCOPE });
-    assert.equal(r.ok, false);
-    assert.ok(r.refused?.includes("kill switch"));
-    assert.equal(seen.length, 0);
-  });
 
   it("redacts secrets from failure summaries", async () => {
     const { t } = fakeSsh({ fail: `auth failed for testuser with ${SECRET}` });

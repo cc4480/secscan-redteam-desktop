@@ -41,8 +41,8 @@ export interface StoredEngagement {
    */
   target?: string;
   mode?: string;
-  /** Set while the engagement is live in this process (kill-switch handle). */
-  abort?: (reason: string) => void;
+  /** True while the engagement's run is in flight in this process. */
+  running?: boolean;
   error?: string;
 }
 

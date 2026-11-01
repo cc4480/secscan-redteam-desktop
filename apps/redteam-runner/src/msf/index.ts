@@ -11,7 +11,7 @@
  * follow-through (marker proven through the session), and session_command /
  * credential_dump / session_close act through that registered session.
  *
- * Every call goes through the same discipline as host-exec: kill switch,
+ * Every call goes through the same discipline as host-exec: scope,
  * exact-hostname ROE scope, module/payload denylists, vault credentials,
  * timeouts, session hygiene, secret redaction.
  */

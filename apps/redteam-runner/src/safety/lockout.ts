@@ -29,12 +29,13 @@
  *    these paths is claiming something the architecture cannot produce.
  *  - A lockout SIGNAL in any classified result (STATUS_ACCOUNT_LOCKED_OUT,
  *    KDC_ERR_CLIENT_REVOKED, LDAP data 775, pam_faillock, the shared
- *    autohalt 429/locked phrasings) trips the WHOLE host: AD's bad-password
- *    counter is per-account across protocols, so one class's signal refuses
- *    them all. Other hosts and all non-credential work continue.
- *  - Resume is a recorded operator decision (who + rationale) or nothing —
- *    the distress-breaker precedent. There is no agent path, no tool, no
- *    timer. The attempt ledger is never erased by a reset.
+ *    LOCKOUT_TEXT_PATTERN 429/locked phrasings) trips the WHOLE host: AD's
+ *    bad-password counter is per-account across protocols, so one class's
+ *    signal refuses them all. Other hosts and all non-credential work
+ *    continue.
+ *  - Resume is a recorded operator decision (who + rationale) or nothing.
+ *    There is no agent path, no tool, no timer. The attempt ledger is
+ *    never erased by a reset.
  *
  * Honest limits: reservations resolve when dispatch records the outcome; a
  * later gate's denial (variant cap, policy) strands the reservation, which
@@ -43,7 +44,15 @@
  * or the breaker would trip on reconnaissance.
  */
 
-import { LOCKOUT_TEXT_PATTERN } from "./autohalt.js";
+/**
+ * Lockout-signal phrasings (fleet charter spec §6): a target throttling
+ * or locking accounts. One shared constant, read by the credential
+ * lockout classifier below — the single set the Q-LOCKOUT spec (§5.3)
+ * requires. Tested against lowercased result text. (Moved here from the
+ * removed autohalt.ts, whose only surviving export this was.)
+ */
+export const LOCKOUT_TEXT_PATTERN =
+  /http 429|status 429|too many requests|account (?:is )?(?:temporarily )?locked|locked out|login locked|too many (?:failed )?(?:login|sign-in|authentication) attempts/;
 
 export type ProtocolClass = "smb" | "ldap" | "kerberos-events" | "rdp" | "winrm" | "ssh" | "web";
 
@@ -229,7 +238,7 @@ export function classifyCredentialAttempt(call: {
 /**
  * Lockout signals that are NEW with this interlock (per-protocol status
  * shapes, spec §5.3). The HTTP/429/locked phrasings are NOT here — they are
- * the shared LOCKOUT_TEXT_PATTERN from autohalt.ts, by design one set.
+ * the shared LOCKOUT_TEXT_PATTERN above, by design one set.
  * Tested against lowercased result text.
  */
 const LOCKOUT_PROTOCOL_PATTERN =
@@ -245,8 +254,8 @@ const NO_VALIDATION_PATTERN =
 
 /**
  * Classify a classified call's result (spec §5.3). Works on the result
- * text + the handler's `ok`, exactly as isTargetDistress does — Class A
- * executors surface no structured status codes today. Precedence:
+ * text + the handler's `ok` — Class A executors surface no structured
+ * status codes today. Precedence:
  * a lockout signal wins over everything (a locked account must trip even
  * on a mislabelled result); `ok === true` is a success (a session that
  * opened validated — its command output is not an auth verdict);
@@ -512,8 +521,8 @@ export class CredentialAttemptGuard {
 
   /**
    * Operator resume — the ONLY way a trip or a spent budget clears, and
-   * only as a recorded decision naming who decided and why (the
-   * distress-breaker rule: an empty rationale is not a decision). Clears
+   * only as a recorded decision naming who decided and why (an empty
+   * rationale is not a decision). Clears
    * the host's trip and counters; the ledger is retained — the attempts
    * that happened stay on record. When the campaign ceiling is tripped,
    * a decision-recorded reset also re-arms the ceiling from the current

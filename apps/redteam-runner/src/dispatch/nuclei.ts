@@ -3,8 +3,8 @@
  *
  * Mirrors the msf_exec dispatcher shape: ROE technique check, explicit
  * targetProfile pinning (windows|linux, never inferred), exploit-phase
- * gating for `run`, kill-switch controller registration, DENIED/ABORTED
- * mapping, coverage counting, per-item attempt recording.
+ * gating for `run`, per-call abort signal, DENIED/ABORTED mapping,
+ * coverage counting, per-item attempt recording.
  */
 import { BATTERY_CATEGORIES, type BatteryCategory } from "../battery.js";
 import { type TargetId, isTargetId } from "../targets.js";
@@ -51,11 +51,9 @@ export async function handleNucleiTools(ctx: Ctx, _role: ActorRole, phase: Engag
   ctx.probesUsed++;
   noteCategoryCoverage(ctx, category, rawTp as TargetId);
   const ctrl = new AbortController();
-  ctx.hostKill.controllers.add(ctrl);
   try {
     if (ctx.input.mode === "black") await sleep(Math.random() * 2500); // jitter
     const exec = ctx.nucleiExecutor;
-    exec.killSwitch = ctx.hostKill;
     const filter = {
       ids: strListArg(args, "ids"),
       tags: strListArg(args, "tags"),
@@ -99,6 +97,5 @@ export async function handleNucleiTools(ctx: Ctx, _role: ActorRole, phase: Engag
     const hintBlock = hints.length ? `\nDedupe guidance:\n${hints.join("\n")}` : "";
     return { result: `${res.summary}\n${res.output}${hintBlock}`, attackId, target: host };
   } finally {
-    ctx.hostKill.controllers.delete(ctrl);
   }
 }

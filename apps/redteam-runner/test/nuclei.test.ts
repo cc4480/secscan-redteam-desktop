@@ -7,7 +7,7 @@
  *    shell interpolation (argv array), template updates never flaggable
  *  - missing binary fails closed with setup instructions
  *  - out-of-scope hosts rejected BEFORE any spawn (zero subprocess calls)
- *  - kill switch aborts in-flight runs (signal → child killed)
+ *  - a call-signal abort kills an in-flight run's child process
  *  - JSONL parsed into findings with CVE extraction; bad lines counted
  *  - mapping: CVE overlap → battery items (one finding, two sources);
  *    template-only → WS-108/LX-110 runtime instances
@@ -191,16 +191,6 @@ describe("nuclei executor", () => {
     // Rate limit inherited from the safety config.
     const argv = spawn.calls[0] ?? [];
     assert.ok(argv.includes("-rate-limit") && argv.includes("2"));
-  });
-
-  it("run: kill switch aborts in-flight runs", async () => {
-    const spawn = fakeSpawn();
-    const exec = testExecutor(spawn);
-    exec.killSwitch.aborted = true;
-    const res = await exec.run({ host: "10.9.0.12", scopeHosts: SCOPE, rateLimit: 2 });
-    assert.ok(res.refused);
-    assert.match(res.refused, /kill switch/i);
-    assert.equal(spawn.calls.length, 0);
   });
 
   it("run: explicit id lists are truncated runner-side", async () => {

@@ -3,16 +3,15 @@
  * (Module doc comment preserved on the msf/executor.ts barrel.)
  *
  * Preflight order (mirrors host-exec/executor.ts):
- *   1. kill-switch check (refuse new work when the coordinator aborted)
- *   2. ROE scope check (exact hostname match, fail closed, before any packet)
- *   3. module/payload policy (dos + destructive modules refused; generic
+ *   1. ROE scope check (exact hostname match, fail closed, before any packet)
+ *   2. module/payload policy (dos + destructive modules refused; generic
  *      single-command payloads run the runner-built canary marker, which
  *      additionally passes the destructive denylist; Meterpreter payloads
  *      open a session — see 6)
  *   4. credential resolution (REDTEAM_MSFRPC_* env/Secure Vault only, fail
  *      fast with setup instructions)
  *   5. execution with timeout + abort signal; the console is destroyed on
- *      abort (that IS the kill switch for a running module)
+ *      abort (the call signal is what stops a running module)
  *   6. session hygiene: a generic-payload validation run must not leave
  *      sessions behind — any session that wasn't there before is stopped
  *      immediately. A Meterpreter-payload run is the one exception (W8):
@@ -85,9 +84,6 @@ export class MsfExecutor {
   readonly testMode: boolean;
   /** Live Meterpreter sessions opened by validated runs on this executor (W8). */
   readonly sessions = new MsfSessionManager();
-  /** Kill-switch state, shared with the engagement context (phases.ts owns it). */
-  killSwitch: { aborted: boolean } = { aborted: false };
-
   constructor(deps: MsfDeps = {}) {
     this.deps = { request: deps.request, env: deps.env ?? process.env, endpoint: deps.endpoint };
     this.testMode = deps.testMode === true;
@@ -106,9 +102,6 @@ export class MsfExecutor {
   }
 
   preflight(host: string, scopeHosts: string[]): { secrets: string[] } | { refused: string } {
-    if (this.killSwitch.aborted) {
-      return { refused: "kill switch active — coordinator aborted; no new msf executions" };
-    }
     const v = validateHostTarget(host, scopeHosts);
     if (!v.ok) return { refused: v.reason };
     return { secrets: [] };
@@ -316,7 +309,7 @@ export class MsfExecutor {
       }
       const markerHit = res.output.includes(`REDTEAM-MARKER-`);
       const verdict = res.aborted
-        ? "ABORTED by kill switch (console destroyed)"
+        ? "ABORTED by call signal (console destroyed)"
         : res.timedOut
           ? "timed out (console destroyed)"
           : markerHit

@@ -3,8 +3,12 @@
  *
  * Mechanical, runner-enforced protections a buyer's security team can verify:
  * per-target rate limiting, PII redaction, staging→production graduation,
- * per-target auto-halt, the machine-readable safety manifest, and the
- * zero-disruption record derived from the audit log.
+ * the credential-attempt lockout interlock, the machine-readable safety
+ * manifest, and the zero-disruption record derived from the audit log.
+ *
+ * The stop-signal class (ESTOP, abort.json, auto-halt, the distress
+ * breaker) was removed on the operator's order (2026-11-01): nothing in
+ * this module can halt or refuse a tool call or a run via a stop signal.
  */
 
 export {
@@ -29,18 +33,11 @@ export {
 export type { TestEnvironment } from './graduation.js'
 
 export {
-  TargetAutoHalt,
-  isTargetDistress,
-  LOCKOUT_TEXT_PATTERN,
-  DEFAULT_AUTOHALT_CONFIG,
-} from './autohalt.js'
-export type { AutoHaltConfig } from './autohalt.js'
-
-export {
   CredentialAttemptGuard,
   classifyCredentialAttempt,
   classifyAuthOutcome,
   lockoutGuardFor,
+  LOCKOUT_TEXT_PATTERN,
   DEFAULT_LOCKOUT_CONFIG,
   LOCKOUT_LEDGER_CAP,
   LOCKOUT_ACCOUNT_LABEL,
@@ -58,19 +55,6 @@ export type {
 } from './lockout.js'
 
 export {
-  ENGAGEMENT_DISTRESS_TARGET_THRESHOLD,
-  clearDistressRecord,
-  distressEscalationResult,
-  distressHalts,
-  engagementDistressed,
-  recordResumeDecision,
-  registerDistressHalt,
-  resumeDecisionFor,
-  resumeTarget,
-} from './distress-breaker.js'
-export type { DistressHaltRecord, ResumeDecision } from './distress-breaker.js'
-
-export {
   buildZeroDisruptionRecord,
   disruptionVerdict,
 } from './disruption.js'
@@ -84,26 +68,6 @@ export {
   SAFETY_MANIFEST_VERSION,
 } from './manifest.js'
 export type { SafetyManifest, ManifestInputs } from './manifest.js'
-
-export {
-  ABORT_FILE_NAME,
-  readAbortFile,
-  writeAbortFile,
-  consumeAbortFile,
-} from './abortfile.js'
-export type { AbortSignal } from './abortfile.js'
-
-export {
-  ESTOP_FILE_NAME,
-  ESTOP_PATH_ENV,
-  EstopEngagedError,
-  readEstopState,
-  resolveEstopPaths,
-  requireEstopClear,
-  engageEstop,
-  disengageEstop,
-} from './estop.js'
-export type { EstopState, EstopPathOptions } from './estop.js'
 
 export {
   LOG_ROTATION_VERSION,

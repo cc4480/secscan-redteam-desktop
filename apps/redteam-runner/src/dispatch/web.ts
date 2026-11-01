@@ -116,7 +116,7 @@ if (call.name === "burst_probe") {
 
 // -- Host execution tools (v0.9.0): ssh/smb/winrm via the safety core ----
 // Host targets are NEVER inferred — targetProfile is required and must be
-// windows|linux. Every refusal (scope, denylist, kill switch, credentials)
+// windows|linux. Every refusal (scope, denylist, credentials)
 // is a DENIED event, never silent. Coverage counts like http_probe.
   return null;
 }

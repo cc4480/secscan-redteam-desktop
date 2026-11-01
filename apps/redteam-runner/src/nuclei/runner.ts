@@ -4,7 +4,7 @@
  * Executes the operator-installed `nuclei` binary as a subprocess with the
  * runner-built argv (never agent-supplied shell text). Output is parsed as
  * JSONL, one finding object per line. The child is killed on abort (the
- * kill switch) and on timeout. Injectable spawn makes the whole thing
+ * call abort signal) and on timeout. Injectable spawn makes the whole thing
  * testable with a fake binary — no real nuclei needed in tests.
  */
 import { spawn, type ChildProcess } from "node:child_process";
@@ -14,7 +14,7 @@ export interface NucleiSpawnOpts {
   argv: string[];
   /** Milliseconds before the child is killed. */
   timeoutMs: number;
-  /** AbortSignal from the coordinator kill switch — kills the child. */
+  /** Per-call AbortSignal — kills the child when it fires. */
   signal?: AbortSignal;
 }
 

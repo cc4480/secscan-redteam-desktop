@@ -82,7 +82,7 @@ export class MsfSessionManager {
   /**
    * Run ONE command through the session and collect its response.
    * Polls the read channel until output goes idle or the deadline hits;
-   * the abort signal (kill switch) interrupts the wait immediately.
+   * the abort signal interrupts the wait immediately.
    * Throws on an unknown/closed handle — callers translate to a refusal.
    */
   async exec(
@@ -97,14 +97,14 @@ export class MsfSessionManager {
         "unknown or closed msf session handle — sessions open only as the mechanical follow-through of a validated exploit run (msf_exec run with a Meterpreter payload)",
       );
     }
-    if (opts.signal?.aborted) throw new Error("aborted by kill switch");
+    if (opts.signal?.aborted) throw new Error("aborted by call signal");
     const line = command.endsWith("\n") ? command : `${command}\n`;
     await client.sessionMeterpreterWrite(record.daemonId, line);
     let output = "";
     let lastDataAt = 0;
     const deadline = Date.now() + opts.timeoutMs;
     for (;;) {
-      if (opts.signal?.aborted) throw new Error("aborted by kill switch");
+      if (opts.signal?.aborted) throw new Error("aborted by call signal");
       const chunk = await client.sessionMeterpreterRead(record.daemonId);
       if (chunk) {
         output += chunk;

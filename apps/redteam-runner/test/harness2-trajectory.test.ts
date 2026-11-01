@@ -331,12 +331,11 @@ describe('writeTrajectory', () => {
 })
 
 describe('captureEngagementTrajectory finish-path wiring', () => {
-  function fakeCtx(overrides: { actions?: number; aborted?: boolean } = {}): Ctx {
+  function fakeCtx(overrides: { actions?: number } = {}): Ctx {
     return {
       fingerprint: { host: 'shop.example.test', stack: [], appType: 'wordpress' },
       itemLedger: new Map(),
-      hostKill: { aborted: overrides.aborted ?? false, controllers: new Set() },
-      safety: { killSwitchAborts: overrides.aborted === true ? 1 : 0 },
+      safety: {},
       actions: overrides.actions ?? 2,
       startedAt: Date.now() - 1000,
       liveFindings: [],
@@ -371,7 +370,7 @@ describe('captureEngagementTrajectory finish-path wiring', () => {
     assert.equal(trajectory.events.some(event => event.action === 'http_probe' && event.isToolCall), true)
   })
 
-  it('maps a kill-switch run to aborted', () => {
+  it('maps a halted run to aborted', () => {
     const dir = tempDir('h2-wire-abort-')
     const events = new EventLog(dir, 'eng-abort', { target: 'shop.example.test', mode: 'red', objective: 'test' })
     events.updateState({ status: 'halted', phase: 'halted', blockedReason: 'aborted by operator (kill switch)' })
@@ -379,7 +378,7 @@ describe('captureEngagementTrajectory finish-path wiring', () => {
       engagementDir: dir,
       engagementId: 'eng-abort',
       target: 'shop.example.test',
-      ctx: fakeCtx({ aborted: true }),
+      ctx: fakeCtx(),
       events,
       environment: {},
     })
@@ -510,8 +509,7 @@ describe('agentLoop section-5 instrumentation (agents.ts)', () => {
       input: { roe: { blackoutWindows: [] } },
       deps: { completeForRole },
       events: new EventLog(dir, 'eng-loop', { target: 'shop.example.test', mode: 'red', objective: 'test' }),
-      hostKill: { aborted: false, controllers: new Set<AbortController>() },
-      safety: { killSwitchAborts: 0 },
+      safety: {},
     } as unknown as Ctx
   }
 
@@ -543,10 +541,10 @@ describe('agentLoop section-5 instrumentation (agents.ts)', () => {
         toolCalls: [{ id: 'call-1', name: 'http_probe', arguments: { url: 'https://shop.example.test/?q=1' } }],
         usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
       }))
-      // An in-process kill switch makes dispatchTool throw before any traffic.
-      ctx.hostKill.aborted = true
-      await assert.rejects(() => agentLoop(ctx, 'exploiter', 'exploit', 's', 'u', [], 1), /aborted/)
-      const rows = readSteps(dir)
+      // The bare fake ctx (no tier state, no safety machinery) makes
+      // dispatchTool throw before any traffic; the loop journals the
+      // failed dispatch as an ERROR observation instead of crashing.
+      const rows = await agentLoop(ctx, 'exploiter', 'exploit', 's', 'u', [], 1).then(() => readSteps(dir))
       assert.deepEqual(rows.map(row => row.role), ['prompt', 'tool', 'observation'])
       assert.equal(rows[0]!.tokens, 15)
       assert.equal(rows[1]!.tool_name, 'http_probe')

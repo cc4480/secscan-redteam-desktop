@@ -65,7 +65,7 @@ export async function winrmExecImpl(core: ExecutorCore, args: {
 /**
  * WinRM listener probe (battery WS-010). Unauthenticated reconnaissance:
  * one POST /wsman per port, reads the 401 challenge. Preflight is
- * kill-switch + scope only — no credentials are resolved or sent.
+ * scope only — no credentials are resolved or sent.
  * `ok` means the probe completed (per-port answers in `output`);
  * a port with no listener is a finding, not a failure.
  */
@@ -133,7 +133,7 @@ export async function winrmProbeImpl(core: ExecutorCore, args: {
 /**
  * NFS export enumeration (battery LX-041). Unauthenticated by design —
  * the mount protocol's EXPORT procedure needs no credentials.
- * Preflight is kill-switch + scope only; no commands run so the denylist
+ * Preflight is scope only; no commands run so the denylist
  * does not apply (documented, not skipped silently). Never mounts
  * anything — see nfs.ts.
  */

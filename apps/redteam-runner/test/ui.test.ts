@@ -2,14 +2,15 @@
  * Web UI tests (v0.22.0).
  *
  * No live engagement, no network beyond loopback: engagement directories
- * are canned fixtures under a tmp dir, the abort handle is a stub, and the
- * server binds a random loopback port. Covers: token generation/uniqueness,
- * auth rejection, loopback-only binding, launch validation, the abort path,
- * SSE streaming of canned events, and findings/coverage/compliance reads.
+ * are canned fixtures under a tmp dir, and the server binds a random
+ * loopback port. Covers: token generation/uniqueness, auth rejection,
+ * loopback-only binding, launch validation, the removed abort route,
+ * store liveness, SSE streaming of canned events, and
+ * findings/coverage/compliance reads.
  */
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { EventEmitter } from "node:events";
@@ -18,7 +19,6 @@ import { UiStore, isSafeEngagementId } from "../src/ui/store.js";
 import { renderMarkdown } from "../src/ui/markdown.js";
 import { startUiServer } from "../src/ui/server.js";
 import { handleLaunch } from "../src/ui/routes/engagements.js";
-import { handleAbort } from "../src/ui/routes/actions.js";
 import { handleFeed } from "../src/ui/routes/feed.js";
 import { handleFindings } from "../src/ui/routes/findings.js";
 import { handleCoverage, handleCompliance } from "../src/ui/routes/coverage.js";
@@ -157,48 +157,30 @@ describe("launch validation", () => {
   }
 });
 
-describe("abort path", () => {
-  it("calls the registered abort handle and returns 200", () => {
-    const dir = cannedEngagement("eng-abort-1", "running");
-    let reason = "";
-    store.register({ id: "eng-abort-1", dir, status: "running", startedAt: new Date().toISOString() });
-    store.setAbort("eng-abort-1", (r: string) => {
-      reason = r;
-    });
-    const res = mockRes();
-    handleAbort(store, res as never, "eng-abort-1", { reason: "test abort" });
-    assert.equal(res.status, 200);
-    assert.equal(reason, "test abort");
+describe("abort route removed (kill switch removed, operator order 2026-11-01)", () => {
+  it("POST /api/engagements/:id/abort is not routed — 404, and no abort.json is written", async () => {
+    cannedEngagement("eng-abort-gone", "running");
+    const srv = await startUiServer({ port: 0, engagementsDir: tmp });
+    try {
+      const base = `http://127.0.0.1:${srv.port}`;
+      const res = await fetch(`${base}/api/engagements/eng-abort-gone/abort`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${srv.token}`, "content-type": "application/json" },
+        body: JSON.stringify({ reason: "ui stop" }),
+      });
+      assert.equal(res.status, 404);
+      assert.equal(existsSync(join(tmp, "eng-abort-gone", "abort.json")), false, "no abort signal file may be written");
+    } finally {
+      await srv.close();
+    }
   });
 
-  it("writes abort.json for a CLI-launched engagement (not live in this process)", () => {
-    // v0.25.0 cross-process kill switch: no 409 anymore — the UI writes
-    // abort.json and the running dispatcher picks it up on its next cycle.
-    cannedEngagement("eng-abort-2", "running");
-    const res = mockRes();
-    handleAbort(store, res as never, "eng-abort-2", { reason: "ui stop" });
-    assert.equal(res.status, 200);
-    const body = JSON.parse(res.body) as { via?: string; engagementStatus?: string };
-    assert.equal(body.via, "abort.json");
-    assert.equal(body.engagementStatus, "running");
-    const marker = JSON.parse(readFileSync(join(tmp, "eng-abort-2", "abort.json"), "utf8")) as {
-      by?: string;
-      reason?: string;
-    };
-    assert.equal(marker.by, "ui-operator");
-    assert.equal(marker.reason, "ui stop");
-  });
-
-  it("404s on unknown engagement id", () => {
-    const res = mockRes();
-    handleAbort(store, res as never, "eng-nope-missing", {});
-    assert.equal(res.status, 404);
-  });
-
-  it("404s on a path-traversal id", () => {
-    const res = mockRes();
-    handleAbort(store, res as never, "../evil", {});
-    assert.equal(res.status, 404);
+  it("store liveness rides the running flag: register → live, complete → not live", () => {
+    const dir = cannedEngagement("eng-live-1", "running");
+    store.register({ id: "eng-live-1", dir, status: "running", startedAt: new Date().toISOString() });
+    assert.equal(store.get("eng-live-1")?.running, true);
+    store.complete("eng-live-1");
+    assert.equal(store.get("eng-live-1")?.running, false);
   });
 });
 

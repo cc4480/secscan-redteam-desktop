@@ -28,7 +28,6 @@ import { buildBingSearchUrl, freshnessForSince, parseBingResults, unwrapBingHref
 import { classifyResearchHost, extractQueryHosts } from "../src/research/scope.js";
 import { spillToolResult, readSpill } from "../src/tool-spill.js";
 import { TargetRateLimiter } from "../src/safety/ratelimit.js";
-import { TargetAutoHalt } from "../src/safety/autohalt.js";
 import { CredentialAttemptGuard } from "../src/safety/lockout.js";
 import type { Ctx } from "../src/context.js";
 
@@ -90,13 +89,10 @@ function researchCtx(provider: SearchProvider, opts?: { scope?: string[]; outOfS
       append: (e: AppendedEvent) => appended.push(e),
       updateState: () => undefined,
     },
-    hostKill: { aborted: false, controllers: new Set<AbortController>() },
     tier: { current: 0, declared: 0, chainSteps: new Map<string, number>() },
     safety: {
       limiter: new TargetRateLimiter({ rpsPerHost: 1000, burst: 1000 }, () => 0),
-      autoHalt: new TargetAutoHalt(),
       lockout: new CredentialAttemptGuard(),
-      killSwitchAborts: 0,
       rpsPerHost: 5,
     },
     itemLedger: new Map(),

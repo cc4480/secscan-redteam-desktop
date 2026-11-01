@@ -11,7 +11,7 @@ import { McpClient } from "../mcp.js";
 import { MsfExecutor } from "../msf/index.js";
 import { NucleiExecutor } from "../nuclei/index.js";
 import { NmapExecutor } from "../nmap/index.js";
-import { CredentialAttemptGuard, TargetAutoHalt, TargetRateLimiter, describeEnvironment, parseEnvironment, productionConfirmed, requireEstopClear, requireGraduation, resolveEffectiveRps, resolveLogRotationConfig, assertDistFresh } from "../safety/index.js";
+import { CredentialAttemptGuard, TargetRateLimiter, describeEnvironment, parseEnvironment, productionConfirmed, requireGraduation, resolveEffectiveRps, resolveLogRotationConfig, assertDistFresh } from "../safety/index.js";
 import { type VulnerabilityRegistry, loadRegistryFile, saveRegistryFile, seedRegistry } from "../registry.js";
 import { WebProber, allHostsPrivateOrLoopback } from "../prober.js";
 import { activeTargets } from "../targets.js";
@@ -44,18 +44,12 @@ import {
 
 import { type RunOptions } from "./run-options.js";
 
-export type { RunOptions, OperatorAbortHandle } from "./run-options.js";
+export type { RunOptions } from "./run-options.js";
 
 export async function runEngagement(input: EngagementInput, opts: RunOptions = {}): Promise<EngagementResult> {
   // Stale compiled dist/ is a silent-safety bug (an old model policy running after a src-only change). Fail fast — before any target touch.
   assertDistFresh();
   const config = resolveConfig(process.env, opts);
-  // Q-ESTOP-APP fleet pause sentinel: checked once, at launch, immediately
-  // after config resolution and before any validation or engagement state.
-  // An engaged sentinel refuses the launch with a typed EstopEngagedError;
-  // an engagement already running is never re-checked and finishes
-  // normally. Resume = delete the sentinel file; there is no override.
-  requireEstopClear(config.estopPaths);
   const deps = opts.deps ?? {};
 
   if (!input.target) throw new Error("[runner] target is required");
@@ -142,11 +136,9 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
     nucleiExecutor: deps.nucleiExecutor ?? new NucleiExecutor(),
     nmapExecutor: deps.nmapExecutor ?? new NmapExecutor(),
     nuclei: { templateExecutions: 0, templatesRun: 0, findings: 0 },
-    hostKill: { aborted: false, controllers: new Set() },
     // v0.13.0 safety case: mechanical protections, armed from engagement start.
     safety: {
       limiter: new TargetRateLimiter({ rpsPerHost: rps, disabled: config.testMode }),
-      autoHalt: new TargetAutoHalt(),
       // Q-LOCKOUT: the credential-attempt interlock, armed from engagement
       // start with the operator-declared lockout policy (defaults: threshold
       // 5, campaign ceiling 25, opaque runs 1/host — see phases/config.ts).
@@ -159,7 +151,6 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
       productionConfirmed: prodConfirmed,
       rpsPerHost: rps,
       productionCapApplied,
-      killSwitchAborts: 0,
     },
     // v0.17.0 accountability: graduated autonomy, mechanically enforced.
     tier: { current: tier, declared: tier, chainSteps: new Map() },
@@ -206,38 +197,10 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
   // the engagement runs. Registered here — before any agent acts — so the tools
   // are reachable for the whole live window, and withdrawn in the finally below
   // so a finished engagement reports "not running" rather than serving a stale
-  // context whose executors and kill switch no longer belong to anything.
+  // context whose executors no longer belong to anything.
   registerLive(engagementId, ctx);
 
   events.append({ phase: "authorize", actor: "runner", action: "engagement_start", target: input.target, result: `Mode=${input.mode.toUpperCase()} env=${describeEnvironment(environment, prodConfirmed)} tier=${describeTier(tier)} rate_limit=${rps}rps/host objective="${input.objective}" scope=[${hosts.join(", ")}] registry=${registry.confirmed.length} confirmed / ${registry.killed.length} killed entries loaded` });
-  // v0.22.0 UI kill switch: hand the operator abort handle to whoever is
-  // driving this engagement (the UI server registers it for the kill-switch
-  // button). Fires synchronously here — before any agent acts — so the
-  // handle is always available while the engagement is live.
-  if (opts.onCtxReady) {
-    opts.onCtxReady({
-      abort: (reason: string) => {
-        ctx.hostKill.aborted = true;
-        for (const c of ctx.hostKill.controllers) {
-          try {
-            c.abort();
-          } catch {
-            /* best effort */
-          }
-        }
-        ctx.hostKill.controllers.clear();
-        ctx.safety.killSwitchAborts++;
-        ctx.events.append({
-          phase: ctx.events.snapshot.phase,
-          // Actor "coordinator": the kill-switch abort carries coordinator-level
-          // authority; the result records that it came from the operator console.
-          actor: "coordinator",
-          action: "abort_engagement",
-          result: `ABORTED by operator: ${reason.slice(0, 500)}`,
-        });
-      },
-    });
-  }
   // v0.15.0: Slack lifecycle — engagement started (best-effort, never blocking).
   void fireSlack(ctx, { kind: "started" });
 
@@ -320,7 +283,7 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
     events.append({ phase: "halted", actor: "runner", action: "engagement_halted", result: reason });
     void fireSlack(ctx, { kind: "halted", reason });
     // A halt is exactly when the zero-disruption record matters most (5xx
-    // auto-halt, kill switch, aborted sign-off). Still emit the mechanical
+    // aborted sign-off). Still emit the mechanical
     // accountability artifacts — safety manifest, item verdicts, proof
     // bundles, partial report — WITHOUT re-running the reporter LLM (it could
     // re-hit the same cap). Defensive: a failure here must never mask the halt.

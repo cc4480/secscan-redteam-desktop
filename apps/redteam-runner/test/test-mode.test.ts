@@ -25,7 +25,6 @@ import { authorizePhase, TEST_MODE_ATTESTATION } from '../src/phases/authorize.j
 import { techniqueAllowed } from '../src/gate.js'
 import { TargetRateLimiter } from '../src/safety/ratelimit.js'
 import { CredentialAttemptGuard } from '../src/safety/lockout.js'
-import { TargetAutoHalt } from '../src/safety/autohalt.js'
 import { checkMsfModule, checkMsfPayload } from '../src/msf/policy.js'
 import { dispatchTool } from '../src/dispatch/router.js'
 import type { Ctx } from '../src/context.js'
@@ -145,7 +144,7 @@ interface ExecResult {
 
 const FAIL_SSH: ExecResult = { summary: 'ssh {host} failed: Permission denied (password)', ok: false }
 
-/** Modeled on test/lockout-dispatch.test.ts (real guard/limiter/auto-halt, stubbed executor). */
+/** Modeled on test/lockout-dispatch.test.ts (real guard/limiter, stubbed executor). */
 function fakeCtx(testMode: boolean) {
   const appended: Array<{ action: string; result: string; target?: string }> = []
   const sshCommands: string[] = []
@@ -161,9 +160,8 @@ function fakeCtx(testMode: boolean) {
       engagementId: 'eng-test-mode-test',
       append: (e: { action: string; result: string; target?: string }) => appended.push(e),
     },
-    hostKill: { aborted: false, controllers: new Set<AbortController>() },
     tier: { current: 2, declared: 2, chainSteps: new Map<string, number>() },
-    safety: { limiter, autoHalt: new TargetAutoHalt(), lockout: guard, killSwitchAborts: 0, rpsPerHost: 5 },
+    safety: { limiter, lockout: guard, rpsPerHost: 5 },
     itemLedger: new Map(),
     opsecCooldown: new Set<string>(),
     coverage: new Set<string>(),

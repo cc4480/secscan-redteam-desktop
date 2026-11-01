@@ -1,7 +1,6 @@
 /**
  * Planning phase (v0.19.0 refactor — extracted from phases.ts).
  */
-import { ABORT_TOOL } from "../tools.js";
 import { type Ctx } from "../context.js";
 import { type PlanStep } from "../types.js";
 import { agentLoop, promptCtx } from "../agents.js";
@@ -26,7 +25,7 @@ export async function planPhase(ctx: Ctx, critique?: string): Promise<void> {
     coordinatorPrompt(promptCtx(ctx)),
     `Authorization is proven for ${ctx.domain} (${ctx.verificationProof}). Produce the operation plan as JSON now: { "adversaryProfile": "...", "steps": [{ "phase": "recon|exploit", "attackId": "Txxxx", "description": "...", "stealthNote": "..." }] }.` +
       (critique ? `\n\nCOMMANDER REDIRECT on the previous plan: ${critique}. Revise the plan accordingly.` : ""),
-    [ABORT_TOOL],
+    [],
     4,
     // Q-STRUCT A3: same adoption as directive — the plan text is parsed as
     // JSON below, so the loop runs under object mode.

@@ -1,5 +1,5 @@
 /**
- * Runner bookkeeping tools: registry, target map, findings, verdicts, abort.
+ * Runner bookkeeping tools: registry, target map, findings, verdicts.
  */
 import type { JsonSchemaTool } from '@secscan/redteam-llm-router'
 
@@ -111,17 +111,6 @@ export const RECORD_ITEM_VERDICT_TOOL: JsonSchemaTool = {
     required: ['batteryItem', 'verdict', 'evidence'],
   },
 }
-export const ABORT_TOOL: JsonSchemaTool = {
-  name: 'abort_engagement',
-  description:
-    'COORDINATOR ONLY. Abort the engagement immediately. Call on any stop condition, ROE violation, detection of an auth-gate bypass attempt, or production-impact signal. Arg: reason.',
-  parameters: {
-    type: 'object',
-    properties: { reason: { type: 'string' } },
-    required: ['reason'],
-  },
-}
-
 export const READ_SPILL_TOOL: JsonSchemaTool = {
   name: 'read_spill',
   description:

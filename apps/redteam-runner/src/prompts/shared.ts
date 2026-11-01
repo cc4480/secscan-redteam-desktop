@@ -86,7 +86,7 @@ export function roeBlock(ctx: PromptContext): string {
   ]
   if (ctx.testMode) {
     lines.push(
-      '- TEST MODE (operator order, REDTEAM_TEST_MODE): the mechanical restraints of the runner are bypassed for this test engagement — ownership verification, tier enforcement, the credential lockout interlock, rate limiting, the variant cap, and the built-in technique exclusions — and every bypass is recorded in the engagement log. The operator ROE exclusions listed above still bind, as do scope, the kill switch, and the stop conditions.',
+      '- TEST MODE (operator order, REDTEAM_TEST_MODE): the mechanical restraints of the runner are bypassed for this test engagement — ownership verification, tier enforcement, the credential lockout interlock, rate limiting, the variant cap, and the built-in technique exclusions — and every bypass is recorded in the engagement log. The operator ROE exclusions listed above still bind, as do scope and the out-of-scope deny list.',
     )
   }
   if (ctx.roe.blackoutWindows?.length) {

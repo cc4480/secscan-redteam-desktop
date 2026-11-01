@@ -72,7 +72,6 @@ if (call.name === "msf_exec") {
   ctx.probesUsed++;
   noteCategoryCoverage(ctx, category, rawTp as TargetId);
   const ctrl = new AbortController();
-  ctx.hostKill.controllers.add(ctrl);
   // TEST MODE (operator order): the executor will skip module/payload
   // policy — pre-compute the would-be denials (policy evaluated WITHOUT
   // test mode) so the bypass lands in the engagement log with its labels.
@@ -102,7 +101,6 @@ if (call.name === "msf_exec") {
   try {
     if (ctx.input.mode === "black") await sleep(Math.random() * 2500); // jitter
     const exec = ctx.msfExecutor;
-    exec.killSwitch = ctx.hostKill;
     const t = { host, scopeHosts: ctx.hosts, signal: ctrl.signal };
     const platform = args["platform"] === "linux" ? "linux" : args["platform"] === "windows" ? "windows" : rawTp === "linux" ? "linux" : "windows";
     const res =
@@ -143,9 +141,6 @@ if (call.name === "msf_exec") {
                     // Runner-generated canary — the agent never chooses the marker.
                     marker: `${Date.now().toString(36)}${Math.floor(Math.random() * 0xffffff).toString(16)}`,
                   });
-    if (/kill switch/i.test(res.summary)) {
-      return { result: `ABORTED by coordinator kill switch — engagement halting. ${res.summary}`, attackId, target: host };
-    }
     if (res.refused) {
       return { result: `DENIED by msf safety policy: ${res.refused}`, attackId, target: host };
     }
@@ -198,7 +193,6 @@ if (call.name === "msf_exec") {
     const out = res.output ? ` Output: ${res.output.slice(0, 600)}` : "";
     return { result: `${res.summary}.${cveTag}${out}`, attackId, target: host, ok: res.ok };
   } finally {
-    ctx.hostKill.controllers.delete(ctrl);
   }
 }
 

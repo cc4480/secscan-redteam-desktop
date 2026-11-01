@@ -3,9 +3,9 @@
  * (spec: lockout-spec-2026-10-31.md §7.4/§7.10–7.12; pair build, Agent B).
  *
  * Drives REAL dispatchTool calls through a fake ctx carrying the REAL
- * CredentialAttemptGuard, TargetRateLimiter, and TargetAutoHalt, with the
- * host executor stubbed to canned summaries. Pins the choke-point wiring:
- * the gate sits after scope + auto-halt + the duplicate guard and before
+ * CredentialAttemptGuard and TargetRateLimiter, with the host executor
+ * stubbed to canned summaries. Pins the choke-point wiring:
+ * the gate sits after scope + the duplicate guard and before
  * limiter.acquire (a lockout refusal consumes no rate token), refusals are
  * result strings (never throws), the campaign ceiling refuses through the
  * router with a lockout_tripped event, a lockout signal trips the host
@@ -16,7 +16,6 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { dispatchTool } from '../src/dispatch/router.js'
 import { CredentialAttemptGuard } from '../src/safety/lockout.js'
-import { TargetAutoHalt } from '../src/safety/autohalt.js'
 import { TargetRateLimiter } from '../src/safety/ratelimit.js'
 import type { Ctx } from '../src/context.js'
 import type { ToolCallRequest } from '@secscan/redteam-llm-router'
@@ -53,7 +52,6 @@ function fakeCtx(opts: {
   // Frozen clock + deep burst: the limiter never sleeps in tests, and
   // `acquires` is the counter §7.10 reads.
   const limiter = new TargetRateLimiter({ rpsPerHost: 1000, burst: 1000 }, () => 0)
-  const autoHalt = new TargetAutoHalt()
   const sshQueue = [...(opts.sshResults ?? [CLEAN_SSH])]
   const smbQueue = [...(opts.smbResults ?? [CLEAN_SSH])]
   const next = (q: ExecResult[], host: string): ExecResult => {
@@ -68,9 +66,8 @@ function fakeCtx(opts: {
       engagementId: 'eng-lockout-test',
       append: (e: FakeEvents) => appended.push(e),
     },
-    hostKill: { aborted: false, controllers: new Set<AbortController>() },
     tier: { current: 2, declared: 2, chainSteps: new Map<string, number>() },
-    safety: { limiter, autoHalt, lockout: guard, killSwitchAborts: 0, rpsPerHost: 5 },
+    safety: { limiter, lockout: guard, rpsPerHost: 5 },
     itemLedger: new Map(),
     opsecCooldown: new Set<string>(),
     coverage: new Set<string>(),
@@ -84,7 +81,6 @@ function fakeCtx(opts: {
       },
     },
     hostExecutor: {
-      killSwitch: undefined,
       sshExec: async (a: { host: string; command: string }) => {
         sshCommands.push(a.command)
         return next(sshQueue, a.host)
@@ -95,7 +91,7 @@ function fakeCtx(opts: {
       },
     },
   } as unknown as Ctx
-  return { ctx, appended, sshCommands, smbCommands, probes, guard, limiter, autoHalt }
+  return { ctx, appended, sshCommands, smbCommands, probes, guard, limiter }
 }
 
 const call = (name: string, args: Record<string, unknown>): ToolCallRequest =>
@@ -151,19 +147,6 @@ describe('dispatch lockout gate — gate order (spec §7.11)', () => {
     assert.equal(guard.ledger().length, 0, 'out-of-scope calls never reach the interlock')
   })
 
-  it('an auto-halted host refuses on auto-halt, not on the interlock', async () => {
-    const host = 'app.example.com'
-    const { ctx, sshCommands, guard, limiter, autoHalt } = fakeCtx({ scope: [host], sshResults: [FAIL_SSH] })
-    for (let i = 0; i < 5; i++) autoHalt.recordOutcome(host, true)
-    assert.equal(autoHalt.isHalted(host), true)
-    const r = await dispatchTool(ctx, 'exploiter', 'exploit', sshCall(host, 1))
-    assert.match(r.result, /HALTED: target app\.example\.com was auto-halted/)
-    assert.doesNotMatch(r.result, /lockout interlock/)
-    assert.equal(sshCommands.length, 0)
-    assert.equal(limiter.acquires, 0)
-    assert.equal(guard.totalFailures(), 0)
-    assert.equal(guard.ledger().length, 0, 'the interlock was never consulted')
-  })
 })
 
 describe('dispatch lockout gate — campaign ceiling (spec §7.4, through the router)', () => {

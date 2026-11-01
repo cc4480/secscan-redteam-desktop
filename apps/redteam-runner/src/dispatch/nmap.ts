@@ -2,8 +2,8 @@
  * Nmap bridge tool handler: nmap_exec (v0.31.0).
  *
  * Mirrors the nuclei_exec dispatcher shape: ROE technique check, explicit
- * targetProfile pinning (windows|linux, never inferred), kill-switch controller
- * registration, coverage counting.
+ * targetProfile pinning (windows|linux, never inferred), per-call abort
+ * signal, coverage counting.
  *
  * Two deliberate differences from nuclei_exec:
  *
@@ -95,7 +95,6 @@ export async function handleNmapTools(
   noteCategoryCoverage(ctx, category, rawTp as TargetId);
 
   const ctrl = new AbortController();
-  ctx.hostKill.controllers.add(ctrl);
   try {
     if (ctx.input.mode === "black") await sleep(Math.random() * 2500); // jitter
     const exec = ctx.nmapExecutor;
@@ -126,6 +125,5 @@ export async function handleNmapTools(
     }
     return { result: `${res.message}\n${lines.join("\n")}`, attackId, target: host };
   } finally {
-    ctx.hostKill.controllers.delete(ctrl);
   }
 }

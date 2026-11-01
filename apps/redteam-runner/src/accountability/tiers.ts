@@ -104,8 +104,6 @@ const TIER0_TOOLS = new Set([
   // research handler, not by the tier ladder.
   "research_search",
   "research_fetch",
-  // abort_engagement is always allowed — the kill switch must work at every tier.
-  "abort_engagement",
 ]);
 
 /** Single validated exploit steps (one command, canary marker). Never chains by itself. */

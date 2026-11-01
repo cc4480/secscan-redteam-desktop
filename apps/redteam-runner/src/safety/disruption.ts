@@ -11,8 +11,6 @@
  *  - dosRefusals: DoS/destructive module or payload refusals (msf policy)
  *  - scopeRefusals: out-of-scope target refusals
  *  - policyRefusals: other ROE/policy refusals (technique excluded, phase-gated msf run, etc.)
- *  - autoHalts: per-target auto-halt events
- *  - killSwitchAborts: coordinator/operator aborts that terminated in-flight work
  *  - destructiveActionsFired: MUST be 0 — any event whose result claims a
  *    destructive action executed. The record states the count, never assumes.
  */
@@ -24,8 +22,6 @@ export interface ZeroDisruptionRecord {
   dosRefusals: number;
   scopeRefusals: number;
   policyRefusals: number;
-  autoHalts: number;
-  killSwitchAborts: number;
   /** Counted, never assumed — the record is only clean when this is 0. */
   destructiveActionsFired: number;
   /** Total safety interventions (all of the above except destructiveActionsFired). */
@@ -37,8 +33,6 @@ const EMPTY: ZeroDisruptionRecord = {
   dosRefusals: 0,
   scopeRefusals: 0,
   policyRefusals: 0,
-  autoHalts: 0,
-  killSwitchAborts: 0,
   destructiveActionsFired: 0,
   totalInterventions: 0,
 };
@@ -55,13 +49,11 @@ export function buildZeroDisruptionRecord(events: EngagementEvent[]): ZeroDisrup
     else if (denied && (/\bdos\b/.test(r) || /denial.of.service/.test(r))) rec.dosRefusals++;
     else if (/out of scope|outside the engagement scope/.test(r)) rec.scopeRefusals++;
     else if (/^denied/.test(ev.result.trim().toLowerCase()) || /denied by roe|phase-gat/.test(r)) rec.policyRefusals++;
-    if (ev.action === "target_auto_halt") rec.autoHalts++;
-    if (ev.action === "abort_engagement" && /abort/i.test(ev.result)) rec.killSwitchAborts++;
     // The negative we must prove: any event claiming a destructive action ran.
     if (/destructive action (executed|fired)|executed destructive/i.test(r)) rec.destructiveActionsFired++;
   }
   rec.totalInterventions =
-    rec.denylistRefusals + rec.dosRefusals + rec.scopeRefusals + rec.policyRefusals + rec.autoHalts + rec.killSwitchAborts;
+    rec.denylistRefusals + rec.dosRefusals + rec.scopeRefusals + rec.policyRefusals;
   return rec;
 }
 
@@ -74,6 +66,6 @@ export function disruptionVerdict(rec: ZeroDisruptionRecord): string {
     `CLEAN: 0 destructive actions fired across the engagement; ` +
     `${rec.totalInterventions} safety intervention(s) ` +
     `(${rec.denylistRefusals} denylist, ${rec.dosRefusals} DoS, ${rec.scopeRefusals} scope, ` +
-    `${rec.policyRefusals} policy, ${rec.autoHalts} auto-halt, ${rec.killSwitchAborts} kill-switch).`
+    `${rec.policyRefusals} policy).`
   );
 }

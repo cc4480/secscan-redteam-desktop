@@ -94,7 +94,6 @@ export type {
 } from "./compliance/index.js";
 export {
   TargetRateLimiter,
-  TargetAutoHalt,
   ScopeGuard,
   HostSet,
   classifyScopeEntry,
@@ -110,7 +109,6 @@ export {
   productionConfirmed,
   requireGraduation,
   resolveEffectiveRps,
-  isTargetDistress,
   PROTECTIONS_IN_FORCE,
   RESIDUAL_RISKS,
   SAFETY_MANIFEST_VERSION,
@@ -120,7 +118,6 @@ export type {
   ManifestInputs,
   ZeroDisruptionRecord,
   RateLimitConfig,
-  AutoHaltConfig,
   TestEnvironment,
   HostMembership,
   ScopeVerdict,

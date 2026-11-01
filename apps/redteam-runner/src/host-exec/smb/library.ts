@@ -63,7 +63,7 @@ type Smb2Client = {
 };
 
 function checkAborted(signal?: AbortSignal): void {
-  if (signal?.aborted) throw new Error("[smb] aborted by kill switch");
+  if (signal?.aborted) throw new Error("[smb] aborted by call signal");
 }
 
 /** Well-known administrative shares probed by list_shares (plus recon-supplied names). */
@@ -90,7 +90,7 @@ function withTimeout<T>(p: Promise<T>, ms: number, what: string, signal?: AbortS
     const timer = setTimeout(() => reject(new Error(`[smb] ${what} timed out after ${ms}ms`)), ms);
     const onAbort = () => {
       clearTimeout(timer);
-      reject(new Error("[smb] aborted by kill switch"));
+      reject(new Error("[smb] aborted by call signal"));
     };
     signal?.addEventListener("abort", onAbort, { once: true });
     p.then(

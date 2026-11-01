@@ -159,7 +159,7 @@ export class SocketSessions {
       });
     });
     if (!connected) {
-      const reason = s.closeReason ?? (args.signal?.aborted ? "aborted by operator (kill switch)" : `no connection within ${NET_CONNECT_TIMEOUT_MS}ms`);
+      const reason = s.closeReason ?? (args.signal?.aborted ? "aborted by call signal" : `no connection within ${NET_CONNECT_TIMEOUT_MS}ms`);
       this.destroy(s, reason);
       return { ok: false, message: `connect to ${args.host}:${args.port} failed: ${reason}` };
     }
@@ -255,7 +255,7 @@ export class SocketSessions {
     return { ok: true, message: `session ${handle} closed` };
   }
 
-  /** Close every session (engagement teardown / kill switch). */
+  /** Close every session (engagement teardown). */
   closeAll(): void {
     for (const s of [...this.sessions.values()]) this.destroy(s, "all sessions closed");
   }

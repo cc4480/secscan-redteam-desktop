@@ -168,7 +168,7 @@ export function buildCompliancePack(input: CompliancePackInput): CompliancePack 
     methodology: {
       approach:
         "Testing was performed by an autonomous AI agent team operating under mechanical safety rails. " +
-        "Four roles collaborate on shared operation state: the coordinator (plans the operation, owns phase sign-off gates and the kill switch), " +
+        "Four roles collaborate on shared operation state: the coordinator (plans the operation, owns phase sign-off gates), " +
         "recon (maps the attack surface), the exploiter (forms hypotheses and executes probes — each probe is one reasoning step, never a blind scan), " +
         "and the reporter (writes the client report; runner-computed facts are appended deterministically, never trusted to the model). " +
         "Coordinator sign-off is required at every phase transition (plan→recon→exploit→report). " +

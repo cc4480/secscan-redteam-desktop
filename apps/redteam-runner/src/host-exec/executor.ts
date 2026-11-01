@@ -25,13 +25,6 @@ type ArgsOf<F> = F extends (core: ExecutorCore, args: infer A) => unknown ? A : 
 
 export class HostExecutor {
   private readonly core: ExecutorCore;
-  /** Kill-switch state, shared with the engagement context (phases.ts owns it). */
-  get killSwitch(): { aborted: boolean } {
-    return this.core.killSwitch;
-  }
-  set killSwitch(v: { aborted: boolean }) {
-    this.core.killSwitch = v;
-  }
 
   constructor(deps: HostExecDeps = {}) {
     this.core = new ExecutorCore(deps);

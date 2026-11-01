@@ -2,7 +2,6 @@
  * Runner config resolution (v0.19.0 refactor — extracted from phases.ts).
  */
 import { type ResolvedRunnerConfig } from '../types.js'
-import { resolveEstopPaths } from '../safety/estop.js'
 import { MemoryError } from '../memory/errors.js'
 import { dirname, join } from 'node:path'
 
@@ -92,8 +91,6 @@ export function resolveConfig(env: NodeJS.ProcessEnv, opts: {
     // reads env only. Never logged, never persisted.
     env['QWEN_API_KEY'] = opts.qwenApiKey
   }
-  // Q-ESTOP-APP: hoisted out of the return literal because the ESTOP
-  // sentinel's primary path is defined relative to it (safety/estop.ts).
   const registryPath =
     opts.registryPath ??
     (env['REDTEAM_HOME'] ? join(env['REDTEAM_HOME'], 'engagements', 'registry.json') : join(process.cwd(), 'engagements', 'registry.json'))
@@ -129,7 +126,6 @@ export function resolveConfig(env: NodeJS.ProcessEnv, opts: {
       (env['REDTEAM_HOME'] ? join(env['REDTEAM_HOME'], 'engagements', 'live') : join(process.cwd(), 'engagements', 'live')),
     registryPath,
     memoryRoot,
-    estopPaths: resolveEstopPaths(env, { registryPath }),
     dryRunAgents: opts.dryRunAgents ?? false,
     localSandbox: opts.localSandbox ?? env['REDTEAM_LOCAL_SANDBOX'] === '1',
     testMode: opts.testMode ?? env['REDTEAM_TEST_MODE'] === '1',

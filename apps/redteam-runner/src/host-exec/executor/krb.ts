@@ -14,9 +14,6 @@ export async function krbPttImpl(core: ExecutorCore, args: {
   signal?: AbortSignal;
 }): Promise<HostExecResult> {
   const started = Date.now();
-  if (core.killSwitch.aborted) {
-    return core.refusedResult("winrm", args.host, "kill switch active — coordinator aborted; no new host executions");
-  }
   const v = validateHostTarget(args.host, args.scopeHosts);
   if (!v.ok) return core.refusedResult("winrm", args.host, v.reason);
   if (args.spn) {

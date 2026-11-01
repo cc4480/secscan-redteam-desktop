@@ -1,7 +1,7 @@
 /**
- * RunOptions + the operator abort handle (extracted from run.ts, which sat
- * at the 300-line file budget: the in-house start options — modelApiKey,
- * verifyViaService — are what pushed it over).
+ * RunOptions (extracted from run.ts, which sat at the 300-line file
+ * budget: the in-house start options — modelApiKey, verifyViaService —
+ * are what pushed it over).
  */
 import { type RunnerDeps } from "../context.js";
 
@@ -46,18 +46,4 @@ export interface RunOptions {
   /** TEST MODE. See ResolvedRunnerConfig.testMode. Env REDTEAM_TEST_MODE=1. Default false. */
   testMode?: boolean;
   deps?: RunnerDeps;
-  /**
-   * v0.22.0 UI kill switch: called with the operator abort handle once the
-   * engagement context exists (synchronously, before authorizePhase). The
-   * handle triggers the kill switch exactly as the coordinator's
-   * abort_engagement does — in-flight executions terminate, new work is
-   * refused, and the next tool dispatch throws HaltError so the engagement
-   * unwinds to "halted".
-   */
-  onCtxReady?: (handle: OperatorAbortHandle) => void;
-}
-
-/** Operator abort handle handed to the UI server (v0.22.0). */
-export interface OperatorAbortHandle {
-  abort: (reason: string) => void;
 }

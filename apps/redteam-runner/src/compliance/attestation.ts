@@ -67,7 +67,7 @@ export function renderAttestationLetter(input: AttestationInput): string {
   L.push(``);
   L.push(`Testing was performed by an autonomous AI agent team (coordinator, recon, exploiter, reporter roles) `);
   L.push(`under mechanical safety rails: exact-hostname scope enforcement, destructive-command denylists, `);
-  L.push(`Secure Vault credential handling with redaction, per-probe timeouts, a coordinator kill switch, and full audit logging. `);
+  L.push(`Secure Vault credential handling with redaction, per-probe timeouts, and full audit logging. `);
   L.push(`Phase order: authorize (server-authoritative ownership proof) → plan → recon → exploit → report, `);
   L.push(`with coordinator sign-off required at every phase transition. Every action carries a MITRE ATT&CK technique ID.`);
   L.push(``);

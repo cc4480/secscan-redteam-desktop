@@ -4,7 +4,7 @@
  * raw output into the engagement evidence store.
  *
  * The perimeter is the session perimeter (executor/session-ops.ts):
- * kill switch + exact scope preflight, runner-issued handle bound to the
+ * exact scope preflight, runner-issued handle bound to the
  * exploited host, post modules limited to the policy allowlist and
  * pinned to the open session. The tool result carries counts, types, the
  * evidence reference and a sha256 — the raw material never enters the
@@ -118,7 +118,7 @@ export async function credentialDump(
           ok: false,
           transport: "msf",
           host: args.host,
-          summary: "msf credential dump ABORTED by kill switch (console destroyed) — nothing sealed",
+          summary: "msf credential dump ABORTED by call signal (console destroyed) — nothing sealed",
           output: "",
           ms: Date.now() - started,
         };

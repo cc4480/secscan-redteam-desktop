@@ -2,8 +2,7 @@
  * MsfExecutor — the runner's Metasploit bridge, behind the safety core.
  *
  * Preflight order (mirrors host-exec/executor.ts):
- *   1. kill-switch check (refuse new work when the coordinator aborted)
- *   2. ROE scope check (exact hostname match, fail closed, before any packet)
+ *  *   2. ROE scope check (exact hostname match, fail closed, before any packet)
  *   3. module/payload policy (dos + destructive modules refused; generic
  *      single-command payloads run the runner-built canary marker, which
  *      additionally passes the destructive denylist; Meterpreter payloads
@@ -11,7 +10,7 @@
  *   4. credential resolution (REDTEAM_MSFRPC_* env/Secure Vault only, fail
  *      fast with setup instructions)
  *   5. execution with timeout + abort signal; the console is destroyed on
- *      abort (that IS the kill switch for a running module)
+ *      abort (the call signal is what stops a running module)
  *   6. session hygiene: a generic-payload validation run must not leave
  *      sessions behind — any session that wasn't there before is stopped
  *      immediately. A Meterpreter-payload run is the one exception (W8):

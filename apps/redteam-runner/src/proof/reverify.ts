@@ -194,23 +194,18 @@ export interface ReplayerOptions {
   /** Exact in-scope hosts. The executors enforce this mechanically. */
   scope: string[]
   env?: NodeJS.ProcessEnv
-  killSwitch?: { aborted: boolean }
   perStepTimeoutMs?: number
 }
 
 /**
  * Production StepRunner: replays bundle steps through the real executors.
  * Scope is enforced by the executors themselves (fail closed); credentials
- * resolve fresh from env; the kill switch aborts via SIGINT wiring in the CLI.
+ * resolve fresh from env.
  */
 export function createReplayer(opts: ReplayerOptions): StepRunner {
   const env = opts.env ?? process.env
   const hostExec = new HostExecutor({ env })
   const msfExec = new MsfExecutor({ env })
-  if (opts.killSwitch) {
-    hostExec.killSwitch = opts.killSwitch
-    msfExec.killSwitch = opts.killSwitch
-  }
   const scope = opts.scope
 
   return async (step: PocStep, marker: string): Promise<StepRunResult> => {

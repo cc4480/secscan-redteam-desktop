@@ -5,7 +5,7 @@
  * libraries. The bridge gives the runner the same reach — ProjectDiscovery
  * Nuclei's ~10,000+ community templates, resolved at runtime, never
  * hardcoded — with the runner's safety discipline: scope checks, dos
- * exclusion, kill switch, audit, honest counting (template executions are
+ * exclusion, audit, honest counting (template executions are
  * reported separately from the 418 intents, never merged).
  */
 export {

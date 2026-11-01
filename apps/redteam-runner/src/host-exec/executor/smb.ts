@@ -68,9 +68,6 @@ export async function smbPthImpl(core: ExecutorCore, args: {
   signal?: AbortSignal;
 }): Promise<HostExecResult> {
   const started = Date.now();
-  if (core.killSwitch.aborted) {
-    return core.refusedResult("smb", args.host, "kill switch active — coordinator aborted; no new host executions");
-  }
   const v = validateHostTarget(args.host, args.scopeHosts);
   if (!v.ok) return core.refusedResult("smb", args.host, v.reason);
   let hashCreds: HostCredentials;

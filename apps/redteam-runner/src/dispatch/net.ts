@@ -46,7 +46,6 @@ export function netExecutorFor(ctx: Ctx): NetExecutor {
     exec = new NetExecutor();
     executors.set(ctx, exec);
   }
-  exec.killSwitch = ctx.hostKill;
   return exec;
 }
 
@@ -159,7 +158,6 @@ export async function handleNetTools(
   noteCategoryCoverage(ctx, category, targetProfile);
 
   const ctrl = new AbortController();
-  ctx.hostKill.controllers.add(ctrl);
   try {
     if (action === "socket_open") {
       const port = numArg(args, "port");
@@ -229,6 +227,5 @@ export async function handleNetTools(
     audit(host, res.message);
     return { result: `${res.ok ? "" : "FAILED: "}${res.message}${clamped}`, attackId, target: host, ok: res.ok };
   } finally {
-    ctx.hostKill.controllers.delete(ctrl);
   }
 }

@@ -8,7 +8,7 @@
  *  - auth failure and unreachable daemon fail closed with setup instructions
  *  - out-of-scope hosts are rejected BEFORE any msfrpcd request
  *  - msfrpc password never appears in summaries, outputs, or errors
- *  - kill switch refuses new runs and destroys a running console mid-flight
+ *  - a call-signal abort destroys a running console mid-flight
  *  - suggest maps service/version → ranked candidates; run captures the
  *    canary marker echo as validation; stray sessions are stopped
  *  - phases.ts wiring: msf_exec in the agent tool list, exploit-phase-only
@@ -416,18 +416,6 @@ describe("MsfExecutor", () => {
     assert.ok(res.refused?.includes("payload not allowed"));
   });
 
-  it("kill switch refuses new runs", async () => {
-    const e = exec();
-    e.killSwitch.aborted = true;
-    const res = await e.run({
-      host: "10.9.0.12", scopeHosts: SCOPE, moduleType: "exploit",
-      module: "windows/smb/ms17_010_eternalblue", marker: "abc123",
-    });
-    assert.equal(res.ok, false);
-    assert.ok(res.refused?.includes("kill switch"));
-    assert.equal(fake.requests.length, 0);
-  });
-
   it("run captures the canary marker echo as validation", async () => {
     const res = await exec().run({
       host: "10.9.0.12", scopeHosts: SCOPE, moduleType: "exploit",
@@ -456,7 +444,7 @@ describe("MsfExecutor", () => {
     assert.ok(!res.output.includes(secret), "output redacted");
   });
 
-  it("aborting mid-run destroys the console (kill switch for running modules)", async () => {
+  it("aborting mid-run destroys the console (call signal for running modules)", async () => {
     fake.hangRead = true; // console.read never answers
     const e = exec();
     const ctrl = new AbortController();

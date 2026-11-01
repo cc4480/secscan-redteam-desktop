@@ -3,7 +3,7 @@
  * gobuster_exec, nikto_exec.
  *
  * Same shape as the nuclei/nmap handlers: ROE technique check, explicit
- * targetProfile pinning, profile tier gate, kill-switch controller registration,
+ * targetProfile pinning, profile tier gate, per-call abort signal,
  * coverage counting.
  *
  * One difference that matters: `john_exec` is an OFFLINE tool. Its `host` is a
@@ -117,11 +117,7 @@ export async function handleXTool(
   noteCategoryCoverage(ctx, category, rawTp ? (rawTp as TargetId) : undefined);
 
   const ctrl = new AbortController();
-  ctx.hostKill.controllers.add(ctrl);
   try {
-    if (ctx.hostKill.aborted) {
-      return { result: "ABORTED by operator (kill switch) — no process started.", attackId, target: host };
-    }
     // Resolve through the shared resolver (arg → REDTEAM_WORDLIST → bundled
     // assets → operator override). A missing list is a returned setup message,
     // never one machine's hardcoded absolute path — the old default made every
@@ -157,6 +153,5 @@ export async function handleXTool(
       target: host,
     };
   } finally {
-    ctx.hostKill.controllers.delete(ctrl);
   }
 }

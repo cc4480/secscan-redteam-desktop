@@ -59,11 +59,9 @@ export function renderCompliancePackMarkdown(pack: CompliancePack): string {
     L.push(``);
     L.push(`- Scope allowlist: ${s.scopeAllowlist.join(", ") || "(empty)"}`);
     L.push(`- Rate limit: ${s.rateLimit.rpsPerHost} requests/sec per host (burst ${s.rateLimit.burst})${s.rateLimit.productionCapApplied ? " — production cap applied mechanically" : ""}`);
-    L.push(`- Kill switch: armed; aborts this engagement: ${s.killSwitch.aborts}`);
     L.push(`- Destructive denylist: ${s.destructiveDenylist.patternCount} patterns (${s.destructiveDenylist.version})`);
     L.push(`- Payload policy: ${s.payloadPolicy} · DoS policy: ${s.dosPolicy}`);
     L.push(`- PII redaction: enabled (${s.piiRedaction.patterns.join(", ")})`);
-    L.push(`- Auto-halt: ${s.autoHalt.consecutiveThreshold} consecutive distress outcomes or ${Math.round(s.autoHalt.windowFailureRate * 100)}% distress over last ${s.autoHalt.windowSize} → target halted; halted targets: ${s.autoHalt.haltedTargets.join(", ") || "(none)"}`);
     L.push(`- Human override: ${s.humanOverride.operator}. ${s.humanOverride.abortPath}`);
     L.push(``);
     L.push(`### Zero-disruption record (derived from events.jsonl)`);

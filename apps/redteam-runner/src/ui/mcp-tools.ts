@@ -14,7 +14,7 @@ import type { ServerResponse } from "node:http";
 import { handleList, handleDetail, handleLaunch } from "./routes/engagements.js";
 import { handleFindings, handleProof } from "./routes/findings.js";
 import { handleCoverage, handleCompliance } from "./routes/coverage.js";
-import { handleAbort, handleEscalate, handleReverify, handleWatchProfiles, handleWatchTrigger } from "./routes/actions.js";
+import { handleEscalate, handleReverify, handleWatchProfiles, handleWatchTrigger } from "./routes/actions.js";
 import { engagementDir, type UiStore } from "./store.js";
 import { ENGAGEMENT_TOOLS } from "./engagement-tools.js";
 import { LOCAL_TOOLS } from "./local-tools.js";
@@ -205,21 +205,6 @@ const COCKPIT_TOOLS: ToolDef[] = [
     description: "Compliance pack mapping (PCI DSS v4.0.1 Req 11.4 / SOC 2 CC6.1, CC6.6, CC7.1 / ISO 27001:2022 A.8.8).",
     inputSchema: ID_ONLY(),
     run: byId(handleCompliance),
-  },
-  {
-    name: "abort_engagement",
-    description: "Kill switch. Stops a live run; works on CLI-launched runs too.",
-    inputSchema: {
-      type: "object",
-      properties: { id: req("Engagement id"), reason: str("Why the run is being stopped") },
-      required: ["id"],
-      additionalProperties: false,
-    },
-    run: async (store, a) => {
-      const c = capture();
-      handleAbort(store, c.res, String(a["id"]), a);
-      return c.result();
-    },
   },
   {
     name: "escalate",

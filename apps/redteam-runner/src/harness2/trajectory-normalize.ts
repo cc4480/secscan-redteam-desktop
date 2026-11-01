@@ -106,7 +106,6 @@ const TOOL_NAMES: ReadonlySet<string> = new Set([
   'record_killed',
   'record_item_verdict',
   'variant_list',
-  'abort_engagement',
 ])
 
 /**

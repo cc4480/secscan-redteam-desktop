@@ -2,8 +2,8 @@
  * net_exec — dispatch integration suite.
  *
  * Drives REAL dispatchTool calls through a fake ctx carrying the REAL
- * TargetRateLimiter / TargetAutoHalt / CredentialAttemptGuard (the
- * lockout-dispatch template), with a real NetExecutor bound via the
+ * TargetRateLimiter / CredentialAttemptGuard (the lockout-dispatch
+ * template), with a real NetExecutor bound via the
  * setNetExecutor test seam and loopback echo fixtures as the only targets.
  *
  * Pins the gate stack: the router's tier + central scope gates and the
@@ -20,7 +20,6 @@ import { dispatchTool } from '../src/dispatch/router.js'
 import { setNetExecutor } from '../src/dispatch/net.js'
 import { NetExecutor } from '../src/net/executor.js'
 import { CredentialAttemptGuard } from '../src/safety/lockout.js'
-import { TargetAutoHalt } from '../src/safety/autohalt.js'
 import { TargetRateLimiter } from '../src/safety/ratelimit.js'
 import type { Ctx } from '../src/context.js'
 import type { ToolCallRequest } from '@secscan/redteam-llm-router'
@@ -60,13 +59,10 @@ function fakeCtx(opts: { scope: string[]; environment?: string; productionConfir
       append: (e: FakeEvent) => appended.push(e),
       updateState: () => {},
     },
-    hostKill: { aborted: false, controllers: new Set<AbortController>() },
     tier: { current: opts.tier ?? 2, declared: 2, chainSteps: new Map<string, number>() },
     safety: {
       limiter,
-      autoHalt: new TargetAutoHalt(),
       lockout: new CredentialAttemptGuard(),
-      killSwitchAborts: 0,
       rpsPerHost: 5,
       environment: opts.environment ?? 'staging',
       productionConfirmed: opts.productionConfirmed ?? false,

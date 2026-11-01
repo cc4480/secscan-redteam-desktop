@@ -125,12 +125,12 @@ export const regenerateTool: ToolDef = {
     }
     const st = readState(dir);
     if (!st) return { status: 404, body: { error: "unknown engagement" } };
-    if (store.get(id)?.abort || !TERMINAL_STATUSES.has(st.status)) {
+    if (store.get(id)?.running || !TERMINAL_STATUSES.has(st.status)) {
       return {
         status: 409,
         body: {
           error:
-            `engagement ${id} is ${store.get(id)?.abort ? "still running" : `not at a recorded end (status: ${st.status})`} — ` +
+            `engagement ${id} is ${store.get(id)?.running ? "still running" : `not at a recorded end (status: ${st.status})`} — ` +
             "regeneration runs on a recorded end; poll engagement_status instead",
         },
       };

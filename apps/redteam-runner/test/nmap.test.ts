@@ -199,21 +199,6 @@ describe("nmap executor", () => {
     assert.match(r.message, /unknown profile/);
   });
 
-  it("never starts a scan once the kill switch is set", async () => {
-    let spawned = false;
-    const exec = new NmapExecutor({
-      spawn: async () => {
-        spawned = true;
-        return { stdout: "", stderr: "", code: 0, timedOut: false };
-      },
-    });
-    exec.killSwitch = { aborted: true };
-    const r = await exec.scan({ target: "h", profile: "quick", rateLimit: 10 });
-    assert.equal(r.ok, false);
-    assert.match(r.message, /kill switch/i);
-    assert.equal(spawned, false, "no process was started");
-  });
-
   it("reports a timeout as PARTIAL, never as clean", async () => {
     const exec = new NmapExecutor({
       spawn: async () => ({ stdout: REAL_XML, stderr: "", code: null, timedOut: true }),

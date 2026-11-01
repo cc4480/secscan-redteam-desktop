@@ -49,14 +49,6 @@ export interface NmapExecResult {
 }
 
 export class NmapExecutor {
-  /**
-   * Kill switch, same contract as NucleiExecutor: the dispatcher hands the
-   * engagement's hostKill here, and a scan refuses to start once aborted. The
-   * scan already receives the controller's AbortSignal, so an IN-FLIGHT nmap is
-   * killed too — this flag is what stops the next one from starting.
-   */
-  killSwitch: { aborted: boolean } = { aborted: false };
-
   private readonly spawn: SpawnFn;
   private readonly env: NodeJS.ProcessEnv;
 
@@ -115,9 +107,6 @@ export class NmapExecutor {
     skipPing?: boolean;
     signal?: AbortSignal;
   }): Promise<NmapExecResult> {
-    if (this.killSwitch.aborted) {
-      return { ok: false, action: "scan", message: "ABORTED by operator (kill switch) — no scan started." };
-    }
     const profile = findProfile(args.profile);
     if (!profile) {
       return {

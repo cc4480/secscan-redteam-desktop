@@ -23,7 +23,7 @@ import { handleConsoleEngagements } from './routes/console-engagements.js'
 import { handleConsoleLayers } from './routes/console-layers.js'
 import { handleConsoleBenchmark } from './routes/console-benchmark.js'
 import { handleConsoleScope } from './routes/console-scope.js'
-import { handleAbort, handleEscalate, handleReverify, handleJob, handleWatchProfiles, handleWatchTrigger } from './routes/actions.js'
+import { handleEscalate, handleReverify, handleJob, handleWatchProfiles, handleWatchTrigger } from './routes/actions.js'
 import { json, badRequest, notFound, readJsonBody } from './routes/http.js'
 import { handleMcp } from './mcp-endpoint.js'
 import { resolveArsenalConfig } from '../arsenal/config.js'
@@ -186,10 +186,6 @@ async function route(store: UiStore, token: string, req: IncomingMessage, res: S
     if (seg[1] === 'engagements' && seg[2] && method === 'GET' && seg.length === 3) return handleDetail(store, res, decodeURIComponent(seg[2]!))
     if (seg[1] === 'engagements' && seg[2] && seg[3] === 'events' && method === 'GET' && seg.length === 4) {
       return handleFeed(store, req, res, decodeURIComponent(seg[2]!), url.searchParams)
-    }
-    if (seg[1] === 'engagements' && seg[2] && seg[3] === 'abort' && method === 'POST' && seg.length === 4) {
-      const body = await readJsonBody(req).catch(() => ({}))
-      return handleAbort(store, res, decodeURIComponent(seg[2]!), body)
     }
     if (seg[1] === 'engagements' && seg[2] && seg[3] === 'escalate' && method === 'POST' && seg.length === 4) {
       const body = await readJsonBody(req).catch(() => ({}))

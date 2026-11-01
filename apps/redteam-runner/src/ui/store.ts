@@ -1,9 +1,9 @@
 /**
  * In-memory registries for the UI server (v0.22.0).
  *
- * Engagements launched through the UI are tracked here with their abort
- * handles (kill switch). Historical engagements are listed from the
- * engagements dir on disk — the UI works even for runs started by the CLI.
+ * Engagements launched through the UI are tracked here while their runs
+ * are in flight. Historical engagements are listed from the engagements
+ * dir on disk — the UI works even for runs started by the CLI.
  */
 
 import { createReadStream, existsSync, readdirSync, readFileSync, statSync, type ReadStream } from "node:fs";
@@ -101,6 +101,7 @@ export class UiStore {
   }
 
   register(e: StoredEngagement): void {
+    e.running = true;
     this.live.set(e.id, e);
   }
 
@@ -108,18 +109,10 @@ export class UiStore {
     return this.live.get(id);
   }
 
-  setAbort(id: string, abort: (reason: string) => void): void {
-    const e = this.live.get(id);
-    if (e) {
-      e.abort = abort;
-      e.status = "running";
-    }
-  }
-
   complete(id: string): void {
     const e = this.live.get(id);
     if (e) {
-      e.abort = undefined;
+      e.running = false;
       const st = readState(e.dir);
       e.status = st?.status ?? "complete";
     }
@@ -128,7 +121,7 @@ export class UiStore {
   fail(id: string, err: unknown): void {
     const e = this.live.get(id);
     if (e) {
-      e.abort = undefined;
+      e.running = false;
       e.status = "halted";
       e.error = err instanceof Error ? err.message : String(err);
     }
@@ -157,14 +150,12 @@ export class UiStore {
           eventCount: 0,
           startedAt: e.startedAt,
           updatedAt: e.startedAt,
-          // `live` must mean RUNNING, not "has an abort handle". A finished or
-          // halted run keeps the handle it was registered with, so testing the
-          // handle alone reported live:true on a record whose own status said
-          // "halted" — contradicting get_engagement, which reads the state file
-          // and correctly says live:false. Two endpoints disagreeing about
-          // whether an engagement is running is the kind of thing an operator
-          // notices at the worst moment. A terminal status wins.
-          live: e.abort !== undefined && !TERMINAL_STATUSES.has(e.status),
+          // `live` must mean RUNNING. The running flag is cleared by
+          // complete()/fail(), and a terminal status wins regardless, so
+          // list() and get_engagement() agree about whether an engagement
+          // is still running. Two endpoints disagreeing about that is the
+          // kind of thing an operator notices at the worst moment.
+          live: e.running === true && !TERMINAL_STATUSES.has(e.status),
           ...(e.error === undefined ? {} : { error: e.error }),
         });
       }

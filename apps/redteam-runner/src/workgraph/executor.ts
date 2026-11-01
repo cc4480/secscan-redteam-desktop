@@ -7,7 +7,7 @@
  *
  *  - a subtask marked done is never re-run — the runner is only ever
  *    invoked for pending subtasks;
- *  - shouldStop is consulted between subtasks, so a stop (kill switch,
+ *  - shouldStop is consulted between subtasks, so a stop (operator stop,
  *    process kill, test) always leaves the persisted graph at a settled
  *    boundary;
  *  - resuming is just calling executeFlow again over the loaded graph.

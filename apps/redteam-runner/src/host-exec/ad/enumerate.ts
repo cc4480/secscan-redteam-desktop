@@ -92,7 +92,7 @@ export async function adEnumerate(transport: AdTransport, args: AdEnumArgs): Pro
     sections.push({ operation, summary: redact(summary), findingCount });
 
   try {
-    if (args.signal?.aborted) throw new Error("[ad] aborted by kill switch");
+    if (args.signal?.aborted) throw new Error("[ad] aborted by call signal");
     await transport.connect(url);
     const bindDn = args.creds.domain ? `${args.creds.domain}\\${args.creds.username}` : args.creds.username;
     if (!args.creds.password) throw new Error("[ad] LDAP simple bind needs REDTEAM_SMB_PASSWORD (test account password)");

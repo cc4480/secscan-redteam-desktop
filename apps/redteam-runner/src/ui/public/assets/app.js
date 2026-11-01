@@ -93,7 +93,6 @@ async function viewDetail(id) {
     <button data-tab="compliance">Compliance</button>
   </div>
   <div id="tab-body"></div>
-  ${detail.live ? `<div class="killbar"><strong>Kill switch</strong><span class="muted small">aborts in-flight work immediately</span><button class="danger" id="kill" style="margin-left:auto">Abort engagement</button></div>` : ""}
   ${detail.live ? `<div class="killbar"><strong>Autonomy tier</strong><span class="muted small">change mid-run — recorded operator approval</span><button id="escalate" style="margin-left:auto">Change tier</button></div>` : ""}`;
 
   const setTab = (tab) => {
@@ -105,19 +104,6 @@ async function viewDetail(id) {
     else if (tab === "compliance") tabCompliance(id);
   };
   $$("#dtabs button").forEach((b) => b.onclick = () => setTab(b.dataset.tab));
-  const kill = $("#kill");
-  if (kill) kill.onclick = async () => {
-    const reason = prompt("Abort reason (recorded in the audit log):", "operator abort from UI");
-    if (reason === null) return;
-    const ok = await confirmModal("Abort engagement?", "<p>This terminates in-flight executions immediately. The engagement unwinds to <strong>halted</strong>.</p>", "Abort now", true);
-    if (!ok) return;
-    try {
-      await api.post(`/api/engagements/${encodeURIComponent(id)}/abort`, { reason });
-      setTab("live");
-    } catch (err) {
-      confirmModal("Abort failed", `<p style="color:var(--red)">${esc(err.message)}</p>`, "Close", false);
-    }
-  };
   const escalateBtn = $("#escalate");
   if (escalateBtn) escalateBtn.onclick = async () => {
     const tier = prompt("New autonomy tier (0 observe · 1 validate · 2 chain):", "2");

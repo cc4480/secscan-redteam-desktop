@@ -17,7 +17,7 @@ import type { ZeroDisruptionRecord } from "./disruption.js";
 import type { ApprovalEntry, AutonomyTier } from "../accountability/index.js";
 import { TIER_NAMES, TIER_DESCRIPTIONS } from "../accountability/index.js";
 
-export const SAFETY_MANIFEST_VERSION = "v0.17.0";
+export const SAFETY_MANIFEST_VERSION = "v0.18.0";
 
 /** The mechanical protections — stated as what the RUNNER enforces, not what the agents were told. */
 export const PROTECTIONS_IN_FORCE: string[] = [
@@ -26,9 +26,7 @@ export const PROTECTIONS_IN_FORCE: string[] = [
   "DoS/resource-exhaustion exclusion (T1499) in every mode — DoS modules and destructive payloads refused mechanically",
   "payload policy (generic payloads execute only the runner-built benign canary marker; a Meterpreter session payload opens only as the follow-through of a validated exploit run — Tier 2, exploit phase, marker proven through the session — and credential dumps run only the curated post-module allowlist, raw output sealed to the evidence store)",
   "per-target rate limiting (token bucket, stated rps/host, mechanically enforced)",
-  "per-target auto-halt (distress threshold → target halted, never hammered)",
   "credential-attempt lockout interlock (per host×protocol failed-validation budget of lockout threshold − 1, enforced in the dispatcher before the rate limiter; lockout signals trip the host; opaque multi-attempt runs call-budgeted; campaign ceiling on total failed validations; resume only via a recorded operator decision)",
-  "kill switch (coordinator/operator abort terminates in-flight executions across all parallel tasks; new work refused)",
   "credential hygiene (env/Secure Vault only; redacted from logs, errors, events, reports)",
   "PII redaction (tool outputs scrubbed before the audit log, agent context, evidence, and reports)",
   "full audit log (every action → events.jsonl with ATT&CK ID; the zero-disruption record is derived from it)",
@@ -45,7 +43,7 @@ export const RESIDUAL_RISKS: string[] = [
   "A validated exploit still executes a benign command on the target host — the canary marker is harmless by construction, but it IS code execution on the client's infrastructure.",
   "A validated exploit run may open an interactive Meterpreter session on the target host (Tier 2, exploit phase): session commands execute on the client's infrastructure and their full responses are written to the engagement audit log, and credential dumps collect the target's stored credential material into the sealed evidence store (0600 + sha256 manifest) — dump results and reports carry counts, types, and references only, never raw secrets.",
   "Rate limits bound request volume, not request cleverness — a single well-formed request can still trigger an expensive code path on the target (e.g. a heavy report query).",
-  "Auto-halt reacts to distress signals; a target that degrades silently (slow responses, no errors) may not trip it before the engagement's own caps do.",
+  "No stop signal can halt a run in flight (the kill-switch class was removed on the operator's order, 2026-11-01): a run ends by completing, by its own mechanical caps (action and duration budgets), or by the operator terminating the runner process. There is no in-band abort.",
   "PII redaction is pattern-based (email, phone, SSN-like, card-like with Luhn) — novel PII shapes, or PII inside binary/encoded blobs, may pass through.",
   "The destructive denylist is a backstop over command TEXT — novel destructive formulations the patterns don't match are refused only if the agent prompts hold.",
   "Credential material lives in the operator's environment/Secure Vault — the runner redacts it everywhere it can see, but cannot protect the operator's own handling of it.",
@@ -65,7 +63,6 @@ export interface SafetyManifest {
     throttledMs: number;
     acquires: number;
   };
-  killSwitch: { armed: boolean; aborts: number };
   destructiveDenylist: { version: string; patternCount: number; patterns: string[] };
   payloadPolicy: "canary-or-gated-session";
   dosPolicy: "excluded-always";
@@ -75,13 +72,6 @@ export interface SafetyManifest {
     responseExpectation: string;
   };
   piiRedaction: { enabled: boolean; patterns: string[] };
-  autoHalt: {
-    consecutiveThreshold: number;
-    windowSize: number;
-    windowFailureRate: number;
-    haltedTargets: string[];
-    haltCount: number;
-  };
   /**
    * Q-LOCKOUT: the credential-attempt interlock's numbers for this
    * engagement — declared threshold, per-key failed validations, opaque
@@ -115,9 +105,7 @@ export interface ManifestInputs {
   productionCapApplied: boolean;
   throttledMs: number;
   acquires: number;
-  killSwitchAborts: number;
   operator: string;
-  autoHalt: { consecutiveThreshold: number; windowSize: number; windowFailureRate: number; haltedTargets: string[]; haltCount: number };
   /**
    * Q-LOCKOUT: the guard's manifest data (ctx.safety.lockout.manifestData()).
    * Optional for backward compatibility — absent means no guard was wired
@@ -154,7 +142,6 @@ export function buildSafetyManifest(input: ManifestInputs): SafetyManifest {
       throttledMs: input.throttledMs,
       acquires: input.acquires,
     },
-    killSwitch: { armed: true, aborts: input.killSwitchAborts },
     destructiveDenylist: {
       version: SAFETY_MANIFEST_VERSION,
       patternCount: destructiveDenyList().length,
@@ -164,12 +151,11 @@ export function buildSafetyManifest(input: ManifestInputs): SafetyManifest {
     dosPolicy: "excluded-always",
     humanOverride: {
       operator: input.operator,
-      abortPath: "abort_engagement tool (coordinator) → kill switch aborts every registered execution controller; in-flight host/msf work terminates, new work is refused. The console operator can trigger it at any time.",
+      abortPath: "none — no in-band abort exists (the kill-switch class was removed on the operator's order, 2026-11-01). The operator stops a run by terminating the runner process.",
       responseExpectation:
-        "The operator who launched the engagement is expected to be reachable for its duration (24/7 override for scheduled multi-day runs — see docs/safety.md). Abort takes effect on the next dispatch boundary, typically seconds.",
+        "The operator who launched the engagement is expected to be reachable for its duration (24/7 for scheduled multi-day runs — see docs/safety.md). Process termination is immediate and total; there is no graceful in-band stop.",
     },
     piiRedaction: { enabled: true, patterns: piiPatternLabels() },
-    autoHalt: input.autoHalt,
     lockout: input.lockout ?? {
       threshold: DEFAULT_LOCKOUT_CONFIG.lockoutThreshold,
       failureLimit: Math.max(1, DEFAULT_LOCKOUT_CONFIG.lockoutThreshold - 1),
@@ -208,11 +194,9 @@ export function renderSafetyManifestMarkdown(m: SafetyManifest): string {
   L.push(`## Configuration this engagement`);
   L.push(`- Scope allowlist: ${m.scopeAllowlist.join(", ") || "(empty)"}`);
   L.push(`- Rate limit: ${m.rateLimit.rpsPerHost} rps/host (burst ${m.rateLimit.burst})${m.rateLimit.productionCapApplied ? " — production cap applied" : ""}; throttled ${m.rateLimit.throttledMs}ms total across ${m.rateLimit.acquires} acquires`);
-  L.push(`- Kill switch: armed; aborts this engagement: ${m.killSwitch.aborts}`);
   L.push(`- Destructive denylist: ${m.destructiveDenylist.patternCount} patterns (${m.destructiveDenylist.version})`);
   L.push(`- Payload policy: ${m.payloadPolicy} · DoS policy: ${m.dosPolicy}`);
   L.push(`- PII redaction: enabled (${m.piiRedaction.patterns.join(", ")})`);
-  L.push(`- Auto-halt: ${m.autoHalt.consecutiveThreshold} consecutive distress or ${Math.round(m.autoHalt.windowFailureRate * 100)}% over last ${m.autoHalt.windowSize} → target halted; halted: ${m.autoHalt.haltedTargets.join(", ") || "(none)"}`);
   L.push(`- Lockout interlock: declared lockout threshold ${m.lockout.threshold} → failed-validation budget ${m.lockout.failureLimit} per host×protocol class; total failed validations ${m.lockout.totalFailures}/${m.lockout.totalFailureCeiling} (campaign ceiling)${m.lockout.campaignTripped ? " — CAMPAIGN TRIPPED" : ""}; tripped hosts: ${m.lockout.trippedHosts.map((t) => t.host).join(", ") || "(none)"}; opaque runs used: ${m.lockout.opaqueRuns.map((o) => `${o.host}×${o.used}`).join(", ") || "(none)"}`);
   L.push(`- Human override: ${m.humanOverride.operator} — ${m.humanOverride.abortPath}`);
   L.push(`- Autonomy tier: Tier ${m.autonomy.tier} (${m.autonomy.tierName}) — ${m.autonomy.tierDescription}`);
@@ -232,8 +216,6 @@ export function renderSafetyManifestMarkdown(m: SafetyManifest): string {
   L.push(`| DoS refusals | ${z.dosRefusals} |`);
   L.push(`| Out-of-scope refusals | ${z.scopeRefusals} |`);
   L.push(`| Other policy refusals | ${z.policyRefusals} |`);
-  L.push(`| Per-target auto-halts | ${z.autoHalts} |`);
-  L.push(`| Kill-switch aborts | ${z.killSwitchAborts} |`);
   L.push(`| **Destructive actions fired** | **${z.destructiveActionsFired}** |`);
   L.push(``);
   L.push(`## Residual risks (stated honestly — a safety case with none is marketing)`);

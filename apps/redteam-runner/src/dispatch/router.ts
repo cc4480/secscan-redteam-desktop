@@ -3,14 +3,14 @@
  *
  * dispatchToolInner (dispatch/handlers.ts) routes each tool call to its
  * handler module in the original order. dispatchTool wraps it with
- * the v0.13.0 safety wrapper: rate limiting + per-target auto-halt +
- * autonomy-tier enforcement, all mechanical.
+ * the v0.13.0 safety wrapper: rate limiting + autonomy-tier
+ * enforcement, all mechanical.
  */
 import { type ActorRole, type EngagementPhase } from "../types.js";
-import { type Ctx, HaltError } from "../context.js";
+import { type Ctx } from "../context.js";
 import { type ToolCallRequest } from "@secscan/redteam-llm-router";
 import { checkTierAllows, recordExploitStep, readTierFile, TIER_NAMES } from "../accountability/index.js";
-import { distressEscalationResult, isTargetDistress, readAbortFile, consumeAbortFile, classifyCredentialAttempt, classifyAuthOutcome, lockoutGuardFor, type CredentialClassification } from "../safety/index.js";
+import { classifyCredentialAttempt, classifyAuthOutcome, lockoutGuardFor, type CredentialClassification } from "../safety/index.js";
 import { type DispatchResult } from "./types.js";
 import { TOOL_TIMEOUT } from "./timeout.js";
 import { recordItemAttempt } from "./verdicts.js";
@@ -47,62 +47,7 @@ export function refreshTierFromDisk(ctx: Ctx, phase: EngagementPhase): void {
   });
 }
 
-/**
- * v0.25.0: cross-process kill switch. The UI cannot reach into a
- * CLI-launched engagement's process, so it writes abort.json into the
- * engagement dir; the dispatcher checks for it here on every dispatch
- * cycle. When the marker is found, the abort sequence is identical to the
- * in-process kill switch: set the flag, terminate every in-flight
- * execution via the registered controllers (shared ctx — covers parallel
- * tasks), count it for the safety manifest, log abort_engagement, consume
- * the marker (the audit event is the durable record), and throw HaltError
- * so the run unwinds to "halted". Exported for tests; dispatchTool calls
- * it. A missing or corrupt file means "no abort requested" — never a
- * crash, never a spurious abort.
- */
-export function checkAbortSignal(ctx: Ctx, phase: EngagementPhase): void {
-  if (ctx.hostKill.aborted) return;
-  const sig = readAbortFile(ctx.events.dir);
-  if (!sig) return;
-  ctx.hostKill.aborted = true;
-  for (const c of ctx.hostKill.controllers) {
-    try {
-      c.abort();
-    } catch {
-      /* best effort */
-    }
-  }
-  ctx.hostKill.controllers.clear();
-  ctx.safety.killSwitchAborts++;
-  ctx.events.append({
-    phase,
-    actor: "coordinator",
-    action: "abort_engagement",
-    result:
-      `ABORTED by operator: ${sig.reason ?? "operator abort"} ` +
-      `(cross-process kill switch; requested ${sig.requestedAt}${sig.by ? ` by ${sig.by}` : ""})`,
-  });
-  consumeAbortFile(ctx.events.dir);
-  throw new HaltError("aborted by operator (kill switch)");
-}
-
 export async function dispatchTool(ctx: Ctx, role: ActorRole, phase: EngagementPhase, call: ToolCallRequest): Promise<DispatchResult> {
-  // v0.22.0 UI kill switch: the operator abort is mechanically identical to
-  // the coordinator's abort_engagement. In-flight work is already dead
-  // (controllers aborted when the flag was set); the next tool call throws
-  // HaltError so the engagement unwinds to "halted" instead of spinning on
-  // preflight refusals. Nothing sets hostKill.aborted and continues — the
-  // coordinator's own abort sets it and throws immediately after.
-  if (ctx.hostKill.aborted) {
-    throw new HaltError("aborted by operator (kill switch)");
-  }
-  // v0.25.0 cross-process kill switch: a CLI-launched engagement has no
-  // abort handle inside the UI server process, so the UI writes abort.json
-  // into the engagement dir instead. Check for it on every dispatch — the
-  // abort sequence below is identical to the in-process kill switch
-  // (flag, controllers, audit event), then HaltError unwinds to "halted".
-  // Checked before the rate limiter: an aborted run acquires nothing.
-  checkAbortSignal(ctx, phase);
   const host = toolTargetHost(call);
   const args = call.arguments ?? {};
   // v0.17.0 accountability: autonomy tiers are MECHANICAL. A tool above the
@@ -133,19 +78,10 @@ export async function dispatchTool(ctx: Ctx, role: ActorRole, phase: EngagementP
     return scopeDenial;
   }
   // Q-LOCKOUT: the call's credential classification, computed at the
-  // interlock gate below and consumed by the outcome recording beside
-  // auto-halt (one post-dispatch block owns all per-host safety state).
+  // interlock gate below and consumed by the outcome recording after
+  // dispatch (one post-dispatch block owns the per-host outcome state).
   let lockoutCls: CredentialClassification | undefined;
   if (host) {
-    // Auto-halt first: a halted target is refused before any packet AND
-    // before waiting on the rate limiter — never hammer, never queue.
-    if (ctx.safety.autoHalt.isHalted(host)) {
-      const reason = ctx.safety.autoHalt.haltReason(host) ?? "auto-halted";
-      return {
-        result: `HALTED: target ${host} was auto-halted (${reason}). No further traffic to this host this engagement — pivot to another in-scope target or report the halt.`,
-        target: host,
-      };
-    }
     // Duplicate guard (A1): an identical repeat of a call that already
     // completed (or already failed twice) is refused before the limiter —
     // it consumes no rate token and sends no traffic.
@@ -154,8 +90,8 @@ export async function dispatchTool(ctx: Ctx, role: ActorRole, phase: EngagementP
     // Q-LOCKOUT interlock (spec §5.5): classify → trip check → budget
     // reservation, after the duplicate guard and BEFORE limiter.acquire —
     // a refused attempt consumes no rate token and sends no packet, and
-    // out-of-scope / auto-halted hosts refused above never touch the
-    // budget. The refusal is a result string, never a throw.
+    // out-of-scope hosts refused above never touch the budget. The
+    // refusal is a result string, never a throw.
     lockoutCls = classifyCredentialAttempt(call);
     // TEST MODE (operator order): the lockout interlock is skipped
     // entirely — no admission check here and no outcome recording below
@@ -211,23 +147,11 @@ export async function dispatchTool(ctx: Ctx, role: ActorRole, phase: EngagementP
   d = await postDispatchHooks(ctx, phase, gate.call, d, host);
   recordCallOutcome(ctx, role, phase, call, host, d);
   if (host) {
-    const haltReason = ctx.safety.autoHalt.recordOutcome(host, isTargetDistress(d.result, d.errorCode));
-    if (haltReason) {
-      ctx.events.append({
-        phase,
-        actor: "runner",
-        action: "target_auto_halt",
-        target: host,
-        result: `AUTO-HALT: ${host} — ${haltReason}. Further traffic to this host refused this engagement.`,
-      });
-      // Spec §6: the halt escalates as a preserved distress record; resume is a recorded decision, never automatic (safety/distress-breaker.ts).
-      ctx.events.append({ phase, actor: "runner", action: "distress_escalation", target: host, result: distressEscalationResult(ctx.events.engagementId, host, haltReason) });
-    }
-    // Q-LOCKOUT: the credential outcome is recorded beside auto-halt —
-    // a success resets the key's failed-validation count, a failed
-    // validation spends budget, a lockout signal trips the host (and the
-    // campaign ceiling can trip the engagement). Watch/event-only calls
-    // record signals only; their budgets were settled at admission.
+    // Q-LOCKOUT: the credential outcome is recorded here — a success
+    // resets the key's failed-validation count, a failed validation
+    // spends budget, a lockout signal trips the host (and the campaign
+    // ceiling can trip the engagement). Watch/event-only calls record
+    // signals only; their budgets were settled at admission.
     if (lockoutCls && lockoutCls.kind !== "none") {
       const outcome = classifyAuthOutcome(d.result, d.ok);
       const info = lockoutGuardFor(ctx).recordOutcome(host, lockoutCls, call.name, outcome);

@@ -137,7 +137,7 @@ export class MsfClient {
    * (foreground, so output streams to the console) → poll console.read
    * until idle/timeout/abort → console.destroy (always).
    *
-   * The console is destroyed on abort — that is the kill switch for a
+   * The console is destroyed on abort — that is the call signal for a
    * running module: destroying the console kills whatever it was doing.
    */
   async runModuleConsole(args: {
@@ -185,7 +185,7 @@ export class MsfClient {
         await write(`run\n`);
         const deadline = Date.now() + args.timeoutMs;
         // Race each poll against the abort signal: a hanging console.read
-        // must not delay the kill switch. The dangling read promise is
+        // must not delay the abort. The dangling read promise is
         // harmless — we break out and destroy the console.
         const abortedPromise = new Promise<null>((resolve) => {
           if (args.signal?.aborted) resolve(null);

@@ -9,7 +9,7 @@
  *    the runner-built argv. Exploit-phase-gated by the dispatcher (like
  *    msf_exec run), Tier 2.
  *
- * Preflight order (mirrors the msf bridge): kill switch → exact-hostname
+ * Preflight order (mirrors the msf bridge): exact-hostname
  * ROE scope check (before any packet) → template/tag policy. Injectable
  * spawn + binary probe make everything testable with a fake binary.
  */
@@ -54,7 +54,6 @@ export interface NucleiExecResult {
 export const NUCLEI_LIST_CAP = 200;
 
 export class NucleiExecutor {
-  killSwitch: { aborted: boolean } = { aborted: false };
   private deps: NucleiDeps;
 
   constructor(deps: NucleiDeps = {}) {
@@ -80,9 +79,6 @@ export class NucleiExecutor {
   }
 
   private preflight(host: string, scopeHosts: string[]): { refused: string } | null {
-    if (this.killSwitch.aborted) {
-      return { refused: "kill switch active — coordinator aborted; no new nuclei executions" };
-    }
     const v = validateHostTarget(host, scopeHosts);
     if (!v.ok) return { refused: v.reason };
     return null;
@@ -94,9 +90,6 @@ export class NucleiExecutor {
    */
   async templates(args: { filter?: NucleiTemplateFilter }): Promise<NucleiExecResult> {
     const started = Date.now();
-    if (this.killSwitch.aborted) {
-      return this.refused("kill switch active — coordinator aborted; no new nuclei executions", started);
-    }
     const bin = resolveNucleiBinary(this.env);
     if (!(await this.binaryAvailable(bin))) {
       return this.refused(`nuclei binary not available.\n${NUCLEI_SETUP_INSTRUCTIONS}`, started);
@@ -156,7 +149,7 @@ export class NucleiExecutor {
         `Nuclei run against ${target}: ${parsed.findings.length} findings ` +
         `(top severity: ${sev}; ${parsed.rawLines} output lines, ${parsed.parseErrors} parse errors)` +
         (r.timedOut ? " — TIMED OUT at the runner timeout" : "") +
-        (r.killed && !r.timedOut ? " — KILLED by kill switch" : ""),
+        (r.killed && !r.timedOut ? " — KILLED by call signal" : ""),
       output: parsed.findings
         .slice(0, 25)
         .map((f) => `[${f.severity}] ${f.templateId} — ${f.name} @ ${f.matchedAt}${f.cve ? ` [${f.cve}]` : ""}`)

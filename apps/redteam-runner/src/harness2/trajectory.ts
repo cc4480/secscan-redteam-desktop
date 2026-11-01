@@ -76,8 +76,8 @@ export function deriveTargetClass(input: {
 
 /**
  * Outcome rule (mechanical, from the recorded engagement status):
- *  - aborted: the kill switch fired (aborted flag or an "aborted by operator"
- *    halt reason);
+ *  - aborted: the run ended halted (a HaltError unwind), or its recorded
+ *    blocked reason names an abort (historical records);
  *  - success: completed with confirmed evidence (findings or proven exploits);
  *  - partial: completed clean, or halted while carrying confirmed evidence;
  *  - failure: halted with no confirmed evidence, or blocked before the run.
@@ -218,7 +218,12 @@ export function captureEngagementTrajectory(input: EngagementCaptureInput): RunM
     // Real token totals from the per-engagement meter (agents.ts records every
     // router response); the explicit seam wins so tests can pin totals.
     const totals = input.tokens ?? tokenMeterFor(input.ctx).totals;
-    const aborted = input.ctx.hostKill.aborted || input.ctx.safety.killSwitchAborts > 0;
+    // "aborted" used to derive from the kill switch (hostKill /
+    // killSwitchAborts). That stop-signal class was removed on the
+    // operator's order (2026-11-01); the metric now reports a run that
+    // ended halted — the HaltError unwind (coordinator sign-off refusal
+    // or a mechanical cap), which is the only in-band early end left.
+    const aborted = state.status === "halted";
     const metrics = captureRunMetrics({
       engagementId: input.engagementId,
       target: input.target,
