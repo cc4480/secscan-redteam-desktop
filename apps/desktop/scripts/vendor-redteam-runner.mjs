@@ -45,6 +45,24 @@ const REDTEAM_RUNNER_PACKAGE = '@secscan/redteam-runner'
 /** The llm-router package: the fleet's charter, exemplar pack and SOUL live in it. */
 const LLM_ROUTER_PACKAGE = '@secscan/redteam-llm-router'
 
+/** The fleet-skills package: the fleet's skill library and prompt assets live in it. */
+const FLEET_SKILLS_PACKAGE = '@secscan/redteam-fleet-skills'
+
+/**
+ * The fleet-skills package's prompt and skill assets: every
+ * `skills/<name>/SKILL.md` bundle, `prompts/master.md`,
+ * `prompts/seats/*.md` and `prompts/souls/*.md`. The payload exclusions
+ * drop every `.md` file, so a payload assembled by the copy alone
+ * contains none of these — and the fleet's loaders fail loud on a
+ * missing asset. {@link placeFleetSkillsAssets} puts them back at the
+ * one payload-stable location the runner-side loading resolves from the
+ * vendored tree: `lib/fleet-skills/` beside the package's bundled
+ * module (mirroring `lib/charter/` for the llm-router, whose own
+ * candidates put the vendored `lib/` location first). The source-tree
+ * candidate the same loaders try is the package's own `skills/` and
+ * `prompts/` directories, which is where the placement reads from.
+ */
+
 /**
  * The llm-router's prompt assets. The payload exclusions drop every `.md`
  * file and {@link stripVendoredSources} deletes the vendored `src/` trees,
@@ -300,6 +318,73 @@ export function placeCharterAssets(sourcePackageDirectory, destination) {
   return placed
 }
 
+/**
+ * Place the fleet-skills package's prompt and skill assets into the
+ * vendored payload.
+ *
+ * The copy exclusions drop every `.md` (see {@link CHARTER_ASSETS} for
+ * the same failure in the llm-router), so the assets are copied from
+ * the source package's `skills/` and `prompts/` trees to the payload's
+ * `node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/`,
+ * preserving their relative layout (`skills/<name>/SKILL.md`,
+ * `prompts/master.md`, `prompts/seats/*.md`, `prompts/souls/*.md`).
+ * The bundle set is enumerated from the source tree rather than
+ * hard-coded, so a skill added to the library ships without a second
+ * edit here. A missing or empty source location fails the vendoring
+ * run: shipping without one of these is not a smaller payload, it is a
+ * broken one.
+ * @param {string} sourcePackageDirectory - The fleet-skills package directory in the source tree.
+ * @param {string} destination - The vendored payload root.
+ * @returns {string[]} The placed asset paths, relative to the payload root.
+ */
+export function placeFleetSkillsAssets(sourcePackageDirectory, destination) {
+  const targetRoot = join(destination, 'node_modules', ...FLEET_SKILLS_PACKAGE.split('/'), 'lib', 'fleet-skills')
+  const placed = []
+  const place = (from, relativePath) => {
+    if (!existsSync(from)) {
+      throw new Error(`vendor-redteam-runner: fleet-skills asset ${relativePath} is missing from ${sourcePackageDirectory}; the payload would ship without it and the fleet's loaders would fail inside the install`)
+    }
+    const target = join(targetRoot, ...relativePath.split('/'))
+    mkdirSync(join(target, '..'), { recursive: true })
+    cpSync(from, target)
+    placed.push(join('node_modules', ...FLEET_SKILLS_PACKAGE.split('/'), 'lib', 'fleet-skills', ...relativePath.split('/')))
+  }
+
+  const skillsRoot = join(sourcePackageDirectory, 'skills')
+  if (!existsSync(skillsRoot)) {
+    throw new Error(`vendor-redteam-runner: fleet-skills skills directory is missing from ${sourcePackageDirectory}; the payload would ship without the skill library`)
+  }
+  const skillNames = readdirSync(skillsRoot, { withFileTypes: true })
+    .filter(entry => entry.isDirectory())
+    .map(entry => entry.name)
+    .sort()
+  if (skillNames.length === 0) {
+    throw new Error(`vendor-redteam-runner: fleet-skills skills directory ${skillsRoot} is empty; the payload would ship without the skill library`)
+  }
+  for (const name of skillNames) {
+    place(join(skillsRoot, name, 'SKILL.md'), `skills/${name}/SKILL.md`)
+  }
+
+  place(join(sourcePackageDirectory, 'prompts', 'master.md'), 'prompts/master.md')
+  for (const group of ['seats', 'souls']) {
+    const groupRoot = join(sourcePackageDirectory, 'prompts', group)
+    if (!existsSync(groupRoot)) {
+      throw new Error(`vendor-redteam-runner: fleet-skills prompts/${group} directory is missing from ${sourcePackageDirectory}; the payload would ship without it`)
+    }
+    const files = readdirSync(groupRoot, { withFileTypes: true })
+      .filter(entry => entry.isFile() && entry.name.endsWith('.md'))
+      .map(entry => entry.name)
+      .sort()
+    if (files.length === 0) {
+      throw new Error(`vendor-redteam-runner: fleet-skills prompts/${group} directory ${groupRoot} holds no .md assets; the payload would ship without them`)
+    }
+    for (const name of files) {
+      place(join(groupRoot, name), `prompts/${group}/${name}`)
+    }
+  }
+  return placed
+}
+
 function vendorRedteamRunner(options) {
   const source = options.from
   const destination = options.to ?? join(APP_ROOT, REDTEAM_RUNNER_PAYLOAD)
@@ -350,6 +435,11 @@ function vendorRedteamRunner(options) {
     throw new Error(`vendor-redteam-runner: ${LLM_ROUTER_PACKAGE} is missing from the dependency closure; its charter assets have nowhere to land`)
   }
   const charterAssets = placeCharterAssets(llmRouter.directory, destination)
+  const fleetSkills = closure.find(entry => entry.name === FLEET_SKILLS_PACKAGE)
+  if (fleetSkills === undefined) {
+    throw new Error(`vendor-redteam-runner: ${FLEET_SKILLS_PACKAGE} is missing from the dependency closure; its prompt and skill assets have nowhere to land`)
+  }
+  const fleetSkillsAssets = placeFleetSkillsAssets(fleetSkills.directory, destination)
 
   const provenance = {
     schemaVersion: 1,
@@ -364,6 +454,9 @@ function vendorRedteamRunner(options) {
     // The prompt assets placeCharterAssets put back after the exclusions and
     // the src/ strip removed them; paths are relative to the payload root.
     charterAssets,
+    // The prompt and skill assets placeFleetSkillsAssets put back after
+    // the exclusions removed them; paths are relative to the payload root.
+    fleetSkillsAssets,
     // Written so the exclusion is visible rather than looking like an omission.
     excludedOptionalDependencies: [{ name: 'nan', reason: "ssh2's build-time C++ header; an optional dependency by contract" }],
   }
