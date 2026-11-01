@@ -38,7 +38,8 @@ export const PACKAGE_DELIVERABLES = [
   "report.docx",
 ] as const;
 
-const PACKAGE_MTIME = new Date("1980-01-01T00:00:00.000Z");
+// Local components, not UTC: fflate reads the mtime's LOCAL date parts, and 1980-01-01T00:00Z is still 1979 west of UTC.
+const PACKAGE_MTIME = new Date(1980, 0, 1, 0, 0, 0);
 
 /** The zip entries for an engagement directory: the four deliverables
  * read back verbatim, then every poc/*.json bundle in sorted order.

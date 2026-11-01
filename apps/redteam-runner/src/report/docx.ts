@@ -162,7 +162,8 @@ export function buildReportDocx(o: EngagementReportInput): Uint8Array {
       'word/styles.xml': strToU8(STYLES_XML),
       'word/_rels/document.xml.rels': strToU8(DOC_RELS_XML),
     },
-    { level: 6, mtime: new Date('1980-01-01T00:00:00.000Z') },
+    // Local components, not UTC: fflate reads the mtime's LOCAL date parts, and 1980-01-01T00:00Z is still 1979 west of UTC.
+    { level: 6, mtime: new Date(1980, 0, 1, 0, 0, 0) },
   )
 }
 
