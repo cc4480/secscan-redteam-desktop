@@ -543,8 +543,10 @@ describe('agentLoop section-5 instrumentation (agents.ts)', () => {
       }))
       // The bare fake ctx (no tier state, no safety machinery) makes
       // dispatchTool throw before any traffic; the loop journals the
-      // failed dispatch as an ERROR observation instead of crashing.
-      const rows = await agentLoop(ctx, 'exploiter', 'exploit', 's', 'u', [], 1).then(() => readSteps(dir))
+      // failed dispatch as an ERROR observation, then rejects — the
+      // loop unwinds on a dispatch throw by design.
+      await assert.rejects(() => agentLoop(ctx, 'exploiter', 'exploit', 's', 'u', [], 1))
+      const rows = readSteps(dir)
       assert.deepEqual(rows.map(row => row.role), ['prompt', 'tool', 'observation'])
       assert.equal(rows[0]!.tokens, 15)
       assert.equal(rows[1]!.tool_name, 'http_probe')

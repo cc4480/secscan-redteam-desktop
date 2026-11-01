@@ -120,7 +120,6 @@ describe("toolMinTier", () => {
     ["update_target_map", {}, 0],
     ["record_finding", {}, 0],
     ["record_killed", {}, 0],
-    ["abort_engagement", {}, 0],
     ["secscan_exec", {}, 0],
     ["secscan_exec", { depth: "passive" }, 0],
     // Tier 1 — single validated steps
