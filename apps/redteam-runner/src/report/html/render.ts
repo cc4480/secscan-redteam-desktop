@@ -34,6 +34,10 @@ import {
 } from "./sections.js";
 import { TIER_DEFINITION, TIER_LABEL, TIER_ORDER, esc, type ReportTier, type SeverityName } from "./tokens.js";
 import type { ReportDetail } from "../detail.js";
+import type { ReportMatter } from "../detail-matter.js";
+import {
+  limitationsSection, methodSection, riskMethodSection, scopeSection, strengthsSection,
+} from "./matter-sections.js";
 import type { HostInventoryArtifact } from "../host-inventory.js";
 import {
   breakdownSection, impactSection, pillarSection, prioritySection,
@@ -67,6 +71,9 @@ export interface EngagementReportInput {
   inventory?: HostInventoryArtifact;
   coverage: CoverageInput;
   activity: ActivityInput;
+  /** The Q-RP-7 / Q-RP-8 matter derivations (report/detail-matter.ts),
+   * when the phase assembled them. Absent => no matter sections render. */
+  matter?: ReportMatter;
   haltedReason?: string;
   dryRun?: boolean;
 }
@@ -150,6 +157,14 @@ export function renderEngagementReportHtml(o: EngagementReportInput): string {
   if (halted) parts.push(haltBanner(o.haltedReason as string));
   else if (o.banner) parts.push(bannerSection(o.banner));
 
+  // Q-RP-7 front matter: the recorded frame (scope, authorisation,
+  // method, grading method) before the narrative it frames.
+  if (o.matter) {
+    parts.push(scopeSection(o.matter));
+    parts.push(methodSection(o.matter));
+    parts.push(riskMethodSection(o.matter));
+  }
+
   const narrative = o.narrativeMd.trim();
   if (narrative) {
     parts.push(
@@ -164,6 +179,7 @@ export function renderEngagementReportHtml(o: EngagementReportInput): string {
     parts.push(impactSection(d));
   } else {
     parts.push(coverageSection(o.coverage));
+    if (o.matter) parts.push(strengthsSection(o.matter));
   }
 
   parts.push(
@@ -186,11 +202,15 @@ export function renderEngagementReportHtml(o: EngagementReportInput): string {
     parts.push(prioritySection(d));
     parts.push(pillarSection(d));
     parts.push(coverageSection(o.coverage));
+    if (o.matter) parts.push(strengthsSection(o.matter));
     parts.push(surfaceSection(d));
   }
   const inventoryHtml = inventorySection(o.inventory);
   if (inventoryHtml) parts.push(inventoryHtml);
   parts.push(activitySection(o.activity));
+  // Q-RP-7 back matter: limitations & residual unknowns close the
+  // report, before the audit footer.
+  if (o.matter) parts.push(limitationsSection(o.matter));
   parts.push(footerSection(o.meta));
 
   return `<!doctype html>

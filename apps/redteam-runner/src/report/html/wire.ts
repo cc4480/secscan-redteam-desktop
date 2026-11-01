@@ -10,11 +10,13 @@
 import { type Ctx, type LiveFinding } from "../../context.js";
 import { type EngagementEvent, type Finding } from "../../types.js";
 import { BATTERY_CATEGORIES } from "../../battery.js";
-import { TARGET_PROFILES } from "../../targets.js";
+import { TARGET_PROFILES, activeTargets } from "../../targets.js";
 import { projectApprovals, projectDanglingCauses, projectToolStats } from "../../events/projections.js";
 import { type NegativeProof, type PocBundle } from "../../proof/index.js";
 import { gradeBanner, gradeFindings } from "../grading.js";
 import { buildReportDetail, type DetailInput } from "../detail.js";
+import { buildReportMatter, type ReportMatter } from "../detail-matter.js";
+import { tierOf } from "./cards.js";
 import { readHostInventory } from "../host-inventory.js";
 import { type ReportMeta } from "../html.js";
 import {
@@ -176,8 +178,89 @@ function buildActivity(events: EngagementEvent[]): ActivityInput {
   };
 }
 
+/** Q-RP-7 / Q-RP-8: assemble the front/back-matter + strengths
+ * derivations from the same records the rest of the input reads — the
+ * ROE and verification record off ctx, the coverage/activity inputs
+ * just built, the item ledger's executed-clean items grouped by
+ * (target, category), and the ruled-out set (killed findings plus
+ * negative proofs, de-duplicated by normalised title exactly as the
+ * renderer's tier grouping de-duplicates them). */
+function buildMatter(deps: WireDeps, coverage: CoverageInput, activity: ActivityInput): ReportMatter {
+  const { ctx, meta } = deps;
+  const roe = ctx.input.roe;
+  const cleanByArea = new Map<string, { target: string; category: string; items: number }>();
+  for (const v of ctx.itemLedger.values()) {
+    if (v.disposition !== "executed-clean") continue;
+    const key = `${v.target}|${v.category}`;
+    const entry = cleanByArea.get(key) ?? { target: v.target, category: v.category, items: 0 };
+    entry.items++;
+    cleanByArea.set(key, entry);
+  }
+  const killedTitles = deps.findings
+    .filter((f) => tierOf(f, deps.bundles.get(f.id)) === "ruled-out")
+    .map((f) => f.title);
+  const killedNorm = new Set(killedTitles.map((t) => t.trim().toLowerCase()));
+  const ruledOut = [
+    ...killedTitles,
+    ...deps.proof.negative
+      .filter((n) => !killedNorm.has(n.hypothesis.trim().toLowerCase()))
+      .map((n) => n.hypothesis),
+  ];
+  const planPhases: string[] = [];
+  for (const s of ctx.plan?.steps ?? []) {
+    if (!planPhases.includes(s.phase)) planPhases.push(s.phase);
+  }
+  return buildReportMatter({
+    target: meta.target,
+    objective: meta.objective,
+    mode: meta.mode,
+    tier: meta.tier,
+    environment: meta.environment,
+    localHost: ctx.input.localHost === true,
+    dryRun: ctx.config.dryRunAgents === true,
+    scope: roe.scope,
+    outOfScope: roe.outOfScope ?? [],
+    excludedTechniques: roe.excludedTechniques ?? [],
+    stopConditions: roe.stopConditions ?? [],
+    testWindow: roe.testWindow,
+    deconflictionContact: roe.deconflictionContact,
+    verified: meta.verified,
+    verifiedAt: ctx.verifiedAt,
+    verificationProof: ctx.verificationProof,
+    operator: meta.operator,
+    client: meta.client,
+    startedAt: meta.startedAt,
+    generatedAt: meta.generatedAt,
+    fullBattery: coverage.fullBattery,
+    batteryTargets: ctx.input.fullBattery
+      ? activeTargets(ctx.input).map((t) => ({ id: t, items: TARGET_PROFILES[t].battery.length }))
+      : [],
+    categoriesProbed: BATTERY_CATEGORIES.filter((c) =>
+      coverage.cells.some((cell) => cell.category === c && cell.state === "done"),
+    ),
+    planPhases,
+    probesUsed: coverage.probesUsed,
+    toolActions: activity.totalActions,
+    eventCount: activity.eventCount,
+    totals: coverage.totals,
+    notCovered: coverage.notCovered,
+    planOnly: coverage.planOnly,
+    blockedCells: coverage.cells
+      .filter((c) => c.state === "blocked")
+      .map((c) => `${c.target}:${c.category}`),
+    haltedReason: deps.haltedReason,
+    executedClean: coverage.totals.executedClean,
+    cleanAreas: [...cleanByArea.values()].sort(
+      (a, b) => a.target.localeCompare(b.target) || a.category.localeCompare(b.category),
+    ),
+    ruledOut,
+  });
+}
+
 /** Assemble the renderer's structured input from the phase's records. */
 export function buildEngagementReportInput(deps: WireDeps): EngagementReportInput {
+  const coverage = buildCoverage(deps);
+  const activity = buildActivity(deps.events);
   return {
     meta: deps.meta,
     title: deps.title,
@@ -191,8 +274,9 @@ export function buildEngagementReportInput(deps: WireDeps): EngagementReportInpu
     findingMeta: buildFindingMeta(deps.bundles, deps.findings),
     detail: deps.detailInput ? buildReportDetail(deps.detailInput) : undefined,
     inventory: readHostInventory(deps.ctx.events.dir),
-    coverage: buildCoverage(deps),
-    activity: buildActivity(deps.events),
+    coverage,
+    activity,
+    matter: buildMatter(deps, coverage, activity),
     haltedReason: deps.haltedReason,
     dryRun: deps.ctx.config.dryRunAgents,
   };
