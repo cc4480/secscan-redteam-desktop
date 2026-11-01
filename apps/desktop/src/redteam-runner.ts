@@ -158,6 +158,18 @@ export function generatedRedteamToken(): string {
 }
 
 /**
+ * Decide whether this launch is a test launch.
+ * Testing mode is a launch-environment signal only: `REDTEAM_TEST_MODE=1` and
+ * nothing else. It is never read from the credential document, so an installed
+ * installation cannot turn it on by storing a value.
+ * @param environment - The launch environment the runner was constructed with.
+ * @returns whether testing mode is on for this launch.
+ */
+export function isRedteamTestMode(environment: NodeJS.ProcessEnv): boolean {
+  return environment.REDTEAM_TEST_MODE === '1'
+}
+
+/**
  * Decide whether a stored token can be handed to the runner.
  * The runner refuses anything below its own strength floor at startup, so a value
  * that cannot clear it is replaced by a generated one instead of failing the launch.
@@ -253,7 +265,9 @@ async function pause(milliseconds: number): Promise<void> {
  * Host is spawned with. An endpoint or token the operator already supplied - exported,
  * or stored in this installation's credential document - describes a console this
  * process did not start, and it wins: the bundled runner then stays off and nothing is
- * overwritten.
+ * overwritten. Testing mode (`REDTEAM_TEST_MODE=1` in the launch environment) suspends
+ * that rule for a test launch: the bundled console starts anyway, and a generated
+ * token replaces the inherited one on both sides of the row.
  *
  * The console itself is spawned with `REDTEAM_TOOLS_DIR` pointing at the tools payload
  * beside the runner, because the runner resolves its bundled binaries - nmap, ffuf,
@@ -301,17 +315,27 @@ export class DesktopRedteamRunner {
    */
   async start(): Promise<RedteamRunnerConsole | undefined> {
     if (this.active !== undefined) return this.active
+    const testMode = isRedteamTestMode(this.environment)
     const operator = REDTEAM_CONSOLE_ENVIRONMENT_NAMES.filter(name => !this.options.installed.has(name)
       && (this.environment[name] ?? '') !== '')
     if (operator.length > 0) {
-      // The person is driving a shared or remote console; the bundled one must not compete for it.
-      console.info(`desktop engagement runner: ${operator.join(' and ')} came from the launch environment, so the bundled console stays off`)
-      return undefined
+      if (!testMode) {
+        // The person is driving a shared or remote console; the bundled one must not compete for it.
+        console.info(`desktop engagement runner: ${operator.join(' and ')} came from the launch environment, so the bundled console stays off`)
+        return undefined
+      }
+      // Testing mode: the inherited values describe a console that is not running, so
+      // they must not leave this launch without an engine. The bypass is named in the
+      // log because a suppressed console and a bypassed one look identical in the UI.
+      console.info(`desktop engagement runner: REDTEAM_TEST_MODE is on, so the bundled console starts despite ${operator.join(' and ')} from the launch environment, with a fresh token replacing the inherited one`)
     }
     const configured = (this.environment.REDTEAM_MCP_URL ?? '').trim()
     if (configured !== '') {
-      console.info(`desktop engagement runner: a console endpoint is configured (${configured}), so the bundled console stays off`)
-      return undefined
+      if (!testMode) {
+        console.info(`desktop engagement runner: a console endpoint is configured (${configured}), so the bundled console stays off`)
+        return undefined
+      }
+      console.info(`desktop engagement runner: REDTEAM_TEST_MODE is on, so the bundled console starts despite the configured console endpoint (${configured})`)
     }
 
     const entry = join(this.resources.directory, REDTEAM_RUNNER_ENTRY)
@@ -325,8 +349,10 @@ export class DesktopRedteamRunner {
     const endpoint = redteamConsoleEndpoint(port)
     const stored = (this.environment.REDTEAM_UI_TOKEN ?? '').trim()
     // A stored token is the operator's, and reusing it keeps the row's bearer value
-    // identical across the upgrade that starts bundling the runner.
-    const token = isRedteamConsoleToken(stored) ? stored : generatedRedteamToken()
+    // identical across the upgrade that starts bundling the runner. Testing mode is
+    // the exception: the inherited token belongs to a console this process did not
+    // start, so a generated token wins and is installed on both sides of the row.
+    const token = !testMode && isRedteamConsoleToken(stored) ? stored : generatedRedteamToken()
     mkdirSync(this.options.engagementsDir, { recursive: true })
     // Resolved before spawning so the console inherits one directory for the whole run,
     // and so an absent payload costs nothing: the variable is then simply not installed.

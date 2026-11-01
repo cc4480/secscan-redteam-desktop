@@ -17,6 +17,7 @@ import {
   allocateLoopbackPort,
   generatedRedteamToken,
   isRedteamConsoleToken,
+  isRedteamTestMode,
   probeRedteamConsole,
   redteamConsoleEndpoint,
   redteamRunnerResources,
@@ -270,6 +271,99 @@ describe('operator-supplied console', () => {
     expect(started).toEqual({ endpoint: 'http://127.0.0.1:18784/mcp', token: stored })
     expect(lastSpawn().options.env.REDTEAM_UI_TOKEN).toBe(stored)
     expect(environment.REDTEAM_UI_TOKEN).toBe(stored)
+  })
+})
+
+describe('testing mode', () => {
+  it('starts the bundled console despite a token exported for this run, with a fresh token', async () => {
+    const { resources, engagements } = payload()
+    const stale = 'stale-operator-token-00000001'
+    const environment: NodeJS.ProcessEnv = { REDTEAM_TEST_MODE: '1', REDTEAM_UI_TOKEN: stale }
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const runner = new DesktopRedteamRunner(resources, environment, {
+      engagementsDir: engagements,
+      installed: new Set(),
+      allocatePort: async () => 18_791,
+      probe: async () => true,
+    })
+
+    const started = await runner.start()
+    expect(started).toBeDefined()
+    expect(started!.endpoint).toBe('http://127.0.0.1:18791/mcp')
+    // The fresh token wins on both sides of the row: the console child is spawned
+    // with it, and the environment the MCP rows read is overwritten with it, so the
+    // inherited token is presented nowhere.
+    expect(started!.token).toMatch(NOW)
+    expect(started!.token).not.toBe(stale)
+    expect(lastSpawn().options.env.REDTEAM_UI_TOKEN).toBe(started!.token)
+    expect(environment.REDTEAM_UI_TOKEN).toBe(started!.token)
+    expect(environment.REDTEAM_MCP_URL).toBe('http://127.0.0.1:18791/mcp')
+    expect(runner.consoleEnvironmentNames).toEqual(new Set(['REDTEAM_UI_TOKEN', 'REDTEAM_MCP_URL']))
+    // The bypass is loud: the log names testing mode as the reason the console
+    // started, because a bypassed suppression looks identical to a normal start.
+    expect(info.mock.calls.flat().join('\n')).toMatch(/REDTEAM_TEST_MODE is on/u)
+  })
+
+  it('starts the bundled console despite an endpoint exported for this run', async () => {
+    const { resources, engagements } = payload()
+    const environment: NodeJS.ProcessEnv = { REDTEAM_TEST_MODE: '1', REDTEAM_MCP_URL: 'https://console.example.test/mcp' }
+    const runner = new DesktopRedteamRunner(resources, environment, {
+      engagementsDir: engagements,
+      installed: new Set(),
+      allocatePort: async () => 18_792,
+      probe: async () => true,
+    })
+
+    const started = await runner.start()
+    expect(started).toBeDefined()
+    expect(harness.spawns).toHaveLength(1)
+    expect(started!.endpoint).toBe('http://127.0.0.1:18792/mcp')
+    expect(environment.REDTEAM_MCP_URL).toBe('http://127.0.0.1:18792/mcp')
+  })
+
+  it('keeps the operator console winning when testing mode is not exactly on', async () => {
+    const { resources, engagements } = payload()
+    // Any value other than "1" - here a plausible-looking one - leaves today's
+    // suppression exactly as it is.
+    const environment: NodeJS.ProcessEnv = { REDTEAM_TEST_MODE: 'true', REDTEAM_UI_TOKEN: 'token-from-the-launch-environment' }
+    const runner = new DesktopRedteamRunner(resources, environment, {
+      engagementsDir: engagements,
+      installed: new Set(),
+      allocatePort: async () => 18_793,
+      probe: async () => true,
+    })
+
+    expect(await runner.start()).toBeUndefined()
+    expect(harness.spawns).toHaveLength(0)
+    expect(environment.REDTEAM_UI_TOKEN).toBe('token-from-the-launch-environment')
+    expect(environment.REDTEAM_MCP_URL).toBeUndefined()
+    expect(runner.consoleEnvironmentNames.size).toBe(0)
+  })
+
+  it('starts normally when testing mode is on and nothing describes an operator console', async () => {
+    const { resources, engagements } = payload()
+    const environment: NodeJS.ProcessEnv = { REDTEAM_TEST_MODE: '1' }
+    const runner = new DesktopRedteamRunner(resources, environment, {
+      engagementsDir: engagements,
+      installed: new Set(),
+      allocatePort: async () => 18_794,
+      probe: async () => true,
+    })
+
+    const started = await runner.start()
+    expect(started).toBeDefined()
+    expect(started!.endpoint).toBe('http://127.0.0.1:18794/mcp')
+    expect(started!.token).toMatch(NOW)
+    expect(lastSpawn().options.env.REDTEAM_UI_TOKEN).toBe(started!.token)
+    expect(environment.REDTEAM_MCP_URL).toBe('http://127.0.0.1:18794/mcp')
+    expect(environment.REDTEAM_UI_TOKEN).toBe(started!.token)
+  })
+
+  it('reads testing mode only from the exact launch value', () => {
+    expect(isRedteamTestMode({ REDTEAM_TEST_MODE: '1' })).toBe(true)
+    expect(isRedteamTestMode({ REDTEAM_TEST_MODE: '0' })).toBe(false)
+    expect(isRedteamTestMode({ REDTEAM_TEST_MODE: ' 1 ' })).toBe(false)
+    expect(isRedteamTestMode({})).toBe(false)
   })
 })
 
