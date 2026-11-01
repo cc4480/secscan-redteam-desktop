@@ -31,13 +31,12 @@ import { writeComplianceArtifacts } from "./compliance.js";
 import { extractNarrative } from "./narrative.js";
 import { buildEngagementMeta, type ReportMeta } from "./html.js";
 import { renderEngagementReportHtml } from "./html/render.js";
-import { applyFindingRefs, buildEngagementReportInput, buildFindingMeta } from "./html/wire.js";
-import { emitFindingsCsv } from "./csv.js";
+import { buildEngagementReportInput, buildFindingMeta } from "./html/wire.js";
+import { emitFindingsSheet, stampFindingRefs, stampPeerVerdicts } from "./finding-refs.js";
 import { buildDetailInput, recordReportMeta } from "./predecessor.js";
 import { type DetailInput } from "./detail.js";
 import { buildGradeSection, gradeFindings } from "./grading.js";
 import { applyCellVerdicts, haltedFindingFromLive } from "./cell-verdicts.js";
-import { applyPeerVerdicts } from "./peer-verdicts.js";
 
 export { applyCellVerdicts, haltedFindingFromLive } from "./cell-verdicts.js";
 
@@ -130,9 +129,7 @@ export async function reportPhase(
       `proof bundles, and safety manifest below are the runner-computed record of ` +
       `work completed up to the halt — no reporter-agent narrative was generated.\n`;
     findings = ctx.liveFindings.map((lf, i) => haltedFindingFromLive(lf, i));
-    // Q-FLEET-XCHECK: peer stamps ride the halted path too — the pass
-    // ran before the halt for any finding it challenged.
-    applyPeerVerdicts(findings, { live: ctx.liveFindings, killed: ctx.peerKilledLive ?? [], deferred: ctx.peerDeferredLive ?? [] });
+    stampPeerVerdicts(findings, ctx);
   } else if (ctx.config.dryRunAgents) {
     reportMd = `# Engagement report (dry-run)\n\nTarget: ${ctx.input.target}\nMode: ${ctx.input.mode}\n`;
     findings = [];
@@ -151,10 +148,7 @@ export async function reportPhase(
     // Q-PROVEN: join the parsed findings back to the live findings so the
     // cell verdict reaches the report (before the accountable stamp below).
     applyCellVerdicts(findings, ctx.liveFindings);
-    // Q-FLEET-XCHECK: the peer challenge reaches the report on the same
-    // join — producer + checker stamp carried, downgrades forced to the
-    // stamped rung, peer-killed/deferred matches stamped out/down.
-    applyPeerVerdicts(findings, { live: ctx.liveFindings, killed: ctx.peerKilledLive ?? [], deferred: ctx.peerDeferredLive ?? [] });
+    stampPeerVerdicts(findings, ctx);
   }
   // v0.17.0 accountability: every finding records the named human
   // accountable for it. Stamped mechanically by the runner at report time —
@@ -163,9 +157,7 @@ export async function reportPhase(
     const accountable = resolveOperatorName(ctx.input.operatorName, process.env) ?? "(operator name not supplied — set REDTEAM_OPERATOR)";
     for (const f of findings) f.accountableOperator = accountable;
   }
-  // Q-RP-3: engine-recorded CVSS/CWE join the final findings mechanically
-  // (corroborated live-finding match; unproven values are removed).
-  applyFindingRefs(findings, ctx.liveFindings);
+  stampFindingRefs(findings, ctx.liveFindings);
   // The unified operation narrative ("Megazord"): the reporter writes it first
   // as plain paragraphs; the runner extracts it for the console header.
   const narrative = extractNarrative(reportMd);
@@ -241,9 +233,7 @@ export async function reportPhase(
   reportMd += buildActivitySection(reportEvents);
   reportMd += await buildIntegrationsSection(ctx, findings, pocBundleMap);
   writeFileSync(join(ctx.events.dir, "report.md"), reportMd);
-  // Q-RP-1: the findings sheet of the deliverable package, from the same
-  // model the HTML renders (own try/catch inside — never breaks the report).
-  emitFindingsCsv(ctx, findings, pocBundleMap);
+  emitFindingsSheet(ctx, findings, pocBundleMap);
   // The HTML twin is the human-facing deliverable — self-contained, severity
   // colour-coded, print/PDF-ready. report.md stays as the diffable, greppable
   // record and the input to other tooling; this is the thing a person opens.
