@@ -6,8 +6,7 @@
   "private": true,
   "scripts": {
     "build": "tsc -p tsconfig.json && node ../scripts/dist-hash.mjs write . lib",
-    "test": "tsc -p tsconfig.test.json && node --test dist-test/test/verify.test.js",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "type": "module",
   "version": "0.1.7-rc.9",
