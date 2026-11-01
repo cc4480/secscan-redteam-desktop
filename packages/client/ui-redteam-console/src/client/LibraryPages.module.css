@@ -10,6 +10,8 @@
   padding: 14px 18px 20px;
   overflow: auto;
   scrollbar-gutter: stable;
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
   color: var(--dsw-alias-label-primary);
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: 1.5;
@@ -90,6 +92,7 @@
   color: var(--dsw-alias-label-secondary);
   border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: 999px;
+  corner-shape: round;
 }
 
 .list {
