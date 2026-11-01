@@ -26,7 +26,8 @@ describe('TurnUsagePanel', () => {
     const view = render(<TurnUsagePanel usage={usage} t={t} />)
 
     const trigger = view.getByRole('button')
-    expect(trigger.textContent).toBe('Usage 15.8K tok')
+    // Split headline: 10.9K fresh (5,060 uncached + 5,800 output) + 4.9K cached.
+    expect(trigger.textContent).toBe('Usage 10.9K tok + 4.9K cached')
     expect(trigger.querySelector('svg')).not.toBeNull()
     expect(trigger.getAttribute('aria-haspopup')).toBe('dialog')
     expect(trigger.getAttribute('aria-expanded')).toBe('false')
@@ -48,6 +49,8 @@ describe('TurnUsagePanel', () => {
     expect(details.textContent).toContain('Cache write0 tok')
     expect(details.textContent).toContain('Output5,800 tok (42 tok reasoning)')
     expect(details.textContent).not.toContain('Total')
+    // The deepseek route declares no rate in the pricing table: no dollar figure.
+    expect(details.textContent).not.toContain('Estimated cost')
   })
 
   it('omits unavailable optional facts instead of inventing values', () => {
@@ -77,9 +80,9 @@ describe('TurnUsagePanel', () => {
     }
     const view = render(<TurnUsagePanel usage={usage} t={t} />)
     const trigger = view.getByRole('button')
-    // The pill carries the compact total; cache-hit rate and exact token
-    // counts stay in the dialog.
-    expect(trigger.textContent).toBe('Usage 1.1K tok')
+    // The pill carries the compact split (101 fresh + 999 cached); cache-hit
+    // rate and exact token counts stay in the dialog.
+    expect(trigger.textContent).toBe('Usage 101 tok + 999 cached')
 
     fireEvent.click(trigger)
     const dialog = view.getByRole('dialog')
@@ -94,5 +97,41 @@ describe('TurnUsagePanel', () => {
     expect(view.queryByRole('dialog')).toBeTruthy()
     fireEvent.pointerDown(document.body)
     expect(view.queryByRole('dialog')).toBeNull()
+  })
+
+  it('shows an estimated cost in the dialog when the route declares a rate', () => {
+    const usage: TurnTokenUsage = {
+      uncachedInputTokens: 2_000_000,
+      cacheReadTokens: 2_000_000,
+      cacheWriteTokens: 0,
+      outputTokens: 1_000_000,
+      totalTokens: 5_000_000,
+      routes: [{ provider: 'meta', model: 'muse-spark-1.3' }],
+    }
+    const view = render(<TurnUsagePanel usage={usage} t={t} />)
+    const trigger = view.getByRole('button')
+    expect(trigger.textContent).toBe('Usage 3M tok + 2M cached')
+    fireEvent.click(trigger)
+    const details = view.getByRole('dialog').querySelector('[data-turn-usage-details]') as HTMLElement
+    // 2M x $1.25 + 2M x $0.15 + 1M x $4.25 = $7.05 at the declared spark rates.
+    expect(details.textContent).toContain('Estimated cost$7.05')
+  })
+
+  it('shows the split without a dollar figure for a seat with no declared rate', () => {
+    const usage: TurnTokenUsage = {
+      uncachedInputTokens: 2_000_000,
+      cacheReadTokens: 2_000_000,
+      cacheWriteTokens: 0,
+      outputTokens: 1_000_000,
+      totalTokens: 5_000_000,
+      routes: [{ provider: 'meta', model: 'muse-spark-1.1' }],
+    }
+    const view = render(<TurnUsagePanel usage={usage} t={t} />)
+    expect(view.getByRole('button').textContent).toBe('Usage 3M tok + 2M cached')
+    fireEvent.click(view.getByRole('button'))
+    const details = view.getByRole('dialog').querySelector('[data-turn-usage-details]') as HTMLElement
+    // muse-spark-1.1 is registered with no price line: never invent one.
+    expect(details.textContent).not.toContain('Estimated cost')
+    expect(details.textContent).not.toContain('$')
   })
 })

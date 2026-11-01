@@ -132,7 +132,12 @@ export class MetaProvider implements LlmProvider {
 
     const data = (await res.json()) as {
       choices?: Array<{ message?: { content?: string | null; reasoning_content?: string | null } & Record<string, unknown> }>
-      usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number }
+      usage?: {
+        prompt_tokens: number
+        completion_tokens: number
+        total_tokens: number
+        prompt_tokens_details?: { cached_tokens?: number }
+      }
     }
     const choice = data.choices?.[0] ?? {}
     const message = choice.message ?? {}
@@ -148,6 +153,12 @@ export class MetaProvider implements LlmProvider {
           promptTokens: data.usage.prompt_tokens,
           completionTokens: data.usage.completion_tokens,
           totalTokens: data.usage.total_tokens,
+          // The cache split rides prompt_tokens_details when Meta reports
+          // it; the key stays absent otherwise so totals never imply a
+          // split the provider did not state.
+          ...(typeof data.usage.prompt_tokens_details?.cached_tokens === 'number'
+            ? { cacheReadTokens: data.usage.prompt_tokens_details.cached_tokens }
+            : {}),
         }
         : undefined,
       provider: this.id,

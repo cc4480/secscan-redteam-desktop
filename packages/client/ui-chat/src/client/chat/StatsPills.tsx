@@ -240,7 +240,14 @@ function UsagePill({ usage, t, dialog }: {
   const { open, setOpen, rootRef, panelRef, pos } = useStatDialog(dialog)
   // Same aggregate as the Turn pill's totalTokens: every prompt-side billing bucket plus output.
   const total = billedInputTokens(usage) + usage.outputTokens
-  const totalText = t('message.turnUsage.count', { count: formatTokens(total, t) })
+  // The headline splits fresh volume from cache reads: the raw sum alone
+  // presents cache-served tokens at fresh weight, which overstates the
+  // cost-bearing volume. With no cache reads the single total stands; the
+  // dialog keeps the exact total and the per-bucket rows.
+  const fresh = total - usage.cacheReadTokens
+  const totalText = usage.cacheReadTokens > 0
+    ? `${t('message.turnUsage.count', { count: formatTokens(fresh, t) })} ${t('message.turnUsage.cached', { count: formatTokens(usage.cacheReadTokens, t) })}`
+    : t('message.turnUsage.count', { count: formatTokens(total, t) })
   const cacheHit = cacheHitPercent(usage)
   const cacheHitText = cacheHit !== null ? t('stats.cacheHit', { percent: cacheHit }) : null
   return (

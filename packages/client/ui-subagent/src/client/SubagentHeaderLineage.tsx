@@ -63,14 +63,18 @@ function formatTokens(value: number, t: TranslateNS<typeof NS>): string {
   return t('tokens.million', { value: scaled(value / 1_000_000) })
 }
 
-/** Sum the four disjoint durable provider-usage buckets. */
-function tokenTotal(
+/**
+ * Split the four disjoint durable provider-usage buckets into fresh volume
+ * and cache reads, so a row can show the two at their own weights instead of
+ * one sum that presents cache-served tokens as fresh spend.
+ */
+function tokenSplit(
   usage: SessionProjectionMap['tokenUsage'] | undefined,
-): number | undefined {
-  return usage === undefined
-    ? undefined
-    : usage.uncachedInputTokens + usage.outputTokens
-      + usage.cacheReadTokens + usage.cacheWriteTokens
+): { fresh: number; cached: number } | undefined {
+  if (usage === undefined) return undefined
+  const total = usage.uncachedInputTokens + usage.outputTokens
+    + usage.cacheReadTokens + usage.cacheWriteTokens
+  return { fresh: total - usage.cacheReadTokens, cached: usage.cacheReadTokens }
 }
 
 /** Exact whole-second active-turn duration for one catalog row. */
@@ -250,15 +254,17 @@ function CatalogRows({
         const secondary = [summary?.title, mode, activity]
           .filter(value => value !== undefined)
           .join(' · ')
-        const totalTokens = tokenTotal(summary?.projectionValues?.tokenUsage)
+        const split = tokenSplit(summary?.projectionValues?.tokenUsage)
         const durationMs = activityDuration(
           summary,
           entry.activity,
           now,
         )
-        const tokenMetric = totalTokens === undefined
+        const tokenMetric = split === undefined
           ? undefined
-          : t('tokens.total', { value: formatTokens(totalTokens, t) })
+          : split.cached > 0
+            ? `${t('tokens.total', { value: formatTokens(split.fresh, t) })} ${t('tokens.cached', { value: formatTokens(split.cached, t) })}`
+            : t('tokens.total', { value: formatTokens(split.fresh, t) })
         const durationMetric = durationMs === undefined
           ? undefined
           : {

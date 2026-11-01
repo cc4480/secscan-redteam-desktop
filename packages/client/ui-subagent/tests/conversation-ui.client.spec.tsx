@@ -589,9 +589,9 @@ describe('SubagentHeaderLineage', () => {
     expect(within(trigger).getByText('9 个子智能体')).toBeTruthy()
     hoverCatalog(trigger)
 
-    const runningRow = screen.getByRole('treeitem', { name: /running.*4\.6K tok · 1分10秒/ })
+    const runningRow = screen.getByRole('treeitem', { name: /running.*1\.6K tok \+ 3K 缓存 · 1分10秒/ })
     const runningMetrics = within(runningRow)
-    const tokenMetric = runningMetrics.getByText('4.6K tok')
+    const tokenMetric = runningMetrics.getByText('1.6K tok + 3K 缓存')
     const durationMetric = runningMetrics.getByText('1分10秒')
     expect(tokenMetric.parentElement).toBe(durationMetric.parentElement)
     expect(tokenMetric.nextElementSibling).toBe(durationMetric)
@@ -612,7 +612,7 @@ describe('SubagentHeaderLineage', () => {
     expect(screen.getByText('约1年')).toBeTruthy()
 
     await vi.advanceTimersByTimeAsync(1_000)
-    expect(screen.getByRole('treeitem', { name: /running.*4\.6K tok · 1分11秒/ })).toBeTruthy()
+    expect(screen.getByRole('treeitem', { name: /running.*1\.6K tok \+ 3K 缓存 · 1分11秒/ })).toBeTruthy()
     expect(screen.getByRole('treeitem', { name: /finished.*已完成.*123 tok · 1小时02分03秒/ })).toBeTruthy()
     expect(screen.getByRole('treeitem', { name: /interrupted.*当前未运行.*123M tok · 6秒/ })).toBeTruthy()
   })

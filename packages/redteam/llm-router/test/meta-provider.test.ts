@@ -123,6 +123,31 @@ describe('MetaProvider wire translation', () => {
     assert.equal(result.model, META_MODELS.wonder)
   })
 
+  test('maps prompt_tokens_details.cached_tokens into usage.cacheReadTokens', async () => {
+    process.env[META_API_KEY_ENV] = 'test-key'
+    stubFetch(async () => jsonResponse({
+      choices: [{ message: { content: 'ok' } }],
+      usage: {
+        prompt_tokens: 1_000,
+        completion_tokens: 50,
+        total_tokens: 1_050,
+        prompt_tokens_details: { cached_tokens: 910 },
+      },
+    }))
+
+    const result = await new MetaProvider().complete({
+      model: META_MODELS.spark,
+      messages: [{ role: 'user', content: 'scan the lab' }],
+    })
+
+    assert.deepEqual(result.usage, {
+      promptTokens: 1_000,
+      completionTokens: 50,
+      totalTokens: 1_050,
+      cacheReadTokens: 910,
+    })
+  })
+
   test('an HTTP failure surfaces as a ProviderError naming Meta and the status', async () => {
     process.env[META_API_KEY_ENV] = 'test-key'
     stubFetch(async () => jsonResponse({ error: { message: 'bad key' } }, 401))

@@ -54,6 +54,8 @@ Image offload reprices existing node identities while preserving prior usage anc
 
 `deriveTurnTokenUsage(events)` folds one complete turn into exact per-attempt and whole-turn usage for browser consumers. It returns no result when lifecycle evidence is missing, counts are unsafe, or exact totals conflict; each corresponding aggregate appears only when every participating attempt reports its optional cache, reasoning, or route value.
 
+`estimateTokenUsageCostUsd(buckets, routes)` prices usage buckets in USD from the rates a route declares; `tokenUsageRate(provider, model)` exposes the declared table. The only declared rates are the Meta seats transcribed from the llm-router's Meta provider header. An unrated route (including `meta/muse-spark-1.1`), an unknown or mixed-rate route set, or an unproven cache bucket yields no figure — callers show the fresh/cached token split alone rather than an invented price. Cache writes price at the fresh input rate; the declared table carries no separate write rate.
+
 ### Composition
 
 ```yaml
@@ -93,6 +95,7 @@ The service is built on one fold and one anchor. Each session gets an isolated r
 | [`src/breakdown-projection.ts`](src/breakdown-projection.ts) | `contextBreakdown` projection definition |
 | [`src/client.ts`](src/client.ts) | Browser-safe client surface for projection consumers |
 | [`src/turn-usage.ts`](src/turn-usage.ts) | Pure fold for exact per-attempt and per-Turn usage |
+| [`src/pricing.ts`](src/pricing.ts) | Declared per-route USD rates and the bucket cost estimator |
 
 ### Fold flow
 

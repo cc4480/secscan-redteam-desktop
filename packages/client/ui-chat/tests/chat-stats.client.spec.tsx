@@ -186,11 +186,12 @@ describe('StatsPills', () => {
     // would have no rows, so the counts reading stays a static pill (no button).
     expect(view.getByText('1 turns 1 steps').closest('button')).toBeNull()
     // Cache hit comes from the projection, so paging the window cannot change
-    // it; the usage pill leads with the whole-log token total. Its accessible
-    // name separates the segments the visual sep glyph joins.
+    // it; the usage pill leads with the whole-log split — fresh volume first,
+    // cache reads at their own weight (105 total = 15 fresh + 90 cached).
+    // Its accessible name separates the segments the visual sep glyph joins.
     const usagePill = view.getAllByRole('button')
-    expect(usagePill.map(pill => pill.textContent)).toEqual(['105 tok·Cache hit 90%'])
-    expect(usagePill[0]!.getAttribute('aria-label')).toBe('105 tok · Cache hit 90%')
+    expect(usagePill.map(pill => pill.textContent)).toEqual(['15 tok + 90 cached·Cache hit 90%'])
+    expect(usagePill[0]!.getAttribute('aria-label')).toBe('15 tok + 90 cached · Cache hit 90%')
     const empty = makeSource()
     const emptyView = render(<StatsPills {...props(empty.source, {
       tokenUsage: { uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
@@ -254,7 +255,7 @@ describe('StatsPills', () => {
     expect(details.textContent).toContain('Avg time to first token (TTFT)0.8s')
     expect(details.textContent).toContain('Tokens per second (TPS)20 tok/s')
     // Token accounting lives on the usage pill's own dialog, not here.
-    expect(dialog.textContent).not.toContain('Token usage')
+    expect(dialog.textContent).not.toContain('Billed tokens')
   })
 
   it('click-opens the token-usage dialog carrying the headline total and exact buckets', () => {
@@ -265,10 +266,10 @@ describe('StatsPills', () => {
     fireEvent.click(usagePill)
     expect(usagePill.getAttribute('aria-expanded')).toBe('true')
     const dialog = view.getByRole('dialog')
-    expect(dialog.getAttribute('aria-label')).toBe('Token usage')
+    expect(dialog.getAttribute('aria-label')).toBe('Billed tokens (all calls)')
     expect(dialog.parentElement).toBe(document.body)
     // Headline total: all prompt-side buckets (10 + 90 + 0) plus output (5).
-    expect(dialog.firstChild?.textContent).toBe('Token usage105 tok')
+    expect(dialog.firstChild?.textContent).toBe('Billed tokens (all calls)105 tok')
     const tokens = dialog.querySelector('[data-session-stats-usage]') as HTMLElement
     expect(tokens).toBeTruthy()
     expect(tokens.textContent).toContain('Cache hit90%')
@@ -310,7 +311,7 @@ describe('StatsPills', () => {
     fireEvent.click(usagePill)
     const dialogs = view.getAllByRole('dialog')
     expect(dialogs).toHaveLength(1)
-    expect(dialogs[0]!.getAttribute('aria-label')).toBe('Token usage')
+    expect(dialogs[0]!.getAttribute('aria-label')).toBe('Billed tokens (all calls)')
     expect(timePill.getAttribute('aria-expanded')).toBe('false')
     expect(usagePill.getAttribute('aria-expanded')).toBe('true')
   })
@@ -320,8 +321,8 @@ describe('StatsPills', () => {
     const view = render(<StatsPills {...props(source, { tokenUsage: tokenUsage(9_995, 5) })} t={t} />)
     const [timePill, usagePill] = [...view.getAllByRole('button')] as [HTMLElement, HTMLElement]
     expect(timePill.textContent).toBe('1 轮 1 步·20 tok/s')
-    // Whole-log total 9995 + 5 + 1 compacts to 10K.
-    expect(usagePill.textContent).toBe('10K tok·缓存命中 99.95%')
+    // Split headline: 6 fresh (5 uncached + 1 output), 9995 cached compacts to 10K.
+    expect(usagePill.textContent).toBe('6 tok + 10K 缓存·缓存命中 99.95%')
     fireEvent.click(timePill)
     const timeDialog = view.getByRole('dialog')
     expect(timeDialog.getAttribute('aria-label')).toBe('会话统计')
@@ -331,7 +332,7 @@ describe('StatsPills', () => {
     fireEvent.keyDown(document, { key: 'Escape' })
     fireEvent.click(usagePill)
     const usageDialog = view.getByRole('dialog')
-    expect(usageDialog.getAttribute('aria-label')).toBe('Token 用量')
+    expect(usageDialog.getAttribute('aria-label')).toBe('计费 Token（全部调用）')
     expect(usageDialog.textContent).toContain('未缓存输入5 tok')
   })
 
@@ -344,7 +345,24 @@ describe('StatsPills', () => {
     // Context occupancy lives on the composer's ContextMeter ring, not here.
     const pills = view.getAllByRole('button')
     expect(pills).toHaveLength(1)
-    expect(pills[0]!.textContent).toBe('105 tok·Cache hit 90%')
+    expect(pills[0]!.textContent).toBe('15 tok + 90 cached·Cache hit 90%')
+  })
+
+  it('splits the footer headline at the diagnosed session scale (6.8M total, 91% cache)', () => {
+    const { source } = makeSource({ nodes: [assistant(1, 1)] })
+    const view = render(<StatsPills {...props(source, {
+      tokenUsage: {
+        uncachedInputTokens: 610_000,
+        outputTokens: 55_000,
+        cacheReadTokens: 6_140_000,
+        cacheWriteTokens: 0,
+      },
+    })} />)
+    const usagePill = view.getAllByRole('button')[0]!
+    // Fresh volume (0.61M input + 0.055M output) leads; the 6.14M of cache
+    // reads no longer inflates the headline at fresh weight.
+    expect(usagePill.textContent).toBe('665K tok + 6.1M cached·Cache hit 91%')
+    expect(usagePill.getAttribute('aria-label')).toBe('665K tok + 6.1M cached · Cache hit 91%')
   })
 
   it('drops the usage pill when no projection is composed', () => {
@@ -445,7 +463,8 @@ describe('StatsPills', () => {
         cacheWriteTokens: 100,
       },
     })} />)
-    expect(view.getAllByRole('button')[0]!.textContent).toBe('207 tok·Cache hit 45%')
+    // Split headline: 117 fresh (10 uncached + 100 cache writes + 7 output) + 90 cached.
+    expect(view.getAllByRole('button')[0]!.textContent).toBe('117 tok + 90 cached·Cache hit 45%')
     // A session that did write cache keeps the row, exact.
     fireEvent.click(view.getAllByRole('button')[0]!)
     expect(view.getByRole('dialog').textContent).toContain('Cache write100 tok')

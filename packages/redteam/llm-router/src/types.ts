@@ -40,7 +40,17 @@ export interface ChatResult {
   reasoning?: string
   /** Tool calls the model requested this turn. */
   toolCalls: ToolCallRequest[]
-  usage?: { promptTokens: number; completionTokens: number; totalTokens: number }
+  usage?: {
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+    /**
+     * Prompt tokens served from the provider's prompt cache, when the wire
+     * reports the split (a subset of promptTokens). Absent when the provider
+     * does not break cached tokens out — never estimated.
+     */
+    cacheReadTokens?: number
+  }
   provider: string
   model: string
   /** Exact provider request body (credentials travel in headers, never here). */

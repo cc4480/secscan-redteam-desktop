@@ -80,7 +80,7 @@ describe('ContextMeter', () => {
       .toMatch(/^上下文已用25%/)
     const enView = meter(values, tEn)
     fireEvent.click(enView.getByRole('button', { name: '25% of context used' }))
-    expect(enView.queryByRole('dialog', { name: 'of context used' })!.textContent)
+    expect(enView.queryByRole('dialog', { name: 'Current context size' })!.textContent)
       .toMatch(/^25%of context used/)
   })
 
