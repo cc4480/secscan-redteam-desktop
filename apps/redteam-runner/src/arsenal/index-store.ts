@@ -258,7 +258,7 @@ export function buildAndSwapArsenalIndex(
   // database written by newer code.
   const previous = readArsenalIndexMeta(dbPath)
   const generation = (previous?.generation ?? 0) + 1
-  const tmpPath = `${dbPath}.tmp`
+  const tmpPath = `${dbPath}.tmp-${process.pid}`
   removeTmpFiles(tmpPath)
   let db: DatabaseSync | undefined
   let inTransaction = false
