@@ -242,3 +242,33 @@
   animation: dsh-rise var(--dur-slow) var(--ease-out) backwards;
   animation-delay: calc(var(--stagger) * 2);
 }
+
+/* Glass shell (dark): the hero mark sits in a glass tile — the sample's
+   logo tile at hero scale — a solid card-plane seat with the rim and the
+   tile elevation, and a soft pool of light gathers behind the stack so
+   the hero reads as a composed card on the panel, not bare text. */
+.stack {
+  position: relative;
+}
+
+.stack::before {
+  content: '';
+  position: absolute;
+  inset: -56px -96px auto;
+  height: 320px;
+  background: var(--glass-hero-glow);
+  pointer-events: none;
+}
+
+.headline,
+.body {
+  position: relative;
+}
+
+:global([data-ds-dark-theme]) .fishHitbox {
+  padding: 10px;
+  background: var(--glass-top-light), var(--glass-card-solid);
+  border: 1px solid var(--glass-line);
+  border-radius: 14px;
+  box-shadow: var(--glass-rim), var(--shadow-tile);
+}

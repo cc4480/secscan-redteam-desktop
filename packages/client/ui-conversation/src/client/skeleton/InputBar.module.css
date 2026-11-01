@@ -424,12 +424,35 @@
   animation-delay: calc(var(--stagger) * 2);
 }
 
-/* Glass shell (dark): the composer card takes the shell's glass step —
-   translucent fill and backdrop blur over the thread panel, the top
-   highlight over its existing elevation stroke and shadow. */
+/* Glass shell (dark): the composer card is the solid card plane inside
+   the thread panel — one lightness step above the panel, no backdrop
+   filter of its own (glass never nests on glass), the specular rim and
+   the card elevation separating it from the panel. Focus deepens the rim
+   to the floating strength so the working card catches more light. */
 :global([data-ds-dark-theme]) .card {
-  background: var(--glass-hi);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow);
+  background: var(--glass-card-solid);
+  box-shadow: var(--glass-rim), var(--shadow-card);
+}
+
+:global([data-ds-dark-theme]) .card:focus-within {
+  box-shadow: var(--glass-rim-float), var(--shadow-card);
+}
+
+/* The workspace-picker form is a hero-class card: hovering lifts it one
+   elevation tier and tilts it a degree toward the light, transform only
+   (the shadow swaps tiers, it is never animated). Coarse pointers keep
+   the plain lift; reduced motion zeroes the tokens upstream. */
+:global([data-ds-dark-theme]) .cardWorkspaceTrigger {
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+:global([data-ds-dark-theme]) .cardWorkspaceTrigger:hover {
+  transform: translateY(var(--lift)) perspective(1000px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
+  box-shadow: var(--glass-rim), var(--shadow-panel);
+}
+
+@media (pointer: coarse) {
+  :global([data-ds-dark-theme]) .cardWorkspaceTrigger:hover {
+    transform: translateY(var(--lift));
+  }
 }

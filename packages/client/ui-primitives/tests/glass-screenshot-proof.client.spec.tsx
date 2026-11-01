@@ -31,15 +31,21 @@ describe('glass shell — screenshot proof (Q-UI-GLASS truth pass)', () => {
   it('glass-shell.css carries the locked dark glass tokens verbatim', () => {
     const css = readRepo('packages/client/ui-layout/src/client/glass-shell.css')
     for (const token of [
-      '--glass: rgba(255, 255, 255, 0.04)',
-      '--glass-hi: rgba(255, 255, 255, 0.055)',
-      '--glass-strong: rgba(255, 255, 255, 0.07)',
+      '--glass: rgba(255, 255, 255, 0.09)',
+      '--glass-hi: rgba(255, 255, 255, 0.11)',
+      '--glass-strong: rgba(255, 255, 255, 0.14)',
       '--glass-line: rgba(255, 255, 255, 0.09)',
       '--well: rgba(0, 0, 0, 0.34)',
-      '--glass-blur: blur(14px) saturate(140%)',
+      '--glass-blur: blur(18px) saturate(165%) brightness(1.05)',
+      '--glass-blur-float: blur(22px) saturate(170%) brightness(1.06)',
       '--glass-solid: #0d0d10',
+      '--glass-card-solid: #232329',
       '--shadow: 0 16px 40px rgba(0, 0, 0, 0.45)',
       '--shadow-lift: 0 22px 48px rgba(0, 0, 0, 0.55)',
+      '--shadow-panel: 0 4px 8px rgba(0, 0, 0, 0.4), 0 12px 24px rgba(0, 0, 0, 0.35), 0 24px 48px rgba(0, 0, 0, 0.22)',
+      '--shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25)',
+      'inset 0 1px 1px rgba(255, 255, 255, 0.38)',
+      'inset 0 -1px 1px rgba(255, 255, 255, 0.3)',
     ]) {
       expect(css).toContain(token)
     }
@@ -97,7 +103,7 @@ describe('glass shell — screenshot proof (Q-UI-GLASS truth pass)', () => {
     const hero = readFileSync(join(scratch, 'hero-harness.html'), 'utf8')
     const shell = readFileSync(join(scratch, 'shell-harness.html'), 'utf8')
     for (const page of [hero, shell]) {
-      expect(page).toContain('--glass-blur: blur(14px) saturate(140%)')
+      expect(page).toContain('--glass-blur: blur(18px) saturate(165%) brightness(1.05)')
       expect(page).toContain('fill="#d92344"')
       expect(page).toContain('data-ds-dark-theme')
     }

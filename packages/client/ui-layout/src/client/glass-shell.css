@@ -7,9 +7,11 @@
  * class. AppFrame.tsx imports this sheet once; AppFrame is the shell root,
  * so the tokens land with the frame in every shell bundle.
  *
- * Dark carries the locked sample values; light keeps a frosted-white
- * analogue of the same steps so neither theme is a flat field. Feature
- * sheets consume these tokens; they never restate the values. */
+ * Dark carries the depth values (glass depth playbook: tint ladder,
+ * saturate-led blur, asymmetric specular rim, layered elevation tiers);
+ * light keeps a frosted-white analogue of the same steps so neither theme
+ * is a flat field. Feature sheets consume these tokens; they never
+ * restate the values. */
 
 body {
   --glass: rgba(255, 255, 255, 0.5);
@@ -17,11 +19,34 @@ body {
   --glass-strong: rgba(255, 255, 255, 0.72);
   --glass-line: rgba(15, 17, 21, 0.09);
   --glass-edge: rgba(255, 255, 255, 0.6);
+  --glass-edge-hi: rgba(15, 17, 21, 0.16);
+  --glass-line-float: rgba(15, 17, 21, 0.16);
   --well: rgba(15, 17, 21, 0.05);
   --glass-blur: blur(14px) saturate(140%);
+  --glass-blur-float: blur(22px) saturate(150%);
   --glass-solid: #f4f4f5;
+  --glass-card-solid: #ececef;
+  --glass-top-light: linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.08) 42%, rgba(255, 255, 255, 0) 72%);
+  --glass-hero-glow: radial-gradient(closest-side, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0));
+  --glass-rim:
+    inset 0 1px 1px rgba(255, 255, 255, 0.5),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.22),
+    inset 1px 0 1px rgba(255, 255, 255, 0.16),
+    inset -1px 0 1px rgba(255, 255, 255, 0.16),
+    inset 0 0 24px rgba(255, 255, 255, 0.18);
+  --glass-rim-float:
+    inset 0 1px 1px rgba(255, 255, 255, 0.55),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.25),
+    inset 1px 0 1px rgba(255, 255, 255, 0.18),
+    inset -1px 0 1px rgba(255, 255, 255, 0.18),
+    inset 0 0 24px rgba(255, 255, 255, 0.2);
   --shadow: 0 16px 40px rgba(0, 0, 0, 0.16);
   --shadow-lift: 0 22px 48px rgba(0, 0, 0, 0.22);
+  --shadow-panel: 0 4px 8px rgba(15, 17, 21, 0.1), 0 12px 24px rgba(15, 17, 21, 0.1), 0 24px 48px rgba(15, 17, 21, 0.08);
+  --shadow-card: 0 1px 2px rgba(15, 17, 21, 0.12), 0 2px 6px rgba(15, 17, 21, 0.08);
+  --shadow-float: 0 8px 16px rgba(15, 17, 21, 0.12), 0 20px 40px rgba(15, 17, 21, 0.12), 0 40px 80px rgba(15, 17, 21, 0.1);
+  --shadow-tile: 0 1px 2px rgba(15, 17, 21, 0.12), 0 4px 10px rgba(15, 17, 21, 0.08);
+  --shadow-well: inset 0 2px 4px rgba(15, 17, 21, 0.12), inset 0 1px 1px rgba(15, 17, 21, 0.08);
 
   /* Motion tokens (local amendment 1: --ease-out is the house entrance
      curve cubic-bezier(0.22, 1, 0.36, 1), shared with the report). */
@@ -38,18 +63,56 @@ body {
   --distance-lg: 32px;
   --stagger: 60ms;
   --lift: -2px;
+  /* Hover tilt for hero-class cards (playbook dashboard cap, well under
+     the demo range); the transform consumes the pair, so the reduced-
+     motion collapse below zeroes the effect without touching rules. */
+  --tilt-x: 1.1deg;
+  --tilt-y: -1.1deg;
 }
 
 body[data-ds-dark-theme] {
-  --glass: rgba(255, 255, 255, 0.04);
-  --glass-hi: rgba(255, 255, 255, 0.055);
-  --glass-strong: rgba(255, 255, 255, 0.07);
+  --glass: rgba(255, 255, 255, 0.09);
+  --glass-hi: rgba(255, 255, 255, 0.11);
+  --glass-strong: rgba(255, 255, 255, 0.14);
   --glass-line: rgba(255, 255, 255, 0.09);
   --glass-edge: rgba(255, 255, 255, 0.05);
+  --glass-edge-hi: rgba(255, 255, 255, 0.16);
+  --glass-line-float: rgba(255, 255, 255, 0.18);
   --well: rgba(0, 0, 0, 0.34);
+  /* Saturation does the depth work: blur alone averages the backdrop to
+     mud, so the chain re-amplifies chroma and lifts the pane a step. */
+  --glass-blur: blur(18px) saturate(165%) brightness(1.05);
+  --glass-blur-float: blur(22px) saturate(170%) brightness(1.06);
   --glass-solid: #0d0d10;
+  /* The solid card plane inside a glass panel: one lightness step above
+     the panel's composited tone, no backdrop filter of its own. */
+  --glass-card-solid: #232329;
+  --glass-top-light: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02) 42%, rgba(255, 255, 255, 0) 72%);
+  --glass-hero-glow: radial-gradient(closest-side, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0));
+  /* Specular rim: the top edge catches roughly twice the light of the
+     sides, the bottom bounces a step less; equal edges read as an
+     outline, not as glass. The last layer is the pane's inner glow. */
+  --glass-rim:
+    inset 0 1px 1px rgba(255, 255, 255, 0.38),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.3),
+    inset 1px 0 1px rgba(255, 255, 255, 0.2),
+    inset -1px 0 1px rgba(255, 255, 255, 0.2),
+    inset 0 0 24px rgba(255, 255, 255, 0.03);
+  --glass-rim-float:
+    inset 0 1px 1px rgba(255, 255, 255, 0.45),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.3),
+    inset 1px 0 1px rgba(255, 255, 255, 0.2),
+    inset -1px 0 1px rgba(255, 255, 255, 0.2),
+    inset 0 0 24px rgba(255, 255, 255, 0.04);
   --shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
   --shadow-lift: 0 22px 48px rgba(0, 0, 0, 0.55);
+  /* Layered elevation tiers (contact / mid / ambient falloff): one heavy
+     shadow cannot be both crisp at the contact edge and soft at range. */
+  --shadow-panel: 0 4px 8px rgba(0, 0, 0, 0.4), 0 12px 24px rgba(0, 0, 0, 0.35), 0 24px 48px rgba(0, 0, 0, 0.22);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
+  --shadow-float: 0 8px 16px rgba(0, 0, 0, 0.45), 0 20px 40px rgba(0, 0, 0, 0.4), 0 40px 80px rgba(0, 0, 0, 0.28);
+  --shadow-tile: 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 10px rgba(0, 0, 0, 0.28);
+  --shadow-well: inset 0 2px 4px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(0, 0, 0, 0.35);
 }
 
 /* Reduced motion by construction: the token collapse lands every animated
@@ -67,6 +130,29 @@ body[data-ds-dark-theme] {
     --distance-lg: 0px;
     --stagger: 0ms;
     --lift: 0px;
+    --tilt-x: 0deg;
+    --tilt-y: 0deg;
+  }
+}
+
+/* Reduced transparency: the glass steps collapse to near-solid fills and
+   the blur chain empties, so every consuming surface keeps its boundary
+   (the 1px border stays) without the frost. */
+@media (prefers-reduced-transparency: reduce) {
+  body {
+    --glass: rgba(244, 244, 245, 0.97);
+    --glass-hi: rgba(244, 244, 245, 0.98);
+    --glass-strong: rgba(244, 244, 245, 0.99);
+    --glass-blur: none;
+    --glass-blur-float: none;
+  }
+
+  body[data-ds-dark-theme] {
+    --glass: rgba(24, 24, 28, 0.97);
+    --glass-hi: rgba(24, 24, 28, 0.98);
+    --glass-strong: rgba(24, 24, 28, 0.99);
+    --glass-blur: none;
+    --glass-blur-float: none;
   }
 }
 

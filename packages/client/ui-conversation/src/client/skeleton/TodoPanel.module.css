@@ -32,6 +32,16 @@
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
+/* Glass shell (dark): the todo strip is a card on the solid card plane
+   inside the thread panel — solid step fill, no backdrop filter of its
+   own, the rim and the card elevation. */
+:global([data-ds-dark-theme]) .root {
+  background: var(--glass-card-solid);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: var(--glass-rim), var(--shadow-card);
+}
+
 .body {
   display: flex;
   flex-direction: column;

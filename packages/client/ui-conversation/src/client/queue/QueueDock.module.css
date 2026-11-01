@@ -277,3 +277,12 @@
 .panel {
   animation: dsh-rise var(--dur-base) var(--ease-out) backwards;
 }
+
+/* Glass shell (dark): the attached tray shares the composer card's solid
+   plane — the fill pseudo takes the solid step and drops its backdrop
+   filter, so the tray and the card read as one attached surface. */
+:global([data-ds-dark-theme]) .panel::before {
+  background: var(--glass-card-solid);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}

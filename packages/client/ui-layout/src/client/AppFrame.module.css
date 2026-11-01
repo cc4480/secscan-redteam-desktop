@@ -295,41 +295,79 @@
    home is glass-shell.css (imported by AppFrame.tsx); this sheet carries
    the frame's own scene and geometry rules, consuming those tokens. */
 
-/* The lit backdrop (dark): layered radial light pools over a diagonal zinc
-   base, with a faint tonal grain as the top layer — a scene with real light
-   variation for the glass to blur against, never flat black. macOS keeps
+/* The lit backdrop (dark): a mesh of related-hue light pools over a lifted
+   zinc base — the base and pools are raised until the light is visible in
+   the gutters between panels, because glass over a flat near-black field
+   has nothing to refract and reads as a solid slab. The pools carry the
+   playbook mesh hues (indigo / cyan / violet, with the brand red as a low
+   ember) at dashboard alphas; a soft vignette keeps the field's focus at
+   the centre. One SVG-noise overlay (the ::after below) breaks gradient
+   banding and gives the blur a micro-texture; the old repeating-linear
+   grain striped visibly across large dark panes and is gone. macOS keeps
    its transparent frame (window vibrancy is the backdrop there). */
 :global(html:not([data-platform='darwin'])) :global(body[data-ds-dark-theme]) .frame {
   background:
-    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.012) 0 1px, transparent 1px 3px),
-    radial-gradient(1100px 620px at 18% -8%, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 60%),
-    radial-gradient(900px 700px at 88% 112%, rgba(214, 205, 188, 0.07), rgba(214, 205, 188, 0) 62%),
-    radial-gradient(820px 560px at 4% 82%, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 60%),
-    radial-gradient(700px 480px at 62% 30%, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0) 65%),
-    linear-gradient(168deg, #101013 0%, #0a0a0c 46%, #060607 100%);
-  background-color: #09090b;
+    radial-gradient(120% 90% at 50% 40%, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.32) 100%),
+    radial-gradient(1100px 620px at 18% -8%, rgba(94, 106, 210, 0.2), rgba(94, 106, 210, 0) 60%),
+    radial-gradient(900px 640px at 88% -6%, rgba(0, 184, 217, 0.12), rgba(0, 184, 217, 0) 58%),
+    radial-gradient(1000px 720px at 72% 112%, rgba(168, 85, 247, 0.1), rgba(168, 85, 247, 0) 60%),
+    radial-gradient(820px 560px at 4% 82%, rgba(217, 35, 68, 0.06), rgba(217, 35, 68, 0) 60%),
+    radial-gradient(760px 520px at 58% 26%, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 65%),
+    linear-gradient(168deg, #17171c 0%, #101014 46%, #0a0a0c 100%);
+  background-color: #0e0e11;
 }
 
-/* Floating geometry (dark, web + Windows caption layout excluded — the
-   caption layout keeps its edge-to-edge card): panels inset 12px with a
-   12px gutter, so the columns read as glass panels over the scene. The
-   Windows frame rule above owns the caption strip's top padding; only the
-   other three sides are set here. */
+/* The single app-wide noise overlay: an SVG turbulence tile at dashboard
+   opacity over the whole frame, panels included, so large panes carry the
+   acrylic micro-texture instead of smooth plastic. It never takes pointer
+   events and sits above the frame's overlay layer; portalled dialogs live
+   outside the frame and stay clean. */
+:global(html:not([data-platform='darwin'])) :global(body[data-ds-dark-theme]) .frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  opacity: 0.04;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Floating geometry (dark): panels inset 16px with a 16px gutter on every
+   layout, the Windows caption layout included — the caption strip keeps
+   the top (its rule above owns the top padding), the other three sides
+   float like the web shell, so the desktop surface is the same composed
+   shell and not an edge-to-edge card. */
 :global(html:not([data-windows-titlebar])) :global(body[data-ds-dark-theme]) .frame {
-  padding: 12px;
-  gap: 12px;
+  padding: 16px;
+  gap: 16px;
+}
+
+:global([data-windows-titlebar]) :global(body[data-ds-dark-theme]) .frame {
+  padding-right: 16px;
+  padding-bottom: 16px;
+  padding-left: 16px;
+  gap: 16px;
 }
 
 /* Drag handles are positioned from the solved column widths; the floating
-   geometry moves the sidebar gutter's centre 18px right of the solved edge
-   (12px frame padding + half the 12px gap) and the rightbar gutter's centre
-   18px left of it. */
+   geometry moves the sidebar gutter's centre 24px right of the solved edge
+   (16px frame padding + half the 16px gap) and the rightbar gutter's centre
+   24px left of it, on both frame layouts. */
 :global(html:not([data-windows-titlebar])) :global(body[data-ds-dark-theme]) .handle[data-side='sidebar'] {
-  transform: translateX(18px);
+  transform: translateX(24px);
 }
 
 :global(html:not([data-windows-titlebar])) :global(body[data-ds-dark-theme]) .handle[data-side='rightbar'] {
-  transform: translateX(-18px);
+  transform: translateX(-24px);
+}
+
+:global([data-windows-titlebar]) :global(body[data-ds-dark-theme]) .handle[data-side='sidebar'] {
+  transform: translateX(24px);
+}
+
+:global([data-windows-titlebar]) :global(body[data-ds-dark-theme]) .handle[data-side='rightbar'] {
+  transform: translateX(-24px);
 }
 
 /* Columns stop painting their own ground in dark: the scene is the ground,

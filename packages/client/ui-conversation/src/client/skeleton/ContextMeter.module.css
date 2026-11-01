@@ -131,6 +131,17 @@
   --meter-tint: var(--dsw-static-blue-450);
 }
 
+/* Glass shell (dark): the breakdown popover is a floating-plane surface —
+   the strongest tint step, the floating blur chain, the brighter float
+   border, and the rim and elevation of the floating tier. */
+:global([data-ds-dark-theme]) .panel {
+  background: var(--glass-top-light), var(--glass-strong);
+  -webkit-backdrop-filter: var(--glass-blur-float);
+  backdrop-filter: var(--glass-blur-float);
+  border: 1px solid var(--glass-line-float);
+  box-shadow: var(--glass-rim-float), var(--shadow-float);
+}
+
 .rows {
   margin: 6px 0 0;
 }

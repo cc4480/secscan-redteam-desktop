@@ -552,24 +552,61 @@ button.crumb:hover {
   animation-delay: var(--stagger);
 }
 
-/* Glass shell (dark): the thread column is a glass panel over the lit
-   scene — translucent fill, backdrop blur, hairline border, top highlight.
-   The composer seat's fade band follows: it melts into the panel's solid
-   step (--glass-solid) instead of the opaque base it used before. */
+/* Glass shell (dark): the conversation column is composed of floating
+   glass planes over the lit scene, not one monolith. In the hero phase
+   the root is a single panel framing the new-session stack. In the
+   active phase the root goes transparent and its regions become separate
+   planes with the scene showing in the gutter between them: the header
+   is a glass card, the thread scroller is a glass panel, and the
+   composer seat's cards sit on the solid card plane inside it (their own
+   sheets own that step). Every glass plane carries the top-light
+   falloff, the asymmetric specular rim, and the layered panel elevation.
+   The composer seat's fade band melts the transcript into the panel's
+   solid step (--glass-solid) above the composer card. */
 :global([data-ds-dark-theme]) .root {
   box-sizing: border-box;
-  background: var(--glass);
+  background: var(--glass-top-light), var(--glass);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-line);
   border-radius: 18px;
-  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow);
+  box-shadow: var(--glass-rim), var(--shadow-panel);
+}
+
+:global([data-ds-dark-theme]) .root[data-phase='active'] {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-color: transparent;
+  box-shadow: none;
+  gap: 16px;
+}
+
+:global([data-ds-dark-theme]) .root[data-phase='active'] .header {
+  background: var(--glass-top-light), var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-line);
+  border-radius: 16px;
+  box-shadow: var(--glass-rim), var(--shadow-panel);
+}
+
+:global([data-ds-dark-theme]) .root[data-phase='active'] .scrollBody {
+  /* The panel's right edge sits flush: the 2px bar offset belongs to the
+     column edge, and the webkit track margin keeps the bar itself clear. */
+  margin-right: 0;
+  background: var(--glass-top-light), var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-line);
+  border-radius: 18px;
+  box-shadow: var(--glass-rim), var(--shadow-panel);
 }
 
 :global([data-ds-dark-theme]) .root[data-phase='active'] .composerSeat {
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--glass-solid) 0%, transparent) 0px,
-    var(--glass-solid) 36px
+    color-mix(in srgb, var(--glass-card-solid) 0%, transparent) 0px,
+    var(--glass-card-solid) 36px
   );
 }
