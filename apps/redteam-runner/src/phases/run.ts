@@ -4,7 +4,7 @@
 import { ApprovalLog, TIER_ENV, defaultTier, describeTier, parseTier, requireNamedOperator, requireTier2ProductionApproval, resolveOperatorName, tier2ProductionConfirmed, writeTierFile } from "../accountability/index.js";
 import { type BatteryCategory } from "../battery.js";
 import { type Ctx, HaltError } from "../context.js";
-import { type EngagementInput, type EngagementResult } from "../types.js";
+import { type EngagementInput, type EngagementResult, type Finding } from "../types.js";
 import { EventLog } from "../events.js";
 import { HostExecutor } from "../host-exec/index.js";
 import { McpClient } from "../mcp.js";
@@ -17,6 +17,7 @@ import { WebProber, allHostsPrivateOrLoopback } from "../prober.js";
 import { activeTargets } from "../targets.js";
 import { buildItemLedger } from "../coverage/items.js";
 import { fireSlack, reportPhase } from "../report.js";
+import { finalizeDeliverables } from "../report/deliverables.js";
 import { inTestWindow, scopeHosts } from "../gate.js";
 import { safeEngagementId } from "../util.js";
 import { existsSync } from "node:fs";
@@ -249,7 +250,19 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
   try {
     const verdict = await authorizePhase(ctx);
     if (!verdict.allowed) {
-      result = { engagementId, status: "blocked", blockedReason: verdict.reason, findings: [] };
+      // Q-DELIVERABLES-AUTOFIRE (P3): a blocked end still closes with the
+      // deliverable set — mechanically (no reporter LLM), the block as the
+      // headline and grade N/A — so a refused scan never vanishes silently.
+      // Defensive like the halt path: a failure here never masks the block.
+      events.updateState({ status: "blocked", phase: "report", blockedReason: verdict.reason });
+      let blockedFindings: Finding[] = [];
+      try {
+        blockedFindings = await reportPhase(ctx, brief, summary, { blockedReason: verdict.reason });
+      } catch (reportErr) {
+        events.append({ phase: "report", actor: "runner", action: "blocked_report_failed", result: `Could not write blocked-end artifacts: ${(reportErr as Error).message}` });
+      }
+      const delivered = finalizeDeliverables(ctx);
+      result = { engagementId, status: "blocked", blockedReason: verdict.reason, reportPath: join(dir, "report.md"), findings: blockedFindings, deliverables: delivered.paths, ...(delivered.ok ? {} : { deliverableFailed: true as const }) };
       return result;
     }
     // Q-MEMTIER moment 2 (§7.1): derive the verified scope and assemble
@@ -283,9 +296,16 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
     );
     const findings = await reportPhase(ctx, brief, summary);
     void fireSlack(ctx, { kind: "phase", phase: "report" });
+    // Q-DELIVERABLES-AUTOFIRE: verify the closing deliverable set on disk
+    // before the completion is recorded — the clean engagement_complete
+    // event is emitted only when the whole set is present; otherwise the
+    // deliverable_failed event + state stamp are the closing record.
+    const delivered = finalizeDeliverables(ctx);
     events.updateState({ status: "complete", phase: "done" });
-    events.append({ phase: "done", actor: "runner", action: "engagement_complete", result: `Complete. ${findings.length} findings.` });
-    result = { engagementId, status: "complete", reportPath: join(dir, "report.md"), findings };
+    if (delivered.ok) {
+      events.append({ phase: "done", actor: "runner", action: "engagement_complete", result: `Complete. ${findings.length} findings.` });
+    }
+    result = { engagementId, status: "complete", reportPath: join(dir, "report.md"), findings, deliverables: delivered.paths, ...(delivered.ok ? {} : { deliverableFailed: true as const }) };
     return result;
   } catch (err) {
     const reason = err instanceof HaltError ? err.message : `unexpected error: ${(err as Error).message}`;
@@ -305,7 +325,11 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
     } catch (reportErr) {
       events.append({ phase: "halted", actor: "runner", action: "halt_report_failed", result: `Could not write halt artifacts: ${(reportErr as Error).message}` });
     }
-    result = { engagementId, status: "halted", blockedReason: reason, reportPath, findings };
+    // Q-DELIVERABLES-AUTOFIRE (G5): the halt close also verifies the set —
+    // including when reportPhase itself threw — so the record always
+    // names what was delivered and flags any gap.
+    const delivered = finalizeDeliverables(ctx);
+    result = { engagementId, status: "halted", blockedReason: reason, reportPath, findings, deliverables: delivered.paths, ...(delivered.ok ? {} : { deliverableFailed: true as const }) };
     return result;
   } finally {
     unregisterLive(engagementId);

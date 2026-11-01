@@ -32,6 +32,7 @@ import { capture, type Captured, type ToolDef } from "./mcp-tools.js";
 import { handleDetail, handleLaunch } from "./routes/engagements.js";
 import { engagementDir } from "./store.js";
 import { readState, type LiveState } from "../events.js";
+import { deliverableToolFields } from "../report/deliverables.js";
 import type { UiLaunchRequest } from "./types.js";
 
 const str = (d: string): Record<string, unknown> => ({ type: "string", description: d });
@@ -278,16 +279,15 @@ const reportTool: ToolDef = {
       };
     }
     // report.md exists, so state.json does too (engagementDir requires it)
-    // and the directory join is safe.
+    // and the directory join is safe. Q-DELIVERABLES-AUTOFIRE: deliverableToolFields.
     const dir = engagementDir(store.engagementsDir, id)!;
-    const html = store.readTextArtifact(id, "report.html");
     return {
       status: 200,
       body: {
         id,
         ready: true,
         reportPath: join(dir, "report.md"),
-        ...(html !== null ? { reportHtmlPath: join(dir, "report.html") } : {}),
+        ...deliverableToolFields(dir),
         content,
         summary: `Report for engagement ${id} is ready. Deliver it in this thread — it lives in the app; do not link out to any external report.`,
       },

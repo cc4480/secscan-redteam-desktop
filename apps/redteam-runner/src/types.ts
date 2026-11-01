@@ -246,6 +246,17 @@ export interface EngagementResult {
   /** Present when the run was blocked/halted before completion. */
   blockedReason?: string
   reportPath?: string
+  /**
+   * Q-DELIVERABLES-AUTOFIRE: the closing deliverable set, by file name —
+   * the absolute path of every deliverable verified on disk at close
+   * (report.html/.md/.json/.txt, findings.csv, report.docx,
+   * report-package.zip). Attached by finalizeDeliverables on every
+   * recorded end (complete, halted, blocked).
+   */
+  deliverables?: Record<string, string>
+  /** True when the deliverable set was incomplete at close: the
+   * engagement must not be read as cleanly complete. */
+  deliverableFailed?: boolean
   findings: Finding[]
   /**
    * Q-MEMTIER two-phase commit receipt (brief §7.2): archive + diff

@@ -32,7 +32,7 @@ import { extractNarrative } from "./narrative.js";
 import { buildEngagementMeta, type ReportMeta } from "./html.js";
 import { renderEngagementReportHtml, type EngagementReportInput } from "./html/render.js";
 import { buildEngagementReportInput, buildFindingMeta } from "./html/wire.js";
-import { emitDeliverables, emitFindingsSheet, stampFindingRefs } from "./finding-refs.js";
+import { emitDeliverables, emitFindingsSheet, stampFindingRefs, writeReportMd } from "./finding-refs.js";
 import { buildDetailInput, recordReportMeta } from "./predecessor.js";
 import { type DetailInput } from "./detail.js";
 import { buildGradeSection, gradeFindings } from "./grading.js";
@@ -45,7 +45,7 @@ export async function reportPhase(
   ctx: Ctx,
   reconBrief: string,
   exploitSummary: string,
-  opts: { haltedReason?: string } = {},
+  opts: { haltedReason?: string; blockedReason?: string } = {},
 ): Promise<Finding[]> {
   const selected = ctx.input.fullBattery ? activeTargets(ctx.input) : [];
   const fbCells = selected.flatMap((t) => BATTERY_CATEGORIES.map((c) => ({ t, c })));
@@ -114,21 +114,20 @@ export async function reportPhase(
       (covered.length < 3 ? `NOT COVERED: ${BATTERY_CATEGORIES.filter((c) => !ctx.coverage.has(c)).join(", ")} — list these under Honest limits.` : "Full battery complete.");
   let reportMd: string;
   let findings: Finding[];
-  if (opts.haltedReason) {
+  if (opts.haltedReason || opts.blockedReason) {
     // Halt path (action/duration cap, 5xx auto-halt, kill switch, aborted
-    // sign-off, unexpected error): NEVER run the reporter LLM here — it could
+    // sign-off, unexpected error) and blocked path (authorization denied;
+    // Q-DELIVERABLES-AUTOFIRE P3): NEVER run the reporter LLM here — it could
     // re-hit the same cap and we would lose the accountability record exactly
     // when it matters most. Build the report mechanically from the audit-log
-    // state so the safety manifest, proof bundles, and item verdicts still
-    // ship. Findings are the live-confirmed set recorded during the run.
+    // state; findings are the live set recorded so far.
     reportMd =
-      `# Engagement report (HALTED)\n\n` +
+      `# Engagement report (${opts.blockedReason ? "BLOCKED" : "HALTED"})\n\n` +
       `Target: ${ctx.input.target}\nMode: ${ctx.input.mode}\n` +
-      `Status: HALTED — ${opts.haltedReason}\n` +
+      `Status: ${opts.blockedReason ? "BLOCKED" : "HALTED"} — ${opts.haltedReason ?? opts.blockedReason}\n` +
       `Authorization: ${ctx.verificationProof}\n\n` +
-      `This engagement halted before the reporter phase. The findings, coverage, ` +
-      `proof bundles, and safety manifest below are the runner-computed record of ` +
-      `work completed up to the halt — no reporter-agent narrative was generated.\n`;
+      `This engagement ${opts.blockedReason ? "was blocked at authorization, before any testing" : "halted before the reporter phase"}. The findings, coverage, proof bundles, and safety manifest below are the runner-computed record of ` +
+      `work completed up to the ${opts.blockedReason ? "block" : "halt"} — no reporter-agent narrative was generated.\n`;
     findings = ctx.liveFindings.map((lf, i) => haltedFindingFromLive(lf, i));
     stampPeerVerdicts(findings, ctx);
   } else if (ctx.config.dryRunAgents) {
@@ -173,15 +172,15 @@ export async function reportPhase(
   reportMd += `\n\n---\n\n## Battery coverage (runner-computed)\n\n${batteryLine}\n`;
   // The engagement grade: the embedded Seclayer anchored scoring engine
   // is the runner's one grading voice (report/grading.ts) — deterministic,
-  // computed here from the final confirmed findings, never the model's.
+  // computed here from the final confirmed findings, never the model's — and never issued for a halted/blocked end (N/A, as the HTML cover renders).
   {
     const posture = gradeFindings(findings);
-    reportMd += `\n---\n\n${buildGradeSection(findings)}`;
+    reportMd += `\n---\n\n${opts.haltedReason || opts.blockedReason ? `## Security grade — SecScan (anchored scoring)\n\n**Grade N/A** — engagement ${opts.blockedReason ? "blocked" : "halted"}; no grade is issued for an incomplete engagement.\n` : buildGradeSection(findings)}`;
     ctx.events.append({
       phase: "report",
       actor: "runner",
       action: "report_grade",
-      result: `Security grade ${posture.grade} (${posture.score}/100, ${posture.postureRating}) over ${posture.activeCount} confirmed finding(s) — Seclayer anchored scoring.`,
+      result: opts.haltedReason || opts.blockedReason ? `Security grade N/A — engagement ${opts.blockedReason ? "blocked" : "halted"}; no grade issued for an incomplete engagement.` : `Security grade ${posture.grade} (${posture.score}/100, ${posture.postureRating}) over ${posture.activeCount} confirmed finding(s) — Seclayer anchored scoring.`,
     });
   }
   // v0.21.0 nuclei: honest counting — template executions are variant-level
@@ -233,7 +232,7 @@ export async function reportPhase(
   const reportEvents = readEvents(ctx.events.dir, 0, 100000);
   reportMd += buildActivitySection(reportEvents);
   reportMd += await buildIntegrationsSection(ctx, findings, pocBundleMap);
-  writeFileSync(join(ctx.events.dir, "report.md"), reportMd);
+  writeReportMd(ctx, reportMd);
   emitFindingsSheet(ctx, findings, pocBundleMap);
   // The HTML twin is the human-facing deliverable — self-contained, severity
   // colour-coded, print/PDF-ready. report.md stays as the diffable, greppable
@@ -282,6 +281,7 @@ export async function reportPhase(
       planOnly: fbPlanOnly,
       events: reportEvents,
       haltedReason: opts.haltedReason,
+      blockedReason: opts.blockedReason,
       detailInput,
     });
     writeFileSync(join(ctx.events.dir, "report.html"), renderEngagementReportHtml(reportInput));
@@ -289,8 +289,8 @@ export async function reportPhase(
   } catch (err) {
     ctx.events.append({ phase: "report", actor: "runner", action: "report_html_failed", result: `HTML report generation failed (report.md unaffected): ${(err as Error).message}` });
   }
-  // Q-RP-2 + Q-RP-5: the DOCX copy, then the deliverable package (finding-refs.ts hooks).
-  emitDeliverables(ctx, reportInput);
+  // Q-RP-2 + Q-RP-5 + Q-DELIVERABLES-AUTOFIRE: DOCX, report model twins (json/txt), package (finding-refs.ts hooks).
+  emitDeliverables(ctx, reportInput, { findings, totals: lsum, cells: fbStatus, haltedReason: opts.haltedReason, blockedReason: opts.blockedReason });
   ctx.events.append({ phase: "report", actor: "reporter", action: "report_written", result: `Report written (${findings.length} findings parsed).` });
   const safetyManifest = writeSafetyArtifacts(ctx);
   writeComplianceArtifacts(ctx, findings, batteryLine, safetyManifest);

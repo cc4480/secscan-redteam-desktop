@@ -90,7 +90,7 @@ describe('autonomous engagement protocol', () => {
     for (const id of ['executive-summary', 'authorization', 'scope', 'findings', 'honest-limits', 'appendix-coverage']) {
       assert.ok(required.includes(id), `${id} is required`)
     }
-    assert.deepEqual(REPORT_CONTRACT.formats, ['report.html', 'report.md', 'findings.csv', 'report.docx', 'report-package.zip'])
+    assert.deepEqual(REPORT_CONTRACT.formats, ['report.html', 'report.md', 'report.json', 'report.txt', 'findings.csv', 'report.docx', 'report-package.zip'])
     assert.equal(REPORT_CONTRACT.severityScale[0], 'critical')
   })
 

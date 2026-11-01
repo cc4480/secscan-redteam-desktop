@@ -1,7 +1,8 @@
 /**
  * Q-RP-5 — the deliverable package zip: ONE zip carrying the full
- * client deliverable set (report.html, report.md, findings.csv,
- * report.docx) plus the proof bundles the report cites (poc/*.json).
+ * client deliverable set (report.html, report.md, report.json,
+ * report.txt, findings.csv, report.docx) plus the proof bundles the
+ * report cites (poc/*.json). (Set extended by Q-DELIVERABLES-AUTOFIRE.)
  * The suite pins the package against the artifacts on disk — entry list
  * exact, every entry byte-equal to the individually emitted artifact —
  * because the package is a bundle of those files, never a re-render.
@@ -26,6 +27,8 @@ import { type Ctx } from "../src/context.js";
 const ARTIFACT_BYTES: Record<string, Buffer> = {
   "report.html": Buffer.from("<!doctype html><html><body>fixture report</body></html>\n"),
   "report.md": Buffer.from("# Engagement report (fixture)\n\nFindings follow.\n"),
+  "report.json": Buffer.from(JSON.stringify({ kind: "secscan-redteam-report", version: 1, findingCount: 1 }, null, 2) + "\n"),
+  "report.txt": Buffer.from("SecScan RedTeam — Penetration Test Report (plain-text summary)\n\nFindings: 1\n"),
   "findings.csv": Buffer.from("id,title,severity\r\nF-1,Fixture finding,high\r\n"),
   // Arbitrary binary content: the package must carry the DOCX verbatim,
   // whatever its bytes are.
@@ -37,13 +40,15 @@ const ARTIFACT_BYTES: Record<string, Buffer> = {
 const EXPECTED_ENTRIES = [
   "report.html",
   "report.md",
+  "report.json",
+  "report.txt",
   "findings.csv",
   "report.docx",
   "poc/F-1.json",
   "poc/F-2.json",
 ];
 
-/** Write the four deliverables + two poc bundles (+ one non-JSON file
+/** Write the six deliverables + two poc bundles (+ one non-JSON file
  * the package must NOT pick up) into a fresh engagement directory. */
 function seedEngagementDir(order: string[] = Object.keys(ARTIFACT_BYTES)): string {
   const dir = mkdtempSync(join(tmpdir(), "report-package-"));
@@ -88,7 +93,7 @@ describe("report package (Q-RP-5)", () => {
     assert.deepEqual(Buffer.from(buildReportPackage(b)), Buffer.from(buildReportPackage(a)));
   });
 
-  it("an engagement with no proof bundles packages the four deliverables alone", () => {
+  it("an engagement with no proof bundles packages the six deliverables alone", () => {
     const dir = mkdtempSync(join(tmpdir(), "report-package-nopoc-"));
     for (const name of PACKAGE_DELIVERABLES) writeFileSync(join(dir, name), ARTIFACT_BYTES[name]!);
     assert.deepEqual(Object.keys(collectPackageEntries(dir)), [...PACKAGE_DELIVERABLES]);
@@ -113,7 +118,7 @@ describe("report package (Q-RP-5)", () => {
     assert.deepEqual(Object.keys(files).sort(), [...EXPECTED_ENTRIES].sort());
     assert.equal(appended.length, 1);
     assert.equal(appended[0]!.action, "report_package_written");
-    assert.match(appended[0]!.result ?? "", /6 entries/);
+    assert.match(appended[0]!.result ?? "", /8 entries/);
   });
 
   it("emitReportPackage failure leaves the artifacts intact and records the failure", () => {

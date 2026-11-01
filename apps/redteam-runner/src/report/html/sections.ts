@@ -17,6 +17,7 @@ export interface CoverInput {
   posture: SecurityPosture;
   tierCounts: Record<ReportTier, number>;
   haltedReason?: string;
+  blockedReason?: string;
   dryRun?: boolean;
   /** Baseline deltas (detail.ts outputs), present only when a same-engine
    * baseline with a recorded score exists — never a fabricated Δ 0. */
@@ -38,11 +39,13 @@ function deltaClass(n: number, upIsGood: boolean): string {
 export function coverSection(o: CoverInput): string {
   const m = o.meta;
   const halted = typeof o.haltedReason === "string" && o.haltedReason.length > 0;
-  const gauge = halted
+  const blocked = typeof o.blockedReason === "string" && o.blockedReason.length > 0;
+  const ended = halted || blocked;
+  const gauge = ended
     ? scoreGauge({ score: null, grade: "N/A" })
     : scoreGauge({ score: o.posture.score, grade: o.posture.grade });
-  const counts = halted
-    ? `<div class="counts-line">engagement halted</div>`
+  const counts = ended
+    ? `<div class="counts-line">engagement ${blocked ? "blocked" : "halted"}</div>`
     : `<div class="counts-line">${o.tierCounts.proven} proven · ${o.tierCounts.confirmed} confirmed · ${o.tierCounts.deferred} deferred</div>`;
   const statusPill =
     m.status === "complete" ? "ok" : m.status === "halted" || m.status === "blocked" ? "bad" : "";
@@ -64,10 +67,10 @@ export function coverSection(o: CoverInput): string {
     (m.objective ? `<p class="objective">${esc(m.objective)}</p>` : "") +
     `<dl class="meta-grid">${rows.join("")}</dl></div>` +
     `<div class="score-block">${gauge}` +
-    `<div class="posture-word">${halted ? "Incomplete" : esc(o.posture.postureRating)}</div>` +
+    `<div class="posture-word">${ended ? "Incomplete" : esc(o.posture.postureRating)}</div>` +
     severityBar(o.posture.findingsBySeverity as Record<SeverityName, number>) +
     counts +
-    (o.delta && !halted
+    (o.delta && !ended
       ? `<div class="delta-line">` +
         (o.delta.scoreDelta !== undefined
           ? `Δ score <span class="${deltaClass(o.delta.scoreDelta, true)}">${signed(o.delta.scoreDelta)}</span> · `
@@ -84,6 +87,15 @@ export function haltBanner(reason: string): string {
   return (
     `<div class="banner critical"><h3>Engagement Halted</h3>` +
     `<p>${esc(reason)} Findings, coverage, and proof below are the runner-computed record of work completed up to the halt.</p></div>`
+  );
+}
+
+/** The blocked banner: authorization denied before any testing ran —
+ * the block is the headline and no grade is issued (Q-DELIVERABLES-AUTOFIRE P3). */
+export function blockedBanner(reason: string): string {
+  return (
+    `<div class="banner critical"><h3>Engagement Blocked</h3>` +
+    `<p>${esc(reason)} Authorization was denied before any testing ran; this record of the block is the engagement's complete deliverable content.</p></div>`
   );
 }
 

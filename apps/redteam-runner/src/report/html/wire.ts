@@ -50,6 +50,7 @@ export interface WireDeps {
   planOnly: string[];
   events: EngagementEvent[];
   haltedReason?: string;
+  blockedReason?: string;
   /** The assembled detail derivations input (report/predecessor.ts),
    * when the phase could build one; absent => pre-detail anatomy. */
   detailInput?: DetailInput;
@@ -278,6 +279,7 @@ export function buildEngagementReportInput(deps: WireDeps): EngagementReportInpu
     activity,
     matter: buildMatter(deps, coverage, activity),
     haltedReason: deps.haltedReason,
+    blockedReason: deps.blockedReason,
     dryRun: deps.ctx.config.dryRunAgents,
   };
 }

@@ -59,6 +59,7 @@ function findingParas(o: EngagementReportInput, f: Finding, tier: ReportTier): s
 export function buildReportDocx(o: EngagementReportInput): Uint8Array {
   const m = o.meta
   const halted = typeof o.haltedReason === 'string' && o.haltedReason.length > 0
+  const blocked = typeof o.blockedReason === 'string' && o.blockedReason.length > 0
   const byTier = new Map<ReportTier, Finding[]>()
   for (const f of o.findings) {
     const tier = tierOf(f, o.bundles.get(f.id))
@@ -90,9 +91,9 @@ export function buildReportDocx(o: EngagementReportInput): Uint8Array {
   if (m.objective) body.push(...labelledBlock('Objective', m.objective))
 
   body.push(heading('Security Grade', 1))
-  if (halted) {
-    body.push(para('Grade N/A — engagement halted.'))
-    body.push(para(o.haltedReason as string))
+  if (halted || blocked) {
+    body.push(para(`Grade N/A — engagement ${blocked ? 'blocked' : 'halted'}.`))
+    body.push(para((blocked ? o.blockedReason : o.haltedReason) as string))
   } else {
     body.push(para([
       { text: 'Grade: ', bold: true },

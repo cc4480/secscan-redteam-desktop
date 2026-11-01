@@ -24,6 +24,7 @@ import {
   activitySection,
   allClearSection,
   bannerSection,
+  blockedBanner,
   coverSection,
   coverageSection,
   fixPromptSection,
@@ -75,6 +76,9 @@ export interface EngagementReportInput {
    * when the phase assembled them. Absent => no matter sections render. */
   matter?: ReportMatter;
   haltedReason?: string;
+  /** Authorization was denied before testing (Q-DELIVERABLES-AUTOFIRE
+   * P3): the cover renders N/A and the blocked banner leads. */
+  blockedReason?: string;
   dryRun?: boolean;
 }
 
@@ -138,6 +142,7 @@ document.querySelectorAll("[data-copy]").forEach(function (b) {
 export function renderEngagementReportHtml(o: EngagementReportInput): string {
   const { groups, counts } = groupFindings(o);
   const halted = typeof o.haltedReason === "string" && o.haltedReason.length > 0;
+  const blocked = typeof o.blockedReason === "string" && o.blockedReason.length > 0;
   const activeCount = counts.proven + counts.confirmed + counts.deferred;
 
   const parts: string[] = [];
@@ -152,9 +157,10 @@ export function renderEngagementReportHtml(o: EngagementReportInput): string {
       }
     : undefined;
   parts.push(
-    coverSection({ meta: o.meta, posture: o.posture, tierCounts: counts, haltedReason: o.haltedReason, dryRun: o.dryRun, delta: coverDelta }),
+    coverSection({ meta: o.meta, posture: o.posture, tierCounts: counts, haltedReason: o.haltedReason, blockedReason: o.blockedReason, dryRun: o.dryRun, delta: coverDelta }),
   );
   if (halted) parts.push(haltBanner(o.haltedReason as string));
+  else if (blocked) parts.push(blockedBanner(o.blockedReason as string));
   else if (o.banner) parts.push(bannerSection(o.banner));
 
   // Q-RP-7 front matter: the recorded frame (scope, authorisation,
@@ -188,7 +194,7 @@ export function renderEngagementReportHtml(o: EngagementReportInput): string {
   );
 
   parts.push(`<h2 class="sec-title">Findings</h2>`);
-  if (activeCount === 0 && !halted) parts.push(allClearSection());
+  if (activeCount === 0 && !halted && !blocked) parts.push(allClearSection());
   for (const g of groups) {
     parts.push(
       `<h3 class="tier-head">${TIER_LABEL[g.tier]} — ${g.cards.length}</h3>` +

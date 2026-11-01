@@ -103,7 +103,7 @@ export const REPORT_CONTRACT: ReportContract = {
     { id: "compliance", required: false, content: "PCI DSS 4.0.1 11.4 / SOC 2 / ISO 27001 mapping when requested" },
     { id: "appendix-coverage", required: true, content: "battery cells probed, blocked and skipped, per family" },
   ],
-  formats: ["report.html", "report.md", "findings.csv", "report.docx", "report-package.zip"],
+  formats: ["report.html", "report.md", "report.json", "report.txt", "findings.csv", "report.docx", "report-package.zip"],
   severityScale: ["critical", "high", "medium", "low", "info"],
 } as const;
 

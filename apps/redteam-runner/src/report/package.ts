@@ -1,14 +1,14 @@
 /**
  * Q-RP-5 — the deliverable package: ONE zip carrying the engagement's
- * full client deliverable set — report.html, report.md, findings.csv,
- * report.docx — plus the proof bundles the report cites (poc/*.json),
- * so a client receives a single downloadable file instead of a loose
- * directory. It is emitted after the individual artifacts and packages
- * their bytes read back from the engagement directory: the package
- * reconciles with the loose deliverables byte-for-byte and never
- * re-renders anything.
+ * full client deliverable set — report.html, report.md, report.json,
+ * report.txt, findings.csv, report.docx — plus the proof bundles the
+ * report cites (poc/*.json), so a client receives a single downloadable
+ * file instead of a loose directory. It is emitted after the individual
+ * artifacts and packages their bytes read back from the engagement
+ * directory: the package reconciles with the loose deliverables
+ * byte-for-byte and never re-renders anything.
  *
- * The four named artifacts are the package contract. If one is missing
+ * The six named artifacts are the package contract. If one is missing
  * — its own writer already recorded that failure — the package fails
  * loudly rather than shipping a partial set under the full-set name.
  * Proof bundles are evidence attachments: the poc/*.json files present
@@ -34,6 +34,8 @@ export const REPORT_PACKAGE_NAME = "report-package.zip";
 export const PACKAGE_DELIVERABLES = [
   "report.html",
   "report.md",
+  "report.json",
+  "report.txt",
   "findings.csv",
   "report.docx",
 ] as const;
@@ -41,7 +43,7 @@ export const PACKAGE_DELIVERABLES = [
 // Local components, not UTC: fflate reads the mtime's LOCAL date parts, and 1980-01-01T00:00Z is still 1979 west of UTC.
 const PACKAGE_MTIME = new Date(1980, 0, 1, 0, 0, 0);
 
-/** The zip entries for an engagement directory: the four deliverables
+/** The zip entries for an engagement directory: the six deliverables
  * read back verbatim, then every poc/*.json bundle in sorted order.
  * Throws naming the first missing deliverable. */
 export function collectPackageEntries(dir: string): Record<string, Uint8Array> {
