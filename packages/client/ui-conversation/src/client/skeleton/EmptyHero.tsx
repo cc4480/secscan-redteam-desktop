@@ -1,10 +1,9 @@
 // The composer remains in ConversationRoot so switching out of the blank-draft
 // phase does not remount its textarea.
 
-import { useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import {
-  FISH_LOGO_PATH, FISH_LOGO_VIEWBOX, IconChevronDownOutlineRegular, IconFolderCloseRegular, IconFolderOpenRegular,
+  DiamondLogo, IconChevronDownOutlineRegular, IconFolderCloseRegular, IconFolderOpenRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { workspaceTitleOf } from '@deepseek-ai/dsh-util-workspace-path'
 import type { ConversationContentProps } from '../contract/slots.ts'
@@ -72,27 +71,15 @@ export interface HeroShellProps {
 }
 
 /**
- * The hero fallback mark (34px wide): the primitives' mark glyph in
- * headline ink. It sways on hover (the `.fishSwim` rules in
- * HeroShell.module.css); a registered occupant of the hero brand slot —
- * the official diamond — replaces it wholesale and always holds still.
- * @param props.hovering - driven by the hitbox parent's pointer state.
+ * The hero fallback mark: the SecScan RedTeam diamond at 34px, in its
+ * official fixed fills. A registered occupant of the hero brand slot
+ * renders the same diamond; the fallback exists so a build without a
+ * brand package still shows the product mark. The diamond always holds
+ * still — no hover animation rides it.
  * @returns the mark svg element.
  */
-function HeroFish({ hovering }: { hovering: boolean }) {
-  return (
-    <svg
-      className={[css.fish, css.fishSwim].join(' ')}
-      data-hovering={hovering ? '' : undefined}
-      width={34}
-      height={(34 * FISH_LOGO_VIEWBOX.height) / FISH_LOGO_VIEWBOX.width}
-      viewBox={`0 0 ${FISH_LOGO_VIEWBOX.width} ${FISH_LOGO_VIEWBOX.height}`}
-      fill="none"
-      aria-hidden="true"
-    >
-      <path d={FISH_LOGO_PATH} fill="currentColor" fillRule="evenodd" />
-    </svg>
-  )
+function HeroDiamond() {
+  return <DiamondLogo size={34} className={css.fish} />
 }
 
 /**
@@ -101,23 +88,14 @@ function HeroFish({ hovering }: { hovering: boolean }) {
  * @returns the centered hero element tree.
  */
 export function HeroShell({ t, renderSlot, children }: HeroShellProps) {
-  const [hovering, setHovering] = useState(false)
   return (
     <div className={css.root}>
       <div className={css.stack}>
         <div className={css.headline}>
-          {/* figma 34:10412: fish 34×25 leading the headline, gap 10. */}
-          <span
-            className={css.fishHitbox}
-            onMouseEnter={() => {
-              if (window.matchMedia('(hover: hover) and (prefers-reduced-motion: no-preference)').matches) {
-                setHovering(true)
-              }
-            }}
-            onMouseLeave={() => { setHovering(false) }}
-          >
+          {/* The 34px diamond leading the headline, gap 10. */}
+          <span className={css.fishHitbox}>
             {renderSlot('conversation.hero.brand.mark', { size: 34, className: css.fish }, {
-              fallback: <HeroFish hovering={hovering} />,
+              fallback: <HeroDiamond />,
             })}
           </span>
           <span className={css.titleGroup}>

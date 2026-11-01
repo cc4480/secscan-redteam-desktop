@@ -67,15 +67,15 @@ describe('glass shell — screenshot proof (Q-UI-GLASS truth pass)', () => {
     expect(svg.getAttribute('viewBox')).toBe('0 0 100 100')
     expect(svg.getAttribute('width')).toBe('34')
     expect(svg.getAttribute('height')).toBe('34')
-    expect(svg.innerHTML).toContain('fill="#d92344"')
-    expect(svg.innerHTML).toContain('#38b2e8')
+    expect(svg.innerHTML).toContain('fill="#CF2B4D"')
+    expect(svg.innerHTML).toContain('#38BDF8')
     expect(svg.innerHTML).not.toContain('currentColor')
   })
 
-  it('the official profile seats the diamond in the sidebar and the hero', () => {
+  it('the brand package seats the diamond in the sidebar and the hero in every profile', () => {
     const index = readRepo('packages/client/ui-brand-official/src/client/index.ts')
     const brand = readRepo('packages/client/ui-brand-official/src/client/Brand.tsx')
-    expect(index).toContain("process.env.DSH_CLIENT_BUILD_PROFILE !== 'official'")
+    expect(index).not.toContain('DSH_CLIENT_BUILD_PROFILE')
     expect(index).toContain("'sidebar.brand.mark'")
     expect(index).toContain("'conversation.hero.brand.mark'")
     expect(brand).toContain('export function OfficialBrandMark')
@@ -84,12 +84,12 @@ describe('glass shell — screenshot proof (Q-UI-GLASS truth pass)', () => {
     expect(brand).toContain('<DiamondLogo size={size} className={className} />')
   })
 
-  it('the hero swim stays on the shield fallback; the slot occupant never loops', () => {
+  it('the hero fallback is the diamond; no shield glyph or swim rides the hero mark', () => {
     const hero = readRepo('packages/client/ui-conversation/src/client/skeleton/EmptyHero.tsx')
-    const heroCss = readRepo('packages/client/ui-conversation/src/client/skeleton/HeroShell.module.css')
-    expect(hero).toContain('className={[css.fish, css.fishSwim].join')
+    expect(hero).not.toContain('FISH_LOGO')
+    expect(hero).not.toContain('fishSwim')
     expect(hero).toContain("renderSlot('conversation.hero.brand.mark', { size: 34, className: css.fish }")
-    expect(heroCss).toContain('.fishSwim')
+    expect(hero).toContain('<DiamondLogo size={34} className={css.fish} />')
   })
 
   it('the glass-verify receipts exist with the recorded dimensions', () => {

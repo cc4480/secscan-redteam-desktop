@@ -42,11 +42,11 @@ describe('official browser-brand plugin', () => {
     expect(inject).toEqual(['slots'])
   })
 
-  it('leaves every slot empty outside the official build profile', async () => {
+  it('fills every slot in a local (non-official) build profile too', async () => {
     vi.stubEnv('DSH_CLIENT_BUILD_PROFILE', 'local')
     const subject = await bench()
     await subject.ctx.plugin({ inject: [...inject], apply }).await()
-    for (const hole of ALL_HOLES) expect(subject.slots.entries(hole)).toHaveLength(0)
+    for (const hole of ALL_HOLES) expect(subject.slots.entries(hole)).toHaveLength(1)
   })
 
   it('fills declarations before or after apply and removes every occupant on teardown', async () => {
@@ -73,7 +73,7 @@ describe('official browser-brand plugin', () => {
     for (const hole of ALL_HOLES) expect(after.slots.entries(hole)).toHaveLength(1)
   })
 
-  it('seats the diamond in the conversation hero in official builds', async () => {
+  it('seats the diamond in the conversation hero', async () => {
     vi.stubEnv('DSH_CLIENT_BUILD_PROFILE', 'official')
     const subject = await bench()
     await subject.ctx.plugin({ inject: [...inject], apply }).await()

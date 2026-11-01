@@ -1,6 +1,6 @@
 {
   "name": "SecScan RedTeam",
-  "short_name": "DSH",
+  "short_name": "SecScan",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",

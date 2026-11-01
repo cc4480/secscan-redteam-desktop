@@ -123,7 +123,7 @@ describe('product icon set', () => {
 })
 
 describe('FishLogo', () => {
-  it('renders the fish path in currentColor at the native ratio', () => {
+  it('renders the legacy shield glyph in currentColor at the native ratio', () => {
     const { container } = render(<primitives.FishLogo />)
     const svg = container.querySelector('svg')!
     expect(svg.getAttribute('width')).toBe('24')
@@ -144,9 +144,9 @@ describe('DiamondLogo', () => {
     expect(svg.getAttribute('viewBox')).toBe('0 0 100 100')
     // Fixed fills (tile, red frame, blue crosshair) — never currentColor.
     expect(container.innerHTML).not.toContain('currentColor')
-    expect(container.innerHTML).toContain('#d92344')
-    expect(container.innerHTML).toContain('#38b2e8')
-    expect(container.innerHTML).toContain('#0e1628')
+    expect(container.innerHTML).toContain('#CF2B4D')
+    expect(container.innerHTML).toContain('#38BDF8')
+    expect(container.innerHTML).toContain('#0B1120')
   })
 
   it('renders at the sidebar (24) and hero (34) seat sizes', () => {
@@ -167,8 +167,14 @@ describe('BrandWordmark', () => {
     expect(svg.getAttribute('width')).toBe('182')
     expect(svg.getAttribute('viewBox')).toBe('0 0 182 24')
 
+    // The default leading mark is the multi-color diamond, never the shield.
+    expect(view.container.innerHTML).toContain('#CF2B4D')
+    expect(view.container.innerHTML).toContain('#38BDF8')
+    expect(view.container.innerHTML).not.toContain(primitives.FISH_LOGO_PATH)
+
     view.rerender(<primitives.BrandWordmark includeMark={false} />)
     expect(svg.getAttribute('width')).toBe('156')
     expect(svg.getAttribute('viewBox')).toBe('26 0 156 24')
+    expect(view.container.innerHTML).not.toContain('#CF2B4D')
   })
 })

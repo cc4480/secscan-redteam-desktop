@@ -1,4 +1,3 @@
-import { FISH_LOGO_PATH, FISH_LOGO_VIEWBOX } from './FishLogo.tsx'
 import type { IconProps } from './icons/props.ts'
 
 /** Display options for the product brand wordmark. */
@@ -16,8 +15,6 @@ export interface BrandWordmarkProps extends IconProps {
  */
 export function BrandWordmark({ size = 24, className, includeMark = true }: BrandWordmarkProps) {
   const width = includeMark ? 182 : 156
-  // The mark keeps its native 23.16x17.04 box, centred in the 24-unit band.
-  const markOffsetY = (24 - FISH_LOGO_VIEWBOX.height) / 2
   return (
     <svg
       width={(size * width) / 24}
@@ -28,12 +25,23 @@ export function BrandWordmark({ size = 24, className, includeMark = true }: Bran
       aria-hidden="true"
     >
       {includeMark && (
-        <path
-          d={FISH_LOGO_PATH}
-          fill="currentColor"
-          fillRule="evenodd"
-          transform={`translate(0 ${markOffsetY})`}
-        />
+        // The leading mark is the SecScan RedTeam diamond: the DiamondLogo
+        // artwork (100-unit square, official fixed fills) scaled into the
+        // 24-unit band. It never rides the monochrome shield glyph.
+        <g transform="scale(0.24)">
+          <rect x="3" y="3" width="94" height="94" rx="19" fill="#0B1120" />
+          <path
+            d={'M50 11.4L89.6 19.7V48L50 90.2L10.4 48V19.7Z'
+              + 'M50 23.4L77 28V46.5L50 77.4L23 46.5V28Z'}
+            fill="#CF2B4D"
+            fillRule="evenodd"
+          />
+          <g stroke="#38BDF8" strokeWidth="3.1">
+            <circle cx="50" cy="47" r="10.5" fill="none" />
+            <path d="M50 33.8V43.8M50 50.2V60.2M36.8 47H46.8M53.2 47H63.2" fill="none" />
+          </g>
+          <circle cx="50" cy="47" r="1.9" fill="#38BDF8" />
+        </g>
       )}
       <text
         x="26"

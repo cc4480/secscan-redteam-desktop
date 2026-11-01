@@ -1,5 +1,5 @@
 ---
-description: "面向侧栏的官方 SecScan RedTeam 品牌填充，仅在官方构建中生效；供选择或替换品牌呈现的用户与维护者阅读。"
+description: "面向侧栏与首屏的官方 SecScan RedTeam 品牌填充，在任何构建 profile 下生效；供选择或替换品牌呈现的用户与维护者阅读。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包让以 `official` profile 构建的客户端在侧栏显示 SecScan RedTeam 标志与名称，并在会话首屏置入钻石标志。其他构建 profile 保留外壳的鱼形标志与本地构建标签，首屏则保留其声明包的回退标志。品牌为 SecScan RedTeam 的部署应选择本包；使用其他品牌的部署应提供替代品牌包。本包不保留运行时状态，也不影响模型请求。
+本包让客户端在侧栏显示 SecScan RedTeam 标志与名称，并在会话首屏置入钻石标志——任何构建 profile 皆然，本地构建亦然。品牌为 SecScan RedTeam 的部署应选择本包；使用其他品牌的部署应提供替代品牌包。本包不保留运行时状态，也不影响模型请求。
 
 ## 目录
 
@@ -25,15 +25,15 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在采用 SecScan RedTeam 自有品牌的部署中，将本插件挂载到浏览器插件名单，然后以 `official` profile 构建客户端，让填充得以注册。
+在采用 SecScan RedTeam 自有品牌的部署中，将本插件挂载到浏览器插件名单；填充会在任何 build profile 下注册。
 
 ### 选择 profile
 
-`DSH_CLIENT_BUILD_PROFILE` 决定渲染哪个品牌。`official` 构建在侧栏显示官方标志与名称；任何其他取值都让外壳回退——鱼形标志与本地构建标签——保持原样。`official` 构建同样在会话首屏置入钻石标志；任何其他取值都让首屏保留 `dsh-client-ui-conversation` 声明的回退标志。两种情况下插件都会照常加载并通过校验；只有注册受 profile 门控。
+组合决定渲染哪个品牌：包含本包的 bundle 会在侧栏显示官方标志与名称，并在会话首屏置入钻石标志——`official` profile 与本地构建皆然。`DSH_CLIENT_BUILD_PROFILE` 不门控注册。不包含本包的 bundle 保留外壳回退——钻石标志与本地化的产品标签。
 
 ### 替换品牌
 
-自有身份的部署不组合本包，而是组合另一个占据侧栏 slot——以及本包在 official 构建中占据的首屏 slot——的包。占据 slot 是唯一的组合路径；这里不存在任何品牌配置面。
+自有身份的部署不组合本包，而是组合另一个占据侧栏 slot——以及本包占据的首屏 slot——的包。占据 slot 是唯一的组合路径；这里不存在任何品牌配置面。
 
 -----
 

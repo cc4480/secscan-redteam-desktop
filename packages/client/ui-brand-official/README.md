@@ -1,5 +1,5 @@
 ---
-description: "Official SecScan RedTeam brand occupants for the sidebar, active only in official builds; for users and maintainers choosing or replacing brand presentation."
+description: "Official SecScan RedTeam brand occupants for the sidebar and hero, active in every build profile; for users and maintainers choosing or replacing brand presentation."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package gives an `official` client build the SecScan RedTeam mark and name in the sidebar and the diamond in the conversation hero. Other build profiles keep the shell's fish mark and local-build label, and the hero keeps its declaring package's fallback mark. Choose it for deployments branded as SecScan RedTeam; deployments with another identity should provide a replacement brand package. It has no runtime state and does not affect model requests.
+This package gives a client build the SecScan RedTeam mark and name in the sidebar and the diamond in the conversation hero, in every build profile — the local build included. Choose it for deployments branded as SecScan RedTeam; deployments with another identity should provide a replacement brand package. It has no runtime state and does not affect model requests.
 
 ## Table of Contents
 
@@ -25,15 +25,15 @@ This package gives an `official` client build the SecScan RedTeam mark and name 
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this plugin in the browser roster of a deployment whose identity is SecScan RedTeam's own, then build the client with the `official` profile so the occupants register.
+Mount this plugin in the browser roster of a deployment whose identity is SecScan RedTeam's own; the occupants register in every build profile.
 
 ### Choosing the profile
 
-`DSH_CLIENT_BUILD_PROFILE` selects which brand renders. An `official` build shows the official mark and name in the sidebar; any other value leaves the shell fallbacks — the fish mark and the local-build label — in place. An `official` build also seats the diamond in the conversation hero; any other profile leaves the hero on the fallback mark declared by `dsh-client-ui-conversation`. The plugin still loads and validates in both cases; only the registration is profile-gated.
+Composition selects which brand renders: a bundle that includes this package shows the official mark and name in the sidebar and seats the diamond in the conversation hero, in the `official` profile and in local builds alike. `DSH_CLIENT_BUILD_PROFILE` does not gate registration. A bundle that leaves this package out keeps the shell fallbacks — the diamond mark and the localized product label.
 
 ### Replacing the brand
 
-A deployment with its own identity leaves this package out and composes another package that occupies the sidebar slots and the hero slot this package fills in official builds. Occupying a slot is the only composition route; there is no brand configuration surface here.
+A deployment with its own identity leaves this package out and composes another package that occupies the sidebar slots and the hero slot this package fills. Occupying a slot is the only composition route; there is no brand configuration surface here.
 
 -----
 
