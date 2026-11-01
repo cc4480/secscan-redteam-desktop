@@ -375,9 +375,9 @@ describe('Messages request conversion', () => {
 })
 
 describe('validated configuration', () => {
-  it('advertises exact model metadata and allows unlisted text models', () => {
+  it('advertises exact model metadata and allows unlisted models', () => {
     expect(modelInfo(connection, 'deepseek-official', MODEL)).toMatchObject({ context: { contextWindow: 1_000_000 }, defaultMaxTokens: 256_000, reasoning: { defaultEffort: 'high' } })
-    expect(modelInfo(connection, 'deepseek-official', 'custom').inputModalities).toEqual(['text'])
+    expect(modelInfo(connection, 'deepseek-official', 'custom').inputModalities).toEqual(['text', 'image'])
     expect(modelInfo(connection, 'deepseek-official', MODEL).systemPromptUpdate).toBeUndefined()
     expect(modelInfo(connection, 'deepseek-official', 'custom').systemPromptUpdate).toBeUndefined()
     expect(modelInfo(capable, 'deepseek-official', MODEL).systemPromptUpdate).toBe('in-history')
@@ -404,6 +404,9 @@ describe('Messages images', () => {
   const version: RequestImageAttachment = { attachment: ref, variantId: ImageVariantId(`sha256:${'b'.repeat(64)}`), mediaType: 'image/png', bytes: 3, data: Uint8Array.of(1, 2, 3), width: 1, height: 1, depth: 'uchar', space: 'srgb', hasAlpha: false }
   const access = () => ({ readonlyPath: '/workspace/image.png' })
   const model = 'deepseek-flash'
+  // Only an explicit declaration resolves a route as text-only now; the
+  // uncatalogued id used elsewhere in this file resolves image-capable.
+  const textOnly = resolveAdapterOptions({ models: [{ id: 'declared-text', inputModalities: ['text'] }] })
   // Only the read operation is consumed by image preparation; the transport is mocked, not durable content.
   const attachments = requestImageStore(async () => version)
   const signal = new AbortController().signal
@@ -417,7 +420,7 @@ describe('Messages images', () => {
       { type: 'text' }, { type: 'image' },
     ] })
     expect(imagePricing(connection, model, access).priceImages([image])[0]?.visualTokens).toBeGreaterThan(0)
-    expect(imagePricing(connection, MODEL, access).priceImages([image])[0]?.visualTokens).toBe(0)
+    expect(imagePricing(textOnly, 'declared-text', access).priceImages([image])[0]?.visualTokens).toBe(0)
   })
   it('requires logged offload at exact encoded bytes and preserves durable references', async () => {
     const config = resolveAdapterOptions({
@@ -444,7 +447,7 @@ describe('Messages images', () => {
   })
   it('rejects unsupported roles and unavailable image capabilities before HTTP', async () => {
     const history = [result('a', [image])]
-    await expect(prepareImages(history, connection, MODEL, attachments, access, signal)).rejects.toMatchObject({ code: 'UNSUPPORTED_CONTENT' })
+    await expect(prepareImages(history, textOnly, 'declared-text', attachments, access, signal)).rejects.toMatchObject({ code: 'UNSUPPORTED_CONTENT' })
     await expect(prepareImages(history, connection, model, undefined, access, signal)).rejects.toMatchObject({ code: 'UNSUPPORTED_CONTENT' })
     await expect(prepareImages([assistant([image])], connection, model, attachments, access, signal)).rejects.toMatchObject({ code: 'UNSUPPORTED_CONTENT' })
     expect(() => body([result('a', [image])])).toThrow(/image/)

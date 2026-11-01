@@ -1,5 +1,19 @@
 /** Shared provider limits and Chat Files API defaults. */
+import type { ModelModality } from '@deepseek-ai/dsh-llm'
 
+/**
+ * Modalities assumed for a model whose catalog entry declares none, and for
+ * a model id the catalog does not list at all. Silence is read as
+ * image-capable: DeepSeek's current endpoints accept image input, and the
+ * routes this default serves are operator deployments whose hand-declared
+ * models are expected to take the media the operator attaches; a text-only
+ * answer to silence refused those images at admission for no declared
+ * reason. The cost of the other wrong answer is accepted and stays visible:
+ * an endpoint that truly cannot take images refuses the request mid-turn
+ * instead. A deployment that knows a model is text-only says so with an
+ * explicit `inputModalities: ['text']`, which every layer honors verbatim.
+ */
+export const DEFAULT_INPUT_MODALITIES: readonly ModelModality[] = ['text', 'image']
 /** Default maximum idle interval while an adapter stream read is outstanding. */
 export const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 300_000
 /** Default combined request/response context capacity. */

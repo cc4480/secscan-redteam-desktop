@@ -14,6 +14,7 @@ import type { ImageAttachmentAccessResolver, ImageBlock, LlmImageRequestPrice, L
 import { longEdgeDimensions, requestImageDimensions } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef, ImageRequestTarget } from '@deepseek-ai/dsh-attachment'
 import { deepSeekImageTokens, deepSeekRequestImageDimensions } from './image-tokens.ts'
+import { resolvedInputModalities } from './model-info.ts'
 import type { DeepSeekCatalogModel, DeepSeekConnectionOptions } from './types.ts'
 
 /** Default bound on accumulated file-referenced image bytes per request. */
@@ -75,8 +76,9 @@ function textOnlyPrice(block: ImageBlock): LlmImageRequestPrice {
 
 /**
  * Build the request-image pricing for one DeepSeek route from a validated
- * connection snapshot. Uncatalogued and text-only models price every
- * occurrence as its deterministic text substitution; image-capable models
+ * connection snapshot. Models resolved as text-only — only an explicit
+ * declaration resolves that way — price every occurrence as its
+ * deterministic text substitution; image-capable models
  * price an offloaded occurrence as its placeholder text and a retained one by
  * its projected request dimensions, with each occurrence's handle or
  * placeholder text built through the same access resolution the serializer
@@ -93,15 +95,17 @@ export function deepSeekImageRequestPricing(
   resolveAccess?: ImageAttachmentAccessResolver,
 ): LlmImageRequestPricing {
   const catalogModel = connection.models.find(entry => entry.id === model)
-  if (catalogModel?.inputModalities?.includes('image') !== true) {
+  if (!resolvedInputModalities(catalogModel).includes('image')) {
     return { priceImages: images => images.map(textOnlyPrice) }
   }
+  // An unlisted model prices retained images at the route defaults.
+  const imageModel = catalogModel ?? { id: model }
   return {
     priceImages: images => images.map(({ attachment: ref, offloaded }) => {
       if (offloaded === true) {
         return { visualTokens: 0, text: offloadedImageText(ref, resolveAccess?.(ref)) }
       }
-      const target = resolveRequestImageTarget(catalogModel, ref)
+      const target = resolveRequestImageTarget(imageModel, ref)
       return {
         visualTokens: deepSeekImageTokens(target.width, target.height),
         text: requestImageHandleText(ref, target, resolveAccess?.(ref)),

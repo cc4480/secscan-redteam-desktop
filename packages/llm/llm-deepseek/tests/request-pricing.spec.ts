@@ -32,15 +32,18 @@ function connection(config: Omit<Config, 'models'> = {}): ReturnType<typeof reso
 }
 
 describe('DeepSeek request-image pricing', () => {
-  it('prices an uncatalogued model as its text-only substitution', () => {
+  it('prices an uncatalogued model by its projected request dimensions', () => {
     const image = ref('photo', 1920, 1080)
     const prices = deepSeekImageRequestPricing(connection(), 'unlisted').priceImages([block(image)])
-    expect(prices).toEqual([{ visualTokens: 0, text: textOnlyImageText(image) }])
+    expect(prices).toEqual([{
+      visualTokens: 968,
+      text: requestImageHandleText(image, { width: 1708, height: 961 }),
+    }])
   })
 
   it('prices a catalogued text-only model as its text-only substitution', () => {
     const image = ref('photo', 1920, 1080)
-    const options = resolveAdapterOptions({ models: [{ id: 'text-only' }] })
+    const options = resolveAdapterOptions({ models: [{ id: 'text-only', inputModalities: ['text'] }] })
     const prices = deepSeekImageRequestPricing(options, 'text-only').priceImages([block(image)])
     expect(prices).toEqual([{ visualTokens: 0, text: textOnlyImageText(image) }])
   })

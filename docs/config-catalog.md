@@ -1518,7 +1518,7 @@ export interface DeepSeekCatalogModel {
   contextWindow?: number
   /** Per-request output cap for this model; omission falls back to the profile's {@link DeepSeekConnectionOptions.maxTokens}. */
   maxTokens?: number
-  /** Accepted request modalities; omission is text-only. */
+  /** Accepted request modalities; omission resolves with the absence default (text and image). */
   inputModalities?: ModelModality[]
   /**
    * Total-pixel budget replacing the published token-grid projection for one
@@ -4260,6 +4260,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-user-questions` ([`packages/interaction/user-questions/src/index.ts`](../packages/interaction/user-questions/src/index.ts))
 - `@deepseek-ai/dsh-webhook` — requires `agents` · `agentDefaultModel` · `agentPresets` · `permissionPresets` · `sessionTitle` · `workspaceRegistry` ([`packages/webhook/webhook/src/index.ts`](../packages/webhook/webhook/src/index.ts))
 - `@deepseek-ai/dsh-workspace` — requires `storageDomain` · `sessionPersistence` ([`packages/workspace/workspace/src/index.ts`](../packages/workspace/workspace/src/index.ts))
+- `@secscan/redteam-command` — requires `commands` ([`packages/redteam/command-redteam/src/index.ts`](../packages/redteam/command-redteam/src/index.ts))
 - `@secscan/redteam-harness-plugin` — requires `tools` · `systemPrompt` ([`packages/redteam/harness-plugin/src/index.ts`](../packages/redteam/harness-plugin/src/index.ts))
 
 ## Seam packages (not directly loadable)

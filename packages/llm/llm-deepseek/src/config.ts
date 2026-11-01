@@ -10,7 +10,7 @@ import type { LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environm
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import type { DeepSeekCatalogModel, DeepSeekConnectionOptions } from './types.ts'
 import { DEFAULT_MODELS } from './models.ts'
-import { DEFAULT_STREAM_IDLE_TIMEOUT_MS, DEFAULT_CONTEXT_WINDOW, DEFAULT_MAX_TOKENS, DEFAULT_MAX_INLINE_REQUEST_IMAGE_BYTES, DEFAULT_IMAGE_OFFLOAD_BYTE_QUANTUM, DEFAULT_INLINE_IMAGE_OFFLOAD_BYTE_QUANTUM, DEFAULT_IMAGE_OFFLOAD_COUNT_QUANTUM, DEFAULT_FILE_EXPIRY_SECONDS, DEFAULT_FILE_REFRESH_MARGIN_SECONDS, DEFAULT_FILE_QUOTA_CLEANUP_BATCH, DEFAULT_FILES_API_TIMEOUT_MS } from './defaults.ts'
+import { DEFAULT_STREAM_IDLE_TIMEOUT_MS, DEFAULT_CONTEXT_WINDOW, DEFAULT_MAX_TOKENS, DEFAULT_MAX_INLINE_REQUEST_IMAGE_BYTES, DEFAULT_IMAGE_OFFLOAD_BYTE_QUANTUM, DEFAULT_INLINE_IMAGE_OFFLOAD_BYTE_QUANTUM, DEFAULT_IMAGE_OFFLOAD_COUNT_QUANTUM, DEFAULT_FILE_EXPIRY_SECONDS, DEFAULT_FILE_REFRESH_MARGIN_SECONDS, DEFAULT_FILE_QUOTA_CLEANUP_BATCH, DEFAULT_FILES_API_TIMEOUT_MS, DEFAULT_INPUT_MODALITIES } from './defaults.ts'
 import { DEFAULT_MAX_IMAGES_PER_REQUEST, DEFAULT_MAX_REQUEST_FILES_BYTES, DEFAULT_REQUEST_IMAGE_MAX_BYTES } from './request-pricing.ts'
 
 const DEFAULT_API_KEY_ENV = 'DEEPSEEK_API_KEY'
@@ -83,7 +83,7 @@ const catalogModel: z<DeepSeekCatalogModel> = z.object({
   description: z.string(),
   contextWindow: z.number().step(1).min(1),
   maxTokens: z.number().step(1).min(1),
-  inputModalities: z.array(z.union(MODEL_MODALITIES)).min(1).default(['text']),
+  inputModalities: z.array(z.union(MODEL_MODALITIES)).min(1).default([...DEFAULT_INPUT_MODALITIES]),
   imagePixelBudget: z.union([z.number().step(1).min(1), 'low']),
   imageMaxBytes: z.number().step(1).min(1),
   systemPromptUpdate: z.const('in-history'),
@@ -148,7 +148,7 @@ function resolveModels(models: readonly DeepSeekCatalogModel[] | undefined): Dee
         `llm-deepseek: catalog model "${model.id}" maxTokens must be a positive integer`,
       )
     }
-    const inputModalities = model.inputModalities ?? ['text']
+    const inputModalities = model.inputModalities ?? DEFAULT_INPUT_MODALITIES
     if (inputModalities.length === 0) {
       throw new Error(`llm-deepseek: catalog model "${model.id}" inputModalities must not be empty`)
     }

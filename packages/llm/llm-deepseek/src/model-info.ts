@@ -1,7 +1,17 @@
 /** Protocol-independent model capabilities and reasoning choices. */
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
-import type { LlmModelInfo, LlmResolvedModelInfo } from '@deepseek-ai/dsh-llm'
+import type { LlmModelInfo, LlmResolvedModelInfo, ModelModality } from '@deepseek-ai/dsh-llm'
+import { DEFAULT_INPUT_MODALITIES } from './defaults.ts'
 import type { DeepSeekCatalogModel, DeepSeekConnectionOptions } from './types.ts'
+
+/**
+ * Resolve the input modalities one catalog entry effectively declares.
+ * @param model - catalog entry, or `undefined` for an unlisted model id.
+ * @returns the entry's declared modalities, or {@link DEFAULT_INPUT_MODALITIES} when the entry declares none or the id is unlisted.
+ */
+export function resolvedInputModalities(model: DeepSeekCatalogModel | undefined): readonly ModelModality[] {
+  return model?.inputModalities ?? DEFAULT_INPUT_MODALITIES
+}
 
 const OFF_REASONING_EFFORT = ReasoningEffortId('off')
 const LOW_REASONING_EFFORT = ReasoningEffortId('low')
@@ -48,7 +58,7 @@ export function catalogModelInfo(provider: string, model: DeepSeekCatalogModel):
     id: model.id,
     name: model.name ?? model.id,
     ...model.description === undefined ? {} : { description: model.description },
-    inputModalities: model.inputModalities ?? ['text'],
+    inputModalities: model.inputModalities ?? [...DEFAULT_INPUT_MODALITIES],
   }
 }
 
@@ -67,11 +77,12 @@ export function modelInfo(
   const contextWindow = configured?.contextWindow
     ?? connection.defaultContextWindow
   return {
-    // An uncatalogued endpoint is safely treated as text-only. Declaring an
-    // unverified image capability would let the host persist input that the
-    // endpoint may reject on every later turn.
+    // An uncatalogued endpoint resolves with the absence default like any
+    // silent entry (see DEFAULT_INPUT_MODALITIES): silence is read as
+    // image-capable, and an explicit catalog declaration is the way to say
+    // a model is text-only.
     ...configured === undefined
-      ? { provider, id: model, name: model, inputModalities: ['text' as const] }
+      ? { provider, id: model, name: model, inputModalities: [...DEFAULT_INPUT_MODALITIES] }
       : catalogModelInfo(provider, configured),
     context: { contextWindow },
     defaultMaxTokens: configured?.maxTokens ?? connection.maxTokens,

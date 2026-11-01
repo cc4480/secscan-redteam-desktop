@@ -4,6 +4,7 @@ import type { AttachmentStore, ImageAttachmentRef, RequestImageAttachment } from
 import { contentHasImage, IMAGE_OFFLOAD_REQUIRED_CODE, LlmError, offloadedImageText, projectOffloadedImages, requiredImageOffload } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, ImageAttachmentAccessResolver, RequestMessage } from '@deepseek-ai/dsh-llm'
 import type { DeepSeekConnectionOptions as Connection } from './types.ts'
+import { resolvedInputModalities } from './model-info.ts'
 import { resolveRequestImageTarget } from './request-pricing.ts'
 import type { DeepSeekFileId } from './file-id.ts'
 import type { RequestFiles } from './request-files.ts'
@@ -42,10 +43,12 @@ export async function prepareImages(
   const versions = new Map<ImageAttachmentRef['attachmentId'], RequestImageAttachment>()
   const messages = projectOffloadedImages(history, ref => offloadedImageText(ref, access(ref)))
   if (!messages.some(message => contentHasImage(message.content))) return { messages, versions }
-  const model = connection.models.find(entry => entry.id === modelId)
-  if (model?.inputModalities?.includes('image') !== true || attachments === undefined) {
+  const catalogModel = connection.models.find(entry => entry.id === modelId)
+  if (!resolvedInputModalities(catalogModel).includes('image') || attachments === undefined) {
     throw new LlmError('DeepSeek Messages image input requires a vision model and attachment service', 'UNSUPPORTED_CONTENT')
   }
+  // An unlisted model resolves its request images at the route defaults.
+  const model = catalogModel ?? { id: modelId }
   if (messages.some(message => message.role !== 'user' && message.role !== 'tool' && contentHasImage(message.content))) {
     throw new LlmError('DeepSeek Messages supports images only in user messages and tool results', 'UNSUPPORTED_CONTENT')
   }
