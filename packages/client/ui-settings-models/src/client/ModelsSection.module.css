@@ -8,6 +8,11 @@
   flex-direction: column;
   gap: 12px;
   max-width: 720px;
+  min-width: 0;
+  /* The panel decides how wide this section gets, so the narrow rules at
+     the end of this sheet key off the section's own width, not the
+     viewport's. */
+  container-type: inline-size;
   color: var(--dsw-alias-label-primary);
 }
 
@@ -64,6 +69,7 @@
 .rowHead {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -721,4 +727,36 @@ select.input {
   font-size: 13px;
   line-height: 20px;
   text-align: center;
+}
+
+/* Narrow section (the panel, not the viewport, decides this width — see
+   `.section`): the model row's two inputs each keep a readable track by
+   giving the model id a full row of its own and setting the name beside
+   the row's icon buttons, and the advanced grid's two columns collapse to
+   one so its fields stop truncating. The add-provider block drops its
+   desktop minimum width so it fits the same space. */
+@container (max-width: 540px) {
+  .modelRow {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .modelRow > :first-child {
+    grid-column: 1 / -1;
+  }
+
+  .modelAdvanced {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .modelListHead {
+    flex-wrap: wrap;
+  }
+
+  .editor {
+    padding: 12px;
+  }
+
+  .addButton {
+    min-width: 0;
+  }
 }

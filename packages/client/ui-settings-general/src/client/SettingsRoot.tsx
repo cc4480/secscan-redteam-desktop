@@ -11,6 +11,7 @@
  * to the step, so a mounted-but-deciding step paints nothing here.
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import {
   ConnectionIndicator,
@@ -244,7 +245,12 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
         <DesktopUpdateIndicator wide={wide} hidden={connectionIndicator !== undefined && desktopUpdate.presentation?.phase !== 'installing'}
           t={t} view={desktopUpdate} onOpen={openDesktopUpdate} />
       </div>
-      {open && (
+      {/* The panel portals to the body: it mounts from inside the sidebar
+          column, whose glass surface filters its backdrop, and a filtered
+          ancestor is the containing block for fixed descendants — inline,
+          the full-viewport overlay would resolve against the column and
+          squeeze the panel into it. */}
+      {open && createPortal((
         <SettingsPanel
           rows={rows}
           renderSlot={renderSlot}
@@ -252,7 +258,7 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
           onSelect={setActiveId}
           onClose={close}
         />
-      )}
+      ), document.body)}
       {/* Dialog chrome and `#root` inert ownership live inside each step's
           visible branch. A step still deciding (private facts loading)
           renders null, so nothing paints or blocks while it decides. */}

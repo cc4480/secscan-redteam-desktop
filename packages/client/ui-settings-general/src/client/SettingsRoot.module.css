@@ -220,11 +220,17 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-/* Options area (figma Options 501:29983): pad (24,0,24,24), scrolls. */
+/* Options area (figma Options 501:29983): pad (24,0,24,24), scrolls. The
+   panel clips its own overflow for the rounded corners, so this pane is
+   the only scroll surface a section has: it scrolls on both axes, so
+   content wider than the pane stays reachable instead of stranding off
+   the panel's right edge. */
 .options {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   padding: 0 24px 24px;
+  overflow-x: auto;
   overflow-y: auto;
 }
 
@@ -242,4 +248,34 @@
    (Electron app-regions are geometry, not stacking). */
 :global([data-platform='darwin']) .overlay {
   -webkit-app-region: no-drag;
+}
+
+/* Narrow viewports: below 700px the 188px nav rail beside the content
+   leaves the sections a sliver, so the panel stacks — the nav becomes a
+   band above the content with its cells in a wrapping row — and takes the
+   full viewport instead of the centered dialog size. */
+@media (max-width: 700px) {
+  .panel {
+    flex-direction: column;
+    width: calc(100vw - 16px);
+    max-width: none;
+    height: calc(100dvh - 16px);
+    border-radius: 20px;
+  }
+
+  .nav {
+    width: auto;
+    gap: 10px;
+    padding: 16px 16px 0;
+  }
+
+  .navList {
+    flex-direction: row;
+    flex-wrap: wrap;
+    overflow-y: visible;
+  }
+
+  .content {
+    min-height: 0;
+  }
 }
