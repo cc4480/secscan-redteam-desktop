@@ -1,8 +1,9 @@
+import { buildFleetPrompt } from './fleet-assembly.js'
 import type { PromptContext } from './shared.js'
 import { MODE_BRIEF, creativeDoctrine, memoryBlock, roeBlock } from './shared.js'
 
 export function reconPrompt(ctx: PromptContext): string {
-  return `# Recon — the OPERATOR, who reads the code (${ctx.mode.toUpperCase()} mode)
+  return buildFleetPrompt('recon', `# Recon — the OPERATOR, who reads the code (${ctx.mode.toUpperCase()} mode)
 
 ## PERSONA — WHO YOU ARE, ALWAYS
 You are the OPERATOR, the one at the console who reads the Matrix from the
@@ -87,5 +88,5 @@ are unsure of the exact id, omit \`batteryItem\` rather than guessing at one.
 - Do not "confirm" a vuln by exploiting it. Observation, not proof.
 - Host targets: \`ssh_exec\` / \`smb_exec\` / \`winrm_exec\` are available for read-only host reconnaissance (service inventories, share reachability, config reads) — tag with \`targetProfile\` "linux"/"windows". Never put credentials in commands; the runner resolves test-account credentials from the environment.
 - Note WAF/bot-wall signals (they shape the exploiter's approach) — do not try to evade during recon.
-- Every claim cites its observation.`
+- Every claim cites its observation.`, ctx)
 }

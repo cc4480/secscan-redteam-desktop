@@ -23,7 +23,9 @@ import {
   classifyScopeEntry,
   commandUsesNetworkTool,
   extractTargets,
+  scopeGuardFor,
 } from "../src/safety/scope-guard.js";
+import { authorizePhase } from "../src/phases/authorize.js";
 import { dispatchTool } from "../src/dispatch/router.js";
 import type { Ctx } from "../src/context.js";
 import type { ToolCallRequest } from "@secscan/redteam-llm-router";
@@ -270,12 +272,13 @@ describe("dispatch scope gate — the choke point", () => {
     target?: string;
   }
 
-  function fakeCtx(roe: { scope: string[]; outOfScope?: string[] }) {
+  function fakeCtx(roe: { scope: string[]; outOfScope?: string[] }, opts: { verifiedScope?: string[] } = {}) {
     const appended: FakeEvents[] = [];
     const probes: Array<{ url: string }> = [];
     const sshCommands: string[] = [];
     const ctx = {
       input: { mode: "red", roe, fullBattery: false },
+      ...(opts.verifiedScope ? { verifiedScope: opts.verifiedScope } : {}),
       hosts: roe.scope,
       events: {
         dir: "/tmp/scope-guard-test-no-such-dir",
@@ -373,5 +376,95 @@ describe("dispatch scope gate — the choke point", () => {
     );
     assert.ok(!/DENIED by scope/.test(r.result), "the scope gate did not refuse it");
     assert.deepEqual(sshCommands, ["uname -a"]);
+  });
+
+  it("record scope wins at dispatch: a host in the record but not the launch scope is allowed", async () => {
+    // The launch request declared launch.example.com; the AUTHORIZE
+    // phase attested record.example.com instead. The record governs.
+    const { ctx, probes } = fakeCtx({ scope: ["launch.example.com"] }, { verifiedScope: ["record.example.com"] });
+    const r = await dispatchTool(ctx, "recon", "recon", call("http_probe", { url: "https://record.example.com/" }));
+    assert.match(r.result, /^HTTP 200/);
+    assert.equal(probes.length, 1);
+  });
+
+  it("record scope wins at dispatch: a host in the launch scope but NOT in the record is denied, zero dispatch", async () => {
+    const { ctx, appended, probes } = fakeCtx({ scope: ["launch.example.com"] }, { verifiedScope: ["record.example.com"] });
+    const r = await dispatchTool(ctx, "recon", "recon", call("http_probe", { url: "https://launch.example.com/" }));
+    assert.match(r.result, /DENIED by scope/);
+    assert.equal(probes.length, 0, "no probe was sent to the unattested host");
+    assert.ok(appended.some((e) => e.action === "scope_violation" && e.target === "launch.example.com"));
+  });
+
+  it("the ROE out-of-scope deny still beats the record allow set", async () => {
+    const { ctx, probes } = fakeCtx(
+      { scope: ["acme.com"], outOfScope: ["status.acme.com"] },
+      { verifiedScope: ["acme.com"] },
+    );
+    const r = await dispatchTool(ctx, "recon", "recon", call("http_probe", { url: "https://status.acme.com/" }));
+    assert.match(r.result, /DENIED by scope/);
+    assert.match(r.result, /out-of-scope list/);
+    assert.equal(probes.length, 0);
+  });
+});
+
+describe("scopeGuardFor — the verified record is the allow source", () => {
+  it("builds from the launch ROE until authorize stamps the record, then rebuilds from the record", () => {
+    const ctx: Parameters<typeof scopeGuardFor>[0] = {
+      input: { roe: { scope: ["launch.example.com"] } },
+    };
+    const launchGuard = scopeGuardFor(ctx);
+    assert.equal(launchGuard.checkHost("launch.example.com").allowed, true);
+    assert.equal(launchGuard.checkHost("record.example.com").allowed, false);
+
+    ctx.verifiedScope = ["record.example.com"];
+    const recordGuard = scopeGuardFor(ctx);
+    assert.notEqual(recordGuard, launchGuard, "the cached launch guard is rebuilt once the record lands");
+    assert.equal(recordGuard.checkHost("record.example.com").allowed, true);
+    assert.equal(recordGuard.checkHost("launch.example.com").allowed, false, "launch scope no longer governs");
+  });
+
+  it("fromVerifiedRecord matches fromRoe membership for the same entries, deny included", () => {
+    const record = ScopeGuard.fromVerifiedRecord({
+      verifiedScope: ["acme.com", "10.0.0.0/24"],
+      outOfScope: ["status.acme.com"],
+    });
+    assert.equal(record.checkHost("api.acme.com").allowed, true);
+    assert.equal(record.checkHost("10.0.0.9").allowed, true);
+    assert.equal(record.checkHost("status.acme.com").kind, "deny");
+    assert.equal(record.checkHost("other.example").allowed, false);
+  });
+});
+
+describe("authorize phase — stamps the verified record the guard derives from", () => {
+  it("on success, ctx.verifiedScope is the attested scope and a later launch-object edit does not move the guard", async () => {
+    const appended: Array<{ action: string; result: string }> = [];
+    const ctx = {
+      domain: "example.com",
+      hosts: ["example.com", "api.example.com"],
+      input: {
+        mode: "red",
+        objective: "record-scope proof",
+        operatorName: "Test Operator",
+        roe: { scope: ["example.com", "api.example.com"], outOfScope: [] as string[] },
+      },
+      config: { testMode: false, verifyViaService: false, mcpEndpoint: "", mcpToken: "", localSandbox: false },
+      deps: {},
+      events: {
+        append: (e: { action: string; result: string }) => appended.push(e),
+        updateState: () => undefined,
+      },
+    } as unknown as Ctx;
+
+    const verdict = await authorizePhase(ctx);
+    assert.equal(verdict.allowed, true);
+    assert.deepEqual(ctx.verifiedScope, ["example.com", "api.example.com"]);
+    assert.ok(appended.some((e) => e.action === "scope_guard"), "the guard state is in the audit log");
+
+    // The launch object is edited after authorize (a different scope
+    // entirely): the guard keeps enforcing the attested record.
+    ctx.input.roe.scope = ["mutated.example.org"];
+    const guard = scopeGuardFor(ctx);
+    assert.equal(guard.checkHost("api.example.com").allowed, true, "the attested host stays in scope");
+    assert.equal(guard.checkHost("mutated.example.org").allowed, false, "the unattested host stays out of scope");
   });
 });

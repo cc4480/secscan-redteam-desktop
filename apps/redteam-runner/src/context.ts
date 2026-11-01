@@ -135,12 +135,25 @@ export interface Ctx {
   /** Optional operator policy (allow/deny rules), enforced before every dispatch. */
   policy?: PolicyRules
   /**
-   * Scope guard (ROE allow set + out-of-scope deny set), enforced at
-   * dispatch before any handler runs. Built from the ROE at engagement
-   * start; the dispatch scope gate builds and caches it lazily when a
-   * context was assembled without one (tests, partial contexts).
+   * Scope guard (allow set + out-of-scope deny set), enforced at
+   * dispatch before any handler runs. Its allow set is the AUTHORIZE
+   * phase's attested scope (see verifiedScope) once authorize has run;
+   * the dispatch scope gate builds and caches it lazily when a context
+   * was assembled without one (tests, partial contexts), falling back
+   * to the launch ROE for those contexts.
    */
   scopeGuard?: ScopeGuard
+  /**
+   * The AUTHORIZE phase's attestation output: the raw ROE scope entries
+   * whose hosts passed authorization (authorize.ts stamps this on
+   * success, beside verifiedAt/verificationProof, in both the normal
+   * and test-mode paths). This — not the launch request's ROE — is the
+   * persisted record the scope guard's allow set derives from, so a
+   * launch scope that differs from what was attested does not govern
+   * dispatch. The ROE outOfScope deny list still applies on top of it
+   * (deny beats allow). Absent until authorize succeeds.
+   */
+  verifiedScope?: string[]
   /** Optional tool lifecycle hooks (pre/post), evaluated around every dispatch. */
   hooks?: HookRegistry
   mcp: McpClient

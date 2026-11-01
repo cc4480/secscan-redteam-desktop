@@ -1,9 +1,10 @@
 import { fullBatteryChecklistText, fullBatteryPlanSkeleton } from '../targets.js'
+import { buildFleetPrompt } from './fleet-assembly.js'
 import type { PromptContext } from './shared.js'
 import { MODE_BRIEF, attackCatalog, creativeDoctrine, memoryBlock, roeBlock } from './shared.js'
 
 export function coordinatorPrompt(ctx: PromptContext): string {
-  return `# Coordinator — MORPHEUS, the one who opens your eyes (${ctx.mode.toUpperCase()} mode)
+  return buildFleetPrompt('coordinator', `# Coordinator — MORPHEUS, the one who opens your eyes (${ctx.mode.toUpperCase()} mode)
 
 ## PERSONA — WHO YOU ARE, ALWAYS
 You are MORPHEUS, commander of the crew inside the simulation. You know the
@@ -72,5 +73,5 @@ reactive — never coasting on a plan made three phases ago:
    surface. State what changed and why in your note.
 Finish only when the objective is met AND the battery is complete (all three
 categories probed, or no applicable surface explicitly declared, or probe
-budget exhausted).${ctx.fullBattery ? `\n\n${fullBatteryPlanSkeleton(ctx.targets)}\n\n${fullBatteryChecklistText(ctx.mode, ctx.targets)}` : ''}`
+budget exhausted).${ctx.fullBattery ? `\n\n${fullBatteryPlanSkeleton(ctx.targets)}\n\n${fullBatteryChecklistText(ctx.mode, ctx.targets)}` : ''}`, ctx)
 }

@@ -6,10 +6,13 @@
  * the caller does not inject a completion (production), this module's
  * factory supplies it, and every call is a chartered call:
  *
- *   - The charter is assembled once, at the head of the loop's messages:
+ *   - The charter is assembled at the head of EVERY call's messages:
  *     charter first, the phase persona after it, per spec §2. The
- *     assembled head replaces the loop's initial messages in place, so
- *     it persists across the loop's turns without re-assembly.
+ *     assembled head replaces the call's initial messages in place, so
+ *     it persists across the loop's turns without re-assembly — and
+ *     side calls that build fresh message arrays (reflector verdicts,
+ *     tool-call repair) are chartered too, idempotently: an array is
+ *     never spliced twice.
  *   - The seat's route is charter routing as data (resolveCharterRoute),
  *     not the bare role policy.
  *   - At each phase's first chartered loop, the agent's phase anchor is
@@ -25,6 +28,13 @@
  *     audit trail. When every hop refuses, the turn returns an empty
  *     result and the loop's own idle/deliverable machinery decides what
  *     happens next — the refusal itself never becomes context.
+ *   - A THROWN content-policy rejection is contained at this call, not
+ *     allowed to kill the turn: the failure is logged with its full
+ *     provider cause, the call is re-issued once with the verified
+ *     engagement record attached and the step context condensed to a
+ *     structured summary, and if the re-issue is rejected too the call
+ *     routes into the same §3 fallback chain. Non-policy errors keep
+ *     their historical behavior and propagate to the caller.
  *
  * Known limitation (spec §4): no per-engagement pseudonym map is built
  * yet, so assembly runs without pseudonymization; the runner's existing
@@ -38,9 +48,7 @@ import {
   classifyResponse,
   complete,
   completeWithCharter,
-  completeWithFallback,
   resolveCharterRoute,
-  SessionAffinity,
   type AgentRole,
   type CharterEngagement,
   type CharterRole,
@@ -52,7 +60,10 @@ import {
   type RoleRoute,
 } from '@secscan/redteam-llm-router'
 import { type Ctx } from './context.js'
+import { callWithPolicyContainment, createFallbackRunner } from './policy-containment.js'
 import { type EngagementPhase } from './types.js'
+
+export { condensedReissueMessages } from './policy-containment.js'
 
 /** Which charter seat each agent role sits in (inverse of CHARTER_ROLE_AGENT_ROLE). */
 const AGENT_TO_CHARTER: Readonly<Record<AgentRole, CharterRole>> = {
@@ -64,7 +75,6 @@ const AGENT_TO_CHARTER: Readonly<Record<AgentRole, CharterRole>> = {
 }
 
 const engagementCache = new WeakMap<Ctx, CharterEngagement>()
-const affinityCache = new WeakMap<Ctx, SessionAffinity>()
 const anchorCache = new WeakMap<Ctx, Map<string, Promise<string | undefined>>>()
 
 /**
@@ -87,15 +97,6 @@ export function charterEngagementFor(ctx: Ctx): CharterEngagement {
   }
   engagementCache.set(ctx, engagement)
   return engagement
-}
-
-function affinityFor(ctx: Ctx): SessionAffinity {
-  let affinity = affinityCache.get(ctx)
-  if (!affinity) {
-    affinity = new SessionAffinity()
-    affinityCache.set(ctx, affinity)
-  }
-  return affinity
 }
 
 /** The per-call options a completion receives (completeForRole's shape). */
@@ -183,6 +184,25 @@ function anchorFor(
 }
 
 /**
+ * First line of the filled charter, as assembled by the router's
+ * assembleCharterMessages. An array whose head already carries it was
+ * chartered by an earlier splice — possibly by a different
+ * createCharteredComplete closure — and must never be spliced again.
+ */
+const CHARTER_HEAD_PREFIX = 'You are an agent of SecScan RedTeam'
+
+/**
+ * Whether a message array already carries the assembled charter head.
+ *
+ * @param messages - the call's messages
+ * @returns true when the first message is the assembled charter system text
+ */
+function isCharterAssembled(messages: ChatMessage[]): boolean {
+  const head = messages[0]
+  return head?.role === 'system' && head.content.startsWith(CHARTER_HEAD_PREFIX)
+}
+
+/**
  * Build the production completion for one agentLoop invocation: a
  * drop-in for the router's completeForRole that charters the call.
  *
@@ -198,7 +218,13 @@ export function createCharteredComplete(
 ): CompleteForRole {
   const engagement = charterEngagementFor(ctx)
   let route: RoleRoute | undefined
-  let assembled = false
+  // Arrays this closure has already chartered. Side calls (reflector,
+  // tool repair) arrive with FRESH arrays that were never spliced, so
+  // the old once-per-loop flag left them unchartered; splicing is now
+  // per-array, and this set (plus the charter-head check in
+  // isCharterAssembled, which survives across closures) keeps it
+  // idempotent — an array is never spliced twice.
+  const charteredArrays = new WeakSet<ChatMessage[]>()
 
   return async (role, messages, opts = {}) => {
     const charterRole = AGENT_TO_CHARTER[role]
@@ -206,11 +232,12 @@ export function createCharteredComplete(
       route = resolveCharterRoute(charterRole)
       assertLocalOnlyRoute(engagement, route)
     }
-    if (!assembled) {
+    const resolvedRoute = route
+    if (!charteredArrays.has(messages) && !isCharterAssembled(messages)) {
       const anchor = await anchorFor(ctx, phase, charterRole, engagement, seams)
       const prompt = assembleCharterMessages(engagement, charterRole, messages, { anchor })
       messages.splice(0, messages.length, ...prompt.messages)
-      assembled = true
+      charteredArrays.add(messages)
     }
     const call =
       seams.call ??
@@ -225,7 +252,36 @@ export function createCharteredComplete(
           temperature: o.temperature,
           responseFormat: o.responseFormat,
         }))
-    const result = await call(route, messages, opts)
+
+    // The spec §3 fallback chain for this call, fed from the call's own
+    // messages (policy-containment.ts). Shared by the prose-refusal gate
+    // below and the thrown-policy containment: both end here rather
+    // than dying.
+    const runFallback = createFallbackRunner({
+      ctx,
+      phase,
+      role,
+      charterRole,
+      engagement,
+      messages,
+      resolvedRoute,
+      fallbackCall: seams.fallbackCall,
+      elicitAnchor: () => anchorFor(ctx, phase, charterRole, engagement, seams),
+    })
+
+    const contained = await callWithPolicyContainment({
+      call,
+      route: resolvedRoute,
+      messages,
+      opts,
+      engagement,
+      ctx,
+      phase,
+      role,
+      runFallback,
+    })
+    if (contained.kind === 'fallback') return contained.result
+    const result = contained.result
     // Refusal gate: only a tool-less response can be a refusal outcome —
     // a response that acts is an answer, whatever its prose says.
     if (result.toolCalls && result.toolCalls.length > 0) return result
@@ -238,45 +294,6 @@ export function createCharteredComplete(
       action: 'refusal_detected',
       result: `${role} response classified ${classified.refusalClass} (${classified.reason}) — running the fallback chain; the refused text is excluded from context.`,
     })
-    const firstUser = messages.find(m => m.role === 'user')
-    const last = messages[messages.length - 1]
-    const taskMessages: ChatMessage[] = []
-    if (firstUser) taskMessages.push({ role: 'user', content: firstUser.content })
-    if (last && last !== firstUser && last.role !== 'assistant') {
-      taskMessages.push({
-        role: 'user',
-        content: `Current step context (latest observation, condensed by the runner):\n${last.content.slice(0, 4000)}`,
-      })
-    }
-    const anchor = await anchorFor(ctx, phase, charterRole, engagement, seams)
-    const outcome = await completeWithFallback({
-      engagement,
-      role: charterRole,
-      taskId: `${engagement.engagementId}:${phase}:${role}`,
-      taskType: phase,
-      messages: taskMessages,
-      anchor,
-      affinity: affinityFor(ctx),
-      callImpl: seams.fallbackCall,
-      onTelemetry: (event) => {
-        ctx.events.append({
-          phase,
-          actor: 'runner',
-          action: 'refusal_telemetry',
-          result:
-            `role=${event.role} task=${event.task_type} model=${event.model} class=${event.class} ` +
-            `hop=${event.hop_taken} outcome=${event.final_outcome} fresh=${event.fresh_context_used} ` +
-            `prefill=${event.prefill_used} anchor=${event.anchor_present}`,
-        })
-      },
-    })
-    if (outcome.result) return outcome.result
-    ctx.events.append({
-      phase,
-      actor: 'runner',
-      action: 'refusal_all_hops',
-      result: `Every fallback hop refused or failed for ${role} in ${phase}; the turn ends empty rather than carrying refusal text forward.`,
-    })
-    return { text: '', toolCalls: [], provider: route.provider, model: route.model }
+    return runFallback()
   }
 }

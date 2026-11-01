@@ -31,6 +31,21 @@ function operatorAttestation(ctx: Ctx): string {
 export const TEST_MODE_ATTESTATION =
   "TEST MODE: operator self-attested — ownership verification bypassed by operator order (REDTEAM_TEST_MODE)";
 
+/**
+ * Stamp the attestation output onto the engagement record: the raw ROE
+ * scope entries whose hosts this phase authorized. From here on the
+ * scope guard's allow set derives from this record (scopeGuardFor
+ * prefers it over the launch request's ROE), so every dispatch consumer
+ * inherits the attested scope. Called on both success paths — the
+ * normal path after every scope host passed authorization, and the
+ * test-mode path where the record is the operator's self-attestation —
+ * always before appendScopeGuardEvent, so the audit event describes
+ * the record-derived guard that will actually be enforced.
+ */
+function stampVerifiedScope(ctx: Ctx): void {
+  ctx.verifiedScope = [...ctx.input.roe.scope];
+}
+
 /** The scope-guard audit event, appended on every authorize path. */
 function appendScopeGuardEvent(ctx: Ctx): void {
   const guard = scopeGuardFor(ctx);
@@ -69,6 +84,7 @@ export async function authorizePhase(ctx: Ctx): Promise<GateVerdict> {
         "module/payload policy. The verification proof on record is the operator's self-attestation, " +
         "not a DNS or service proof. Kill switch, ESTOP, auto-halt and the out-of-scope deny list remain in force.",
     });
+    stampVerifiedScope(ctx);
     appendScopeGuardEvent(ctx);
     ctx.verifiedAt = new Date().toISOString();
     ctx.verificationProof = TEST_MODE_ATTESTATION;
@@ -128,8 +144,11 @@ export async function authorizePhase(ctx: Ctx): Promise<GateVerdict> {
   // Scope guard state lands in the audit log before any agent acts: the
   // parsed allow/deny sets, and any scope entries that could not be
   // classified (an operator typo must be visible, never a silent
-  // narrowing of scope). Building it here also caches it on the context
-  // for the dispatch scope gate.
+  // narrowing of scope). The guard is stamped from the attestation
+  // output first (stampVerifiedScope), so the sets the event describes
+  // are the record-derived sets the dispatch scope gate will enforce.
+  // Building it here also caches it on the context for that gate.
+  stampVerifiedScope(ctx);
   appendScopeGuardEvent(ctx);
   ctx.verifiedAt = new Date().toISOString();
   ctx.verificationProof = verdict.reason

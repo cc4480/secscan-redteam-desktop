@@ -7,9 +7,13 @@
  * scope-hostset.ts (the HostSet matching rules), scope-extract.ts
  * (the command-text target scan), and this module (the decision):
  *
- *  - Two sets, one job each. The ALLOW set is the engagement's declared ROE
- *    scope (--scope / roe.scope): the hosts the operator is authorized to
- *    touch. The DENY set is the operator's out-of-scope list
+ *  - Two sets, one job each. The ALLOW set is the engagement scope the
+ *    AUTHORIZE phase attested (ctx.verifiedScope — the raw ROE scope
+ *    entries whose hosts passed authorization, stamped on the engagement
+ *    record beside the verification proof): the hosts the operator is
+ *    authorized to touch. Until authorize stamps that record (tests,
+ *    partial contexts), the declared ROE scope (--scope / roe.scope)
+ *    stands in for it. The DENY set is the operator's out-of-scope list
  *    (--out-of-scope / roe.outOfScope): hosts that must never be touched,
  *    even when they fall inside the allow set. Deny always beats allow.
  *  - Matching (HostSet.contains): a hostname matches a listed domain exactly
@@ -42,6 +46,7 @@
  */
 import { HostSet, LOCAL_HOSTS, type HostMembership } from "./scope-hostset.js";
 import { extractTargets, commandUsesNetworkTool, stripSubstitutions, SUBSTITUTION_RE } from "./scope-extract.js";
+import { scopeGuardSetsFromEntries, scopeGuardSetsFromVerifiedRecord } from "./scope-record.js";
 
 export { HostSet, classifyScopeEntry, LOCAL_HOSTS } from "./scope-hostset.js";
 export type { HostMembership } from "./scope-hostset.js";
@@ -112,18 +117,26 @@ export class ScopeGuard {
    * @returns The guard for this engagement.
    */
   static fromRoe(roe: { scope?: readonly string[]; outOfScope?: readonly string[] }): ScopeGuard {
-    const allowEntries = roe.scope ?? [];
-    const allowBuilt = HostSet.fromEntries(allowEntries);
-    const denyDeclared = roe.outOfScope !== undefined;
-    const denyBuilt = denyDeclared ? HostSet.fromEntries(roe.outOfScope ?? []) : { set: new HostSet(), skipped: [] as string[] };
-    return new ScopeGuard({
-      allow: allowBuilt.set,
-      deny: denyBuilt.set,
-      allowEntries,
-      allowLoaded: allowEntries.length > 0,
-      denyLoaded: denyDeclared,
-      skipped: [...allowBuilt.skipped, ...denyBuilt.skipped],
-    });
+    return new ScopeGuard(scopeGuardSetsFromEntries(roe.scope ?? [], roe.outOfScope));
+  }
+
+  /**
+   * Build the guard from the AUTHORIZE phase's attestation output: the
+   * raw ROE scope entries whose hosts passed authorization, persisted on
+   * the engagement record (ctx.verifiedScope). The record wins for the
+   * allow set — a launch-request scope that differs from what was
+   * actually attested (or a launch object mutated after authorize) does
+   * not move the guard. The deny set still comes from the ROE
+   * `outOfScope`: deny always beats allow, record or not.
+   *
+   * @param record - The attested scope entries and the ROE deny list.
+   * @returns The guard for this engagement, allow-sourced from the record.
+   */
+  static fromVerifiedRecord(record: {
+    verifiedScope: readonly string[];
+    outOfScope?: readonly string[];
+  }): ScopeGuard {
+    return new ScopeGuard(scopeGuardSetsFromVerifiedRecord(record));
   }
 
   /** Entries from either list that classification skipped (operator typos surface here, never silently). */
@@ -241,21 +254,38 @@ export class ScopeGuard {
 }
 
 /**
- * The engagement's scope guard, built once from the ROE and cached on
- * the context. Contexts assembled without one (tests, partial contexts)
- * get it built lazily here from their ROE; a context with no ROE at all
- * gets an empty guard that allows everything, matching the pre-gate
- * behavior for those paths.
+ * The engagement's scope guard, built once and cached on the context.
+ * The allow set's source, in precedence order:
+ *
+ *  1. The AUTHORIZE phase's attestation output (ctx.verifiedScope):
+ *     once authorize has stamped the record, the guard is built from
+ *     it — and rebuilt when the stamp changes — so every dispatch
+ *     consumer inherits the attested scope, never the launch request's.
+ *  2. The launch ROE (ctx.input.roe): contexts authorize has not
+ *     stamped yet (tests, partial contexts) build from the declared
+ *     scope, exactly as before.
+ *
+ * A context with neither gets an empty guard that allows everything,
+ * matching the pre-gate behavior for those paths.
  *
  * @param ctx - The context (or context-shaped object) to resolve for.
  * @returns The cached or newly built guard.
  */
 export function scopeGuardFor(ctx: {
   scopeGuard?: ScopeGuard;
+  /** Cache key of the record stamp {@link scopeGuardFor} built the cached guard from. */
+  scopeGuardRecordKey?: string;
+  verifiedScope?: readonly string[];
   input?: { roe?: { scope?: readonly string[]; outOfScope?: readonly string[] } };
 }): ScopeGuard {
-  if (!ctx.scopeGuard) {
-    ctx.scopeGuard = ScopeGuard.fromRoe(ctx.input?.roe ?? {});
+  const record = ctx.verifiedScope && ctx.verifiedScope.length > 0 ? ctx.verifiedScope : undefined;
+  const recordKey = record ? `record:${record.join("\n")}` : undefined;
+  if (ctx.scopeGuard && ctx.scopeGuardRecordKey === recordKey) {
+    return ctx.scopeGuard;
   }
+  ctx.scopeGuard = record
+    ? ScopeGuard.fromVerifiedRecord({ verifiedScope: record, outOfScope: ctx.input?.roe?.outOfScope })
+    : ScopeGuard.fromRoe(ctx.input?.roe ?? {});
+  ctx.scopeGuardRecordKey = recordKey;
   return ctx.scopeGuard;
 }

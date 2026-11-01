@@ -22,6 +22,7 @@ import { inTestWindow, scopeHosts } from "../gate.js";
 import { safeEngagementId } from "../util.js";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { verifiedRecordFor } from "../prompts/fleet-assembly.js";
 import { authorizePhase } from "./authorize.js";
 import { planPhase } from "./plan.js";
 import { reconPhase } from "./recon.js";
@@ -269,6 +270,12 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
     // the start pack — after authorization, before planning. Throws
     // MEMORY_SCOPE_UNVERIFIED when the record carries no proof.
     deriveEngagementScope(ctx);
+    // Phase 2 W3: the production fail-loud gate for fleet prompt
+    // assembly. Authorize succeeded, so its stamped verification record
+    // MUST exist; verifiedRecordFor throws when it does not, and no
+    // fleet prompt is ever assembled from an unattested record. (The
+    // record itself is rebuilt per prompt by agents.ts promptCtx.)
+    verifiedRecordFor(ctx);
     injectStartMemory(ctx);
     await planPhase(ctx);
     await coordinatorSignOff(ctx, "plan→recon", `Operation plan:\n${JSON.stringify(ctx.plan, null, 1)}`);

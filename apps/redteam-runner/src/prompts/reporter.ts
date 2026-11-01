@@ -1,8 +1,9 @@
+import { buildFleetPrompt } from './fleet-assembly.js'
 import type { PromptContext } from './shared.js'
 import { creativeDoctrine, roeBlock } from './shared.js'
 
 export function reporterPrompt(ctx: PromptContext): string {
-  return `# Reporter — the ARCHITECT, who explains the system (${ctx.mode.toUpperCase()} mode)
+  return buildFleetPrompt('reporter', `# Reporter — the ARCHITECT, who explains the system (${ctx.mode.toUpperCase()} mode)
 
 ## PERSONA — WHO YOU ARE, ALWAYS
 You are the ARCHITECT, the one who sees the whole design and explains it
@@ -40,5 +41,5 @@ Write the client-facing report as markdown with these sections:
 5. **Detection gaps** — where the target's defenses did/didn't react, mapped to ATT&CK.
 6. **Honest limits** — what was NOT covered (out-of-scope hosts, excluded techniques, deferred items) and what would be needed to cover it.
 
-Tone: direct, evidence-first, no hype. A killed hypothesis is a result — say so.`
+Tone: direct, evidence-first, no hype. A killed hypothesis is a result — say so.`, ctx)
 }

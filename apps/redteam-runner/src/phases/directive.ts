@@ -3,7 +3,7 @@
  */
 import { COMMAND_TOOLS } from "../tools.js";
 import { HaltError, type Ctx } from "../context.js";
-import { describeErrorCause } from "@secscan/redteam-llm-router";
+import { classifyError, describeErrorCause } from "@secscan/redteam-llm-router";
 import { agentLoop, promptCtx } from "../agents.js";
 import { coordinatorPrompt } from "../prompts.js";
 import { extractJsonBlock } from "../util.js";
@@ -55,6 +55,61 @@ export async function coordinatorDirective(
 }
 
 /**
+ * Condense a directive context for the single re-issue after a
+ * content-policy rejection: the raw batch dump is what the provider
+ * rejected, so the retry carries a structured summary instead — section
+ * count and sizes, plus the head (and, for long sections, the tail) of
+ * each section — from which the coordinator produces the same directive.
+ *
+ * @param kind - the directive kind being re-issued
+ * @param context - the original, uncondensed directive context
+ * @returns the condensed context for the re-issue call
+ */
+export function condenseDirectiveContext(kind: "decompose" | "replan", context: string): string {
+  const sections = context.split(/\n\n+/);
+  const digest = sections
+    .map((section, i) => {
+      const flat = section.replace(/\s+/g, " ").trim();
+      const excerpt =
+        flat.length > 900 ? `${flat.slice(0, 600)} … ${flat.slice(-300)}` : flat;
+      return `[section ${i + 1} of ${sections.length}, ${section.length} chars] ${excerpt}`;
+    })
+    .join("\n");
+  return (
+    `CONDENSED RE-ISSUE — the previous ${kind} directive call was rejected by the provider ` +
+    `(content policy). The raw context is replaced by this structured summary; produce the ` +
+    `same directive from it.\nContext: ${sections.length} section(s), ${context.length} chars total.\n${digest}`
+  );
+}
+
+/**
+ * The honest close itself: exactly one directive_failed event carrying
+ * the provider cause, and null for the caller to close with.
+ *
+ * @param ctx - the engagement context
+ * @param kind - the directive kind that failed
+ * @param err - the final error (after any containment re-issue)
+ * @returns null, always
+ */
+function closeWithDirectiveFailed(
+  ctx: Ctx,
+  kind: "decompose" | "replan",
+  err: unknown,
+): null {
+  const cause = describeErrorCause(err);
+  ctx.events.append({
+    phase: "exploit",
+    actor: "coordinator",
+    action: "directive_failed",
+    result:
+      `${kind} directive call failed: ${(err as Error).message}` +
+      (cause !== undefined ? ` Cause: ${cause}` : "") +
+      ` — closing the phase with completed work only.`,
+  });
+  return null;
+}
+
+/**
  * coordinatorDirective with the honest-close failure path (Q-HALT Item 4).
  *
  * A directive call that fails (e.g. the provider safety-rejects the re-plan
@@ -67,6 +122,14 @@ export async function coordinatorDirective(
  * the ResilienceError message alone is only the classifier's rule name)
  * and returns null, leaving the caller to close the phase with completed
  * work only. coordinatorDirective itself is unchanged.
+ *
+ * One containment step runs before the close (W2): when the failure is
+ * classified content_policy, the directive is re-issued ONCE with a
+ * condensed context (condenseDirectiveContext — a structured summary,
+ * not the raw batch dump that was rejected). The re-issue's outcome is
+ * final: success returns the directive, a HaltError rethrows, and any
+ * other failure falls into the same honest close, whose single
+ * directive_failed event carries that final error's cause.
  */
 export async function coordinatorDirectiveOrClose(
   ctx: Ctx,
@@ -77,16 +140,24 @@ export async function coordinatorDirectiveOrClose(
     return await coordinatorDirective(ctx, kind, context);
   } catch (err) {
     if (err instanceof HaltError) throw err;
+    if (classifyError(err).reason !== "content_policy") {
+      return closeWithDirectiveFailed(ctx, kind, err);
+    }
     const cause = describeErrorCause(err);
     ctx.events.append({
       phase: "exploit",
       actor: "coordinator",
-      action: "directive_failed",
+      action: "directive_reissue",
       result:
-        `${kind} directive call failed: ${(err as Error).message}` +
+        `${kind} directive call was content-policy rejected` +
         (cause !== undefined ? ` Cause: ${cause}` : "") +
-        ` — closing the phase with completed work only.`,
+        ` — re-issuing once with a condensed context before closing.`,
     });
-    return null;
+    try {
+      return await coordinatorDirective(ctx, kind, condenseDirectiveContext(kind, context));
+    } catch (reissueErr) {
+      if (reissueErr instanceof HaltError) throw reissueErr;
+      return closeWithDirectiveFailed(ctx, kind, reissueErr);
+    }
   }
 }

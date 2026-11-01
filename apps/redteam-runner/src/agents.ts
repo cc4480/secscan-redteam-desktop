@@ -22,12 +22,12 @@ import { Reflector } from './reflector.js'
 import { spillToolResult } from './tool-spill.js'
 import { inBlackout } from './gate.js'
 import { isPrivateOrLoopbackHost } from './prober.js'
-import { reconPrompt } from './prompts.js'
+import { reconPrompt, type PromptContext } from './prompts.js'
+import { verifiedRecordFor } from './prompts/fleet-assembly.js'
 import { redactPii } from './safety/index.js'
 import { tokenMeterFor } from './harness2/trajectory-normalize.js'
 import { stepJournalFor, responseTokens, TOOL_ERROR_PREFIX } from './harness2/steps.js'
-import { type EngagementMode, type EngagementPhase, type RulesOfEngagement } from './types.js'
-import { type TargetId } from './targets.js'
+import { type EngagementPhase } from './types.js'
 import { HaltError, type Ctx } from './context.js'
 import { sleep } from './util.js'
 import { partitionToolCalls, executeToolGroup } from './dispatch/parallel-batch.js'
@@ -456,18 +456,7 @@ export async function agentLoop(
 // Phases
 // ---------------------------------------------------------------------------
 
-export function promptCtx(ctx: Ctx): {
-  mode: EngagementMode
-  objective: string
-  target: string
-  scopeHosts: string[]
-  roe: RulesOfEngagement
-  fullBattery?: boolean
-  targets?: TargetId[]
-  localSandbox?: boolean
-  testMode?: boolean
-  memoryBrief?: string
-} {
+export function promptCtx(ctx: Ctx): PromptContext {
   return {
     mode: ctx.input.mode,
     objective: ctx.input.objective,
@@ -486,6 +475,18 @@ export function promptCtx(ctx: Ctx): {
     // and the pack assembled (post-authorize). It reaches the system
     // prompts through memoryBlock and is journaled with them.
     memoryBrief: memoryStateFor(ctx)?.startPack?.text,
+    // Phase 2 W3: the fleet prompt-assembly input, built from the
+    // AUTHORIZE phase's stamped verification record when authorize has
+    // stamped one. Production runs are gated in runEngagement: it calls
+    // verifiedRecordFor immediately after a successful authorize and
+    // fails loud there, so a live engagement never reaches promptCtx
+    // without its record. Direct phase calls on hand-built contexts
+    // (unit fixtures) carry no record and render the historical seat
+    // text. The runner has no CHARTER / ENGAGEMENT knob files, so the
+    // knob sources stay unset and the fleet package's defaults govern.
+    ...(ctx.verificationProof && ctx.verifiedAt
+      ? { fleet: { record: verifiedRecordFor(ctx) } }
+      : {}),
   }
 }
 

@@ -4,6 +4,7 @@
  * per sibling file.
  */
 
+import type { VerifiedEngagementRecord } from '@secscan/redteam-fleet-skills'
 import { TECHNIQUES } from '../attack.js'
 import { resolveExcludedTechniques } from '../attack.js'
 import { TARGET_PREFIXES, TARGET_PROFILES } from '../targets.js'
@@ -42,6 +43,25 @@ export interface PromptContext {
    * no memory was recalled; memoryBlock renders nothing then.
    */
   memoryBrief?: string
+  /**
+   * Phase 2 W3: the fleet prompt-assembly input (prompts/fleet-assembly.ts).
+   * agents.ts promptCtx sets it from the AUTHORIZE phase's stamped record
+   * (Ctx.verificationProof / verifiedAt / verifiedScope) on every live
+   * run, and the role prompts then assemble through
+   * @secscan/redteam-fleet-skills (master → soul → engagement injection →
+   * knobs → seat text → skills index → phase skill bodies). Absent in
+   * engagement-independent contexts (the agent-docs canonical context,
+   * unit fixtures): the role prompts render their historical text
+   * unchanged there.
+   */
+  fleet?: {
+    /** The verified engagement record for the injection block. */
+    record: VerifiedEngagementRecord
+    /** Fleet-wide CHARTER knob text (Prompt Pack §4), when a source exists. */
+    charterKnobs?: string
+    /** Per-engagement ENGAGEMENT knob text; wins over the charter text. */
+    engagementKnobs?: string
+  }
 }
 
 /** "SecScan (SS-*) + Windows host + AD (WS-*)" style list for prompt text. */
