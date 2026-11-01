@@ -85,12 +85,12 @@ describe('autonomous engagement protocol', () => {
     assert.ok(PROTOCOL_RULES.some(rule => rule.includes('Authorize first')))
   })
 
-  it('requires the professional report sections and both formats', () => {
+  it('requires the professional report sections and the full deliverable formats', () => {
     const required = REPORT_CONTRACT.sections.filter(section => section.required).map(section => section.id)
     for (const id of ['executive-summary', 'authorization', 'scope', 'findings', 'honest-limits', 'appendix-coverage']) {
       assert.ok(required.includes(id), `${id} is required`)
     }
-    assert.deepEqual(REPORT_CONTRACT.formats, ['report.html', 'report.md'])
+    assert.deepEqual(REPORT_CONTRACT.formats, ['report.html', 'report.md', 'findings.csv', 'report.docx', 'report-package.zip'])
     assert.equal(REPORT_CONTRACT.severityScale[0], 'critical')
   })
 

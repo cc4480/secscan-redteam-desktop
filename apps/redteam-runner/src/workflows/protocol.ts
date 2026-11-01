@@ -84,7 +84,8 @@ export const PROTOCOL_RULES: readonly string[] = [
 /** The report contract: every engagement ends with this, or it is not finished. */
 export interface ReportContract {
   readonly sections: readonly { readonly id: string; readonly required: boolean; readonly content: string }[];
-  /** Rendered in addition to the Markdown twin. */
+  /** The deliverable set: the report twins, the findings sheet, the
+   * editable DOCX copy, and the package zip carrying them all. */
   readonly formats: readonly string[];
   readonly severityScale: readonly string[];
 }
@@ -102,7 +103,7 @@ export const REPORT_CONTRACT: ReportContract = {
     { id: "compliance", required: false, content: "PCI DSS 4.0.1 11.4 / SOC 2 / ISO 27001 mapping when requested" },
     { id: "appendix-coverage", required: true, content: "battery cells probed, blocked and skipped, per family" },
   ],
-  formats: ["report.html", "report.md"],
+  formats: ["report.html", "report.md", "findings.csv", "report.docx", "report-package.zip"],
   severityScale: ["critical", "high", "medium", "low", "info"],
 } as const;
 

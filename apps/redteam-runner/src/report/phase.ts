@@ -31,9 +31,8 @@ import { writeComplianceArtifacts } from "./compliance.js";
 import { extractNarrative } from "./narrative.js";
 import { buildEngagementMeta, type ReportMeta } from "./html.js";
 import { renderEngagementReportHtml, type EngagementReportInput } from "./html/render.js";
-import { writeDocxArtifact } from "./docx.js";
 import { buildEngagementReportInput, buildFindingMeta } from "./html/wire.js";
-import { emitFindingsSheet, stampFindingRefs } from "./finding-refs.js";
+import { emitDeliverables, emitFindingsSheet, stampFindingRefs } from "./finding-refs.js";
 import { buildDetailInput, recordReportMeta } from "./predecessor.js";
 import { type DetailInput } from "./detail.js";
 import { buildGradeSection, gradeFindings } from "./grading.js";
@@ -290,8 +289,8 @@ export async function reportPhase(
   } catch (err) {
     ctx.events.append({ phase: "report", actor: "runner", action: "report_html_failed", result: `HTML report generation failed (report.md unaffected): ${(err as Error).message}` });
   }
-  // Q-RP-2: the editable DOCX copy, from the same assembled input (own try/catch inside).
-  if (reportInput) writeDocxArtifact(ctx, reportInput);
+  // Q-RP-2 + Q-RP-5: the DOCX copy, then the deliverable package (finding-refs.ts hooks).
+  emitDeliverables(ctx, reportInput);
   ctx.events.append({ phase: "report", actor: "reporter", action: "report_written", result: `Report written (${findings.length} findings parsed).` });
   const safetyManifest = writeSafetyArtifacts(ctx);
   writeComplianceArtifacts(ctx, findings, batteryLine, safetyManifest);
