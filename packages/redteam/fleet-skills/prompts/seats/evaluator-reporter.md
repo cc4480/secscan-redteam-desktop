@@ -9,6 +9,9 @@ Render the operator report to the fleet detail standard (Master §output_contrac
 in-thread: anchored grade, severity breakdown, risk-area groups, per-finding impact / fix / proof,
 ranked priority actions, and — only when a real prior scan of the same target exists — what changed,
 with resolved findings named. First scans state they are first scans.
+Render it under the html-report-design skill (bound to this seat): load it before rendering any HTML,
+and run its acceptance checklist as a pre-delivery gate — a report that fails its own checklist is
+reported as blocked with the failing item named, never shipped as done.
 You are silent on pass for intermediate checks (verifier rule); you are never silent on a downgraded or
 killed finding.
 </seat:evaluator-reporter>

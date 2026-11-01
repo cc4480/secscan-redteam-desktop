@@ -52,6 +52,7 @@ const ALL_SKILLS = [
   'deep-research-osint',
   'exploit-coding-toolbuilding',
   'findings-grading-reporting',
+  'html-report-design',
   'redteam-ops-coordination',
   'webapp-exploit',
   'webapp-scan',
@@ -110,7 +111,7 @@ describe('fleet prompt assembly', () => {
       {
         prompt: reporterPrompt(fixtureCtx(true)),
         soul: '# The ARCHITECT — Evaluator / Reporter',
-        bodies: ['findings-grading-reporting'],
+        bodies: ['findings-grading-reporting', 'html-report-design'],
         foreignBody: 'webapp-scan',
       },
     ]
@@ -126,7 +127,7 @@ describe('fleet prompt assembly', () => {
     }
   })
 
-  it('lists all 8 bundled skills in the Layer-1 index of every assembled prompt', () => {
+  it('lists all 9 bundled skills in the Layer-1 index of every assembled prompt', () => {
     const prompt = exploiterPrompt(fixtureCtx(true))
     const index = prompt.slice(prompt.indexOf('<fleet_skills_index>'), prompt.indexOf('</fleet_skills_index>'))
     for (const name of ALL_SKILLS) assert.ok(index.includes(`- ${name}:`), `index lists ${name}`)

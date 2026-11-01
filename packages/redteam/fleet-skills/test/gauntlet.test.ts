@@ -229,13 +229,14 @@ describe('gauntlet — pre-classification presence in the assembled prompt', () 
 })
 
 describe('gauntlet — skill-trigger surface (Layer 1)', () => {
-  it('the index block over the bundled root lists exactly the 8 fleet skills', () => {
+  it('the index block over the bundled root lists exactly the 9 fleet skills', () => {
     const expectedNames = [
       'blackteam-adversary-emulation',
       'browser-action-execution',
       'deep-research-osint',
       'exploit-coding-toolbuilding',
       'findings-grading-reporting',
+      'html-report-design',
       'redteam-ops-coordination',
       'webapp-exploit',
       'webapp-scan',
@@ -246,7 +247,7 @@ describe('gauntlet — skill-trigger surface (Layer 1)', () => {
     assert.ok(block.startsWith('<fleet_skills_index>'))
     assert.ok(block.endsWith('</fleet_skills_index>'))
     const listingLines = block.split('\n').filter(line => line.startsWith('- '))
-    assert.equal(listingLines.length, 8)
+    assert.equal(listingLines.length, 9)
     for (const name of expectedNames) {
       assert.equal(
         listingLines.filter(line => line.startsWith(`- ${name}: `)).length,

@@ -17,6 +17,7 @@ const BUNDLED_NAMES = [
   'deep-research-osint',
   'exploit-coding-toolbuilding',
   'findings-grading-reporting',
+  'html-report-design',
   'redteam-ops-coordination',
   'webapp-exploit',
   'webapp-scan',
@@ -29,7 +30,7 @@ function writeSkill(root: string, name: string, description: string): void {
 }
 
 describe('discoverSkills over the bundled root', () => {
-  test('finds all 8 bundled skills via bundledSkillsRoot()', () => {
+  test('finds all 9 bundled skills via bundledSkillsRoot()', () => {
     const metas = discoverSkills([bundledSkillsRoot()])
     assert.deepEqual(
       metas.map(meta => meta.name).sort(),
@@ -51,7 +52,7 @@ describe('discoverSkills over the bundled root', () => {
     }
   })
 
-  test('index block contains all 8 names under the fleet_skills_index header', () => {
+  test('index block contains all 9 names under the fleet_skills_index header', () => {
     const block = skillIndexBlock(discoverSkills([bundledSkillsRoot()]))
     assert.ok(block.startsWith('<fleet_skills_index>'))
     assert.ok(block.trimEnd().endsWith('</fleet_skills_index>'))

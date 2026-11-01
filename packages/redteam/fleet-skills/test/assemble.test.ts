@@ -5,6 +5,12 @@ import {
   buildEngagementInjection,
   sanitizeRecordField,
 } from '../src/engagement.js';
+import {
+  bundledSkillsRoot,
+  discoverSkills,
+  loadSkillBody,
+  skillIndexBlock,
+} from '../src/registry.js';
 import { resolveKnobs } from '../src/knobs.js';
 import { assembleFleetPrompt } from '../src/assemble.js';
 import type { VerifiedEngagementRecord } from '../src/types.js';
@@ -186,6 +192,38 @@ test('assembly without a soul is unchanged apart from the missing soul block', (
   // The soul is the only difference: removing its block recovers the
   // soul-less prompt byte for byte, so no other block moved or changed.
   assert.equal(withSoul.replace('\n\nSOUL-TEXT', ''), withoutSoul);
+});
+
+test('reporter assembly carries the html-report-design skill body', () => {
+  // The Reporter seat's Layer-2 set (the runner's SKILLS_BY_ROLE binding)
+  // pairs the grading skill with the HTML design skill: the seat that
+  // grades also renders. This test proves the package machinery — bundled
+  // discovery, body loading, index, assembler — actually carries the
+  // design skill into an assembled reporter prompt.
+  const metas = discoverSkills([bundledSkillsRoot()]);
+  const byName = new Map(metas.map(meta => [meta.name, meta]));
+  const reporterSkills = ['findings-grading-reporting', 'html-report-design'];
+  const skillBodies = reporterSkills.map(name => {
+    const meta = byName.get(name);
+    assert.ok(meta, `bundled skill present: ${name}`);
+    return { name, body: loadSkillBody(meta) };
+  });
+  const prompt = assembleFleetPrompt({
+    master: 'MASTER-TEXT',
+    seatDelta: 'REPORTER-SEAT-TEXT',
+    record: makeRecord(),
+    skillIndex: skillIndexBlock(metas),
+    skillBodies,
+  });
+  const indexAt = prompt.indexOf('<fleet_skills_index>');
+  const gradingAt = prompt.indexOf('<skill_content name="findings-grading-reporting">');
+  const designAt = prompt.indexOf('<skill_content name="html-report-design">');
+  assert.ok(indexAt !== -1, 'skills index present');
+  assert.ok(prompt.includes('- html-report-design:'), 'index lists the design skill');
+  assert.ok(gradingAt > indexAt, 'grading body follows the index');
+  assert.ok(designAt > gradingAt, 'design body follows the grading body');
+  assert.ok(prompt.includes('## Acceptance checklist'), 'the delivered body is the full design skill, checklist included');
+  assert.ok(prompt.includes('4 / 8 / 12 / 16 / 24 / 32'), 'the spacing scale rides the assembled prompt');
 });
 
 test('assembly defaults knobs when none are supplied', () => {

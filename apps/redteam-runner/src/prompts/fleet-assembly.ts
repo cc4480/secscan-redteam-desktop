@@ -61,7 +61,7 @@ const SKILLS_BY_ROLE: Readonly<Record<FleetSeatRole, readonly string[]>> = {
   coordinator: ['redteam-ops-coordination'],
   recon: ['deep-research-osint', 'webapp-scan'],
   exploiter: ['webapp-exploit', 'browser-action-execution'],
-  reporter: ['findings-grading-reporting'],
+  reporter: ['findings-grading-reporting', 'html-report-design'],
   coder: ['exploit-coding-toolbuilding'],
 }
 

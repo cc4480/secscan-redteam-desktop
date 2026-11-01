@@ -1,6 +1,6 @@
 # @secscan/redteam-fleet-skills
 
-Fleet skills library + prompt assembly for SecScan RedTeam. This package carries the fleet's eight bundled skills (`skills/<name>/SKILL.md` — deep research/OSINT, web app scan, web app exploit, red-team ops coordination, black-team adversary emulation, exploit coding/toolbuilding, browser action execution, findings grading/reporting), the prompt assets under `prompts/`, and the TypeScript that serves them: the skill registry (`src/registry.ts`, `src/frontmatter.ts`), the verified-engagement record and its prompt injection block (`src/engagement.ts`), operator knobs (`src/knobs.ts`), seat prompt assembly (`src/assemble.ts`), the tool guard (`src/tool-guard.ts`), and step containment (`src/containment.ts`).
+Fleet skills library + prompt assembly for SecScan RedTeam. This package carries the fleet's nine bundled skills (`skills/<name>/SKILL.md` — deep research/OSINT, web app scan, web app exploit, red-team ops coordination, black-team adversary emulation, exploit coding/toolbuilding, browser action execution, findings grading/reporting, HTML report design), the prompt assets under `prompts/`, and the TypeScript that serves them: the skill registry (`src/registry.ts`, `src/frontmatter.ts`), the verified-engagement record and its prompt injection block (`src/engagement.ts`), operator knobs (`src/knobs.ts`), seat prompt assembly (`src/assemble.ts`), the tool guard (`src/tool-guard.ts`), and step containment (`src/containment.ts`).
 
 ## How skills load: three layers
 
