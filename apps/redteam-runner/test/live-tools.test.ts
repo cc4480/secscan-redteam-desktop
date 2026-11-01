@@ -1,18 +1,20 @@
 /**
- * Live engagement registry + executor tool surface (v0.30.0).
+ * Live engagement registry + executor tool surface (v0.30.0; ungated v0.31.0).
  *
- * These tests pin the CONTRACT that makes the 26 executor tools safe to expose:
+ * These tests pin the CONTRACT of the executor surface:
  *
- *   1. A tool is reachable only while its engagement is live; a finished one
- *      reports "not running" rather than serving a stale context whose
- *      executors and kill switch no longer belong to anything.
- *   2. The role is DERIVED from the phase and is not a parameter. That is what
- *      stops an operator from reaching the exploit toolset during recon by
- *      naming a role — the whole reason this surface adds reach without adding
- *      authority.
- *   3. engagementId is required and never defaulted. A tool call that silently
- *      resolved to "the one running engagement" would act against an engagement
- *      the caller never named.
+ *   1. A call that NAMES an engagement is reachable only while that
+ *      engagement is live; a finished one reports "not running" rather than
+ *      serving a stale context whose executors no longer belong to
+ *      anything — and it never falls back to operator mode.
+ *   2. The role for an engagement-bound call is DERIVED from the phase and
+ *      is not a parameter. That is what stops a caller from reaching the
+ *      exploit toolset during recon by naming a role.
+ *   3. engagementId is OPTIONAL and never defaulted TO an engagement. A
+ *      call that omits it runs as a direct operator call (see
+ *      operator-dispatch.test.ts) — it never silently resolves to "the
+ *      one running engagement", which would act against an engagement the
+ *      caller never named.
  *   4. No executor tool may shadow a cockpit tool. abort_engagement exists in
  *      both sets, and the cockpit version is strictly more capable (it works
  *      cross-process via abort.json), so it must win.
@@ -112,13 +114,13 @@ describe("executor tool surface", () => {
     assert.deepEqual(shadowed, [], "abort_engagement must resolve to the cockpit version");
   });
 
-  it("requires engagementId on every tool, and never defaults it", async () => {
+  it("offers engagementId on every tool but never requires it", () => {
     for (const t of EXEC_TOOLS) {
-      const schema = t.inputSchema as { required?: string[] };
-      assert.ok(schema.required?.includes("engagementId"), `${t.name} must require engagementId`);
+      const schema = t.inputSchema as { required?: string[]; properties?: Record<string, unknown> };
+      assert.ok(!schema.required?.includes("engagementId"), `${t.name} must not require engagementId`);
+      assert.ok(schema.properties?.["engagementId"], `${t.name} must still accept engagementId`);
+      assert.ok(!/Requires engagementId|Call list_live_engagements/.test(t.description), `${t.name} description must not gate on an engagement`);
     }
-    // Called without one it must refuse rather than pick an engagement.
-    await assert.rejects(() => EXEC_TOOLS_BY_NAME.get("nuclei_exec")!.run({}), /engagementId is required/);
   });
 
   it("refuses a tool call against an engagement that is not live", async () => {

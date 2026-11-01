@@ -65,8 +65,9 @@ async function dispatch(
     case 'tools/list':
       // Three surfaces, deliberately in one list. The cockpit tools drive
       // ENGAGEMENTS (start one, read its feed, escalate, abort); the executor
-      // tools drive the tooling INSIDE a running one (nuclei_exec, msf_exec,
-      // http_probe, ssh_exec, …), each requiring an engagementId; the arsenal
+      // tools are the tooling itself (nuclei_exec, msf_exec, http_probe,
+      // ssh_exec, …) — an engagementId aims one at a running engagement,
+      // and omitting it runs the tool directly as an operator call; the arsenal
       // tools (arsenal_search/browse/recommend) read the local Arsenal index
       // and are present only when the arsenal is enabled.
       return rpcOk(r.id, {

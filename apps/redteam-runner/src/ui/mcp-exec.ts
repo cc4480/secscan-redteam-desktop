@@ -1,18 +1,23 @@
 /**
- * MCP surface for the runner's EXECUTOR tools (v0.30.0).
+ * MCP surface for the runner's EXECUTOR tools (v0.30.0; ungated v0.31.0).
  *
- * The 13 tools in mcp-tools.ts drive ENGAGEMENTS. These 27 drive the tools
- * INSIDE a running engagement: nuclei_exec, msf_exec, http_probe, ssh_exec,
- * ad_enum, query_registry, and the rest. Without them an operator could start
- * an engagement and read its results but never reach the tooling itself, which
- * is the whole point of a harness-connected red team.
+ * The 13 tools in mcp-tools.ts drive ENGAGEMENTS. These 27 are the tooling
+ * itself: nuclei_exec, msf_exec, http_probe, ssh_exec, ad_enum,
+ * query_registry, and the rest.
  *
- * Every tool requires an engagementId, and every call goes through
- * dispatchLiveTool -> dispatchTool, so the kill switch, the tier ladder,
- * auto-halt, the per-host rate limiter and the per-item variant cap all run
- * first. A Tier-1 call to `msf_exec run` is refused with the reason, exactly as
- * it would be for the engagement's own agents. This file adds reach, not
- * authority.
+ * engagementId is OPTIONAL, and the two modes are kept strictly apart:
+ *
+ *   - WITH the id of a running engagement, the call goes through
+ *     dispatchLiveTool -> dispatchTool and executes inside that
+ *     engagement's context, under exactly the machinery the engagement's
+ *     own agents run under. A non-live id is an honest error — it never
+ *     falls back to operator mode, because a call aimed at an engagement
+ *     must not silently retarget.
+ *   - WITHOUT an id, the call executes directly as an operator call
+ *     (src/operator.ts): the operator's own target, named in the call's
+ *     arguments, with no engagement to belong to and no liveness, tier or
+ *     scope gate in front of it. Carlos's order (2026-11-01): the tools
+ *     are not gated on an engagement existing.
  *
  * The schemas are NOT duplicated: they are the same JsonSchemaTool objects the
  * agents are given, with `engagementId` added. A tool that changes its
@@ -38,6 +43,7 @@ import { VARIANT_LIST_TOOL } from "../variants/tool.js";
 import { TOOLS } from "./mcp-tools.js";
 import type { JsonSchemaTool } from "@secscan/redteam-llm-router";
 import { dispatchLiveTool, getLive } from "../live.js";
+import { dispatchOperatorTool } from "../operator.js";
 
 export interface ExecToolDef {
   name: string;
@@ -47,12 +53,13 @@ export interface ExecToolDef {
 }
 
 /**
- * Add the required engagementId to a tool's schema.
+ * Add the optional engagementId to a tool's schema.
  *
- * Required rather than optional on purpose: defaulting to "the only running
- * engagement" would make a tool call succeed against an engagement the caller
- * never named, which is exactly the kind of implicit targeting a red-team run
- * must not do.
+ * Optional, never defaulted: omitting it does NOT resolve to "the only
+ * running engagement" — it selects operator mode, a direct call against
+ * the target named in the arguments, in no engagement's context. Naming
+ * an id selects that engagement, and if it is not running the call fails
+ * rather than retargeting.
  */
 function bindToEngagement(t: JsonSchemaTool): ExecToolDef {
   const params = (t.parameters ?? {}) as {
@@ -63,24 +70,34 @@ function bindToEngagement(t: JsonSchemaTool): ExecToolDef {
     name: t.name,
     description:
       t.description +
-      " Requires engagementId: the RUNNING engagement whose context this executes in. " +
-      "Call list_live_engagements to see what is running — an engagement that has finished is no longer executable.",
+      " engagementId is OPTIONAL: pass the id of a RUNNING engagement to execute inside its context; " +
+      "omit it to execute directly as an operator call against the target named in the arguments — no engagement needs to be running.",
     inputSchema: {
       type: "object",
       properties: {
         engagementId: {
           type: "string",
-          description: "The running engagement id (e.g. eng-2026-10-15-y8fo).",
+          description:
+            "Optional. The running engagement id (e.g. eng-2026-10-15-y8fo) whose context this executes in. Omit for a direct operator call.",
         },
         ...(params.properties ?? {}),
       },
-      required: ["engagementId", ...(params.required ?? [])],
+      required: [...(params.required ?? [])],
     },
     run: async (args: Record<string, unknown>): Promise<string> => {
-      const id = typeof args["engagementId"] === "string" ? args["engagementId"] : "";
-      if (!id) throw new Error("engagementId is required");
+      const raw = args["engagementId"];
+      if (raw !== undefined && typeof raw !== "string") {
+        throw new Error("engagementId must be a string when given");
+      }
+      const id = typeof raw === "string" ? raw.trim() : "";
       const rest = { ...args };
       delete rest["engagementId"];
+      if (!id) {
+        // Operator mode: no engagement named, none implied. The call is
+        // the operator's own, against its own arguments.
+        const d = await dispatchOperatorTool(t.name, rest);
+        return d.result;
+      }
       const d = await dispatchLiveTool(id, t.name, rest);
       // The caller gets the tool's own result verbatim: it is already written
       // for an agent to read, and rewrapping it would only lose the detail that
@@ -91,7 +108,7 @@ function bindToEngagement(t: JsonSchemaTool): ExecToolDef {
 }
 
 /**
- * All executor tools, reachable only against a live engagement.
+ * All executor tools, reachable with or without a live engagement.
  *
  * The composed sets in tools/compose.ts overlap — the same tool can appear
  * in more than one phase set — so they are concatenated here and
@@ -141,23 +158,25 @@ export const EXEC_TOOLS_BY_NAME = new Map(EXEC_TOOLS.map((t) => [t.name, t]));
 export const EXEC_TOOL_NAMES: string[] = EXEC_TOOLS.map((t) => t.name);
 
 /**
- * The discovery tool. An agent that cannot tell what is live cannot use any of
- * the 26, and "which engagement?" is the first question every one of them
- * requires answering.
+ * The discovery tool: which engagements are live in this process, for
+ * callers who want to aim an executor call at one. Pure discovery — no
+ * executor tool depends on it; every one of them also runs with no
+ * engagementId at all, as a direct operator call.
  */
 export const LIST_LIVE_TOOL: ExecToolDef = {
   name: "list_live_engagements",
   description:
-    "Engagements running IN THIS PROCESS, with the phase, tier, environment, in-scope hosts and the role an operator call would run as. " +
-    "Only these accept the executor tools (nuclei_exec, msf_exec, http_probe, ssh_exec, …). " +
-    "An engagement that has finished — or that was launched from a different process, such as the CLI — is not listed and cannot be driven this way; " +
+    "Engagements running IN THIS PROCESS, with the phase, tier, environment, in-scope hosts and the role an engagement-bound call would run as. " +
+    "Passing one of these ids as engagementId makes an executor tool (nuclei_exec, msf_exec, http_probe, ssh_exec, …) execute inside that engagement's context; " +
+    "omitting engagementId runs the tool directly as an operator call, whether or not anything is listed here. " +
+    "An engagement that has finished — or that was launched from a different process, such as the CLI — is not listed and cannot be driven by id; " +
     "use get_engagement and get_feed to read a finished one.",
   inputSchema: { type: "object", properties: {} },
   run: async (): Promise<string> => {
     const { listLive } = await import("../live.js");
     const rows = listLive();
     if (rows.length === 0) {
-      return "No engagements are running in this process. Start one with start_engagement; the executor tools become available while it runs.";
+      return "No engagements are running in this process. The executor tools are still available: call any of them without engagementId for a direct operator call, or start one with start_engagement to run the fleet.";
     }
     return JSON.stringify(rows, null, 2);
   },
