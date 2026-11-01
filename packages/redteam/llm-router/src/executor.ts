@@ -89,17 +89,30 @@ export interface ExecuteStepOptions<T> {
   now?: () => number
 }
 
-/** Thrown when the executor gives up: carries the classification so the
- *  router can cascade to a fallback provider without re-classifying. */
+/**
+ * Thrown when the executor gives up: carries the classification so the
+ * router can cascade to a fallback provider without re-classifying.
+ *
+ * The message carries the classification (reason, status, rule detail)
+ * AND the provider-cause excerpt from the wrapped error (describeErrorCause:
+ * provider, status, code, body excerpt), so a caller that only logs
+ * `err.message` — or String(err) — at the router funnel still sees what the
+ * provider actually said. The excerpt is built from the ProviderError only
+ * (status/body/headers; never request data or credentials — see errors.ts),
+ * the same text the attempt-failed events already emit as `causeExcerpt`.
+ * The original error stays reachable, unmodified, at `cause`.
+ */
 export class ResilienceError extends Error {
   readonly classified: ClassifiedFailure
   readonly attempts: number
 
   constructor(classified: ClassifiedFailure, attempts: number, cause: unknown) {
+    const excerpt = describeErrorCause(cause)
     super(
       `[llm-router] giving up after ${attempts} attempt(s): ${classified.reason}` +
         (classified.status !== undefined ? ` (HTTP ${classified.status})` : '') +
-        ` — ${classified.detail}`,
+        ` — ${classified.detail}` +
+        (excerpt !== undefined ? ` — cause: ${excerpt}` : ''),
       { cause },
     )
     this.name = 'ResilienceError'

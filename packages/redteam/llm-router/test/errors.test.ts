@@ -1,10 +1,12 @@
 /**
  * describeErrorCause: the provider's words survive wrapping.
  *
- * ResilienceError's message carries only the classifier's rule name; the
- * ProviderError it wraps as `cause` carries status, code, and the body
- * excerpt. These tests pin the unwrap so a future refactor cannot silently
- * sever the chain the Q-HALT incident proved was unread.
+ * The ProviderError a ResilienceError wraps as `cause` carries status,
+ * code, and the body excerpt; describeErrorCause unwraps it, and the
+ * ResilienceError message itself embeds the same excerpt so a caller that
+ * only logs err.message at the router funnel still sees the provider's
+ * words. These tests pin both surfaces so a future refactor cannot
+ * silently sever the chain the Q-HALT incident proved was unread.
  */
 
 import assert from 'node:assert/strict'
@@ -75,6 +77,56 @@ describe('describeErrorCause', () => {
     )
     assert.equal(describeErrorCause(wrapped), 'the root failure')
     assert.equal(describeErrorCause(new Error('plain failure')), 'plain failure')
+  })
+
+  test('the ResilienceError message itself carries rule, status, and body excerpt (content_policy)', async () => {
+    const cause = providerFailure()
+    await assert.rejects(
+      executeStep({
+        run: async () => {
+          throw cause
+        },
+        initial: { providerId: 'fake', model: 'model-a' },
+        maxAttempts: 1,
+      }),
+      (err: unknown) => {
+        if (!(err instanceof ResilienceError)) return false
+        assert.equal(err.classified.reason, 'content_policy')
+        assert.ok(err.message.includes('content_policy'), err.message)
+        assert.ok(err.message.includes('content-pattern'), err.message)
+        assert.ok(err.message.includes('HTTP 400'), err.message)
+        assert.ok(err.message.includes('blocked by the safety system'), err.message)
+        assert.ok(String(err).includes('blocked by the safety system'), String(err))
+        assert.equal(err.cause, cause)
+        return true
+      },
+    )
+  })
+
+  test('the ResilienceError message itself carries rule, status, and body excerpt (5xx)', async () => {
+    const cause = new ProviderError({
+      provider: 'fake',
+      message: '[llm-router] Fake HTTP 500: upstream exploded in shard 7',
+      status: 500,
+    })
+    await assert.rejects(
+      executeStep({
+        run: async () => {
+          throw cause
+        },
+        initial: { providerId: 'fake', model: 'model-a' },
+        maxAttempts: 1,
+      }),
+      (err: unknown) => {
+        if (!(err instanceof ResilienceError)) return false
+        assert.equal(err.classified.reason, 'server_error')
+        assert.ok(err.message.includes('server_error'), err.message)
+        assert.ok(err.message.includes('HTTP 500'), err.message)
+        assert.ok(err.message.includes('upstream exploded in shard 7'), err.message)
+        assert.equal(err.cause, cause)
+        return true
+      },
+    )
   })
 
   test('non-Error input has nothing describable', () => {

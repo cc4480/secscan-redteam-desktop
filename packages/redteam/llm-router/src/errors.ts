@@ -136,9 +136,11 @@ export async function providerErrorFromResponse(
  */
 /**
  * Describe the provider failure at the root of an error chain, for logs and
- * event records. ResilienceError's own message carries only the classifier's
- * rule name; the provider's actual words (status, code, body excerpt) live on
- * the ProviderError it wraps as `cause`. This walks the chain (depth ≤ 3,
+ * event records. The provider's actual words (status, code, body excerpt)
+ * live on the ProviderError a ResilienceError wraps as `cause`;
+ * ResilienceError's message embeds this excerpt (see executor.ts), and this
+ * helper remains the structured unwrap for event records and callers that
+ * need the cause on its own. This walks the chain (depth ≤ 3,
  * starting from `err` itself) and formats the first ProviderError found; with
  * no ProviderError in the chain it falls back to the deepest Error's message.
  * Built from the ProviderError only — request data is never formatted, so no
