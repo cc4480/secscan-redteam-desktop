@@ -1,0 +1,28 @@
+STATUS: CONTINUE | step 4
+
+Recon is leads, not findings. Holding them as leads:
+<lead> /login exists - needs oracle mapping, unverified auth bypass </lead>
+<lead> X-Powered-By leak - unverified stack disclosure, needs header receipt </lead>
+<lead> /admin 403 vs /admin/ 404 split - unverified ACL string-match, needs bypass matrix </lead>
+
+There is no spoon. 403 vs 404 is code, not physics. It can be bent.
+
+Next three moves:
+
+1. Freeze baseline. Re-GET /login, /admin, /admin/ and capture full request + response + headers + body + timestamp. Record X-Powered-By value, login form fields/method/action, exact 403 vs 404 bodies.
+Why: no receipt, no finding later. This is the control everything else mutates from.
+
+2. Chase the split. PLAN: hypothesis = 403 is a prefix string rule on `/admin`, 404 is app fallback. Mechanism = normalization bypass. Probes: `/ADMIN`, `/Admin`, `/admin%2f`, `/admin/.`, `/admin//`, `/admin;%2f`, `/admin%3b`, `/api/admin`, `/admin.json`. Proof standard: 200 / 302 / different length/body vs baseline. Negative control: `/nope-zzz-123` must stay 404.
+Why: that 403/404 delta is the weakest seam. One hit becomes my next primitive.
+
+3. Map login oracle, then fire. GET /login form structure, POST wrong:wrong to record failed-login oracle (status, length, error text, timing). Then fire detector payload. Then chain: one feature's output as another's input.
+
+First payload on /login:
+username: `admin' OR '1'='1' -- -`
+password: `x`
+
+Why this one first:
+Mechanism: tests classic string-breakout. If backend is `SELECT ... WHERE user='$u' AND pass='$p'`, the `'` breaks out, `OR '1'='1'` forces true, `-- -` kills the password check.
+Proof if vulnerable: response diverges from wrong:wrong oracle - 302/200, length jump, logged-in body, or session set.
+Negative control is built-in: wrong:wrong must fail the same way before and after. If payload returns identical failure, hypothesis killed cleanly, no noise, no lockout.
+It fuses with Move 1 and 2: X-Powered-By tells me which comment/quote variant to mutate next, /admin split tells me where to replay a stolen session if login falls.
