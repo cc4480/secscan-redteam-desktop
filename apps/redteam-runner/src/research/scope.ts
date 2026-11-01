@@ -25,6 +25,15 @@
  * is general by construction. Known limit of the line: a target listed
  * by IP cannot be tied to its hostname without DNS, so the hostname
  * form is general unless the deny list or a domain entry ties it.
+ *
+ * One mechanism the classifier must compensate for: the shared
+ * HostSet short-circuits the four local literals (localhost,
+ * 127.0.0.1, ::1, 0.0.0.0) out of every set before membership is
+ * consulted, so a deny entry naming one of them can never bind
+ * through the guard's denyMembership. For exactly that verdict the
+ * classifier re-checks the raw deny entries itself (see
+ * denyEntryNamesHost) — deny still decides; the shared HostSet keeps
+ * the probe semantics it is load-bearing for elsewhere.
  */
 import { classifyScopeEntry, scopeGuardFor, type ScopeGuard } from "../safety/scope-guard.js";
 import { networkContains, parseIp, parseNetwork } from "../safety/scope-ip.js";
@@ -66,6 +75,12 @@ export function normaliseResearchHost(raw: string): string {
     const end = h.indexOf("]");
     if (end > 0) return h.slice(1, end);
   }
+  // A bare IP literal normalizes to its canonical parsed form. Without
+  // this, the port strip below mangles bare IPv6 (its segments are not
+  // a trailing numeric port): "::1" came out as ":" and could never
+  // match the deny list, the scope entries, or LOCAL_HOSTS downstream.
+  const bareIp = parseIp(h.replace(/^\[+/, "").replace(/\]+$/, ""));
+  if (bareIp) return bareIp.text;
   const colon = h.lastIndexOf(":");
   if (colon > 0 && /^\d+$/.test(h.slice(colon + 1))) h = h.slice(0, colon);
   return h.replace(/\.+$/, "");
@@ -152,6 +167,32 @@ function scopeEntryHosts(ctx: ResearchScopeCtx): ScopeEntryHost[] {
 }
 
 /**
+ * True when a raw out-of-scope entry names `host`: an exact match
+ * after normalization, or — for an IP host — a CIDR entry containing
+ * it. Consulted only for the local literals, whose HostSet verdict is
+ * the "local" short-circuit rather than a membership answer (see
+ * module header). The entries read are the same ROE deny list the
+ * guard itself was built from (scopeGuardFor sources deny there in
+ * both its record and launch paths), so this decides from exactly the
+ * operator's list — never a second one.
+ *
+ * @param ctx - The engagement context (reads the ROE deny list).
+ * @param host - The normalized host to test.
+ * @returns Whether a deny entry names the host.
+ */
+function denyEntryNamesHost(ctx: ResearchScopeCtx, host: string): boolean {
+  const hostIp = parseIp(host);
+  for (const raw of ctx.input?.roe?.outOfScope ?? []) {
+    if (normaliseResearchHost(raw) === host) return true;
+    if (hostIp && classifyScopeEntry(raw) === "cidr") {
+      const net = parseNetwork(raw.trim());
+      if (net && networkContains(net, hostIp)) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Classify one named host for a research call (see module header).
  *
  * @param ctx - The engagement context (record + ROE + guard).
@@ -167,6 +208,16 @@ export function classifyResearchHost(ctx: ResearchScopeCtx, host: string): Resea
     return {
       kind: "denied",
       reason: `${h} is on the engagement out-of-scope list (${denied.reason}) — deny beats allow, for research as for probes`,
+    };
+  }
+  // The HostSet "local" short-circuit (see module header): the deny
+  // verdict for a local literal is {member:false, reason:"local"}
+  // whether or not an entry names it, so the literal case is decided
+  // against the raw deny entries here.
+  if (denied.reason === "local" && denyEntryNamesHost(ctx, h)) {
+    return {
+      kind: "denied",
+      reason: `${h} is on the engagement out-of-scope list (listed local host) — deny beats allow, for research as for probes`,
     };
   }
   const related = scopeEntryHosts(ctx).some((e) => hostsRelated(h, e));

@@ -399,3 +399,136 @@ describe("bing provider — parsing", () => {
     assert.ok(url.includes("q=openssl+release"));
   });
 });
+
+// ---------------------------------------------------------------------------
+// Scope law — F-1: deny entries naming LOCAL literals bind
+//
+// HostSet.contains() short-circuits localhost / 127.0.0.1 / ::1 /
+// 0.0.0.0 to {member:false, reason:"local"} before consulting the set,
+// so a deny entry naming one of them never bound through
+// denyMembership alone (checker Finding F-1: a research_fetch to a
+// deny-listed 127.0.0.1 executed). The research classifier re-checks
+// the raw deny entries for exactly that verdict. These tests pin both
+// directions: listed local literals are denied with zero lookups, and
+// unlisted local literals behave exactly as before.
+// ---------------------------------------------------------------------------
+
+describe("research scope law — local-literal deny entries (F-1)", () => {
+  const ctxOf = (scope: string[], outOfScope: string[] = []) => ({
+    input: { roe: { scope, outOfScope } },
+  });
+
+  it("denies every local literal the deny list names", () => {
+    for (const literal of ["localhost", "127.0.0.1", "::1", "0.0.0.0"]) {
+      const ctx = ctxOf(["app.example.com"], [literal]);
+      assert.equal(
+        classifyResearchHost(ctx, literal).kind,
+        "denied",
+        `${literal} named on the deny list must bind`,
+      );
+    }
+  });
+
+  it("binds local literals named in entry forms (URL, port, brackets, covering CIDR)", () => {
+    assert.equal(
+      classifyResearchHost(ctxOf(["app.example.com"], ["http://127.0.0.1:8080/admin"]), "127.0.0.1").kind,
+      "denied",
+    );
+    assert.equal(
+      classifyResearchHost(ctxOf(["app.example.com"], ["localhost:8443"]), "localhost").kind,
+      "denied",
+    );
+    assert.equal(classifyResearchHost(ctxOf(["app.example.com"], ["[::1]"]), "::1").kind, "denied");
+    assert.equal(
+      classifyResearchHost(ctxOf(["app.example.com"], ["127.0.0.0/8"]), "127.0.0.1").kind,
+      "denied",
+    );
+  });
+
+  it("leaves local literals OFF the deny list general, exactly as before", () => {
+    const ctx = ctxOf(["app.example.com"], ["10.9.9.9"]);
+    for (const literal of ["localhost", "127.0.0.1", "::1", "0.0.0.0"]) {
+      assert.equal(
+        classifyResearchHost(ctx, literal).kind,
+        "general",
+        `${literal} not on the deny list stays general`,
+      );
+    }
+    assert.equal(classifyResearchHost(ctxOf(["app.example.com"], []), "127.0.0.1").kind, "general");
+  });
+});
+
+describe("research tools — F-1 local-literal deny at dispatch", () => {
+  let server: Server;
+  let base = "";
+  let hits = 0;
+
+  before(async () => {
+    server = createServer((_req, res) => {
+      hits++;
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end("<html><body><article><h1>Loopback Page</h1><p>loopback body text</p></article></body></html>");
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const addr = server.address();
+    base = `http://127.0.0.1:${typeof addr === "object" && addr ? addr.port : 0}`;
+  });
+  after(async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  it("refuses a fetch to a deny-listed loopback before any request (checker P1)", async () => {
+    const provider = new FixtureProvider([]);
+    const { ctx, appended } = researchCtx(provider, {
+      scope: ["app.example.com"],
+      outOfScope: ["127.0.0.1"],
+    });
+    const beforeHits = hits;
+    const r = await dispatchTool(ctx, "recon", "recon", call("research_fetch", { url: `${base}/page` }));
+    assert.equal(r.ok, false);
+    assert.match(r.result, /SCOPE-EXIT: 127\.0\.0\.1/);
+    assert.equal(appended.filter((e) => e.action === "scope_exit").length, 1);
+    assert.equal(hits, beforeHits, "zero requests: the loopback server was never hit");
+  });
+
+  it("refuses a search naming a deny-listed loopback with zero provider calls", async () => {
+    const provider = new FixtureProvider([HIT_NEW]);
+    const { ctx, appended } = researchCtx(provider, { outOfScope: ["127.0.0.1"] });
+    const r = await dispatchTool(
+      ctx,
+      "recon",
+      "recon",
+      call("research_search", { query: "127.0.0.1 admin interface default password" }),
+    );
+    assert.equal(r.ok, false);
+    assert.match(r.result, /SCOPE-EXIT: 127\.0\.0\.1/);
+    assert.equal(appended.filter((e) => e.action === "scope_exit").length, 1);
+    assert.equal(provider.calls.length, 0, "zero lookups: the provider was never called");
+  });
+
+  it("still fetches the same loopback when it is NOT deny-listed (no new denials)", async () => {
+    const provider = new FixtureProvider([]);
+    const { ctx } = researchCtx(provider, {
+      scope: ["app.example.com"],
+      outOfScope: ["10.9.9.9"],
+    });
+    const beforeHits = hits;
+    const r = await dispatchTool(ctx, "recon", "recon", call("research_fetch", { url: `${base}/page` }));
+    assert.equal(r.ok, true);
+    assert.ok(r.result.includes("loopback body text"));
+    assert.equal(hits, beforeHits + 1, "the general-research fetch executed exactly as before");
+  });
+
+  it("still searches a query naming a non-denied loopback (no new denials)", async () => {
+    const provider = new FixtureProvider([HIT_NEW]);
+    const { ctx } = researchCtx(provider, { outOfScope: ["10.9.9.9"] });
+    const r = await dispatchTool(
+      ctx,
+      "recon",
+      "recon",
+      call("research_search", { query: "127.0.0.1 port forwarding guide" }),
+    );
+    assert.equal(r.ok, true);
+    assert.equal(provider.calls.length, 1);
+  });
+});
