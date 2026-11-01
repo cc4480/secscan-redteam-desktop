@@ -345,6 +345,15 @@ describe("research scope law", () => {
       ["nvd.nist.gov", "10.0.0.5"],
     );
   });
+
+  it("extracts the bare local-literal tokens a query names (F-1B)", () => {
+    assert.deepEqual(extractQueryHosts("localhost admin interface default password"), ["localhost"]);
+    assert.deepEqual(extractQueryHosts("::1 admin interface default password"), ["::1"]);
+    assert.deepEqual(extractQueryHosts("0.0.0.0 admin interface default password"), ["0.0.0.0"]);
+    assert.deepEqual(extractQueryHosts("see http://[::1]:8080/x for the admin page"), ["::1"]);
+    // Times, ratios, and ordinary words are text, not hosts.
+    assert.deepEqual(extractQueryHosts("meeting at 12:30 about a:b testing"), []);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -504,6 +513,65 @@ describe("research tools — F-1 local-literal deny at dispatch", () => {
     assert.match(r.result, /SCOPE-EXIT: 127\.0\.0\.1/);
     assert.equal(appended.filter((e) => e.action === "scope_exit").length, 1);
     assert.equal(provider.calls.length, 0, "zero lookups: the provider was never called");
+  });
+
+  it("refuses a search naming a deny-listed localhost with zero provider calls (F-1B)", async () => {
+    const provider = new FixtureProvider([HIT_NEW]);
+    const { ctx, appended } = researchCtx(provider, { outOfScope: ["localhost"] });
+    const r = await dispatchTool(
+      ctx,
+      "recon",
+      "recon",
+      call("research_search", { query: "localhost admin interface default password" }),
+    );
+    assert.equal(r.ok, false);
+    assert.match(r.result, /SCOPE-EXIT: localhost/);
+    assert.equal(appended.filter((e) => e.action === "scope_exit").length, 1);
+    assert.equal(provider.calls.length, 0, "zero lookups: the provider was never called");
+  });
+
+  it("refuses a search naming a deny-listed ::1 with zero provider calls (F-1B)", async () => {
+    const provider = new FixtureProvider([HIT_NEW]);
+    const { ctx, appended } = researchCtx(provider, { outOfScope: ["::1"] });
+    const r = await dispatchTool(
+      ctx,
+      "recon",
+      "recon",
+      call("research_search", { query: "::1 admin interface default password" }),
+    );
+    assert.equal(r.ok, false);
+    assert.match(r.result, /SCOPE-EXIT: ::1/);
+    assert.equal(appended.filter((e) => e.action === "scope_exit").length, 1);
+    assert.equal(provider.calls.length, 0, "zero lookups: the provider was never called");
+  });
+
+  it("refuses a search naming a deny-listed ::1 in a bracketed URL with zero provider calls (F-1B)", async () => {
+    const provider = new FixtureProvider([HIT_NEW]);
+    const { ctx, appended } = researchCtx(provider, { outOfScope: ["::1"] });
+    const r = await dispatchTool(
+      ctx,
+      "recon",
+      "recon",
+      call("research_search", { query: "http://[::1]:8080/admin default password" }),
+    );
+    assert.equal(r.ok, false);
+    assert.match(r.result, /SCOPE-EXIT: ::1/);
+    assert.equal(appended.filter((e) => e.action === "scope_exit").length, 1);
+    assert.equal(provider.calls.length, 0, "zero lookups: the provider was never called");
+  });
+
+  it("still searches queries naming localhost / ::1 when they are NOT deny-listed (F-1B controls)", async () => {
+    for (const q of [
+      "localhost port forwarding guide",
+      "::1 port forwarding guide",
+      "http://[::1]:8080/admin setup guide",
+    ]) {
+      const provider = new FixtureProvider([HIT_NEW]);
+      const { ctx } = researchCtx(provider, { outOfScope: ["10.9.9.9"] });
+      const r = await dispatchTool(ctx, "recon", "recon", call("research_search", { query: q }));
+      assert.equal(r.ok, true, q);
+      assert.equal(provider.calls.length, 1, q);
+    }
   });
 
   it("still fetches the same loopback when it is NOT deny-listed (no new denials)", async () => {

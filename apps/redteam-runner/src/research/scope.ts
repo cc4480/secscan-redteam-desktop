@@ -125,8 +125,10 @@ export function hostsRelated(host: string, entry: ScopeEntryHost): boolean {
 }
 
 /**
- * Extract the hosts a search query names: URL hosts, IPv4 literals,
- * and dotted hostname tokens (file-name lookalikes excluded).
+ * Extract the hosts a search query names: URL hosts (bracketed-IPv6
+ * ones included), IPv4 literals, dotted hostname tokens (file-name
+ * lookalikes excluded), and the bare local-literal tokens — the word
+ * "localhost" and IPv6 literals — that none of those forms can see.
  *
  * @param query - The raw query text.
  * @returns The distinct normalized hosts, in first-appearance order.
@@ -141,6 +143,16 @@ export function extractQueryHosts(query: string): string[] {
       out.push(n);
     }
   };
+  // Bracketed-IPv6 URL hosts first: the general URL pass below stops
+  // its match at "]", which truncates http://[::1]:8080/x before URL
+  // can parse it, so a bracketed host would never surface.
+  for (const m of query.matchAll(/https?:\/\/\[[0-9a-fA-F:.]+\](?::\d+)?(?:\/[^\s"'<>)\]]*)?/gi)) {
+    try {
+      push(new URL(m[0]).hostname);
+    } catch {
+      /* malformed URL text in a query is text, not a host */
+    }
+  }
   for (const m of query.matchAll(/https?:\/\/[^\s"'<>)\]]+/gi)) {
     try {
       push(new URL(m[0]).hostname);
@@ -156,6 +168,16 @@ export function extractQueryHosts(query: string): string[] {
     const tld = token.slice(token.lastIndexOf(".") + 1);
     if (FILE_EXT_TLDS.has(tld)) continue;
     push(token);
+  }
+  // Bare tokens the passes above cannot see: "localhost" is an
+  // undotted single label (the hostname pass requires a dot) and an
+  // IPv6 literal's colons fit no pass above. A punctuation-delimited
+  // word is pushed only when it normalizes to "localhost" or parses
+  // as an IPv6 literal, so times ("12:30"), ratios ("a:b"), and
+  // ordinary words stay text.
+  for (const m of query.matchAll(/[^\s"'<>(),;]+/g)) {
+    const n = normaliseResearchHost(m[0]);
+    if (n === "localhost" || (n.includes(":") && parseIp(n))) push(n);
   }
   return out;
 }
