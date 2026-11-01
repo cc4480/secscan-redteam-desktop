@@ -49,21 +49,38 @@ export interface LoopState {
 }
 
 /**
- * Load the loop state; absent state reads as zero cycles.
+ * Load the loop state; absent state reads as zero cycles (a store path
+ * under a non-directory is absent too — no state file can exist there,
+ * and runLoopCycle's never-throws contract relies on the distinction).
+ * A state file that exists but cannot be read, parsed, or recognized
+ * fails loud instead: reading it as zero lets the next saveLoopState
+ * overwrite the real cycle history (counter + fitness table) with a
+ * fresh state, and reused cycle numbers corrupt the loop's bookkeeping.
+ * Mirrors the registry treatment in store.ts.
  *
  * @param storeDir - the foundry store directory
- * @returns the persisted loop state
+ * @returns the persisted loop state (zero state when the file is absent)
  */
 export function loadLoopState(storeDir: string): LoopState {
+  const path = join(storeDir, 'loop-state.json')
+  let text: string
   try {
-    const raw = JSON.parse(readFileSync(join(storeDir, 'loop-state.json'), 'utf8')) as Partial<LoopState>
-    if (raw && typeof raw.cyclesRun === 'number') {
-      return { cyclesRun: raw.cyclesRun, lastCycle: raw.lastCycle ?? null, fitness: raw.fitness ?? {} }
-    }
-  } catch {
-    /* absent — a fresh loop */
+    text = readFileSync(path, 'utf8')
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code
+    if (code === 'ENOENT' || code === 'ENOTDIR') return { cyclesRun: 0, lastCycle: null, fitness: {} }
+    throw new Error(`[foundry] loop state at ${path} could not be read: ${err instanceof Error ? err.message : String(err)}`)
   }
-  return { cyclesRun: 0, lastCycle: null, fitness: {} }
+  let raw: Partial<LoopState>
+  try {
+    raw = JSON.parse(text) as Partial<LoopState>
+  } catch (err) {
+    throw new Error(`[foundry] loop state at ${path} is not valid JSON — refusing to read it as zero cycles: ${err instanceof Error ? err.message : String(err)}`)
+  }
+  if (!raw || typeof raw.cyclesRun !== 'number') {
+    throw new Error(`[foundry] loop state at ${path} has an unrecognized shape (no numeric cyclesRun) — refusing to read it as zero cycles`)
+  }
+  return { cyclesRun: raw.cyclesRun, lastCycle: raw.lastCycle ?? null, fitness: raw.fitness ?? {} }
 }
 
 /**
