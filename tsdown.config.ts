@@ -16,9 +16,23 @@ function isBuildFaceClient(value: unknown): boolean {
 export default defineConfig(({ env }) => {
   const client = isBuildFaceClient(env?.DSH_BUILD_FACE)
   return {
-    workspace: client
-      ? ['vendor/*', 'packages/*/*', 'apps/cli']
-      : ['vendor/*', 'packages/*/*', 'apps/cli', 'apps/desktop', 'apps/desktop-host'],
+    workspace: {
+      include: client
+        ? ['vendor/*', 'packages/*/*', 'apps/cli']
+        : ['vendor/*', 'packages/*/*', 'apps/cli', 'apps/desktop', 'apps/desktop-host'],
+      exclude: [
+        // tsdown's built-in defaults, restated: supplying `exclude`
+        // replaces them (tsdown resolveWorkspace).
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/test?(s)/**',
+        '**/t?(e)mp/**',
+        // Not a package: shared helper scripts for packages/redteam/*
+        // (dist-hash.mjs). It has no package.json and must not be
+        // swept into the workspace as a phantom member.
+        'packages/redteam/scripts',
+      ],
+    },
     entry: client ? '' : ['lib/types/{index,invariant,startup}.js'],
     outDir: 'lib',
     format: ['esm'],
