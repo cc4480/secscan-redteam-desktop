@@ -5,15 +5,20 @@
  * Preflight order (mirrors host-exec/executor.ts):
  *   1. kill-switch check (refuse new work when the coordinator aborted)
  *   2. ROE scope check (exact hostname match, fail closed, before any packet)
- *   3. module/payload policy (dos + destructive modules refused; only
- *      generic single-command payloads; the command is always the runner-built
- *      canary marker and additionally passes the destructive denylist)
+ *   3. module/payload policy (dos + destructive modules refused; generic
+ *      single-command payloads run the runner-built canary marker, which
+ *      additionally passes the destructive denylist; Meterpreter payloads
+ *      open a session — see 6)
  *   4. credential resolution (REDTEAM_MSFRPC_* env/Secure Vault only, fail
  *      fast with setup instructions)
  *   5. execution with timeout + abort signal; the console is destroyed on
  *      abort (that IS the kill switch for a running module)
- *   6. session hygiene: a validation run must not leave sessions behind —
- *      any session that wasn't there before is stopped immediately
+ *   6. session hygiene: a generic-payload validation run must not leave
+ *      sessions behind — any session that wasn't there before is stopped
+ *      immediately. A Meterpreter-payload run is the one exception (W8):
+ *      the session it produces is registered as the mechanical
+ *      follow-through of the validated run (executor/session-ops.ts) and
+ *      stays open under a runner-issued handle
  *   7. redaction of every secret from every string that leaves
  *
  * The request function is injectable so tests run against a fake msfrpcd.
@@ -26,9 +31,19 @@ import {
   buildMarkerCommand,
   checkMsfModule,
   checkMsfPayload,
+  isMsfSessionPayload,
 } from "../policy.js";
+import { MsfSessionManager } from "../sessions.js";
 import { filterAndRank, suggestModules, type SuggestInput } from "../suggest.js";
 import { authedClient } from "./auth.js";
+import {
+  closeSession as closeMsfSession,
+  finishSessionRun,
+  sessionCommand as runSessionCommand,
+  type SessionCloseArgs,
+  type SessionCommandArgs,
+} from "./session-ops.js";
+import { credentialDump as runCredentialDump, type CredentialDumpArgs } from "./credential-dump.js";
 
 export interface MsfDeps {
   /** Injectable transport (default: HTTPS to the operator's msfrpcd). */
@@ -56,14 +71,20 @@ export interface MsfResult {
   ms: number;
   /** Set when the safety core refused before contacting msfrpcd. */
   refused?: string;
+  /** Set when a Meterpreter-payload run opened a session (W8): the runner-issued handle + daemon id. */
+  session?: { handle: string; daemonId: string };
+  /** Set by the credential-dump path: sealed evidence reference — counts/types/ref only, never raw material. */
+  evidence?: { path: string; sha256: string; records: number; types: string[] };
 }
 
 export const MSF_TIMEOUT_MS = 120_000; // exploits get longer than 30s host-exec
 
 export class MsfExecutor {
-  private readonly deps: { request?: MsfRequestFn; env: NodeJS.ProcessEnv; endpoint?: { host: string; port: number; useTls: boolean } };
+  readonly deps: { request?: MsfRequestFn; env: NodeJS.ProcessEnv; endpoint?: { host: string; port: number; useTls: boolean } };
   /** TEST MODE: policy checks bypassed (see MsfDeps.testMode). */
   readonly testMode: boolean;
+  /** Live Meterpreter sessions opened by validated runs on this executor (W8). */
+  readonly sessions = new MsfSessionManager();
   /** Kill-switch state, shared with the engagement context (phases.ts owns it). */
   killSwitch: { aborted: boolean } = { aborted: false };
 
@@ -72,7 +93,7 @@ export class MsfExecutor {
     this.testMode = deps.testMode === true;
   }
 
-  private refusedResult(host: string, refused: string, secrets: string[] = []): MsfResult {
+  refusedResult(host: string, refused: string, secrets: string[] = []): MsfResult {
     return {
       ok: false,
       transport: "msf",
@@ -84,7 +105,7 @@ export class MsfExecutor {
     };
   }
 
-  private preflight(host: string, scopeHosts: string[]): { secrets: string[] } | { refused: string } {
+  preflight(host: string, scopeHosts: string[]): { secrets: string[] } | { refused: string } {
     if (this.killSwitch.aborted) {
       return { refused: "kill switch active — coordinator aborted; no new msf executions" };
     }
@@ -208,10 +229,13 @@ export class MsfExecutor {
   }
 
   /**
-   * Run ONE module with a benign canary marker as the only payload action.
-   * Exploits use a generic cmd payload running `echo REDTEAM-MARKER-<id>` —
-   * the marker echoing back IS the validation ("command execution
-   * achieved"). No sessions, no post-exploitation, no destructive modules.
+   * Run ONE module. With a generic cmd payload, the only payload action is
+   * the benign canary marker: `echo REDTEAM-MARKER-<id>` echoing back IS
+   * the validation ("command execution achieved"). With a Meterpreter
+   * session payload (W8), the session the run produces is registered and
+   * the same marker is proven through the session — the session opens as
+   * the mechanical follow-through of the validated run, never before it.
+   * No destructive modules in either path.
    */
   async run(args: {
     host: string;
@@ -265,6 +289,25 @@ export class MsfExecutor {
         timeoutMs,
         signal: args.signal,
       });
+      // W8: a Meterpreter payload's session is the mechanical
+      // follow-through of this validated run — register it and prove the
+      // marker through it instead of hygiene-stopping it.
+      if (payload && isMsfSessionPayload(payload)) {
+        return finishSessionRun(this, {
+          client,
+          secrets,
+          before,
+          console: res,
+          targetHost: args.host,
+          module: args.module,
+          payload,
+          marker: args.marker,
+          markerCmd,
+          timeoutMs,
+          signal: args.signal,
+          started,
+        });
+      }
       // Session hygiene: validation must not leave sessions behind.
       const after = await client.sessionList().catch(() => ({}));
       const strays = Object.keys(after).filter((id) => !before.has(id));
@@ -305,5 +348,20 @@ export class MsfExecutor {
         refused: err instanceof MsfAuthError ? refused : undefined,
       };
     }
+  }
+
+  /** Run ONE command through a session a validated run opened (W8). See executor/session-ops.ts. */
+  async sessionCommand(args: SessionCommandArgs): Promise<MsfResult> {
+    return runSessionCommand(this, args);
+  }
+
+  /** Close a session a validated run opened (W8). See executor/session-ops.ts. */
+  async sessionClose(args: SessionCloseArgs): Promise<MsfResult> {
+    return closeMsfSession(this, args);
+  }
+
+  /** Dump credential material through an open session, sealed to evidence (W8). See executor/credential-dump.ts. */
+  async credentialDump(args: CredentialDumpArgs): Promise<MsfResult> {
+    return runCredentialDump(this, args);
   }
 }

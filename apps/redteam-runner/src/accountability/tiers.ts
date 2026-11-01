@@ -138,7 +138,9 @@ const TIER1_TOOLS = new Set([
  *    engine's verification-gated active web app tests → Tier 1 (the ladder
  *    the retired scan_url wrapper used; the verification-record refusal
  *    itself lives in the dispatch handler, which can name what is missing).
- *  - msf_exec: search/suggest never fire → Tier 1; run fires exploits → Tier 2.
+ *  - msf_exec: search/suggest never fire → Tier 1; run fires exploits and
+ *    the session actions (session_command / credential_dump /
+ *    session_close) act through a live session on the target → Tier 2.
  *  - nuclei_exec: templates never fires (local template listing) → Tier 1;
  *    run executes templates against the target → Tier 2.
  *  - nmap_exec: profiles touches no target (it runs `nmap --version`) → Tier 0;
@@ -153,7 +155,8 @@ export function toolMinTier(toolName: string, args: Record<string, unknown> = {}
     return args["depth"] === "deep" ? 1 : 0;
   }
   if (toolName === "msf_exec") {
-    return args["action"] === "run" ? 2 : 1;
+    const a = args["action"];
+    return a === "run" || a === "session_command" || a === "credential_dump" || a === "session_close" ? 2 : 1;
   }
   if (toolName === "nuclei_exec") {
     return args["action"] === "run" ? 2 : 1;

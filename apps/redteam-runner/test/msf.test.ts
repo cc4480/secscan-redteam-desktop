@@ -13,12 +13,16 @@
  *    canary marker echo as validation; stray sessions are stopped
  *  - phases.ts wiring: msf_exec in the agent tool list, exploit-phase-only
  *    gating for run, DENIED events on scope refusal
+ *  - W8 sessions: a Meterpreter-payload run opens a session ONLY as the
+ *    follow-through of the validated run (marker proven through it);
+ *    session commands round-trip and are host-bound; credential dumps
+ *    seal raw output to evidence and return counts/types/refs only
  */
 
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from "node:http";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { encode, decode } from "@msgpack/msgpack";
@@ -34,6 +38,10 @@ import {
   buildModuleQueries,
   suggestModules,
   MsfClient,
+  isMsfSessionPayload,
+  isAllowedSessionPostModule,
+  MSF_SESSION_POST_MODULES,
+  countCredentialRecords,
 } from "../src/msf/index.js";
 import { runEngagement } from "../src/phases.js";
 import type { EngagementInput } from "../src/types.js";
@@ -63,14 +71,28 @@ interface FakeMsf {
   readCount: number;
   hangRead: boolean;
   markerEcho: string;
+  /** Live fake sessions (daemon id → info), as session.list reports them. */
+  sessions: Record<string, Record<string, unknown>>;
+  /** Everything written to Meterpreter sessions, in order. */
+  meterpreterWrites: string[];
   close(): Promise<void>;
 }
+
+/** Fake SAM dump the fake post/hashdump run "gathers" (2 records). */
+const FAKE_SAM_DUMP =
+  "[*] Dumping password hashes...\n" +
+  "Administrator:500:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0:::\n" +
+  "fakeuser:1001:aad3b435b51404eeaad3b435b51404ee:5ebe2294ecd0e0f08eab7690d2a6ee69:::\n";
 
 async function startFakeMsf(opts: { badAuth?: boolean } = {}): Promise<FakeMsf> {
   const requests: { method: string; args: unknown[] }[] = [];
   const consolesDestroyed: string[] = [];
   const sessionsStopped: string[] = [];
   const writes: string[] = [];
+  const meterpreterWrites: string[] = [];
+  const sessions: Record<string, Record<string, unknown>> = {};
+  let pendingSessionOutput = "";
+  let postModuleRan = false;
   const fake: FakeMsf = {
     server: null as unknown as Server,
     url: "",
@@ -81,6 +103,8 @@ async function startFakeMsf(opts: { badAuth?: boolean } = {}): Promise<FakeMsf> 
     readCount: 0,
     hangRead: false,
     markerEcho: "REDTEAM-MARKER-abc123",
+    sessions,
+    meterpreterWrites,
     async close() {
       // Destroy open sockets first: a deliberately-hung console.read (abort
       // test) would otherwise keep server.close() waiting forever.
@@ -134,8 +158,22 @@ async function startFakeMsf(opts: { badAuth?: boolean } = {}): Promise<FakeMsf> 
           return;
         case "console.write": {
           const [, , _cid, data] = decoded as unknown[];
-          writes.push(String(data));
-          reply({ wrote: String(data).length });
+          const text = String(data);
+          writes.push(text);
+          if (text.trim() === "run") {
+            // A Meterpreter payload landing = a session appears (id "7").
+            const payloadWrite = [...writes].reverse().find((w) => w.includes("set PAYLOAD"));
+            if (payloadWrite && payloadWrite.includes("meterpreter")) {
+              sessions["7"] = {
+                type: "meterpreter",
+                target_host: "10.9.0.12",
+                session_host: "10.9.0.12",
+                payload: payloadWrite.replace("set PAYLOAD", "").trim(),
+              };
+            }
+            if (writes.some((w) => w.trim().startsWith("use post/"))) postModuleRan = true;
+          }
+          reply({ wrote: text.length });
           return;
         }
         case "console.read": {
@@ -143,7 +181,7 @@ async function startFakeMsf(opts: { badAuth?: boolean } = {}): Promise<FakeMsf> 
           if (fake.hangRead) return; // never respond — lets abort testing work
           const ran = writes.some((w) => w.trim() === "run");
           reply({
-            data: ran ? `[*] Running...\n${fake.markerEcho}\n[*] Done\n` : "",
+            data: postModuleRan ? FAKE_SAM_DUMP : ran ? `[*] Running...\n${fake.markerEcho}\n[*] Done\n` : "",
             prompt: "msf6 > ",
             busy: false,
           });
@@ -156,12 +194,36 @@ async function startFakeMsf(opts: { badAuth?: boolean } = {}): Promise<FakeMsf> 
           return;
         }
         case "session.list":
-          reply({});
+          reply(sessions);
           return;
         case "session.stop": {
           const [, , id] = decoded as unknown[];
           sessionsStopped.push(String(id));
+          delete sessions[String(id)];
           reply({ result: "success" });
+          return;
+        }
+        case "session.meterpreter_write": {
+          const [, , _sid, data] = decoded as unknown[];
+          const text = String(data);
+          meterpreterWrites.push(text);
+          const marker = text.match(/REDTEAM-MARKER-[A-Za-z0-9_-]+/);
+          if (text.includes("echo REDTEAM-MARKER-") && marker) {
+            pendingSessionOutput += `${marker[0]}\n`;
+          } else if (text.includes("sysinfo")) {
+            pendingSessionOutput += "Computer : FAKE-PC\nOS : Windows 10 (Build 19045)\n";
+          } else if (text.includes("load kiwi")) {
+            pendingSessionOutput += "[*] Loaded extension: kiwi\n";
+          } else if (text.includes("creds_all")) {
+            pendingSessionOutput += "[*] KERBEROS:\nUsername : fakeuser\nPassword : fake-pass-123\n";
+          }
+          reply({ result: "success" });
+          return;
+        }
+        case "session.meterpreter_read": {
+          const data = pendingSessionOutput;
+          pendingSessionOutput = "";
+          reply({ data, prompt: "meterpreter > " });
           return;
         }
         default:
@@ -202,11 +264,19 @@ function msfEnv(): NodeJS.ProcessEnv {
 // ---------------------------------------------------------------------------
 
 describe("msf policy", () => {
-  it("allows generic single-command payloads, refuses everything else", () => {
+  it("allows generic + Meterpreter session payloads, refuses everything else", () => {
     assert.equal(checkMsfPayload("cmd/unix/generic"), null);
     assert.equal(checkMsfPayload("cmd/windows/generic"), null);
-    assert.ok(checkMsfPayload("windows/meterpreter/reverse_tcp"));
+    // W8: Meterpreter session payloads are the session-run path.
+    assert.equal(checkMsfPayload("windows/meterpreter/reverse_tcp"), null);
+    assert.equal(checkMsfPayload("windows/x64/meterpreter/reverse_https"), null);
+    assert.equal(checkMsfPayload("linux/x64/meterpreter/bind_tcp"), null);
+    assert.ok(isMsfSessionPayload("windows/x64/meterpreter/reverse_tcp"));
+    assert.ok(!isMsfSessionPayload("cmd/unix/generic"));
+    // Non-Meterpreter session payloads stay refused.
+    assert.ok(checkMsfPayload("windows/shell_reverse_tcp"));
     assert.ok(checkMsfPayload("linux/x64/shell_reverse_tcp"));
+    assert.ok(checkMsfPayload("windows/meterpreter/reverse_http")); // transport not in the allowed set
     assert.ok(checkMsfPayload(""));
   });
 
@@ -216,7 +286,22 @@ describe("msf policy", () => {
     assert.ok(checkMsfModule("dos/windows/smb/ms06_025_rras", "auxiliary")?.includes("denial-of-service"));
     assert.ok(checkMsfModule("exploit/windows/fileformat/wiper_x", "exploit"));
     assert.ok(checkMsfModule("auxiliary/dos/tcp/synflood", "auxiliary"));
-    assert.ok(checkMsfModule("post/windows/gather/hashdump", "post")?.includes("only exploit/auxiliary"));
+    // W8 post allowlist: the curated gathers may run (through a session
+    // only); every other post module is refused structurally.
+    assert.equal(checkMsfModule("post/windows/gather/hashdump", "post"), null);
+    assert.equal(checkMsfModule("post/multi/gather/firefox_creds", "post"), null);
+    assert.equal(checkMsfModule("windows/gather/hashdump", "post"), null); // prefix-less form
+    assert.ok(isAllowedSessionPostModule("post/windows/gather/lsa_secrets"));
+    assert.equal(MSF_SESSION_POST_MODULES.length, 10);
+    assert.ok(checkMsfModule("post/windows/gather/credentials/kiwi", "post")?.includes("post module not allowed")); // kiwi is an extension, not a module
+    assert.ok(checkMsfModule("post/multi/manage/shell_to_meterpreter", "post")?.includes("post module not allowed"));
+    assert.ok(checkMsfModule("encoder/x86/shikata_ga_nai", "encoder")?.includes("module type not allowed"));
+  });
+
+  it("counts credential records in dump output (SAM lines + labelled pairs)", () => {
+    assert.equal(countCredentialRecords(FAKE_SAM_DUMP), 2);
+    assert.equal(countCredentialRecords("Username : u\nPassword : p\n"), 1);
+    assert.equal(countCredentialRecords("nothing here\n"), 0);
   });
 
   it("denylist is exported and non-empty", () => {
@@ -322,10 +407,10 @@ describe("MsfExecutor", () => {
     assert.equal(fake.requests.filter((r) => r.method === "console.create").length, 0);
   });
 
-  it("non-generic payload run is refused by policy", async () => {
+  it("non-generic, non-Meterpreter payload run is refused by policy", async () => {
     const res = await exec().run({
       host: "10.9.0.12", scopeHosts: SCOPE, moduleType: "exploit",
-      module: "windows/smb/ms17_010_eternalblue", payload: "windows/meterpreter/reverse_tcp", marker: "abc123",
+      module: "windows/smb/ms17_010_eternalblue", payload: "windows/shell_reverse_tcp", marker: "abc123",
     });
     assert.equal(res.ok, false);
     assert.ok(res.refused?.includes("payload not allowed"));
@@ -386,6 +471,172 @@ describe("MsfExecutor", () => {
     assert.equal(res.ok, false);
     assert.ok(res.summary.includes("ABORTED"), res.summary);
     assert.ok(fake.consolesDestroyed.includes("cid-1"), "console destroyed on abort");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// W8 — sessions + credential dumping (executor level, fake msfrpcd)
+// ---------------------------------------------------------------------------
+
+describe("MsfExecutor sessions + credential dump (W8)", () => {
+  let fake: FakeMsf;
+  beforeEach(async () => {
+    fake = await startFakeMsf();
+  });
+  afterEach(async () => {
+    await fake.close();
+  });
+
+  const exec = () => new MsfExecutor({ request: fakeRequest(fake), env: msfEnv() });
+
+  async function openSession(e: MsfExecutor) {
+    const res = await e.run({
+      host: "10.9.0.12", scopeHosts: SCOPE, moduleType: "exploit",
+      module: "windows/smb/ms17_010_eternalblue", payload: "windows/x64/meterpreter/reverse_tcp", marker: "abc123",
+    });
+    assert.equal(res.ok, true, res.summary);
+    assert.ok(res.session?.handle, "run returns the session handle");
+    return res;
+  }
+
+  it("a Meterpreter run opens a session as the follow-through — marker proven through it, session kept", async () => {
+    const e = exec();
+    const res = await openSession(e);
+    assert.ok(res.summary.includes("Meterpreter session opened"), res.summary);
+    assert.ok(res.summary.includes("MARKER ECHOED through the session"), res.summary);
+    assert.equal(e.sessions.list().length, 1);
+    assert.equal(e.sessions.list()[0]!.targetHost, "10.9.0.12");
+    assert.ok(!fake.sessionsStopped.includes("7"), "the opened session is NOT hygiene-stopped");
+    assert.ok(
+      fake.meterpreterWrites.some((w) => w.includes("echo REDTEAM-MARKER-abc123")),
+      "marker command ran through the session",
+    );
+  });
+
+  it("negative control: a session command with no prior validated run is refused with ZERO daemon requests", async () => {
+    const e = exec();
+    const res = await e.sessionCommand({
+      host: "10.9.0.12", scopeHosts: SCOPE,
+      handle: "00000000-0000-0000-0000-000000000000", command: "sysinfo",
+    });
+    assert.equal(res.ok, false);
+    assert.ok(res.refused?.includes("unknown or closed"), res.summary);
+    assert.equal(fake.requests.length, 0, "no msfrpcd request at all");
+  });
+
+  it("commands round-trip through the mocked session", async () => {
+    const e = exec();
+    const { session } = await openSession(e);
+    const res = await e.sessionCommand({
+      host: "10.9.0.12", scopeHosts: SCOPE, handle: session!.handle, command: "sysinfo",
+    });
+    assert.equal(res.ok, true, res.summary);
+    assert.ok(res.output.includes("FAKE-PC"), res.output);
+    assert.ok(fake.meterpreterWrites.some((w) => w.includes("sysinfo")));
+  });
+
+  it("a session handle is bound to the exploited host", async () => {
+    const e = exec();
+    const { session } = await openSession(e);
+    const res = await e.sessionCommand({
+      host: "10.9.0.13", scopeHosts: ["10.9.0.12", "10.9.0.13"], handle: session!.handle, command: "sysinfo",
+    });
+    assert.equal(res.ok, false);
+    assert.ok(res.refused?.includes("bound to 10.9.0.12"), res.summary);
+  });
+
+  it("out-of-scope session command is denied before any new daemon request", async () => {
+    const e = exec();
+    const { session } = await openSession(e);
+    const before = fake.requests.length;
+    const res = await e.sessionCommand({
+      host: "10.99.0.99", scopeHosts: SCOPE, handle: session!.handle, command: "sysinfo",
+    });
+    assert.equal(res.ok, false);
+    assert.ok(res.refused?.includes("out of scope"), res.summary);
+    assert.equal(fake.requests.length, before, "no new msfrpcd request");
+  });
+
+  it("destructive session commands are refused by the denylist", async () => {
+    const e = exec();
+    const { session } = await openSession(e);
+    const res = await e.sessionCommand({
+      host: "10.9.0.12", scopeHosts: SCOPE, handle: session!.handle, command: "rm -rf /",
+    });
+    assert.equal(res.ok, false);
+    assert.ok(res.refused?.includes("denylist"), res.summary);
+  });
+
+  it("credential dump seals raw output to evidence and returns counts/types/refs only", async () => {
+    const e = exec();
+    const { session } = await openSession(e);
+    const dir = mkdtempSync(join(tmpdir(), "msf-dump-"));
+    try {
+      const res = await e.credentialDump({
+        host: "10.9.0.12", scopeHosts: SCOPE, handle: session!.handle,
+        kind: "hashdump", evidenceDir: join(dir, "evidence"),
+      });
+      assert.equal(res.ok, true, res.summary);
+      assert.equal(res.output, "", "no raw material in the tool output");
+      assert.ok(!res.summary.includes("31d6cfe0"), "no hash in the summary");
+      assert.equal(res.evidence?.records, 2);
+      assert.deepEqual(res.evidence?.types, ["sam-hash"]);
+      assert.ok(res.evidence && existsSync(res.evidence.path), "sealed evidence file exists");
+      const sealed = readFileSync(res.evidence!.path, "utf8");
+      assert.ok(sealed.includes("31d6cfe0d16ae931b73c59d7e0c089c0"), "raw material is in the evidence store");
+      const manifest = JSON.parse(readFileSync(`${res.evidence!.path}.json`, "utf8")) as { sha256: string; records: number };
+      assert.equal(manifest.sha256, res.evidence!.sha256);
+      assert.equal(manifest.records, 2);
+      assert.ok(fake.writes.some((w) => w.includes("set SESSION 7")), "post module pinned to the open session");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("kiwi dump runs through the session channel and seals the same way", async () => {
+    const e = exec();
+    const { session } = await openSession(e);
+    const dir = mkdtempSync(join(tmpdir(), "msf-kiwi-"));
+    try {
+      const res = await e.credentialDump({
+        host: "10.9.0.12", scopeHosts: SCOPE, handle: session!.handle,
+        kind: "kiwi", evidenceDir: join(dir, "evidence"),
+      });
+      assert.equal(res.ok, true, res.summary);
+      assert.ok((res.evidence?.records ?? 0) >= 1);
+      assert.ok(!res.summary.includes("fake-pass-123"), "no password in the summary");
+      assert.ok(fake.meterpreterWrites.some((w) => w.includes("load kiwi")));
+      assert.ok(fake.meterpreterWrites.some((w) => w.includes("creds_all")));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("unknown dump kind is refused before any post console opens", async () => {
+    const e = exec();
+    const { session } = await openSession(e);
+    const consolesBefore = fake.requests.filter((r) => r.method === "console.create").length;
+    const res = await e.credentialDump({
+      host: "10.9.0.12", scopeHosts: SCOPE, handle: session!.handle,
+      kind: "everything", evidenceDir: "/tmp/never-written",
+    });
+    assert.equal(res.ok, false);
+    assert.ok(res.refused?.includes("unknown credential dump kind"), res.summary);
+    assert.equal(fake.requests.filter((r) => r.method === "console.create").length, consolesBefore);
+  });
+
+  it("session close stops the daemon session and forgets the handle", async () => {
+    const e = exec();
+    const { session } = await openSession(e);
+    const res = await e.sessionClose({ host: "10.9.0.12", scopeHosts: SCOPE, handle: session!.handle });
+    assert.equal(res.ok, true, res.summary);
+    assert.ok(fake.sessionsStopped.includes("7"));
+    assert.equal(e.sessions.list().length, 0);
+    const after = await e.sessionCommand({
+      host: "10.9.0.12", scopeHosts: SCOPE, handle: session!.handle, command: "sysinfo",
+    });
+    assert.equal(after.ok, false);
+    assert.ok(after.refused?.includes("unknown or closed"));
   });
 });
 
@@ -535,6 +786,116 @@ describe("msf_exec wiring", () => {
         deps: { verify: async () => true, completeForRole: llm as never },
       });
       assert.ok(sawTools.includes("msf_exec"), "agent tool list includes msf_exec");
+    } finally {
+      await fake.close();
+    }
+  });
+
+  it("W8 flow: run opens a session; session_command + credential_dump land as events; dump stays sealed", async () => {
+    const fake = await startFakeMsf();
+    try {
+      let handle = "missing-handle";
+      const llm = async (role: AgentRole, messages: ChatMessage[], _opts: { tools?: { name: string }[] }): Promise<ChatResult> => {
+        const has = (s: string) => messages.some((m) => m.content.includes(s));
+        if (role === "coordinator") {
+          if (has("Transition awaiting sign-off")) return textOnly("SIGN-OFF: approved.");
+          if (has("RE-PLAN") || has("Last batch results") || has("OVERRIDE"))
+            return textOnly('```json\n{"tasks": [], "finish": true, "note": "done"}\n```');
+          if (has("Return ONLY a JSON block")) {
+            return textOnly(
+              '```json\n{"tasks": [{"kind": "probe", "brief": "msf session flow", "attackId": "T1190", "category": "functionality", "maxTurns": 6}], "finish": false, "note": "go"}\n```',
+            );
+          }
+          return textOnly(
+            '```json\n{"adversaryProfile": "test", "steps": [{"phase": "exploit", "attackId": "T1190", "description": "msf session flow"}]}\n```',
+          );
+        }
+        if (role === "recon") return textOnly("recon brief: smb detected");
+        if (role === "reporter") return textOnly('# Report\n\n```json {"findings": []} ```');
+        const sys = messages.find((m) => m.role === "system")?.content ?? "";
+        if (sys.includes("Task:") || has("Execute the task now")) {
+          const toolMsgs = messages.filter((m) => m.role === "tool");
+          const base = { host: "10.9.0.12", category: "functionality", targetProfile: "windows" };
+          if (toolMsgs.length === 0) {
+            return {
+              text: "firing run",
+              toolCalls: [toolCall("msf_exec", { ...base, action: "run", moduleType: "exploit", module: "windows/smb/ms17_010_eternalblue", payload: "windows/x64/meterpreter/reverse_tcp", attackId: "T1190", cve: "CVE-2017-0144", hypothesis: "session flow" })],
+              provider: "fake",
+              model: "fake",
+            };
+          }
+          if (toolMsgs.length === 1) {
+            const m = toolMsgs[0]!.content.match(/handle ([0-9a-f-]{36})/);
+            handle = m ? m[1]! : "missing-handle";
+            return {
+              text: "session command",
+              toolCalls: [toolCall("msf_exec", { ...base, action: "session_command", sessionHandle: handle, command: "sysinfo", attackId: "T1059", hypothesis: "interact" })],
+              provider: "fake",
+              model: "fake",
+            };
+          }
+          if (toolMsgs.length === 2) {
+            return {
+              text: "dump",
+              toolCalls: [toolCall("msf_exec", { ...base, action: "credential_dump", sessionHandle: handle, dumpKind: "hashdump", attackId: "T1003", hypothesis: "dump" })],
+              provider: "fake",
+              model: "fake",
+            };
+          }
+          if (toolMsgs.length === 3) {
+            return {
+              text: "close",
+              toolCalls: [toolCall("msf_exec", { ...base, action: "session_close", sessionHandle: handle, attackId: "T1059", hypothesis: "close" })],
+              provider: "fake",
+              model: "fake",
+            };
+          }
+          return textOnly("TRIED: msf session flow / OBSERVED: done / VERDICT: killed - done");
+        }
+        return textOnly("idle");
+      };
+      const input: EngagementInput = {
+        target: "10.9.0.12",
+        mode: "red",
+        objective: "msf session wiring test",
+        roe: { scope: ["10.9.0.12"] },
+      };
+      const msfExecutor = new MsfExecutor({ request: fakeRequest(fake), env: msfEnv() });
+      const res = await runEngagement(input, {
+        mcpToken: "test",
+        deepseekApiKey: "test",
+        qwenApiKey: "test",
+        engagementsDir: dir,
+        deps: {
+          verify: async () => true,
+          completeForRole: llm as never,
+          msfExecutor,
+        },
+      });
+      assert.equal(res.status, "complete");
+      assert.notEqual(handle, "missing-handle", "the run result carried the session handle to the agent");
+      const all = readFileSync(join(dir, res.engagementId, "events.jsonl"), "utf8")
+        .split("\n")
+        .filter(Boolean)
+        .map((l) => JSON.parse(l) as { action: string; result: string });
+      const opened = all.find((e) => e.action === "msf_session_opened");
+      assert.ok(opened, "msf_session_opened event logged");
+      const cmd = all.find((e) => e.action === "msf_session_command");
+      assert.ok(cmd, "msf_session_command event logged");
+      assert.ok(cmd!.result.includes("sysinfo"), "the command itself is in the event log");
+      assert.ok(cmd!.result.includes("FAKE-PC"), "the full response is in the event log");
+      const dump = all.find((e) => e.action === "msf_credential_dump");
+      assert.ok(dump, "msf_credential_dump event logged");
+      assert.ok(dump!.result.includes("sealed"), dump!.result.slice(0, 200));
+      assert.ok(!dump!.result.includes("31d6cfe0"), "no raw hash in the event log");
+      const evidenceDir = join(dir, res.engagementId, "evidence");
+      const sealedFiles = readdirSync(evidenceDir).filter((f) => f.startsWith("msf-credential-dump-hashdump-") && f.endsWith(".txt"));
+      assert.equal(sealedFiles.length, 1, "exactly one sealed dump file");
+      assert.ok(
+        readFileSync(join(evidenceDir, sealedFiles[0]!), "utf8").includes("31d6cfe0d16ae931b73c59d7e0c089c0"),
+        "raw material lives in the sealed evidence file",
+      );
+      assert.ok(all.some((e) => e.action === "msf_session_closed"), "msf_session_closed event logged");
     } finally {
       await fake.close();
     }

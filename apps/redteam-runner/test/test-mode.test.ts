@@ -117,14 +117,21 @@ describe('test mode — rate limiter disabled', () => {
 })
 
 describe('test mode — msf policy', () => {
-  it('module denylist is bypassed, structural type validation is not', () => {
+  it('module denylist is bypassed, structural validation is not', () => {
     assert.match(checkMsfModule('auxiliary/dos/tcp/synflood', 'auxiliary') ?? '', /denylist/)
     assert.equal(checkMsfModule('auxiliary/dos/tcp/synflood', 'auxiliary', { testMode: true }), null)
-    assert.match(checkMsfModule('post/windows/gather/hashdump', 'post', { testMode: true }) ?? '', /module type not allowed/)
+    // W8: allowlisted post modules are valid in every mode; a post
+    // module outside the allowlist is refused structurally, test mode
+    // included (test mode bypasses the denylist, never the allowlist).
+    assert.equal(checkMsfModule('post/windows/gather/hashdump', 'post', { testMode: true }), null)
+    assert.match(checkMsfModule('post/multi/manage/shell_to_meterpreter', 'post', { testMode: true }) ?? '', /post module not allowed/)
     assert.match(checkMsfModule('', 'exploit', { testMode: true }) ?? '', /empty module name/)
   })
   it('payload policy returns null in test mode', () => {
-    assert.match(checkMsfPayload('windows/x64/meterpreter/reverse_tcp') ?? '', /not allowed/)
+    assert.match(checkMsfPayload('windows/x64/shell_reverse_tcp') ?? '', /not allowed/)
+    assert.equal(checkMsfPayload('windows/x64/shell_reverse_tcp', { testMode: true }), null)
+    // Meterpreter session payloads are policy-allowed with or without test mode (W8).
+    assert.equal(checkMsfPayload('windows/x64/meterpreter/reverse_tcp'), null)
     assert.equal(checkMsfPayload('windows/x64/meterpreter/reverse_tcp', { testMode: true }), null)
     assert.equal(checkMsfPayload('cmd/unix/generic'), null)
   })

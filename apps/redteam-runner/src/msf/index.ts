@@ -25,6 +25,9 @@ export {
   buildMarkerCommand,
   msfRankWeight,
   msfSecrets,
+  isMsfSessionPayload,
+  isAllowedSessionPostModule,
+  MSF_SESSION_POST_MODULES,
   MSFRPC_SETUP_INSTRUCTIONS,
   MSF_ENV_HOST,
   MSF_ENV_PORT,
@@ -32,6 +35,10 @@ export {
   MSF_ENV_PASS,
   MSF_ENV_TLS,
 } from "./policy.js";
+export { MsfSessionManager } from "./sessions.js";
+export type { MsfSessionRecord } from "./sessions.js";
+export { DUMP_KINDS, dumpKindNames, countCredentialRecords } from "./executor/credential-dump.js";
+export type { DumpKindSpec } from "./executor/credential-dump.js";
 export { extractCves, buildModuleQueries, filterAndRank, suggestModules, CVE_RE } from "./suggest.js";
 export type { SuggestInput, RankedModule } from "./suggest.js";
 export { msfCall, createHttpMsfRequest, MsfTransportError, MSFRPC_DEFAULT_HOST, MSFRPC_DEFAULT_PORT, MSFRPC_DEFAULT_TLS } from "./protocol.js";

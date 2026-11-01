@@ -114,6 +114,21 @@ export class MsfClient {
   }
 
   /**
+   * Write to a live Meterpreter session's command channel (W8 session
+   * interaction). Only the session manager calls this, and only for
+   * sessions it registered from a validated exploit run.
+   */
+  async sessionMeterpreterWrite(id: string, data: string): Promise<void> {
+    await this.call("session.meterpreter_write", [id, data]);
+  }
+
+  /** Drain a Meterpreter session's pending output. Returns "" when idle. */
+  async sessionMeterpreterRead(id: string): Promise<string> {
+    const res = await this.call("session.meterpreter_read", [id]);
+    return asString(res["data"]);
+  }
+
+  /**
    * Run a module in a throwaway console and capture its output.
    *
    * Flow: console.create → `use <type>/<fullname>` → `set` each option →
@@ -125,7 +140,7 @@ export class MsfClient {
    * running module: destroying the console kills whatever it was doing.
    */
   async runModuleConsole(args: {
-    moduleType: "exploit" | "auxiliary";
+    moduleType: "exploit" | "auxiliary" | "post";
     fullname: string;
     options: Record<string, string>;
     payload?: string;
