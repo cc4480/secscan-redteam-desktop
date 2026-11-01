@@ -10,6 +10,9 @@
  */
 import { CONSOLE_SHARE_PREFIX_ROUTE } from '@secscan/redteam-console-share/shared'
 import type {
+  Compliance, Coverage, Finding, JobRecord, ProofBundle, ReverifyPlan,
+} from './engagements-model.ts'
+import type {
   AbortOutcome, ConsoleEngagementsResponse, EngagementEvent, EscalateInput, EscalateOutcome,
   FeedState, ModelsResponse,
 } from './model.ts'
@@ -54,7 +57,62 @@ export interface ConsoleApi {
    * @returns the open connection; close it to stop the stream.
    */
   openFeed(id: string, after: number, handlers: FeedHandlers): FeedConnection
+  /**
+   * Read one engagement's confirmed findings (each flagged with proof availability).
+   * @param id - the engagement id.
+   * @param signal - the caller's lifetime.
+   * @returns the findings, or the failure.
+   */
+  findings(id: string, signal: AbortSignal): Promise<ConsoleResult<readonly Finding[]>>
+  /**
+   * Read one finding's proof bundle.
+   * @param id - the engagement id.
+   * @param findingId - the finding id (F-1, …).
+   * @param signal - the caller's lifetime.
+   * @returns the bundle, or the failure.
+   */
+  proof(id: string, findingId: string, signal: AbortSignal): Promise<ConsoleResult<ProofBundle>>
+  /**
+   * Read one engagement's coverage rollup.
+   * @param id - the engagement id.
+   * @param signal - the caller's lifetime.
+   * @returns the coverage, or the failure.
+   */
+  coverage(id: string, signal: AbortSignal): Promise<ConsoleResult<Coverage>>
+  /**
+   * Read one engagement's compliance documents (server-rendered HTML).
+   * @param id - the engagement id.
+   * @param signal - the caller's lifetime.
+   * @returns the documents, or the failure.
+   */
+  compliance(id: string, signal: AbortSignal): Promise<ConsoleResult<Compliance>>
+  /**
+   * Start a reverify for one finding: a plan when `execute` is falsy (no
+   * traffic), a background job when executing (scope hosts required by the
+   * console, enforced mechanically there).
+   * @param input - engagement id, finding id, and the execute/scope choice.
+   * @returns the plan or the job handle, or the failure.
+   */
+  reverify(input: ReverifyInput): Promise<ConsoleResult<ReverifyStart>>
+  /**
+   * Read one background job's record.
+   * @param jobId - the job id.
+   * @param signal - the caller's lifetime.
+   * @returns the job, or the failure.
+   */
+  job(jobId: string, signal: AbortSignal): Promise<ConsoleResult<JobRecord>>
 }
+
+/** A reverify request: the console resolves the bundle from the engagement's own records. */
+export interface ReverifyInput {
+  readonly id: string
+  readonly finding: string
+  readonly execute?: boolean
+  readonly scope?: readonly string[]
+}
+
+/** A reverify start: the plan (no traffic sent) or the background job's handle. */
+export type ReverifyStart = ReverifyPlan | { readonly jobId: string }
 
 /** Callbacks for one open feed connection. */
 export interface FeedHandlers {
@@ -131,6 +189,33 @@ export function createConsoleApi(): ConsoleApi {
           confirmTier2Production: input.tier === '2',
         }),
       }).then(r => readJson<EscalateOutcome>(r)))
+    },
+    findings(id, signal) {
+      return settle(fetch(`${base}/api/engagements/${encodeURIComponent(id)}/findings`, { signal }).then(r => readJson<readonly Finding[]>(r)))
+    },
+    proof(id, findingId, signal) {
+      return settle(fetch(`${base}/api/engagements/${encodeURIComponent(id)}/proof/${encodeURIComponent(findingId)}`, { signal }).then(r => readJson<ProofBundle>(r)))
+    },
+    coverage(id, signal) {
+      return settle(fetch(`${base}/api/engagements/${encodeURIComponent(id)}/coverage`, { signal }).then(r => readJson<Coverage>(r)))
+    },
+    compliance(id, signal) {
+      return settle(fetch(`${base}/api/engagements/${encodeURIComponent(id)}/compliance`, { signal }).then(r => readJson<Compliance>(r)))
+    },
+    reverify(input) {
+      return settle(fetch(`${base}/api/reverify`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          id: input.id,
+          finding: input.finding,
+          ...(input.execute === true ? { execute: true } : {}),
+          ...(input.scope !== undefined ? { scope: input.scope } : {}),
+        }),
+      }).then(r => readJson<ReverifyStart>(r)))
+    },
+    job(jobId, signal) {
+      return settle(fetch(`${base}/api/jobs/${encodeURIComponent(jobId)}`, { signal }).then(r => readJson<JobRecord>(r)))
     },
     openFeed(id, after, handlers) {
       const source = new EventSource(`${base}/api/engagements/${encodeURIComponent(id)}/events?after=${after}`)

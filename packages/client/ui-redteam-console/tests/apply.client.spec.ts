@@ -11,15 +11,18 @@ import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { SidebarRightTabRegistry } from '@deepseek-ai/dsh-client-ui-sidebar-right/src/client/tab-registry.ts'
 import { WATCH_ID, WATCH_KIND } from '../src/client/definition.ts'
-import { apply, inject } from '../src/client/index.ts'
+import { apply, inject, PANEL_ID } from '../src/client/index.ts'
 import { apply as hostApply } from '../src/index.ts'
+import { EngagementsPage } from '../src/client/EngagementsPage.tsx'
 import { en, zh } from '../src/client/locales.ts'
+import { PanelIcon } from '../src/client/PanelIcon.tsx'
 import { WatchBody } from '../src/client/WatchBody.tsx'
 import { WatchTitle } from '../src/client/WatchTitle.tsx'
 
 interface Recorded {
   name: string
   key: string | undefined
+  id: string | undefined
   locale: string | undefined
   store: unknown
   inject: unknown
@@ -74,13 +77,19 @@ describe('ui-redteam-console apply', () => {
     expect(registered.map(entry => [entry.name, entry.key, entry.locale, entry.component])).toEqual([
       ['sidebar.right.pane.tab', WATCH_ID, 'redteamConsole', WatchBody],
       ['sidebar.right.pane.tab.title', WATCH_ID, undefined, WatchTitle],
+      ['main', PANEL_ID, 'redteamConsole', EngagementsPage],
+      ['sidebar.panellist', undefined, 'redteamConsole', PanelIcon],
     ])
+    expect(registered[3]!.id).toBe(PANEL_ID)
     const body = registered[0]!
     expect(body.store).toBeDefined()
     // The seat's inject is the slot factory: (sessionId, actions) => face.
     expect(typeof body.inject).toBe('function')
     const face = (body.inject as (sessionId: string, actions: unknown) => object)('s-1', {})
     expect(Object.keys(face).sort()).toEqual(['abort', 'escalate', 'refresh', 'select', 'start'])
+    // The panel's inject factory returns the controller's face, hooks included.
+    const panelFace = (registered[2]!.inject as () => { hooks: object })()
+    expect(Object.keys(panelFace.hooks)).toEqual(['engagements'])
   })
 
   it('removes every registration when the plugin fiber disposes', async () => {

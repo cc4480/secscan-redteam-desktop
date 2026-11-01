@@ -106,6 +106,32 @@ describe('createConsoleApi', () => {
     expect(fetchMock.mock.calls[0]![0]).toBe('redteam-console/api/models')
   })
 
+  it('addresses the record routes and the reverify/job flow', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(200, {}))
+    const api = createConsoleApi()
+    const signal = new AbortController().signal
+    await api.findings('eng-9', signal)
+    await api.proof('eng-9', 'F-1', signal)
+    await api.coverage('eng-9', signal)
+    await api.compliance('eng-9', signal)
+    await api.job('job-7', signal)
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual([
+      'redteam-console/api/engagements/eng-9/findings',
+      'redteam-console/api/engagements/eng-9/proof/F-1',
+      'redteam-console/api/engagements/eng-9/coverage',
+      'redteam-console/api/engagements/eng-9/compliance',
+      'redteam-console/api/jobs/job-7',
+    ])
+    await api.reverify({ id: 'eng-9', finding: 'F-1' })
+    const planCall = fetchMock.mock.calls.at(-1)!
+    expect(planCall[0]).toBe('redteam-console/api/reverify')
+    expect(JSON.parse(String(planCall[1]?.body))).toEqual({ id: 'eng-9', finding: 'F-1' })
+    await api.reverify({ id: 'eng-9', finding: 'F-1', execute: true, scope: ['fixture.invalid'] })
+    expect(JSON.parse(String(fetchMock.mock.calls.at(-1)![1]?.body))).toEqual({
+      id: 'eng-9', finding: 'F-1', execute: true, scope: ['fixture.invalid'],
+    })
+  })
+
   it('opens the feed on the proxied events route and routes its frames', () => {
     const api = createConsoleApi()
     const handlers: FeedHandlers = {
