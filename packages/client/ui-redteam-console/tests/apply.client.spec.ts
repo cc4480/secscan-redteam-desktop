@@ -75,7 +75,7 @@ describe('ui-redteam-console apply', () => {
     const definition = tabs.get(WATCH_KIND)
     expect(definition?.id).toBe(WATCH_ID)
     expect(definition?.priority).toBe('builtin')
-    expect(definition?.title()).toBe('tab.watch.title')
+    expect(definition?.title('')).toBe('tab.watch.title')
     expect(definition?.guide?.map(entry => [entry.order, entry.title(), entry.description?.()]))
       .toEqual([[40, 'guide.watch.title', 'guide.watch.description']])
     expect(dictionaries.get('redteamConsole')).toEqual({ zh, en })

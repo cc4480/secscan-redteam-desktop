@@ -44,7 +44,7 @@ export interface ConsoleApi {
    * @param reason - the operator's reason, recorded by the console.
    * @returns the console's outcome, or the failure.
    */
-  abort(id: string, reason: string): Promise<ConsoleResult<AbortOutcome>>
+  abort(id: string, reason: string, signal?: AbortSignal): Promise<ConsoleResult<AbortOutcome>>
   /**
    * Change one engagement's autonomy tier under a named operator.
    * @param id - the engagement id.
@@ -52,7 +52,7 @@ export interface ConsoleApi {
    * production confirmation, exactly as the console's own page sends it.
    * @returns the console's outcome, or the failure.
    */
-  escalate(id: string, input: EscalateInput): Promise<ConsoleResult<EscalateOutcome>>
+  escalate(id: string, input: EscalateInput, signal?: AbortSignal): Promise<ConsoleResult<EscalateOutcome>>
   /**
    * Open the engagement's live event feed.
    * @param id - the engagement id.
@@ -211,14 +211,15 @@ export function createConsoleApi(formatHttpStatus?: (status: number) => string):
     models(signal) {
       return settle(fetch(`${base}/api/models`, { signal }).then(r => readJson<ModelsResponse>(r, httpStatus)))
     },
-    abort(id, reason) {
+    abort(id, reason, signal) {
       return settle(fetch(`${base}/api/engagements/${encodeURIComponent(id)}/abort`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ reason }),
+        signal,
       }).then(r => readJson<AbortOutcome>(r, httpStatus)))
     },
-    escalate(id, input) {
+    escalate(id, input, signal) {
       return settle(fetch(`${base}/api/engagements/${encodeURIComponent(id)}/escalate`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -231,6 +232,7 @@ export function createConsoleApi(formatHttpStatus?: (status: number) => string):
           // confirm happens here before this call is made.
           confirmTier2Production: input.tier === '2',
         }),
+        signal,
       }).then(r => readJson<EscalateOutcome>(r, httpStatus)))
     },
     findings(id, signal) {

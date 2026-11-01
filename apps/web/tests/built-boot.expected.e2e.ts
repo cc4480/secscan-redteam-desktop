@@ -29,7 +29,7 @@ if (!isBuildRecordReader(readClientBuildRecord)) {
 }
 const record: unknown = readClientBuildRecord(resolve(import.meta.dirname, '../../..'))
 if (typeof record !== 'object' || record === null) throw new TypeError('client build record must be an object')
-const clientBuildEnvironment = requireObject(
+requireObject(
   Reflect.get(record, 'environment'),
   'client build record environment must be an object',
 )
@@ -45,15 +45,6 @@ function requireObject(value: unknown, message: string): Record<string, unknown>
 
 function isUnknownRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
-}
-
-/** Read one optional string from the verified client build record. */
-function clientBuildValue(name: string): string | undefined {
-  const value = clientBuildEnvironment[name]
-  if (value !== undefined && typeof value !== 'string') {
-    throw new TypeError(`client build record environment ${name} must be a string`)
-  }
-  return value
 }
 
 it('boots the built plugin graph and renders a fixture session end to end', async () => {
