@@ -109,6 +109,8 @@ pnpm run start:desktop
 
 Web 侧的对应命令是 `pnpm run dev:web` 与 `pnpm run start:web`，见[开发指南](../../docs/development.zh.md)。Workspace 开发使用 Electron RunAsNode 运行当前 CLI 与私有 Desktop Host 包，插件管理和恢复使用 `$DSH_HOME/profiles/desktop`，与一次性工作区运行时分离。Host 在开发与打包构建中都使用 runtime 模块解析，不创建官方包的 fallback 链接；开发者安装的包（包括链接）保留原生优先级。需要验证 Electron RunAsNode、内置 pnpm、内置 dsh 资源、插件安装和修复时，应运行未封装安装器的应用目录。
 
+源码启动同样需要打包流程物化的 gitignore 载荷。首次源码启动前，在仓库根目录运行 `node apps/desktop/scripts/vendor-llama.mjs`：它会把 `resources/llama-manifest.json` 中固定的 llama.cpp 运行时下载到 `resources/llama/`；缺少它时，本地模型页面无法启动其服务器（启动错误会给出这条命令）。`node apps/desktop/scripts/vendor-tools.mjs` 对源码启动是可选的：它把内置扫描工具物化到 `resources/tools/`，缺少时 runner 改从 `PATH` 解析这些工具。
+
 
 ### 启动引导
 

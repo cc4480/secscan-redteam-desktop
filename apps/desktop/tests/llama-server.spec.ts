@@ -416,10 +416,28 @@ describe('llama-server lifecycle', () => {
     const failure = await startFailure(target)
 
     expect(failure.message).toMatch(/is missing/u)
-    expect(failure.message).toContain('Reinstall the application')
+    expect(failure.message).toContain('node apps/desktop/scripts/vendor-llama.mjs')
+    expect(failure.message).not.toContain('Reinstall the application')
     expect(harness.spawns).toHaveLength(0)
     expect(target.state.status).toBe('error')
     expect(states.map(state => state.status)).toEqual(['error'])
+  })
+
+  it('names reinstalling as the remedy when a packaged payload is absent', async () => {
+    const { fetcher } = readyFetch()
+    const target = new LlamaServer(
+      { packaged: true, resourcesPath: join('C:', 'unused'), appPath: join('C:', 'app') },
+      { directory: tempRoot(), spawn: spawnIntoHarness, allocatePort: async () => FIXED_PORT, fetch: fetcher },
+    )
+    servers.push(target)
+
+    const failure = await startFailure(target)
+
+    expect(failure.message).toMatch(/is missing/u)
+    expect(failure.message).toContain('Reinstall the application')
+    expect(failure.message).not.toContain('vendor-llama')
+    expect(harness.spawns).toHaveLength(0)
+    expect(target.state.status).toBe('error')
   })
 
   it('rejects an invalid start request without spawning', async () => {

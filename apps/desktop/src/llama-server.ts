@@ -462,11 +462,14 @@ export class LlamaServer {
     }
     const resources = this.resources()
     if (!existsSync(resources.binary)) {
+      const remedy = this.location.packaged
+        ? 'Reinstall the application.'
+        : 'Run `node apps/desktop/scripts/vendor-llama.mjs` from the repository root to materialize the pinned runtime.'
       throw this.failFor(
         generation,
         input.modelId,
         `desktop llama-server: ${resources.binary} is missing, so this installation does not carry the local `
-        + 'inference server. Reinstall the application.',
+        + `inference server. ${remedy}`,
       )
     }
     let port: number

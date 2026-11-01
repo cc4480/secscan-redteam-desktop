@@ -109,6 +109,8 @@ pnpm run start:desktop
 
 The Web counterparts are `pnpm run dev:web` and `pnpm run start:web`, documented in the [development guide](../../docs/development.md). Workspace development runs the current CLI and private Desktop Host packages under Electron RunAsNode. Plugin management and recovery use `$DSH_HOME/profiles/desktop`, separate from the disposable workspace runtime. The Host uses runtime module resolution in both development and packaged builds without creating official-package fallback links; developer-installed packages, including links, retain native priority. Use an unpacked application to exercise Electron RunAsNode, bundled pnpm, bundled dsh resources, plugin installation and repair paths.
 
+A source launch also needs the gitignored payloads the packaging flow materializes. Before the first source launch, run `node apps/desktop/scripts/vendor-llama.mjs` from the repository root: it downloads the llama.cpp runtime pinned in `resources/llama-manifest.json` into `resources/llama/`, and without it the local-models page cannot start its server (the start error names this command). `node apps/desktop/scripts/vendor-tools.mjs` is optional for a source launch: it materializes the bundled scanner tools under `resources/tools/`, and without it the runner resolves those tools from `PATH` instead.
+
 
 ### Startup onboarding
 
