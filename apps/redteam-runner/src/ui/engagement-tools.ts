@@ -7,7 +7,7 @@
  * improvised with other tools instead — the launch it needed was one it had
  * to assemble perfectly before it could start anything.
  *
- * These three tools are the conversation-shaped surface over the SAME route
+ * These tools are the conversation-shaped surface over the SAME route
  * handlers, so the safety core, launch validation and tier rules apply
  * unchanged:
  *
@@ -17,22 +17,26 @@
  *                        named operator on the record — the attestation the
  *                        authorize phase consumes.
  *   engagement_status  — one snapshot reshaped for narration in a thread:
- *                        status, phase, event and finding counts, and the
- *                        halt/block reason when there is one.
+ *                        status, phase, event and finding counts, the
+ *                        halt/block reason when there is one, and the
+ *                        missing files when the deliverable set failed.
  *   engagement_report  — the finished report's content for delivery in the
  *                        thread, plus the in-app artifact paths. Returns
  *                        ready:false while the run is still going.
+ *   engagement_regenerate_report — (report-tools.ts) re-fires report
+ *                        generation from the recorded state when a
+ *                        finished engagement's deliverable set is short.
  *
  * The console chat and the desktop host's chat consume one MCP tool list
  * (mcp-endpoint.ts), so these tools appear on both surfaces at once.
  */
 
-import { join } from "node:path";
 import { capture, type Captured, type ToolDef } from "./mcp-tools.js";
 import { handleDetail, handleLaunch } from "./routes/engagements.js";
 import { engagementDir } from "./store.js";
-import { readState, type LiveState } from "../events.js";
-import { deliverableToolFields } from "../report/deliverables.js";
+import { type LiveState } from "../events.js";
+import { verifyDeliverables } from "../report/deliverables.js";
+import { regenerateTool, reportTool } from "./report-tools.js";
 import type { UiLaunchRequest } from "./types.js";
 
 const str = (d: string): Record<string, unknown> => ({ type: "string", description: d });
@@ -222,11 +226,24 @@ const statusTool: ToolDef = {
     }
     const s = b["state"] as LiveState;
     const findings = Array.isArray(s.findings) ? s.findings.length : 0;
+    // Q-DELIVERABLES-AUTOFIRE follow-up (diag-html-report 2026-11-01):
+    // a deliverable-failed end must never summarize as plain "complete"
+    // in the chat surface — name the missing files where the operator
+    // actually looks, and point at the repair tool.
+    const stateDir = engagementDir(store.engagementsDir, id);
+    const missingDeliverables =
+      s.deliverableFailed === true && stateDir ? verifyDeliverables(stateDir).missing : [];
+    const deliverableNote =
+      missingDeliverables.length > 0
+        ? ` Deliverable set INCOMPLETE — missing: ${missingDeliverables.join(", ")}. Call engagement_regenerate_report to re-fire report generation.`
+        : "";
     const summary =
       s.status === "complete"
-        ? `Engagement ${id} is complete: ${findings} findings over ${s.eventCount} events. Call engagement_report to deliver the report.`
+        ? missingDeliverables.length > 0
+          ? `Engagement ${id} ended: ${findings} findings over ${s.eventCount} events.${deliverableNote}`
+          : `Engagement ${id} is complete: ${findings} findings over ${s.eventCount} events. Call engagement_report to deliver the report.`
         : s.status === "halted" || s.status === "blocked"
-          ? `Engagement ${id} ${s.status}${s.blockedReason ? `: ${s.blockedReason}` : ""}. ${findings} findings recorded.`
+          ? `Engagement ${id} ${s.status}${s.blockedReason ? `: ${s.blockedReason}` : ""}. ${findings} findings recorded.${deliverableNote}`
           : `Engagement ${id} is ${s.status} — phase: ${s.phase}, ${s.eventCount} events, ${findings} findings so far.`;
     return {
       status: 200,
@@ -242,6 +259,9 @@ const statusTool: ToolDef = {
         startedAt: s.startedAt,
         updatedAt: s.updatedAt,
         ...(s.blockedReason ? { blockedReason: s.blockedReason } : {}),
+        ...(missingDeliverables.length > 0
+          ? { deliverableFailed: true, missingDeliverables }
+          : {}),
         artifacts: b["artifacts"],
         summary,
       },
@@ -249,51 +269,7 @@ const statusTool: ToolDef = {
   },
 };
 
-/** engagement_report — the finished report, for delivery in the thread. */
-const reportTool: ToolDef = {
-  name: "engagement_report",
-  description:
-    "The finished report for an engagement: the report content for delivery in the thread, plus the in-app artifact paths. " +
-    "Returns ready:false while the run is still going — keep polling engagement_status instead of treating that as an error.",
-  inputSchema: ID_ONLY(),
-  run: async (store, a): Promise<Captured> => {
-    const id = String(a["id"] ?? "");
-    const content = store.readTextArtifact(id, "report.md");
-    if (content === null) {
-      // No report file: distinguish a run that has not finished from an id
-      // nothing knows. The store record or a state file proves existence.
-      const dir = engagementDir(store.engagementsDir, id);
-      const st = dir ? readState(dir) : null;
-      const rec = store.get(id);
-      if (!st && !rec) return { status: 404, body: { error: "unknown engagement" } };
-      const status = st?.status ?? rec?.status ?? "starting";
-      return {
-        status: 200,
-        body: {
-          id,
-          ready: false,
-          status,
-          ...(st ? { phase: st.phase } : {}),
-          summary: `Engagement ${id} has no report yet (status: ${status}). Keep polling engagement_status; the report lands when the run completes.`,
-        },
-      };
-    }
-    // report.md exists, so state.json does too (engagementDir requires it)
-    // and the directory join is safe. Q-DELIVERABLES-AUTOFIRE: deliverableToolFields.
-    const dir = engagementDir(store.engagementsDir, id)!;
-    return {
-      status: 200,
-      body: {
-        id,
-        ready: true,
-        reportPath: join(dir, "report.md"),
-        ...deliverableToolFields(dir),
-        content,
-        summary: `Report for engagement ${id} is ready. Deliver it in this thread — it lives in the app; do not link out to any external report.`,
-      },
-    };
-  },
-};
-
-/** The chat-shaped engagement trio, appended to the cockpit list. */
-export const ENGAGEMENT_TOOLS: ToolDef[] = [launchTool, statusTool, reportTool];
+/** The chat-shaped engagement tools, appended to the cockpit list.
+ * Launch + status live here; report delivery + regeneration live in
+ * report-tools.ts. */
+export const ENGAGEMENT_TOOLS: ToolDef[] = [launchTool, statusTool, reportTool, regenerateTool];

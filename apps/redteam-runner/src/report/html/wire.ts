@@ -258,10 +258,24 @@ function buildMatter(deps: WireDeps, coverage: CoverageInput, activity: Activity
   });
 }
 
+/** The optional derivations (detail, matter) enrich the report — they
+ * must never kill it: a throw degrades that section to absent (the
+ * renderer's designed anatomy) and records `report_detail_failed`. */
+function deriveSection<T>(deps: WireDeps, section: string, build: () => T): T | undefined {
+  try { return build(); } catch (err) {
+    deps.ctx.events.append({
+      phase: "report", actor: "runner", action: "report_detail_failed",
+      result: `Report ${section} derivation failed (report renders without it): ${(err as Error).message}`,
+    });
+    return undefined;
+  }
+}
+
 /** Assemble the renderer's structured input from the phase's records. */
 export function buildEngagementReportInput(deps: WireDeps): EngagementReportInput {
   const coverage = buildCoverage(deps);
   const activity = buildActivity(deps.events);
+  const detailInput = deps.detailInput;
   return {
     meta: deps.meta,
     title: deps.title,
@@ -273,11 +287,11 @@ export function buildEngagementReportInput(deps: WireDeps): EngagementReportInpu
     noBundleReasons: deps.proof.noBundleReasons,
     negativeProof: deps.proof.negative,
     findingMeta: buildFindingMeta(deps.bundles, deps.findings),
-    detail: deps.detailInput ? buildReportDetail(deps.detailInput) : undefined,
+    detail: detailInput ? deriveSection(deps, "detail", () => buildReportDetail(detailInput)) : undefined,
     inventory: readHostInventory(deps.ctx.events.dir),
     coverage,
     activity,
-    matter: buildMatter(deps, coverage, activity),
+    matter: deriveSection(deps, "matter", () => buildMatter(deps, coverage, activity)),
     haltedReason: deps.haltedReason,
     blockedReason: deps.blockedReason,
     dryRun: deps.ctx.config.dryRunAgents,

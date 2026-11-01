@@ -67,9 +67,9 @@ function cannedState(id: string, status: string, withReport: boolean): string {
 }
 
 describe("tool surface", () => {
-  it("registers the trio once, alongside the CLI-shaped tools", () => {
-    assert.equal(ENGAGEMENT_TOOLS.length, 3);
-    for (const name of ["engagement_launch", "engagement_status", "engagement_report"]) {
+  it("registers the quartet once, alongside the CLI-shaped tools", () => {
+    assert.equal(ENGAGEMENT_TOOLS.length, 4);
+    for (const name of ["engagement_launch", "engagement_status", "engagement_report", "engagement_regenerate_report"]) {
       assert.ok(TOOLS_BY_NAME.has(name), `${name} in TOOLS_BY_NAME`);
       assert.equal(TOOLS.filter((t) => t.name === name).length, 1, `${name} appears exactly once`);
     }
