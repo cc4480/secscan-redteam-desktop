@@ -303,3 +303,90 @@ describe("server security posture", () => {
     }
   });
 });
+
+describe("route dispatch strictness (once-over A-1/A-2/A-3)", () => {
+  it("answers 400, not 500, for a malformed JSON body on body-requiring POST routes", async () => {
+    const srv = await startUiServer({ port: 0, engagementsDir: tmp });
+    try {
+      const base = `http://127.0.0.1:${srv.port}`;
+      const auth = { authorization: `Bearer ${srv.token}`, "content-type": "application/json" };
+      for (const path of ["/api/engagements", "/api/reverify", "/api/watch/trigger"]) {
+        const res = await fetch(`${base}${path}`, { method: "POST", headers: auth, body: "{not json" });
+        assert.equal(res.status, 400, path);
+        assert.deepEqual(await res.json(), { error: "invalid JSON body" }, path);
+      }
+    } finally {
+      await srv.close();
+    }
+  });
+
+  it("answers 413 for a JSON body past the reader cap", async () => {
+    const srv = await startUiServer({ port: 0, engagementsDir: tmp });
+    try {
+      const base = `http://127.0.0.1:${srv.port}`;
+      const res = await fetch(`${base}/api/engagements`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${srv.token}`, "content-type": "application/json" },
+        body: " ".repeat(1_048_577),
+      });
+      assert.equal(res.status, 413);
+      assert.deepEqual(await res.json(), { error: "body too large" });
+    } finally {
+      await srv.close();
+    }
+  });
+
+  it("404s near-miss routes with extra path segments instead of executing them", async () => {
+    cannedEngagement("eng-x", "complete");
+    const srv = await startUiServer({ port: 0, engagementsDir: tmp });
+    try {
+      const base = `http://127.0.0.1:${srv.port}`;
+      const auth = { authorization: `Bearer ${srv.token}` };
+      // The canonical route still works…
+      const ok = await fetch(`${base}/api/engagements/eng-x/findings`, { headers: auth });
+      assert.equal(ok.status, 200);
+      // …while every trailed variant falls through to the 404.
+      for (const path of [
+        "/api/engagements/eng-x/findings/junk",
+        "/api/engagements/eng-x/coverage/junk",
+        "/api/engagements/eng-x/proof/F-1/junk",
+        "/api/console/scope/junk",
+        "/api/jobs/job-1/junk",
+        "/api/watch/profiles/junk",
+      ]) {
+        const res = await fetch(`${base}${path}`, { headers: auth });
+        assert.equal(res.status, 404, path);
+        assert.deepEqual(await res.json(), { error: "not found" }, path);
+      }
+      const post = await fetch(`${base}/api/foundry/verify/extra`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${srv.token}`, "content-type": "application/json" },
+        body: "{}",
+      });
+      assert.equal(post.status, 404);
+    } finally {
+      await srv.close();
+    }
+  });
+
+  it("an oversized login form body does not wedge the server", async () => {
+    const srv = await startUiServer({ port: 0, engagementsDir: tmp });
+    try {
+      const base = `http://127.0.0.1:${srv.port}`;
+      // The form reader destroys the request past its cap; the client sees a
+      // reset or a refusal, but the exchange must settle either way.
+      await fetch(`${base}/api/auth`, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: `token=${"x".repeat(8192)}`,
+        signal: AbortSignal.timeout(5000),
+      }).catch(() => undefined);
+      const after = await fetch(`${base}/api/engagements`, {
+        headers: { authorization: `Bearer ${srv.token}` },
+      });
+      assert.equal(after.status, 200);
+    } finally {
+      await srv.close();
+    }
+  });
+});

@@ -24,7 +24,7 @@ import { handleConsoleLayers } from './routes/console-layers.js'
 import { handleConsoleBenchmark } from './routes/console-benchmark.js'
 import { handleConsoleScope } from './routes/console-scope.js'
 import { handleAbort, handleEscalate, handleReverify, handleJob, handleWatchProfiles, handleWatchTrigger } from './routes/actions.js'
-import { json, notFound, readJsonBody } from './routes/http.js'
+import { json, badRequest, notFound, readJsonBody } from './routes/http.js'
 import { handleMcp } from './mcp-endpoint.js'
 import { resolveArsenalConfig } from '../arsenal/config.js'
 import { startArsenalRefreshTimer } from '../arsenal/refresh.js'
@@ -77,6 +77,26 @@ function loginPage(): string {
 </form></body></html>`
 }
 
+/** Sentinel returned by readBodyOrReject when it has already answered. */
+const BODY_REJECTED = Symbol('body-rejected')
+
+/**
+ * Read a JSON request body for a route that requires one. A malformed or
+ * oversized body is the caller's error, not the server's: answer 400 (413
+ * when the body exceeds the reader's cap) and return BODY_REJECTED so the
+ * route stops there instead of surfacing the failure as a 500.
+ */
+async function readBodyOrReject(req: IncomingMessage, res: ServerResponse): Promise<unknown> {
+  try {
+    return await readJsonBody(req)
+  } catch (err) {
+    const message = (err as Error).message
+    if (message === 'body too large') json(res, 413, { error: message })
+    else badRequest(res, message)
+    return BODY_REJECTED
+  }
+}
+
 async function route(store: UiStore, token: string, req: IncomingMessage, res: ServerResponse): Promise<void> {
   const url = new URL(req.url ?? '/', 'http://localhost')
   const path = url.pathname
@@ -97,10 +117,17 @@ async function route(store: UiStore, token: string, req: IncomingMessage, res: S
       const raw = await new Promise<string>((resolve) => {
         let s = ''
         req.on('data', (c: Buffer) => {
-          s += c.toString('utf8')
-          if (s.length > 4096) req.destroy()
+          // Cap the buffered form body without destroying the request:
+          // the socket must survive so the 401 below can be delivered.
+          // Past the cap the bytes are drained and discarded; the
+          // truncated body simply fails the token comparison.
+          if (s.length <= 4096) s += c.toString('utf8').slice(0, 4096)
         })
         req.on('end', () => resolve(s))
+        // After destroy() (oversized body) 'end' never fires; settle on
+        // 'close' so the handler returns instead of hanging. A partial
+        // body simply fails the token comparison below.
+        req.on('close', () => resolve(s))
       })
       presented = new URLSearchParams(raw).get('token') ?? undefined
     }
@@ -152,54 +179,57 @@ async function route(store: UiStore, token: string, req: IncomingMessage, res: S
     if (seg[1] === 'models' && method === 'GET' && seg.length === 2) return handleModels(res)
     if (seg[1] === 'engagements' && method === 'GET' && seg.length === 2) return handleList(store, res)
     if (seg[1] === 'engagements' && method === 'POST' && seg.length === 2) {
-      const body = await readJsonBody(req)
+      const body = await readBodyOrReject(req, res)
+      if (body === BODY_REJECTED) return
       return handleLaunch(store, req, res, body)
     }
     if (seg[1] === 'engagements' && seg[2] && method === 'GET' && seg.length === 3) return handleDetail(store, res, decodeURIComponent(seg[2]!))
-    if (seg[1] === 'engagements' && seg[2] && seg[3] === 'events' && method === 'GET') {
+    if (seg[1] === 'engagements' && seg[2] && seg[3] === 'events' && method === 'GET' && seg.length === 4) {
       return handleFeed(store, req, res, decodeURIComponent(seg[2]!), url.searchParams)
     }
-    if (seg[1] === 'engagements' && seg[2] && seg[3] === 'abort' && method === 'POST') {
+    if (seg[1] === 'engagements' && seg[2] && seg[3] === 'abort' && method === 'POST' && seg.length === 4) {
       const body = await readJsonBody(req).catch(() => ({}))
       return handleAbort(store, res, decodeURIComponent(seg[2]!), body)
     }
-    if (seg[1] === 'engagements' && seg[2] && seg[3] === 'escalate' && method === 'POST') {
+    if (seg[1] === 'engagements' && seg[2] && seg[3] === 'escalate' && method === 'POST' && seg.length === 4) {
       const body = await readJsonBody(req).catch(() => ({}))
       return handleEscalate(store, res, decodeURIComponent(seg[2]!), body)
     }
     if (seg[1] === 'engagements' && seg[2] && seg[3] === 'deliverables' && seg[4] && (method === 'GET' || method === 'HEAD') && seg.length === 5) {
       return handleDeliverable(store, req, res, decodeURIComponent(seg[2]!), decodeURIComponent(seg[4]!))
     }
-    if (seg[1] === 'engagements' && seg[2] && seg[3] === 'findings' && method === 'GET') {
+    if (seg[1] === 'engagements' && seg[2] && seg[3] === 'findings' && method === 'GET' && seg.length === 4) {
       return handleFindings(store, res, decodeURIComponent(seg[2]!))
     }
-    if (seg[1] === 'engagements' && seg[2] && seg[3] === 'proof' && seg[4] && method === 'GET') {
+    if (seg[1] === 'engagements' && seg[2] && seg[3] === 'proof' && seg[4] && method === 'GET' && seg.length === 5) {
       return handleProof(store, res, decodeURIComponent(seg[2]!), decodeURIComponent(seg[4]!))
     }
-    if (seg[1] === 'engagements' && seg[2] && seg[3] === 'coverage' && method === 'GET') {
+    if (seg[1] === 'engagements' && seg[2] && seg[3] === 'coverage' && method === 'GET' && seg.length === 4) {
       return handleCoverage(store, res, decodeURIComponent(seg[2]!))
     }
-    if (seg[1] === 'engagements' && seg[2] && seg[3] === 'compliance' && method === 'GET') {
+    if (seg[1] === 'engagements' && seg[2] && seg[3] === 'compliance' && method === 'GET' && seg.length === 4) {
       return handleCompliance(store, res, decodeURIComponent(seg[2]!))
     }
     // Operator console (Phase 5) — read-only views over on-disk artifacts.
-    if (seg[1] === 'console' && seg[2] === 'engagements' && method === 'GET') return handleConsoleEngagements(store, res)
-    if (seg[1] === 'console' && seg[2] === 'layers' && method === 'GET') return handleConsoleLayers(store, res)
-    if (seg[1] === 'console' && seg[2] === 'benchmark' && method === 'GET') return handleConsoleBenchmark(store, res)
-    if (seg[1] === 'console' && seg[2] === 'scope' && method === 'GET') return handleConsoleScope(store, res)
+    if (seg[1] === 'console' && seg[2] === 'engagements' && method === 'GET' && seg.length === 3) return handleConsoleEngagements(store, res)
+    if (seg[1] === 'console' && seg[2] === 'layers' && method === 'GET' && seg.length === 3) return handleConsoleLayers(store, res)
+    if (seg[1] === 'console' && seg[2] === 'benchmark' && method === 'GET' && seg.length === 3) return handleConsoleBenchmark(store, res)
+    if (seg[1] === 'console' && seg[2] === 'scope' && method === 'GET' && seg.length === 3) return handleConsoleScope(store, res)
     // Foundry (D2) — store/loop state + gate actions for the chat view.
     if (seg[1] === 'foundry' && method === 'GET' && seg.length === 2) return handleFoundry(store, res)
-    if (seg[1] === 'foundry' && seg[2] === 'verify' && method === 'POST') return handleFoundryVerify(store, res)
-    if (seg[1] === 'foundry' && seg[2] === 'run-gold' && method === 'POST') return handleFoundryRunGold(store, res)
-    if (seg[1] === 'foundry' && seg[2] === 'loop' && method === 'POST') return handleFoundryLoop(store, res)
-    if (seg[1] === 'reverify' && method === 'POST') {
-      const body = await readJsonBody(req)
+    if (seg[1] === 'foundry' && seg[2] === 'verify' && method === 'POST' && seg.length === 3) return handleFoundryVerify(store, res)
+    if (seg[1] === 'foundry' && seg[2] === 'run-gold' && method === 'POST' && seg.length === 3) return handleFoundryRunGold(store, res)
+    if (seg[1] === 'foundry' && seg[2] === 'loop' && method === 'POST' && seg.length === 3) return handleFoundryLoop(store, res)
+    if (seg[1] === 'reverify' && method === 'POST' && seg.length === 2) {
+      const body = await readBodyOrReject(req, res)
+      if (body === BODY_REJECTED) return
       return handleReverify(store, res, body)
     }
-    if (seg[1] === 'jobs' && seg[2] && method === 'GET') return handleJob(store, res, decodeURIComponent(seg[2]!))
-    if (seg[1] === 'watch' && seg[2] === 'profiles' && method === 'GET') return handleWatchProfiles(res, url.searchParams)
-    if (seg[1] === 'watch' && seg[2] === 'trigger' && method === 'POST') {
-      const body = await readJsonBody(req)
+    if (seg[1] === 'jobs' && seg[2] && method === 'GET' && seg.length === 3) return handleJob(store, res, decodeURIComponent(seg[2]!))
+    if (seg[1] === 'watch' && seg[2] === 'profiles' && method === 'GET' && seg.length === 3) return handleWatchProfiles(res, url.searchParams)
+    if (seg[1] === 'watch' && seg[2] === 'trigger' && method === 'POST' && seg.length === 3) {
+      const body = await readBodyOrReject(req, res)
+      if (body === BODY_REJECTED) return
       return handleWatchTrigger(store, res, body)
     }
   } catch (err) {
