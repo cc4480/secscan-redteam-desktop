@@ -1,0 +1,11 @@
+/* Engagement-report document card: one row per deliverable, actions right-aligned. */
+.summary { margin-left: 8px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.documents { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
+.document { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 6px 10px; border-radius: 8px; background: var(--dsw-alias-bg-layer-1); font-size: 12px; }
+.fileName { color: var(--dsw-alias-label-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note { color: var(--dsw-alias-label-secondary); flex-shrink: 0; }
+.gap { color: var(--dsw-alias-label-secondary); margin-left: auto; flex-shrink: 0; }
+.error { color: var(--dsw-alias-label-error, var(--dsw-alias-label-secondary)); flex-shrink: 0; }
+.actions { display: flex; align-items: center; gap: 4px; margin-left: auto; flex-shrink: 0; }
+.action { display: inline-flex; align-items: center; gap: 4px; border: none; padding: 4px 6px; border-radius: 6px; background: transparent; color: var(--dsw-alias-link); font: inherit; font-size: 12px; cursor: pointer; }
+.action:hover { background: var(--dsw-alias-bg-layer-2, transparent); }

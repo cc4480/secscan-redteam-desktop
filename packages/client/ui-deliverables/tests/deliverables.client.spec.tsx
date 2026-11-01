@@ -752,7 +752,12 @@ describe('plugin registration', () => {
     await fiber.await()
     const [entry] = ctx.slots.entries('conversation.chat.turnTail')
     expect(entry).toBeDefined()
-    expect(ctx.slots.entries('tool.call.toolview')).toHaveLength(1)
+    // The present row plus the engagement-report document card under
+    // both of its wire names (Q-DOC-ACTIONS).
+    expect(ctx.slots.entries('tool.call.toolview')).toHaveLength(3)
+    expect(ctx.slots.entries('tool.call.toolview').map(entry => entry.options.key)).toEqual([
+      'present', 'mcp__redteam__engagement_report', 'engagement_report',
+    ])
     expect(entry?.inject).toBeDefined()
     expect(registered).toMatchObject({ kind: 'changes-review', patterns: ['dsh-resource://changes-review/**'] })
     const [tabEntry] = ctx.slots.entries('sidebar.right.pane.tab')

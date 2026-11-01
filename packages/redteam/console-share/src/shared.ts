@@ -40,6 +40,63 @@ export interface ConsoleShareArsenalPayload {
   readonly arguments?: Record<string, unknown>
 }
 
+/**
+ * The engagement deliverable set the runner writes at every engagement
+ * close (Q-DELIVERABLES-AUTOFIRE), in package order with the package zip
+ * last. The runner console serves each one, byte for byte, at
+ * `/api/engagements/<id>/deliverables/<file>`; the share proxy carries
+ * that route to the browser under the prefix, so every chat surface —
+ * the engagement-report document card and the Reports library alike —
+ * addresses deliverables through {@link deliverableFileRoute} and this
+ * one list. It mirrors the runner's `DELIVERABLE_FILES`; the runner's
+ * route refuses any name outside its own copy of the list.
+ */
+export const DELIVERABLE_FILE_NAMES = [
+  'report.html',
+  'report.md',
+  'report.json',
+  'report.txt',
+  'findings.csv',
+  'report.docx',
+  'report-package.zip',
+] as const
+
+/** One deliverable file name from {@link DELIVERABLE_FILE_NAMES}. */
+export type DeliverableFileName = typeof DELIVERABLE_FILE_NAMES[number]
+
+/**
+ * Narrow an arbitrary string to a deliverable file name.
+ * @param value - the candidate file name.
+ * @returns whether the value names one deliverable file.
+ */
+export function isDeliverableFileName(value: string): value is DeliverableFileName {
+  return (DELIVERABLE_FILE_NAMES as readonly string[]).includes(value)
+}
+
+/**
+ * Whether a deliverable's content is text a Copy action can place on the
+ * clipboard verbatim. The DOCX and the package zip are binary containers:
+ * they carry a Download action only, and surfaces say so rather than
+ * offering a copy that would paste garbage.
+ * @param file - the deliverable file name.
+ * @returns whether the file is text-native.
+ */
+export function isCopyableDeliverable(file: DeliverableFileName): boolean {
+  return file !== 'report.docx' && file !== 'report-package.zip'
+}
+
+/**
+ * Browser-relative share route for one deliverable file of one
+ * engagement. The Host proxy attaches the console bearer; the browser
+ * never sees the console's address or token.
+ * @param id - the engagement id.
+ * @param file - the deliverable file name.
+ * @returns the document-relative route the browser fetches or downloads.
+ */
+export function deliverableFileRoute(id: string, file: DeliverableFileName): string {
+  return `${CONSOLE_SHARE_PREFIX_ROUTE}/api/engagements/${encodeURIComponent(id)}/deliverables/${encodeURIComponent(file)}`
+}
+
 /** Error payload every share route answers with on a refused or failed call. */
 export interface ConsoleShareErrorPayload {
   /** Stable machine-readable failure code. */

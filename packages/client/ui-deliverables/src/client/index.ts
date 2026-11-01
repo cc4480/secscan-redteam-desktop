@@ -23,6 +23,7 @@ import { ChangesDiffStore } from './changes-diff.ts'
 import { ChangesSummaryStore } from './changes-summary.ts'
 import { PresentedOpenController } from './present-open.ts'
 import { PresentRow } from './PresentRow.tsx'
+import { EngagementReportRow } from './EngagementReportRow.tsx'
 import { DeliverablesTail, type DeliverablesInjected } from './Deliverables.tsx'
 import { ReviewTab, type ReviewInjected } from './ReviewTab.tsx'
 import { CHANGES_REVIEW_ID, changesReviewDefinition } from './review-definition.ts'
@@ -82,6 +83,17 @@ export function apply(ctx: ClientContext): void {
   ctx.slots.inject('tool.call.toolview', () => ctx.slots.register(
     { name: 'tool.call.toolview', key: 'present', locale: NS }, PresentRow,
   ))
+  // The engagement report's document card, under both wire names the
+  // call carries: the MCP-prefixed name in the desktop chat and the
+  // bare name on surfaces that call the runner's tools directly.
+  ctx.slots.inject('tool.call.toolview', function* () {
+    yield ctx.slots.register(
+      { name: 'tool.call.toolview', key: 'mcp__redteam__engagement_report', locale: NS }, EngagementReportRow,
+    )
+    yield ctx.slots.register(
+      { name: 'tool.call.toolview', key: 'engagement_report', locale: NS }, EngagementReportRow,
+    )
+  })
   const t = ctx.locale.bind(NS)
   ctx.effect(() => ctx.sidebarRightTabs.register(changesReviewDefinition(t)), 'ui-deliverables: changes-review type')
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register(

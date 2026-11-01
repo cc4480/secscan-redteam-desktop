@@ -17,6 +17,7 @@ import { authCookie, generateToken, isAuthorized, tokensEqual, assertStrongToken
 import { handleLaunch, handleList, handleDetail } from './routes/engagements.js'
 import { handleFeed } from './routes/feed.js'
 import { handleFindings, handleProof } from './routes/findings.js'
+import { handleDeliverable } from './routes/deliverables.js'
 import { handleCoverage, handleCompliance } from './routes/coverage.js'
 import { handleConsoleEngagements } from './routes/console-engagements.js'
 import { handleConsoleLayers } from './routes/console-layers.js'
@@ -165,6 +166,9 @@ async function route(store: UiStore, token: string, req: IncomingMessage, res: S
     if (seg[1] === 'engagements' && seg[2] && seg[3] === 'escalate' && method === 'POST') {
       const body = await readJsonBody(req).catch(() => ({}))
       return handleEscalate(store, res, decodeURIComponent(seg[2]!), body)
+    }
+    if (seg[1] === 'engagements' && seg[2] && seg[3] === 'deliverables' && seg[4] && (method === 'GET' || method === 'HEAD') && seg.length === 5) {
+      return handleDeliverable(store, req, res, decodeURIComponent(seg[2]!), decodeURIComponent(seg[4]!))
     }
     if (seg[1] === 'engagements' && seg[2] && seg[3] === 'findings' && method === 'GET') {
       return handleFindings(store, res, decodeURIComponent(seg[2]!))

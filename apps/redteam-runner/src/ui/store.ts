@@ -6,7 +6,7 @@
  * engagements dir on disk — the UI works even for runs started by the CLI.
  */
 
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { createReadStream, existsSync, readdirSync, readFileSync, statSync, type ReadStream } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import { randomBytes } from "node:crypto";
 import type { StoredEngagement, UiJob } from "./types.js";
@@ -239,6 +239,20 @@ export class UiStore {
     if (!existsSync(p)) return null;
     try {
       return readFileSync(p, "utf8");
+    } catch {
+      return null;
+    }
+  }
+
+  /** Open an artifact of an engagement dir as a byte stream with its size (null when absent). */
+  openArtifact(id: string, name: string): { size: number; stream: ReadStream } | null {
+    const dir = engagementDir(this.engagementsDir, id);
+    if (!dir) return null;
+    const p = join(dir, name);
+    try {
+      const stat = statSync(p);
+      if (!stat.isFile()) return null;
+      return { size: stat.size, stream: createReadStream(p) };
     } catch {
       return null;
     }
