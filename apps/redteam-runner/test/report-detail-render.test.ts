@@ -118,26 +118,31 @@ function section(htmlText: string, title: string): string {
   return htmlText.slice(start, next === -1 ? undefined : next);
 }
 
-describe("report detail — §9 anatomy", () => {
-  it("renders the detail sections in the §9 order", () => {
+describe("report detail — anatomy", () => {
+  // Q-REPORT-TEMPLATES superseded the §9 order with the ONE canonical
+  // template order (report/document.ts REPORT_SECTION_ORDER): coverage
+  // sits in its single slot before Findings (it previously rendered
+  // twice-positioned — before Findings without detail, after Pillars
+  // with it), and Surface follows Pillar Coverage.
+  it("renders the detail sections in the canonical template order", () => {
     const marks = [
       "Engagement Report",
       "Detailed Executive Breakdown",
       "What Changed",
       "Key Risk Areas",
       "Business Impact",
+      ">Coverage<",
       ">Findings<",
       "Complete Fix Prompt",
       "Priority Actions",
       "Pillar Coverage",
-      ">Coverage<",
       "Surface &amp; Coverage Detail",
       "Artifacts:",
     ];
     let last = -1;
     for (const m of marks) {
       const i = html.indexOf(m);
-      assert.ok(i > last, `marker ${JSON.stringify(m)} in §9 order`);
+      assert.ok(i > last, `marker ${JSON.stringify(m)} in canonical order`);
       last = i;
     }
   });

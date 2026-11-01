@@ -249,8 +249,12 @@ function renderInput(over: Partial<EngagementReportInput> = {}): EngagementRepor
 describe("report matter — rendering", () => {
   const html = renderEngagementReportHtml(renderInput());
 
-  it("places front matter before the narrative and back matter before the footer", () => {
-    const marks = ["Scope &amp; Authorisation", "Method &amp; Tooling", "Risk Rating Method", "Executive Summary", ">Coverage<", "What Is Working Well", "Tool Activity", "Limitations &amp; Residual Unknowns", "Artifacts:"];
+  // Q-REPORT-TEMPLATES: the recorded frame (scope / method / risk
+  // method) renders as BACK matter in the one canonical template
+  // order (report/document.ts) — the RC6 exemplar's placement —
+  // superseding the Q-RP-7 front-matter position.
+  it("places the recorded frame as back matter before the footer, in canonical order", () => {
+    const marks = ["Executive Summary", ">Coverage<", "What Is Working Well", "Tool Activity", "Scope &amp; Authorisation", "Method &amp; Tooling", "Risk Rating Method", "Limitations &amp; Residual Unknowns", "Artifacts:"];
     let last = -1;
     for (const mark of marks) {
       const i = html.indexOf(mark);

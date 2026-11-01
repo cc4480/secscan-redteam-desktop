@@ -2,13 +2,17 @@
  * Q-RP-2 — the editable DOCX copy of the engagement report, emitted as
  * report.docx alongside report.html from the SAME structured input
  * (html/render.ts's EngagementReportInput) — never by scraping HTML.
- * Contents mirror the HTML cover and finding anatomy: front matter,
- * the anchored grade, the §5 business-impact band, findings grouped by
+ * Since Q-REPORT-TEMPLATES it renders the ONE shared report document
+ * (report/document.ts) in the canonical anatomy — cover matter, the
+ * anchored grade, executive summary, coverage, findings grouped by
  * truth tier with Severity / CVSS / CWE / Evidence / Impact /
- * Remediation, and the ranked priority actions. Per-finding reference
- * data (CVSS/CWE) renders only where the record carries it — the same
- * honesty rule as the HTML chips. The proof apparatus (Cell Receipts,
- * reverify commands) stays in the HTML twin; this is the editable copy.
+ * Remediation, the consolidated fix prompt, priority actions, pillar
+ * cards, strengths, surface, activity, the recorded frame, and
+ * limitations — so the editable copy can no longer drift from the
+ * flagship's structure or counts. Per-finding reference data (CVSS/CWE)
+ * renders only where the record carries it — the same honesty rule as
+ * the HTML chips. The proof apparatus (Cell Receipts, reverify
+ * commands) stays in the HTML twin; this is the editable copy.
  *
  * Packaging: a fixed OOXML part set zipped with fflate (already in the
  * workspace dependency tree via session-log-export) at a fixed mtime,
@@ -20,8 +24,8 @@ import { strToU8, zipSync } from 'fflate'
 import { type Ctx } from '../context.js'
 import { type Finding } from '../types.js'
 import { type EngagementReportInput } from './html/render.js'
-import { severityRank, tierOf } from './html/cards.js'
-import { SEVERITY_ORDER, TIER_LABEL, TIER_ORDER, type ReportTier } from './html/tokens.js'
+import { TIER_LABEL, type ReportTier } from './html/tokens.js'
+import { buildReportDocument, type ReportDocument } from './document.js'
 import {
   CONTENT_TYPES_XML, DOC_RELS_XML, RELS_XML, STYLES_XML,
   documentXml, heading, labelledBlock, para, type RunSeg,
@@ -29,6 +33,16 @@ import {
 
 function metaLine(label: string, value: string): string {
   return para([{ text: `${label}: `, bold: true }, { text: value }])
+}
+
+/** Narrative markdown → plain paragraphs: heading markers and fence
+ * lines drop, the words stay the reporter's. */
+function proseParas(md: string): string[] {
+  return md
+    .split(/\n{2,}/)
+    .map((p) => p.replace(/^#{1,6}\s+/gm, '').replace(/^```.*$/gm, '').trim())
+    .filter((p) => p.length > 0)
+    .map((p) => para(p.replace(/\s*\n\s*/g, ' ')))
 }
 
 function findingParas(o: EngagementReportInput, f: Finding, tier: ReportTier): string[] {
@@ -55,27 +69,45 @@ function findingParas(o: EngagementReportInput, f: Finding, tier: ReportTier): s
   return out
 }
 
+function detailParas(doc: ReportDocument): string[] {
+  const d = doc.detail
+  if (!d) return []
+  const out: string[] = []
+  if (d.breakdown.length > 0) {
+    out.push(heading('Detailed Executive Breakdown', 2), ...d.breakdown.map((l) => para(l)))
+  }
+  out.push(heading('What Changed', 2))
+  if (!d.diff || !d.baselineLabel) {
+    out.push(para(
+      `First recorded scan of this target by this engine — there is no earlier scan to diff against. ` +
+      `This report is the baseline: the next scan of ${doc.meta.target} will be diffed against it.`))
+  } else {
+    const diff = d.diff
+    out.push(para(
+      `Since ${d.baselineLabel}: ${diff.newFindings.length} new · ${diff.resolved.length} resolved · ` +
+      `${diff.worsened.length} worsened · ${diff.improved.length} improved · Δ findings ${diff.findingsDelta}`))
+    for (const e of [...diff.newFindings, ...diff.resolved, ...diff.worsened, ...diff.improved]) {
+      out.push(para(`[${e.severity}] ${e.title}${e.note ? ` — ${e.note}` : ''}`))
+    }
+  }
+  if (d.actionableCount > 0 && d.riskAreas.length > 0) {
+    out.push(heading('Key Risk Areas', 2))
+    for (const a of d.riskAreas) {
+      out.push(para([{ text: `${a.name}: `, bold: true },
+        { text: `${a.findings.length} finding(s) · worst ${a.worst} — ${a.findings.map((f) => `${f.title} (${f.id})`).join('; ')}` }]))
+    }
+  }
+  out.push(heading('Business Impact', 2), para(d.impact.text))
+  return out
+}
+
 /** Assemble report.docx (the OOXML zip bytes) from the report model. */
 export function buildReportDocx(o: EngagementReportInput): Uint8Array {
+  const doc = buildReportDocument(o)
   const m = o.meta
   const halted = typeof o.haltedReason === 'string' && o.haltedReason.length > 0
   const blocked = typeof o.blockedReason === 'string' && o.blockedReason.length > 0
-  const byTier = new Map<ReportTier, Finding[]>()
-  for (const f of o.findings) {
-    const tier = tierOf(f, o.bundles.get(f.id))
-    byTier.set(tier, [...(byTier.get(tier) ?? []), f])
-  }
-  for (const list of byTier.values()) {
-    list.sort((a, b) => severityRank(a.severity) - severityRank(b.severity) || a.id.localeCompare(b.id))
-  }
-  const killedTitles = new Set(
-    (byTier.get('ruled-out') ?? []).map((f) => f.title.trim().toLowerCase()),
-  )
-  const extraNegatives = o.negativeProof.filter(
-    (n) => !killedTitles.has(n.hypothesis.trim().toLowerCase()),
-  )
-  const count = (t: ReportTier): number =>
-    (byTier.get(t) ?? []).length + (t === 'ruled-out' ? extraNegatives.length : 0)
+  const tc = doc.tierCounts
 
   const body: string[] = [
     para(o.title, 'Title'),
@@ -100,37 +132,58 @@ export function buildReportDocx(o: EngagementReportInput): Uint8Array {
       { text: `${o.posture.grade} (${o.posture.score}/100) — ${o.posture.postureRating}` },
     ]))
   }
-  const sev = o.posture.findingsBySeverity as Record<string, number>
-  body.push(para(SEVERITY_ORDER.map((s) => `${sev[s] ?? 0} ${s}`).join(' · ')))
+  const sev = doc.severityCounts
+  body.push(para(`critical ${sev.critical} · high ${sev.high} · medium ${sev.medium} · low ${sev.low} · info ${sev.info}`))
   body.push(para(
-    `${count('proven')} proven · ${count('confirmed')} confirmed · ` +
-    `${count('deferred')} deferred · ${count('ruled-out')} ruled out`,
+    `${tc.proven} proven · ${tc.confirmed} confirmed · ` +
+    `${tc.deferred} deferred · ${tc['ruled-out']} ruled out`,
   ))
-  if (o.banner && !halted) {
+  if (o.banner && !halted && !blocked) {
     body.push(para([{ text: o.banner.title, bold: true }]), para(o.banner.message))
   }
 
-  const d = o.detail
-  if (d) {
-    body.push(heading('Business Impact', 1), para(d.impact.text))
+  const narrative = o.narrativeMd.trim()
+  if (narrative || o.detail) {
+    body.push(heading('Executive Summary', 1))
+    if (narrative) body.push(...proseParas(narrative))
+    body.push(...detailParas(doc))
+  }
+
+  const c = o.coverage
+  const t = c.totals
+  body.push(heading('Coverage', 1))
+  body.push(para(`${c.fullBattery ? 'Full battery' : 'Scoped run'} — ${c.cells.length} coverage cells: ` +
+    c.cells.map((cell) => `${cell.target}:${cell.category} ${cell.state}`).join(' · ')))
+  if (t.total > 0) {
+    body.push(para(`${t.total} battery items: ${t.confirmed} confirmed · ${t.executedClean} executed-clean · ${t.killed} killed · ${t.blocked} blocked · ${t.na} not-applicable · ${t.pending} pending${c.probesUsed > 0 ? ` · ${c.probesUsed} probes` : ''}`))
+  }
+  const limits: string[] = []
+  for (const cell of c.cells) if (cell.state === 'blocked') limits.push(`Blocked (prerequisite not met): ${cell.target}:${cell.category}`)
+  for (const p of c.planOnly) limits.push(`Executes when its prerequisite is supplied: ${p}`)
+  for (const n of c.notCovered) limits.push(`Not covered: ${n}`)
+  if (limits.length) {
+    body.push(heading('Honest limits', 2), ...limits.map((l) => para(`• ${l}`)))
   }
 
   body.push(heading('Findings', 1))
-  if (o.findings.length === 0 && extraNegatives.length === 0) {
+  if (o.findings.length === 0 && doc.tierGroups.length === 0) {
     body.push(para('No findings were confirmed in this engagement.'))
   }
-  for (const tier of TIER_ORDER) {
-    const list = byTier.get(tier) ?? []
-    const negs = tier === 'ruled-out' ? extraNegatives : []
-    if (list.length === 0 && negs.length === 0) continue
-    body.push(heading(`${TIER_LABEL[tier]} — ${count(tier)}`, 2))
-    for (const f of list) body.push(...findingParas(o, f, tier))
-    for (const n of negs) {
+  for (const g of doc.tierGroups) {
+    body.push(heading(`${TIER_LABEL[g.tier]} — ${g.findings.length + g.negativeProof.length}`, 2))
+    for (const f of g.findings) body.push(...findingParas(o, f, g.tier))
+    for (const n of g.negativeProof) {
       body.push(heading(n.hypothesis, 3))
       body.push(...labelledBlock('Decisive observation', n.killingObservation))
     }
   }
 
+  if (doc.fixPrompt) {
+    body.push(heading('Complete Fix Prompt', 1))
+    body.push(...doc.fixPrompt.split('\n').filter((l) => l.trim().length > 0).map((l) => para(l)))
+  }
+
+  const d = o.detail
   if (d && (d.priority.actions.length > 0 || d.priority.verifyNext.length > 0 || d.priority.zeroNote)) {
     body.push(heading('Priority Actions', 1))
     if (d.priority.zeroNote) {
@@ -145,6 +198,37 @@ export function buildReportDocx(o: EngagementReportInput): Uint8Array {
         body.push(para(`${i + 1}. Verify ${e.id} — ${e.title} (${e.severity}). ${e.fixSentence}`))
       })
     }
+  }
+  if (d && d.pillars.length > 0) {
+    body.push(heading('Pillar Coverage', 1))
+    for (const p of d.pillars) {
+      body.push(para([{ text: `${p.pillar} (${p.scopeLabel}): `, bold: true },
+        { text: `${p.status}${p.status === 'FINDINGS' ? ` ${p.findingCount}` : ''}${p.reason ? ` — ${p.reason}` : ''}` }]))
+    }
+  }
+  if (o.matter?.strengths) {
+    body.push(heading('What Is Working Well', 1), para(o.matter.strengths.summary),
+      ...o.matter.strengths.areaLines.map((l) => para(`• ${l}`)))
+  }
+  if (d && ((d.surfaceNetwork && d.surfaceNetwork.length > 0) || d.surfaceDynamic.length > 0)) {
+    body.push(heading('Surface & Coverage Detail', 1))
+    for (const r of [...(d.surfaceNetwork ?? []), ...d.surfaceDynamic]) {
+      body.push(para([{ text: `${r.label}: `, bold: true }, { text: r.value }]))
+    }
+  }
+  if (o.activity.eventCount > 0) {
+    body.push(heading('Tool Activity', 1),
+      para(`${o.activity.eventCount} events across ${o.activity.totalActions} distinct actions — the full table renders in report.html.`))
+  }
+  if (o.matter) {
+    body.push(heading('Scope & Authorisation', 1))
+    for (const r of [...o.matter.scopeRows, ...o.matter.authorisationRows]) {
+      body.push(para([{ text: `${r.label}: `, bold: true }, { text: r.value }]))
+    }
+    body.push(heading('Method & Tooling', 1), ...o.matter.methodLines.map((l) => para(l)))
+    body.push(heading('Risk Rating Method', 1), ...o.matter.riskMethodLines.map((l) => para(l)))
+    body.push(heading('Limitations & Residual Unknowns', 1),
+      ...o.matter.limitationLines.map((l) => para(`• ${l}`)))
   }
 
   body.push(

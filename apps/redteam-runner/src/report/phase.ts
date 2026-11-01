@@ -32,7 +32,7 @@ import { extractNarrative } from "./narrative.js";
 import { buildEngagementMeta, type ReportMeta } from "./html.js";
 import { renderEngagementReportHtml, type EngagementReportInput } from "./html/render.js";
 import { buildEngagementReportInput, buildFindingMeta } from "./html/wire.js";
-import { emitDeliverables, emitFindingsSheet, stampFindingRefs, writeReportMd } from "./finding-refs.js";
+import { emitDeliverables, stampFindingRefs } from "./finding-refs.js";
 import { buildDetailInput, recordReportMeta } from "./predecessor.js";
 import { type DetailInput } from "./detail.js";
 import { buildGradeSection, gradeFindings } from "./grading.js";
@@ -194,6 +194,7 @@ export async function reportPhase(
   // v0.18.0 per-item verdicts: the item reconciliation section — every
   // battery item's disposition, derived from the ledger (audit log +
   // verdict tools), never hand-waved. Full ledger: item-verdicts.json.
+  const itemsMark = reportMd.length;
   if (ctx.input.fullBattery && ctx.itemLedger.size > 0) {
     reportMd += `\n---\n\n## Item reconciliation (runner-computed)\n\n`;
     reportMd +=
@@ -231,13 +232,11 @@ export async function reportPhase(
   }
   const reportEvents = readEvents(ctx.events.dir, 0, 100000);
   reportMd += buildActivitySection(reportEvents);
-  reportMd += await buildIntegrationsSection(ctx, findings, pocBundleMap);
-  writeReportMd(ctx, reportMd);
-  emitFindingsSheet(ctx, findings, pocBundleMap);
-  // The HTML twin is the human-facing deliverable — self-contained, severity
-  // colour-coded, print/PDF-ready. report.md stays as the diffable, greppable
-  // record and the input to other tooling; this is the thing a person opens.
-  // Its own try/catch: a rendering problem must not break the report itself.
+  const integrationsMd = await buildIntegrationsSection(ctx, findings, pocBundleMap);
+  reportMd += integrationsMd;
+  // report.md + findings.csv are written after the HTML input exists
+  // (below): both render from the ONE report document when it built;
+  // the legacy assembly above is the fallback when it could not.
   let reportInput: EngagementReportInput | undefined;
   try {
     const totals = {
@@ -289,8 +288,9 @@ export async function reportPhase(
   } catch (err) {
     ctx.events.append({ phase: "report", actor: "runner", action: "report_html_failed", result: `HTML report generation failed (report.md unaffected): ${(err as Error).message}` });
   }
-  // Q-RP-2 + Q-RP-5 + Q-DELIVERABLES-AUTOFIRE: DOCX, report model twins (json/txt), package (finding-refs.ts hooks).
-  emitDeliverables(ctx, reportInput, { findings, totals: lsum, cells: fbStatus, haltedReason: opts.haltedReason, blockedReason: opts.blockedReason });
+  // Q-RP-2 + Q-RP-5 + Q-DELIVERABLES-AUTOFIRE + Q-REPORT-TEMPLATES: closing set — md/csv from the document, DOCX, twins, zip.
+  emitDeliverables(ctx, reportInput, { findings, totals: lsum, cells: fbStatus, haltedReason: opts.haltedReason, blockedReason: opts.blockedReason },
+    { legacyMd: reportMd, findings, bundles: pocBundleMap, annexes: { batteryLine, nucleiLine: ncAny || undefined, itemsMd: reportMd.slice(itemsMark), proofMd: proofData.markdown, integrationsMd } });
   ctx.events.append({ phase: "report", actor: "reporter", action: "report_written", result: `Report written (${findings.length} findings parsed).` });
   const safetyManifest = writeSafetyArtifacts(ctx);
   writeComplianceArtifacts(ctx, findings, batteryLine, safetyManifest);

@@ -19,6 +19,22 @@
  * a letter computed over a partial or empty record would be a fabricated
  * verdict. A dry run keeps its computed grade but is status-marked
  * "dry-run" in every document this module writes.
+ *
+ * report.json schema (kind "secscan-redteam-report", version 1) — the
+ * stable machine-readable twin of the report document
+ * (report/document.ts). Fields: engagementId, target, mode, objective,
+ * status ("complete" | "halted" | "blocked" | "dry-run"), reason (only
+ * for halted/blocked ends), dryRun, generatedAt, grade ({letter,
+ * score, rating} — null for halted/blocked), severityCounts (the
+ * grading seam's posture counts over confirmed findings — the same
+ * counts every format prints), findingCount (all recorded findings),
+ * batteryTotals, coverageCells, findings (the recorded Finding
+ * objects). When the report document was built, three more fields
+ * ride along: tierCounts (truth-tier counts, ruled-out including
+ * de-duplicated negative proofs), sections (the canonical section ids
+ * the record carries, report/document.ts REPORT_SECTION_ORDER), and
+ * fixPrompt (the consolidated fix prompt text, "" when nothing is
+ * actionable).
  */
 import { statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -26,6 +42,8 @@ import { type Ctx } from "../context.js";
 import { type Finding } from "../types.js";
 import { gradeFindings } from "./grading.js";
 import { REPORT_PACKAGE_NAME } from "./package.js";
+import { type ReportDocument } from "./document.js";
+import { renderReportTxt } from "./text.js";
 
 export const REPORT_JSON_NAME = "report.json";
 export const REPORT_TXT_NAME = "report.txt";
@@ -59,6 +77,12 @@ export interface ReportModel {
   /** The anchored grade; null when the end was halted/blocked (N/A). */
   grade: { letter: string; score: number; rating: string } | null;
   severityCounts: { critical: number; high: number; medium: number; low: number; info: number };
+  /** Truth-tier counts from the report document, when it was built. */
+  tierCounts?: { proven: number; confirmed: number; deferred: number; "ruled-out": number };
+  /** Canonical section ids the record carries, when the document was built. */
+  sections?: string[];
+  /** The consolidated fix prompt, when the document was built. */
+  fixPrompt?: string;
   findingCount: number;
   batteryTotals: { total: number; confirmed: number; executedClean: number; killed: number; blocked: number; na: number; pending: number };
   coverageCells: { target: string; category: string; state: string }[];
@@ -75,8 +99,13 @@ export interface ReportModelArgs {
 
 /** Assemble the report model from the phase's final records — the same
  * findings, posture, totals, and cells the HTML renders from, so every
- * format reconciles by construction. */
-export function buildReportModel(ctx: Ctx, args: ReportModelArgs): ReportModel {
+ * format reconciles by construction. When the shared report document
+ * was built, its canonical counts win: severityCounts are the
+ * posture's counts over confirmed findings (the counts report.html,
+ * report.md, and report.docx print), not a second all-findings count
+ * that disagreed with the flagship whenever killed/deferred findings
+ * existed. */
+export function buildReportModel(ctx: Ctx, args: ReportModelArgs, doc?: ReportDocument): ReportModel {
   const status: DeliverableEndStatus = args.blockedReason
     ? "blocked"
     : args.haltedReason
@@ -106,7 +135,10 @@ export function buildReportModel(ctx: Ctx, args: ReportModelArgs): ReportModel {
     dryRun: ctx.config.dryRunAgents === true,
     generatedAt: new Date().toISOString(),
     grade: posture ? { letter: posture.grade, score: posture.score, rating: posture.postureRating } : null,
-    severityCounts,
+    severityCounts: doc ? { ...doc.severityCounts } : severityCounts,
+    ...(doc
+      ? { tierCounts: { ...doc.tierCounts }, sections: [...doc.sections], fixPrompt: doc.fixPrompt }
+      : {}),
     findingCount: args.findings.length,
     batteryTotals: args.totals,
     coverageCells: args.cells.map((cell) => ({ target: cell.t, category: cell.c, state: cell.s })),
@@ -118,52 +150,16 @@ export function renderReportJson(model: ReportModel): string {
   return JSON.stringify(model, null, 2) + "\n";
 }
 
-const STATUS_LINE: Record<DeliverableEndStatus, string> = {
-  complete: "Complete",
-  halted: "HALTED",
-  blocked: "BLOCKED",
-  "dry-run": "DRY RUN — no live testing ran; this is not a client report",
-};
-
-/** The plain-language summary: grade, counts, and every finding with its
- * severity and fix, in clean text a client can read without a browser. */
-export function renderReportTxt(model: ReportModel): string {
-  const sc = model.severityCounts;
-  const lines: string[] = [
-    "SecScan RedTeam — Penetration Test Report (plain-text summary)",
-    "================================================================",
-    `Target: ${model.target}`,
-    `Engagement: ${model.engagementId}`,
-    `Mode: ${model.mode}`,
-    `Objective: ${model.objective}`,
-    `Status: ${STATUS_LINE[model.status]}${model.reason ? ` — ${model.reason}` : ""}`,
-    `Generated: ${model.generatedAt}`,
-    "",
-    model.grade
-      ? `Grade: ${model.grade.letter} (${model.grade.score}/100 — ${model.grade.rating})`
-      : `Grade: N/A — engagement ${model.status}; no grade is issued for an incomplete engagement`,
-    "",
-    `Findings: ${model.findingCount} — ${sc.critical} critical · ${sc.high} high · ${sc.medium} medium · ${sc.low} low · ${sc.info} info`,
-    `Battery: ${model.batteryTotals.total} items — ${model.batteryTotals.confirmed} confirmed · ${model.batteryTotals.executedClean} executed-clean · ${model.batteryTotals.killed} killed · ${model.batteryTotals.blocked} blocked · ${model.batteryTotals.na} not-applicable · ${model.batteryTotals.pending} pending`,
-    "",
-    "Findings",
-    "--------",
-  ];
-  if (model.findings.length === 0) lines.push("(no findings recorded)");
-  for (const f of model.findings) {
-    lines.push(`[${f.severity.toUpperCase()}] ${f.id} — ${f.title} (status: ${f.status})`);
-    if (f.evidence) lines.push(`  Evidence: ${f.evidence.replace(/\s+/g, " ").trim()}`);
-    if (f.fix) lines.push(`  Fix: ${f.fix.replace(/\s+/g, " ").trim()}`);
-  }
-  lines.push("");
-  return lines.join("\n");
-}
+/** The plain-text renderer lives in ./text.ts (it renders the model +
+ * the shared report document); re-exported here for the module's
+ * existing consumers. */
+export { renderReportTxt } from "./text.js";
 
 /** Write report.json + report.txt from the model. Each is its own
  * failure domain in the established emitter style: a failure is an
  * event, never a lost report — finalizeDeliverables is the backstop
  * that refuses a clean completion when a file is missing. */
-export function emitReportModel(ctx: Ctx, model: ReportModel): void {
+export function emitReportModel(ctx: Ctx, model: ReportModel, doc?: ReportDocument): void {
   const dir = ctx.events.dir;
   try {
     writeFileSync(join(dir, REPORT_JSON_NAME), renderReportJson(model));
@@ -182,7 +178,7 @@ export function emitReportModel(ctx: Ctx, model: ReportModel): void {
     });
   }
   try {
-    writeFileSync(join(dir, REPORT_TXT_NAME), renderReportTxt(model));
+    writeFileSync(join(dir, REPORT_TXT_NAME), renderReportTxt(model, doc));
     ctx.events.append({
       phase: "report",
       actor: "runner",

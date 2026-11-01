@@ -16,6 +16,8 @@ import { emitFindingsCsv } from "./csv.js";
 import { writeDocxArtifact } from "./docx.js";
 import { emitReportPackage } from "./package.js";
 import { buildReportModel, emitReportModel, type ReportModelArgs } from "./deliverables.js";
+import { buildReportDocument, type ReportDocument } from "./document.js";
+import { renderReportMarkdown, type ReportMarkdownAnnexes } from "./markdown.js";
 
 /** Q-RP-3: engine-recorded CVSS/CWE join the final findings mechanically
  * (corroborated live-finding match; unproven values are removed). */
@@ -52,21 +54,56 @@ export function writeReportMd(ctx: Ctx, reportMd: string): void {
   }
 }
 
+/** The markdown + CSV source the phase hands over: the legacy
+ * assembled report.md (the fallback), the final findings + bundles
+ * (the CSV fallback order), and the runner-computed annexes the
+ * document renderer places in their canonical slots. */
+export interface ReportMdSource {
+  legacyMd: string;
+  findings: Finding[];
+  bundles: ReadonlyMap<string, PocBundle>;
+  annexes: ReportMarkdownAnnexes;
+}
+
+/** Q-REPORT-TEMPLATES: report.md and findings.csv render from the ONE
+ * report document when it built — the markdown mirrors the flagship's
+ * anatomy and the CSV rows follow report order, as its header comment
+ * has always claimed. When the document could not be built (the HTML
+ * input assembly failed), the legacy assembly and the recorded order
+ * stand, exactly as before the unification. Each write keeps its own
+ * failure domain (writeReportMd / emitFindingsCsv guard themselves). */
+export function emitMarkdownAndCsv(
+  ctx: Ctx,
+  doc: ReportDocument | undefined,
+  src: ReportMdSource,
+): void {
+  if (doc) {
+    writeReportMd(ctx, renderReportMarkdown(doc, src.annexes));
+    emitFindingsCsv(ctx, [...doc.findingsInReportOrder], src.bundles);
+  } else {
+    writeReportMd(ctx, src.legacyMd);
+    emitFindingsSheet(ctx, src.findings, src.bundles);
+  }
+}
+
 /** Q-RP-2 + Q-RP-5 + Q-DELIVERABLES-AUTOFIRE: the closing deliverables,
- * in order — the DOCX copy from the same assembled input as the HTML
- * (own try/catch inside), the report model twins (report.json +
- * report.txt, built from the phase's final records so they emit even
- * when the HTML input assembly failed), then the package zip over the
- * artifacts on disk. The package reads the emitted files back, so it
- * runs even when a writer failed; it then fails loudly on the missing
- * deliverable (report_package_failed) instead of shipping a partial
- * set. */
+ * in order — report.md + findings.csv from the one report document,
+ * the DOCX copy from the same assembled input as the HTML (own
+ * try/catch inside), the report model twins (report.json + report.txt,
+ * built from the phase's final records so they emit even when the HTML
+ * input assembly failed), then the package zip over the artifacts on
+ * disk. The package reads the emitted files back, so it runs even when
+ * a writer failed; it then fails loudly on the missing deliverable
+ * (report_package_failed) instead of shipping a partial set. */
 export function emitDeliverables(
   ctx: Ctx,
   reportInput: EngagementReportInput | undefined,
   modelArgs: ReportModelArgs,
+  mdSource?: ReportMdSource,
 ): void {
+  const doc = reportInput ? buildReportDocument(reportInput) : undefined;
+  if (mdSource) emitMarkdownAndCsv(ctx, doc, mdSource);
   if (reportInput) writeDocxArtifact(ctx, reportInput);
-  emitReportModel(ctx, buildReportModel(ctx, modelArgs));
+  emitReportModel(ctx, buildReportModel(ctx, modelArgs, doc), doc);
   emitReportPackage(ctx);
 }

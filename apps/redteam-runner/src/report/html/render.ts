@@ -19,7 +19,8 @@ import { renderMarkdown } from "../../ui/markdown.js";
 import { type ReportMeta } from "../html.js";
 import { REPORT_CSS } from "./style.js";
 import { severityChips } from "./gauge.js";
-import { findingCard, negativeProofCard, severityRank, tierOf, type FindingMeta } from "./cards.js";
+import { findingCard, negativeProofCard, type FindingMeta } from "./cards.js";
+import { buildReportDocument, type ReportTierGroup } from "../document.js";
 import {
   activitySection,
   allClearSection,
@@ -33,7 +34,7 @@ import {
   type ActivityInput,
   type CoverageInput,
 } from "./sections.js";
-import { TIER_DEFINITION, TIER_LABEL, TIER_ORDER, esc, type ReportTier, type SeverityName } from "./tokens.js";
+import { TIER_DEFINITION, TIER_LABEL, esc } from "./tokens.js";
 import type { ReportDetail } from "../detail.js";
 import type { ReportMatter } from "../detail-matter.js";
 import {
@@ -82,52 +83,27 @@ export interface EngagementReportInput {
   dryRun?: boolean;
 }
 
-interface TierGroup {
-  tier: ReportTier;
-  cards: string[];
-}
-
-const norm = (s: string): string => s.trim().toLowerCase();
-
-/** Group findings under the truth tiers (PROVEN → CONFIRMED → DEFERRED →
- * RULED OUT), severity-ordered within a tier. Ruled-out negative proofs
- * join the group unless a killed finding already states the same
- * hypothesis (exact normalized match — deterministic, not fuzzy). */
-function groupFindings(o: EngagementReportInput): { groups: TierGroup[]; counts: Record<ReportTier, number> } {
-  const byTier = new Map<ReportTier, Finding[]>();
-  for (const f of o.findings) {
-    const tier = tierOf(f, o.bundles.get(f.id));
-    const list = byTier.get(tier) ?? [];
-    list.push(f);
-    byTier.set(tier, list);
-  }
-  const killedTitles = new Set(
-    (byTier.get("ruled-out") ?? []).map((f) => norm(f.title)),
+/** Render one tier group of the shared report document: finding cards
+ * in report order, then the group's negative-proof cards (ruled-out
+ * tier). The grouping itself — tiers, ordering, negative-proof
+ * de-duplication — is the document's (report/document.ts), so every
+ * format groups identically. */
+function tierGroupHtml(o: EngagementReportInput, group: ReportTierGroup): string {
+  const cards = group.findings.map((f) =>
+    findingCard({
+      finding: f,
+      bundle: o.bundles.get(f.id),
+      noBundleReason: o.noBundleReasons.get(f.id),
+      meta: o.findingMeta.get(f.id),
+      impact: o.detail?.findingImpacts[f.id],
+    }),
   );
-  const extraNegatives = o.negativeProof.filter((n) => !killedTitles.has(norm(n.hypothesis)));
-
-  const groups: TierGroup[] = [];
-  const counts: Record<ReportTier, number> = { proven: 0, confirmed: 0, deferred: 0, "ruled-out": 0 };
-  for (const tier of TIER_ORDER) {
-    const list = (byTier.get(tier) ?? [])
-      .slice()
-      .sort((a, b) => severityRank(a.severity) - severityRank(b.severity) || a.id.localeCompare(b.id));
-    const cards = list.map((f) =>
-      findingCard({
-        finding: f,
-        bundle: o.bundles.get(f.id),
-        noBundleReason: o.noBundleReasons.get(f.id),
-        meta: o.findingMeta.get(f.id),
-        impact: o.detail?.findingImpacts[f.id],
-      }),
-    );
-    if (tier === "ruled-out") {
-      for (const n of extraNegatives) cards.push(negativeProofCard(n));
-    }
-    counts[tier] = cards.length;
-    if (cards.length > 0) groups.push({ tier, cards });
-  }
-  return { groups, counts };
+  for (const n of group.negativeProof) cards.push(negativeProofCard(n));
+  return (
+    `<h3 class="tier-head">${TIER_LABEL[group.tier]} — ${cards.length}</h3>` +
+    `<p class="tier-def">${TIER_DEFINITION[group.tier]}</p>` +
+    cards.join("")
+  );
 }
 
 const COPY_SCRIPT = `<script>
@@ -140,7 +116,12 @@ document.querySelectorAll("[data-copy]").forEach(function (b) {
 </script>`;
 
 export function renderEngagementReportHtml(o: EngagementReportInput): string {
-  const { groups, counts } = groupFindings(o);
+  // The sections render from the ONE shared report document
+  // (report/document.ts) in its canonical order — the same model the
+  // markdown, JSON, TXT, CSV, and DOCX renderers consume, so no format
+  // can drift from the flagship's structure or counts.
+  const doc = buildReportDocument(o);
+  const counts = doc.tierCounts;
   const halted = typeof o.haltedReason === "string" && o.haltedReason.length > 0;
   const blocked = typeof o.blockedReason === "string" && o.blockedReason.length > 0;
   const activeCount = counts.proven + counts.confirmed + counts.deferred;
@@ -163,14 +144,6 @@ export function renderEngagementReportHtml(o: EngagementReportInput): string {
   else if (blocked) parts.push(blockedBanner(o.blockedReason as string));
   else if (o.banner) parts.push(bannerSection(o.banner));
 
-  // Q-RP-7 front matter: the recorded frame (scope, authorisation,
-  // method, grading method) before the narrative it frames.
-  if (o.matter) {
-    parts.push(scopeSection(o.matter));
-    parts.push(methodSection(o.matter));
-    parts.push(riskMethodSection(o.matter));
-  }
-
   const narrative = o.narrativeMd.trim();
   if (narrative) {
     parts.push(
@@ -178,45 +151,46 @@ export function renderEngagementReportHtml(o: EngagementReportInput): string {
     );
   }
 
+  // The detail derivations ride inside the executive-summary segment:
+  // breakdown, what changed (real predecessors only), risk areas,
+  // business impact.
   if (d) {
     parts.push(breakdownSection(d));
     parts.push(whatChangedSection(d, o.meta.target));
     if (d.riskAreas.length > 0) parts.push(riskAreasSection(d));
     parts.push(impactSection(d));
-  } else {
-    parts.push(coverageSection(o.coverage));
-    if (o.matter) parts.push(strengthsSection(o.matter));
   }
 
+  parts.push(coverageSection(o.coverage));
+
   parts.push(
-    severityChips(o.posture.findingsBySeverity as Record<SeverityName, number>) +
+    severityChips(doc.severityCounts) +
       `<p class="accuracy">${counts.proven} proven · ${counts.confirmed} confirmed · ${counts.deferred} deferred · ${counts["ruled-out"]} ruled out</p>`,
   );
 
   parts.push(`<h2 class="sec-title">Findings</h2>`);
   if (activeCount === 0 && !halted && !blocked) parts.push(allClearSection());
-  for (const g of groups) {
-    parts.push(
-      `<h3 class="tier-head">${TIER_LABEL[g.tier]} — ${g.cards.length}</h3>` +
-        `<p class="tier-def">${TIER_DEFINITION[g.tier]}</p>` +
-        g.cards.join(""),
-    );
-  }
+  for (const g of doc.tierGroups) parts.push(tierGroupHtml(o, g));
 
   parts.push(fixPromptSection(o.meta.target, o.findings, o.bundles));
   if (d) {
     parts.push(prioritySection(d));
     parts.push(pillarSection(d));
-    parts.push(coverageSection(o.coverage));
-    if (o.matter) parts.push(strengthsSection(o.matter));
-    parts.push(surfaceSection(d));
   }
+  if (o.matter) parts.push(strengthsSection(o.matter));
+  if (d) parts.push(surfaceSection(d));
   const inventoryHtml = inventorySection(o.inventory);
   if (inventoryHtml) parts.push(inventoryHtml);
   parts.push(activitySection(o.activity));
-  // Q-RP-7 back matter: limitations & residual unknowns close the
-  // report, before the audit footer.
-  if (o.matter) parts.push(limitationsSection(o.matter));
+  // The recorded frame (scope, authorisation, method, grading method)
+  // and the limitations close the report as back matter — the RC6
+  // exemplar's order — before the audit footer.
+  if (o.matter) {
+    parts.push(scopeSection(o.matter));
+    parts.push(methodSection(o.matter));
+    parts.push(riskMethodSection(o.matter));
+    parts.push(limitationsSection(o.matter));
+  }
   parts.push(footerSection(o.meta));
 
   return `<!doctype html>
