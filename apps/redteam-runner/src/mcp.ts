@@ -105,6 +105,15 @@ export class McpClient {
       method: "tools/call",
       params: { name, arguments: args },
     });
+    // A JSON-RPC error reply is a protocol failure, not an empty result:
+    // without this check it unwraps to a content-less object and the caller
+    // reads a server failure as a successful empty string.
+    const rpcError = (raw as { error?: { code?: unknown; message?: unknown } } | null)?.error;
+    if (rpcError) {
+      throw new Error(
+        `[mcp] ${name}: JSON-RPC error ${String(rpcError.code ?? "unknown")}: ${String(rpcError.message ?? "no message")}`,
+      );
+    }
     const result = this.unwrap(raw) as {
       isError?: boolean;
       content?: Array<{ type?: string; text?: string }>;
