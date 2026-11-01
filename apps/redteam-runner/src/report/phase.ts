@@ -33,11 +33,12 @@ import { buildEngagementMeta, type ReportMeta } from "./html.js";
 import { renderEngagementReportHtml, type EngagementReportInput } from "./html/render.js";
 import { writeDocxArtifact } from "./docx.js";
 import { buildEngagementReportInput, buildFindingMeta } from "./html/wire.js";
-import { emitFindingsSheet, stampFindingRefs, stampPeerVerdicts } from "./finding-refs.js";
+import { emitFindingsSheet, stampFindingRefs } from "./finding-refs.js";
 import { buildDetailInput, recordReportMeta } from "./predecessor.js";
 import { type DetailInput } from "./detail.js";
 import { buildGradeSection, gradeFindings } from "./grading.js";
 import { applyCellVerdicts, haltedFindingFromLive } from "./cell-verdicts.js";
+import { peerDeferredPromptSection, peerVerdictSuffix, stampPeerVerdicts } from "./peer-verdicts.js";
 
 export { applyCellVerdicts, haltedFindingFromLive } from "./cell-verdicts.js";
 
@@ -140,7 +141,7 @@ export async function reportPhase(
       "reporter",
       "report",
       reporterPrompt(promptCtx(ctx)),
-      `Write the client report now.\n\nAuthorization: ${ctx.verificationProof}\n\nOperation plan: ${JSON.stringify(ctx.plan)}\n\nShared verdicts this engagement — confirmed (${ctx.liveFindings.length}):\n${ctx.liveFindings.map((f) => `- [${f.severity}] ${f.title} (${f.attackId}${f.vulnClass ? `, ${f.vulnClass}` : ""}${f.cellState ? `, cell: ${f.cellState.toUpperCase()}` : ""}${f.peerReview ? `, peer: ${f.peerReview.verdict} by ${f.peerReview.checker}` : ""}): ${f.evidence}`).join("\n") || "(none)"}\nKilled hypotheses (${ctx.killedLive.length}):\n${ctx.killedLive.map((k) => `- ${k.hypothesis} → ${k.killingObservation}`).join("\n") || "(none)"}\nPeer-review deferred (${(ctx.peerDeferredLive ?? []).length}) — challenged by a different seat and sent back for more evidence; NOT confirmed findings, mark any write-up deferred:\n${(ctx.peerDeferredLive ?? []).map((f) => `- [${f.severity}] ${f.title} (${f.attackId}) — deferred by ${f.peerReview?.checker}: ${f.peerReview?.rationale}`).join("\n") || "(none)"}\nRegistry hits consulted: ${ctx.registryHits.length}. Target fingerprint: ${JSON.stringify(ctx.fingerprint)}.\n\n${batteryLine}\n\nRecon brief:\n${reconBrief.slice(0, 4000)}\n\nExploitation summary:\n${exploitSummary.slice(0, 4000)}\n\nProof of exploitation is appended mechanically by the runner from the audit log — do not invent PoC details, marker values, or reproduction steps in your narrative; describe findings only from the evidence given.\n\nEnd the report with a JSON block: \`\`\`json {"findings": [{"id":"F-1","severity":"low","title":"...","attackIds":["T1190"],"evidence":"...","fix":"...","retest":"...","status":"confirmed"}]} \`\`\``,
+      `Write the client report now.\n\nAuthorization: ${ctx.verificationProof}\n\nOperation plan: ${JSON.stringify(ctx.plan)}\n\nShared verdicts this engagement — confirmed (${ctx.liveFindings.length}):\n${ctx.liveFindings.map((f) => `- [${f.severity}] ${f.title} (${f.attackId}${f.vulnClass ? `, ${f.vulnClass}` : ""}${f.cellState ? `, cell: ${f.cellState.toUpperCase()}` : ""}${peerVerdictSuffix(f)}): ${f.evidence}`).join("\n") || "(none)"}\nKilled hypotheses (${ctx.killedLive.length}):\n${ctx.killedLive.map((k) => `- ${k.hypothesis} → ${k.killingObservation}`).join("\n") || "(none)"}\n${peerDeferredPromptSection(ctx.peerDeferredLive)}Registry hits consulted: ${ctx.registryHits.length}. Target fingerprint: ${JSON.stringify(ctx.fingerprint)}.\n\n${batteryLine}\n\nRecon brief:\n${reconBrief.slice(0, 4000)}\n\nExploitation summary:\n${exploitSummary.slice(0, 4000)}\n\nProof of exploitation is appended mechanically by the runner from the audit log — do not invent PoC details, marker values, or reproduction steps in your narrative; describe findings only from the evidence given.\n\nEnd the report with a JSON block: \`\`\`json {"findings": [{"id":"F-1","severity":"low","title":"...","attackIds":["T1190"],"evidence":"...","fix":"...","retest":"...","status":"confirmed"}]} \`\`\``,
       [],
       4,
     );

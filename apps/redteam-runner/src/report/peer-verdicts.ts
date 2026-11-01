@@ -24,7 +24,7 @@
  * fabricates a challenge.
  */
 import { type Finding } from "../types.js";
-import { type LiveFinding } from "../context.js";
+import { type Ctx, type LiveFinding } from "../context.js";
 
 export interface PeerVerdictSources {
   live: LiveFinding[];
@@ -71,4 +71,26 @@ export function applyPeerVerdicts(findings: Finding[], sources: PeerVerdictSourc
     }
     used.live.add(i);
   }
+}
+
+/** The report-phase call site for the peer join, with the sources read
+ * from the engagement context (extracted from report/phase.ts so the
+ * orchestrator stays inside the file budget; arguments unchanged). */
+export function stampPeerVerdicts(findings: Finding[], ctx: Ctx): void {
+  applyPeerVerdicts(findings, { live: ctx.liveFindings, killed: ctx.peerKilledLive ?? [], deferred: ctx.peerDeferredLive ?? [] });
+}
+
+/** The per-finding peer fragment of the reporter prompt's shared-verdicts
+ * list: the checker's verdict and seat, or nothing when unchallenged. */
+export function peerVerdictSuffix(f: LiveFinding): string {
+  return f.peerReview ? `, peer: ${f.peerReview.verdict} by ${f.peerReview.checker}` : "";
+}
+
+/** The reporter prompt's peer-deferred section: findings a different
+ * seat challenged and sent back for more evidence, listed so the
+ * reporter marks any write-up deferred. Ends with a newline. */
+export function peerDeferredPromptSection(deferred: readonly LiveFinding[] | undefined): string {
+  const list = deferred ?? [];
+  const body = list.map((f) => `- [${f.severity}] ${f.title} (${f.attackId}) — deferred by ${f.peerReview?.checker}: ${f.peerReview?.rationale}`).join("\n") || "(none)";
+  return `Peer-review deferred (${list.length}) — challenged by a different seat and sent back for more evidence; NOT confirmed findings, mark any write-up deferred:\n${body}\n`;
 }
