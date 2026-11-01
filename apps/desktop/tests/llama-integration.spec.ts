@@ -406,6 +406,84 @@ describe('service composition over the real modules', () => {
   })
 })
 
+describe('vision projector companions', () => {
+  const MMPROJ_FILE = 'mmproj-Huihui-Qwen3.8-27B-abliterated-f16.gguf'
+
+  /** A Hugging Face surface serving one main GGUF and its projector, writing fixture bytes. */
+  function companionHf(): LlamaServiceDeps['hf'] {
+    return {
+      listRepoFiles: async () => [
+        { file: MODEL_FILE, sizeBytes: 18, isGguf: true },
+        { file: MMPROJ_FILE, sizeBytes: 20, isGguf: false, isProjector: true },
+      ],
+      resolveFileUrl: ({ repo, file }) => `https://huggingface.test/${repo}/resolve/main/${file}`,
+      downloadFile: async (options) => {
+        mkdirSync(dirname(options.destination), { recursive: true })
+        const bytes = `GGUF fixture bytes for ${options.destination}`
+        writeFileSync(options.destination, bytes)
+        return { sizeBytes: Buffer.byteLength(bytes) }
+      },
+    }
+  }
+
+  it('downloads the projector with the model, records it and serves with it', async () => {
+    const environment = createEnvironment()
+    const supervisor = supervisorHarness()
+    const service = createService(environment, supervisor.server, companionHf())
+
+    const model = await service.downloadModel({ repo: REPO, file: MODEL_FILE })
+
+    const companionId = deriveModelId({ repo: REPO, file: MMPROJ_FILE })
+    const companionPath = join(resolveModelsDirectory(environment), `${companionId}.gguf`)
+    expect(model.companionPath).toBe(companionPath)
+    expect(existsSync(companionPath)).toBe(true)
+    const [listed] = await listModels(environment)
+    expect(listed).toMatchObject({ id: model.id, companionPath })
+
+    writeSettings(settingsFor(model), environment)
+    await expect(service.startServer()).resolves.toMatchObject({ status: 'running', modelId: model.id })
+    expect(supervisor.start).toHaveBeenCalledExactlyOnceWith({
+      modelPath: model.path,
+      modelId: model.id,
+      contextLength: 16_384,
+      threads: 4,
+      mmprojPath: companionPath,
+    })
+  })
+
+  it('resolves a registry holding only a projector to no active model', async () => {
+    const environment = createEnvironment()
+    const directory = resolveModelsDirectory(environment)
+    mkdirSync(directory, { recursive: true })
+    const projectorId = deriveModelId({ repo: REPO, file: MMPROJ_FILE })
+    const projectorPath = join(directory, `${projectorId}.gguf`)
+    writeFileSync(projectorPath, 'GGUF fixture bytes')
+    // The registry document an older build wrote when the projector was
+    // downloaded and activated as though it were a model.
+    writeFileSync(join(directory, MODEL_REGISTRY_FILENAME), JSON.stringify({
+      version: 1,
+      models: [{
+        id: projectorId,
+        repo: REPO,
+        file: MMPROJ_FILE,
+        path: projectorPath,
+        sizeBytes: 18,
+        downloadedAt: DOWNLOADED_AT,
+      }],
+    }))
+    writeSettings(
+      { activeModelId: projectorId, contextLength: 16_384, threads: 4, startOnLaunch: false },
+      environment,
+    )
+    const supervisor = supervisorHarness()
+    const service = createService(environment, supervisor.server)
+
+    await expect(service.listModels()).resolves.toEqual([])
+    await expect(service.startServer()).rejects.toThrow(/no longer installed/u)
+    expect(supervisor.start).not.toHaveBeenCalled()
+  })
+})
+
 describe('shell wiring and the runner environment', () => {
   it('derives exactly the local runner environment from the running server', async () => {
     const environment = createEnvironment()

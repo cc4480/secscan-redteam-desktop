@@ -240,6 +240,70 @@ describe('local model service', () => {
     expect(h.models.registerModel).not.toHaveBeenCalled()
   })
 
+  it('refuses to download a vision projector as a model', async () => {
+    const h = harness()
+    await expect(h.service.downloadModel({ repo: 'owner/repo', file: 'mmproj-Qwen-f16.gguf' }))
+      .rejects.toThrow(/vision projector/u)
+    expect(h.hf.downloadFile).not.toHaveBeenCalled()
+    expect(h.models.registerModel).not.toHaveBeenCalled()
+  })
+
+  it('fetches the vision projector companion with a model download and records it', async () => {
+    const h = harness()
+    h.models.deriveModelId.mockImplementation(input => `id-for-${input.file}`)
+    h.hf.listRepoFiles.mockResolvedValue([
+      { file: 'Qwen.Q4_K_M.gguf', sizeBytes: 1024, isGguf: true },
+      { file: 'mmproj-Qwen-f16.gguf', sizeBytes: 512, isGguf: false, isProjector: true },
+    ])
+    const companionPath = join('/models', 'id-for-mmproj-Qwen-f16.gguf.gguf')
+    const model = await h.service.downloadModel({ repo: 'owner/repo', file: 'Qwen.Q4_K_M.gguf' })
+    expect(model).toMatchObject({ id: 'id-for-Qwen.Q4_K_M.gguf', companionPath })
+    expect(h.hf.downloadFile).toHaveBeenCalledTimes(2)
+    const companionCall = h.hf.downloadFile.mock.calls[1]![0]
+    expect(companionCall.url).toBe('https://huggingface.co/owner/repo/resolve/main/mmproj-Qwen-f16.gguf')
+    expect(companionCall.destination).toBe(companionPath)
+    expect(h.models.registerModel).toHaveBeenCalledTimes(2)
+    expect(h.models.registerModel).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 'id-for-Qwen.Q4_K_M.gguf', companionPath }),
+      ENVIRONMENT,
+    )
+  })
+
+  it('keeps the model when the vision projector companion cannot be fetched', async () => {
+    const h = harness()
+    h.hf.listRepoFiles.mockRejectedValue(new Error('the listing is unavailable'))
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const model = await h.service.downloadModel({ repo: 'owner/repo', file: 'Qwen.Q4_K_M.gguf' })
+    expect(model).toMatchObject({ id: installed.id })
+    expect(model.companionPath).toBeUndefined()
+    expect(h.models.registerModel).toHaveBeenCalledOnce()
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('vision projector'))
+  })
+
+  it('never offers a vision projector in the repository file list', async () => {
+    const h = harness()
+    h.hf.listRepoFiles.mockResolvedValue([
+      { file: 'Qwen.Q4_K_M.gguf', sizeBytes: 1024, isGguf: true },
+      { file: 'mmproj-Qwen-f16.gguf', sizeBytes: 512, isGguf: true, isProjector: true },
+    ])
+    await expect(h.service.listRepoFiles('owner/repo')).resolves.toEqual([
+      { file: 'Qwen.Q4_K_M.gguf', sizeBytes: 1024, isGguf: true },
+    ])
+  })
+
+  it('starts the supervisor with the active model projector companion', async () => {
+    const h = harness()
+    h.models.listModels.mockResolvedValue([{ ...installed, companionPath: '/models/mmproj-Qwen-f16.gguf' }])
+    await h.service.startServer()
+    expect(h.server.start).toHaveBeenCalledExactlyOnceWith({
+      modelPath: installed.path,
+      modelId: installed.id,
+      contextLength: 32768,
+      threads: 8,
+      mmprojPath: '/models/mmproj-Qwen-f16.gguf',
+    })
+  })
+
   it('cancels exactly the in-flight download it is asked to cancel', async () => {
     const h = harness()
     h.models.deriveModelId.mockImplementation(input => `id-${input.file}`)

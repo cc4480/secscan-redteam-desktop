@@ -17,6 +17,8 @@ export interface LlamaModel {
   readonly file: string
   /** Absolute path of the downloaded file. */
   readonly path: string
+  /** Absolute path of the vision projector companion fetched with this model, when its repository ships one. */
+  readonly companionPath?: string
   /** Bytes on disk. */
   readonly sizeBytes: number
   /** Quantization label parsed from the file name (`Q4_K_M`, `IQ4_XS`, ...), when present. */
@@ -35,6 +37,12 @@ export interface LlamaRepoFile {
   readonly sizeBytes?: number
   /** True for `.gguf` files the manager offers. */
   readonly isGguf: boolean
+  /**
+   * True for a vision projector (`mmproj-*.gguf`), the companion asset of a main
+   * model; absent when the file is not one. A projector is never a model, so
+   * `isGguf` is always false for it.
+   */
+  readonly isProjector?: boolean
 }
 
 /** llama-server lifecycle. */

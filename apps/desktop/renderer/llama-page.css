@@ -80,6 +80,20 @@
   text-transform: uppercase;
 }
 
+.llama-model-companion {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 0 6px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  line-height: 16px;
+  text-transform: uppercase;
+}
+
 /* The repository input shares its row with the List files button, so it must flex instead of fill. */
 .button-row #llama-repo-input {
   flex: 1 1 auto;

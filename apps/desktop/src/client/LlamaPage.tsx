@@ -481,6 +481,7 @@ export function LlamaPage({ api }: { api: LlamaOperations }) {
                       <span className="llama-model-name">{model.file}</span>
                       <span className="llama-model-repo">{model.repo}</span>
                       {model.id === activeModelId ? <span className="llama-model-active">Active</span> : null}
+                      {model.companionPath !== undefined ? <span className="llama-model-companion">Vision projector attached</span> : null}
                     </span>
                   </th>
                   <td className="numeric">{model.quantization === undefined ? '--' : model.quantization}</td>

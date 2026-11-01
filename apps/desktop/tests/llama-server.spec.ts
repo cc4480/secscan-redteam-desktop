@@ -265,6 +265,53 @@ describe('llama-server lifecycle', () => {
     expect(spawn.options.stdio).toEqual(['ignore', 'pipe', 'pipe'])
   })
 
+  it('passes the vision projector companion as --mmproj right after the model', async () => {
+    const mmprojPath = join('C:', 'models', 'mmproj-Huihui-Qwen3.8-27B-abliterated-f16.gguf')
+    const withCompanion = { ...START_INPUT, mmprojPath }
+    expect(llamaServerArgs({ ...withCompanion, port: FIXED_PORT })).toEqual([
+      '-m', MODEL_PATH,
+      '--mmproj', mmprojPath,
+      '--alias', MODEL_ID,
+      '-c', '32768',
+      '-t', '8',
+      '-tb', '8',
+      '-b', '2048',
+      '-ub', '512',
+      '--host', '127.0.0.1',
+      '--port', String(FIXED_PORT),
+      '--jinja',
+      '-ngl', '0',
+    ])
+    // Without a companion the argv is exactly the long-standing one.
+    expect(llamaServerArgs({ ...START_INPUT, port: FIXED_PORT })).toEqual([
+      '-m', MODEL_PATH,
+      '--alias', MODEL_ID,
+      '-c', '32768',
+      '-t', '8',
+      '-tb', '8',
+      '-b', '2048',
+      '-ub', '512',
+      '--host', '127.0.0.1',
+      '--port', String(FIXED_PORT),
+      '--jinja',
+      '-ngl', '0',
+    ])
+
+    const directory = payloadDirectory()
+    const target = supervisor(directory)
+    const started = await target.start(withCompanion)
+    expect(started.status).toBe('running')
+    expect(lastSpawn().args).toEqual(llamaServerArgs({ ...withCompanion, port: FIXED_PORT }))
+  })
+
+  it('refuses a start whose vision projector path is blank', async () => {
+    const directory = payloadDirectory()
+    const target = supervisor(directory)
+    const failure = await startFailure(target, { ...START_INPUT, mmprojPath: '  ' })
+    expect(failure.message).toContain('the vision projector path is empty')
+    expect(harness.spawns).toHaveLength(0)
+  })
+
   it('falls back to /v1/models while /health reports the model still loading', async () => {
     const directory = payloadDirectory()
     const calls: string[] = []

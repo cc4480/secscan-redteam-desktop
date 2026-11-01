@@ -23,6 +23,7 @@
  *   otherwise keep answering for a model the operator has replaced.
  */
 
+import { stat } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import {
   LLAMA_IPC,
@@ -46,6 +47,7 @@ import {
 import {
   deleteModel,
   deriveModelId,
+  isProjectorFile,
   listModels,
   parseModelMetadata,
   registerModel,
@@ -248,6 +250,7 @@ export function createLlamaService(deps: LlamaServiceDeps): LlamaService {
       modelId: model.id,
       contextLength: values.contextLength,
       threads: values.threads,
+      ...model.companionPath === undefined ? {} : { mmprojPath: model.companionPath },
     })
   }
 
@@ -277,7 +280,58 @@ export function createLlamaService(deps: LlamaServiceDeps): LlamaService {
     return Promise.resolve()
   }
 
+  /**
+   * Fetch the vision projector companion a downloaded model's repository ships.
+   *
+   * The companion lands under its own derived id, so every model of the
+   * repository shares one copy (a file at the destination is complete by
+   * construction: the downloader renames into place only after verification),
+   * and the model entry is registered again with the companion path recorded.
+   * A repository without a projector and any companion failure both leave the
+   * model exactly as registered: it serves text-only, and the failure is
+   * logged rather than failing a download whose model already landed.
+   * @param model - the registered model the companion belongs to.
+   * @param token - the configured Hub token, forwarded to both Hub calls.
+   * @param signal - the download's abort signal, shared with the companion transfer.
+   * @returns the model, re-registered with `companionPath` when a companion was fetched.
+   */
+  const fetchCompanion = async (
+    model: LlamaModel,
+    token: string | undefined,
+    signal: AbortSignal,
+  ): Promise<LlamaModel> => {
+    try {
+      const files = await deps.hf.listRepoFiles({ repo: model.repo, ...token === undefined ? {} : { token } })
+      const projector = files
+        .filter(file => file.isProjector === true || isProjectorFile(file.file))
+        .sort((left, right) => left.file.localeCompare(right.file))[0]
+      if (projector === undefined) return model
+      const companionId = deps.models.deriveModelId({ repo: model.repo, file: projector.file })
+      const extension = extname(projector.file) || DEFAULT_MODEL_EXTENSION
+      const companionPath = join(deps.models.resolveModelsDirectory(environment), `${companionId}${extension}`)
+      const present = await stat(companionPath).catch(() => undefined)
+      if (present === undefined || !present.isFile()) {
+        await deps.hf.downloadFile({
+          url: deps.hf.resolveFileUrl({ repo: model.repo, file: projector.file }),
+          destination: companionPath,
+          signal,
+          ...token === undefined ? {} : { token },
+        })
+      }
+      return await deps.models.registerModel({ ...model, companionPath }, environment)
+    } catch (error) {
+      console.error(`${PREFIX} the vision projector for ${model.id} could not be fetched: ${messageOf(error)}`)
+      return model
+    }
+  }
+
   const downloadModel = async (input: { repo: string; file: string }): Promise<LlamaModel> => {
+    if (isProjectorFile(input.file)) {
+      throw new Error(
+        `${PREFIX} ${input.file} is a vision projector, not a model; it cannot be downloaded or served `
+        + 'on its own, and it is fetched automatically with a model from the same repository',
+      )
+    }
     const id = deps.models.deriveModelId({ repo: input.repo, file: input.file })
     if (controllers.has(id)) throw new Error(`${PREFIX} a download for ${id} is already in progress`)
     // The id is an identifier-safe stem, and the destination repeats it so two repos
@@ -315,8 +369,9 @@ export function createLlamaService(deps: LlamaServiceDeps): LlamaService {
         ...metadata.parameterSize === undefined ? {} : { parameterSize: metadata.parameterSize },
       }
       const registered = await deps.models.registerModel(model, environment)
+      const completed = await fetchCompanion(registered, token, controller.signal)
       emitProgress({ id, phase: 'done', receivedBytes: result.sizeBytes, totalBytes: result.sizeBytes })
-      return registered
+      return completed
     } catch (error) {
       if (controller.signal.aborted || error instanceof DownloadCancelledError) {
         emitProgress({ id, phase: 'cancelled', ...lastProgress })
@@ -332,8 +387,9 @@ export function createLlamaService(deps: LlamaServiceDeps): LlamaService {
   const loadRepoFiles = async (repo: string): Promise<LlamaRepoFile[]> => {
     const token = currentSettings().huggingFaceToken
     const files = await deps.hf.listRepoFiles({ repo, ...token === undefined ? {} : { token } })
-    // The manager offers GGUF files only; the client reports the flag for every sibling.
-    return files.filter(file => file.isGguf)
+    // The manager offers GGUF model files only; the client reports the flag for
+    // every sibling, and a vision projector is a companion asset, never an offer.
+    return files.filter(file => file.isGguf && !isProjectorFile(file.file))
   }
 
   return {

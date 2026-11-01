@@ -103,6 +103,8 @@ export interface LlamaServerResources {
 export interface LlamaServerStartInput {
   /** Absolute path of the downloaded GGUF file. */
   readonly modelPath: string
+  /** Absolute path of the model's vision projector companion, passed as `--mmproj` when present. */
+  readonly mmprojPath?: string
   /** Stable model id the server advertises as its alias. */
   readonly modelId: string
   /** Context window passed as `-c`. */
@@ -217,6 +219,8 @@ export function llamaServerResources(
  * the CPU build is qualified with. `--alias` publishes the model id the runner's
  * OpenAI-compatible rows address, `--jinja` enables the chat template the GGUF carries,
  * and `-ngl 0` keeps every layer on the CPU because the bundled build has no GPU backend.
+ * A model with a vision projector companion adds `--mmproj` right after `-m`; without
+ * one the argv is exactly the long-standing list.
  * @param input - Model, limits and the loopback port the server was allocated.
  * @returns The argv, in the fixed order the supervisor asserts.
  */
@@ -225,6 +229,7 @@ export function llamaServerArgs(
 ): readonly string[] {
   return [
     '-m', input.modelPath,
+    ...input.mmprojPath === undefined ? [] : ['--mmproj', input.mmprojPath],
     '--alias', input.modelId,
     '-c', String(input.contextLength),
     '-t', String(input.threads),
@@ -285,6 +290,9 @@ function messageOf(error: unknown): string {
 /** @returns why the start request cannot be served, or `undefined` when it can. */
 function invalidStartReason(input: LlamaServerStartInput): string | undefined {
   if (input.modelPath.trim() === '') return 'the model path is empty'
+  if (input.mmprojPath !== undefined && input.mmprojPath.trim() === '') {
+    return 'the vision projector path is empty'
+  }
   if (input.modelId.trim() === '') return 'the model id is empty'
   if (!Number.isSafeInteger(input.contextLength) || input.contextLength < 1) {
     return `context length ${String(input.contextLength)} is not a positive integer`

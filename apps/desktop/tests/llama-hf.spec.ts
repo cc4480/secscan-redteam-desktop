@@ -242,6 +242,28 @@ describe('listRepoFiles', () => {
     ])
   })
 
+  it('flags a vision projector sibling instead of marking it a model file', async () => {
+    const fixture = await startFixture((request, response) => {
+      if (request.url === '/api/models/acme/model') {
+        json(response, 200, {
+          siblings: [
+            { rfilename: 'mmproj-acme-f16.gguf', size: 40 },
+            { rfilename: 'model-a.Q4_K_M.gguf', size: 100 },
+          ],
+        })
+        return
+      }
+      json(response, 404, { error: 'unexpected fixture path' })
+    })
+
+    const files = await listRepoFiles({ repo: 'acme/model', fetch: hubFetch(fixture) })
+
+    expect(files).toEqual([
+      { file: 'mmproj-acme-f16.gguf', sizeBytes: 40, isGguf: false, isProjector: true },
+      { file: 'model-a.Q4_K_M.gguf', sizeBytes: 100, isGguf: true },
+    ])
+  })
+
   it('rejects malformed repository identifiers before requesting anything', async () => {
     let calls = 0
     const fetchImpl: typeof fetch = async () => {

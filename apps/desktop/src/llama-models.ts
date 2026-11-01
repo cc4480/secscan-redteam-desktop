@@ -21,6 +21,22 @@ export const MODEL_REGISTRY_FILENAME = 'registry.json'
 /** Suffix of a partially downloaded model file. */
 export const MODEL_PARTIAL_SUFFIX = '.part'
 
+/** Vision projector prefix: `mmproj` followed by a name separator or the end of the stem. */
+const PROJECTOR_FILE_PATTERN = /^mmproj(?:[-_.]|$)/iu
+
+/**
+ * Whether a file name names a vision projector rather than a language model.
+ *
+ * A multimodal projector (`mmproj-*.gguf`) is a companion asset of a main model:
+ * llama-server loads it through `--mmproj` beside a model and cannot serve it
+ * alone, so no surface may offer, register or activate one as a model.
+ * @param file - file name or path of a repository file or a downloaded file.
+ * @returns true when the base name carries the projector prefix.
+ */
+export function isProjectorFile(file: string): boolean {
+  return PROJECTOR_FILE_PATTERN.test(basename(file))
+}
+
 /** On-disk registry schema version. */
 export const MODEL_REGISTRY_VERSION = 1
 
@@ -102,7 +118,8 @@ export async function ensureModelsDirectory(environment: NodeJS.ProcessEnv = pro
  *
  * A missing or corrupt registry reads as no entries, and entries whose file is
  * gone (a manual deletion or an interrupted download) are dropped from the
- * result. `sizeBytes` reports the file's current size on disk.
+ * result. `sizeBytes` reports the file's current size on disk. A recorded
+ * companion path is reported only while the companion file is present.
  * @param environment - environment holding the override and the platform roots.
  * @returns present models ordered by descending `downloadedAt`.
  */
@@ -113,9 +130,23 @@ export async function listModels(environment: NodeJS.ProcessEnv = process.env): 
   for (const model of models) {
     const details = await stat(model.path).catch(() => undefined)
     if (details === undefined || !details.isFile()) continue
-    present.push({ ...model, sizeBytes: details.size })
+    present.push(await withPresentCompanion({ ...model, sizeBytes: details.size }))
   }
   return present.sort((left, right) => right.downloadedAt - left.downloadedAt || left.id.localeCompare(right.id))
+}
+
+/**
+ * Drop a model's recorded companion path when the companion file is gone, so a
+ * start never passes a missing projector to the server.
+ * @param model - registry entry whose model file is present.
+ * @returns the entry, with `companionPath` only when that file is present too.
+ */
+async function withPresentCompanion(model: LlamaModel): Promise<LlamaModel> {
+  if (model.companionPath === undefined) return model
+  const companion = await stat(model.companionPath).catch(() => undefined)
+  if (companion !== undefined && companion.isFile()) return model
+  const { companionPath: _companionPath, ...rest } = model
+  return rest
 }
 
 /**
@@ -123,8 +154,13 @@ export async function listModels(environment: NodeJS.ProcessEnv = process.env): 
  * @param model - validated download metadata; an existing entry with the same id is replaced.
  * @param environment - environment holding the override and the platform roots.
  * @returns the registered model.
+ * @throws Error when the entry names a vision projector, which is a companion
+ *   asset and never a model.
  */
 export function registerModel(model: LlamaModel, environment: NodeJS.ProcessEnv = process.env): Promise<LlamaModel> {
+  if (isProjectorFile(model.file)) {
+    throw new Error('local models: a vision projector cannot be registered as a model')
+  }
   const directory = resolveModelsDirectory(environment)
   return serializeStore(async () => {
     const models = await readRegistryModels(directory)
@@ -136,8 +172,9 @@ export function registerModel(model: LlamaModel, environment: NodeJS.ProcessEnv 
 /**
  * Delete a model file, its partial download sidecar and the registry entry.
  *
- * Unknown ids and already-missing files are a successful no-op so the UI can
- * retry a delete without special cases.
+ * The model's companion file and its sidecar go with it unless another entry
+ * records the same companion. Unknown ids and already-missing files are a
+ * successful no-op so the UI can retry a delete without special cases.
  * @param id - model id to remove.
  * @param environment - environment holding the override and the platform roots.
  */
@@ -149,7 +186,15 @@ export function deleteModel(id: string, environment: NodeJS.ProcessEnv = process
     if (target === undefined) return
     await rm(target.path, { force: true })
     await rm(`${target.path}${MODEL_PARTIAL_SUFFIX}`, { force: true })
-    await writeRegistry(directory, models.filter(entry => entry.id !== id))
+    const remaining = models.filter(entry => entry.id !== id)
+    // The companion file is shared by every model of its repository: it is
+    // removed only when no remaining entry records it.
+    if (target.companionPath !== undefined
+      && !remaining.some(entry => entry.companionPath === target.companionPath)) {
+      await rm(target.companionPath, { force: true })
+      await rm(`${target.companionPath}${MODEL_PARTIAL_SUFFIX}`, { force: true })
+    }
+    await writeRegistry(directory, remaining)
   })
 }
 
@@ -307,8 +352,12 @@ function registryModel(value: unknown): LlamaModel | undefined {
   const downloadedAt = record['downloadedAt']
   if (typeof sizeBytes !== 'number' || !Number.isFinite(sizeBytes)) return undefined
   if (typeof downloadedAt !== 'number' || !Number.isFinite(downloadedAt)) return undefined
+  // A projector is a companion asset, never a model: a registry an older build
+  // wrote with the projector as its own entry reads as no such model.
+  if (isProjectorFile(file)) return undefined
   const quantization = nonEmptyString(record['quantization'])
   const parameterSize = nonEmptyString(record['parameterSize'])
+  const companionPath = nonEmptyString(record['companionPath'])
   return {
     id,
     repo,
@@ -318,6 +367,7 @@ function registryModel(value: unknown): LlamaModel | undefined {
     downloadedAt,
     ...quantization === undefined ? {} : { quantization },
     ...parameterSize === undefined ? {} : { parameterSize },
+    ...companionPath === undefined ? {} : { companionPath },
   }
 }
 

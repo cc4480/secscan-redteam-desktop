@@ -21,6 +21,7 @@ import {
   deleteModel,
   deriveModelId,
   ensureModelsDirectory,
+  isProjectorFile,
   listModels,
   parseModelMetadata,
   registerModel,
@@ -316,6 +317,105 @@ describe('tolerant registry reads', () => {
     rmSync(removed.path)
     expect(await listModels(fixture.environment)).toStrictEqual([kept])
     expect(registryModels(fixture)).toHaveLength(2)
+  })
+})
+
+describe('isProjectorFile', () => {
+  it.each([
+    'mmproj-Qwen3.6-35B-A3B-Uncensored-Genesis-f16.gguf',
+    'mmproj.gguf',
+    'mmproj-f16.gguf',
+    'MMProj-Qwen-F16.gguf',
+    'owner/mmproj-model-f16.gguf',
+  ])('recognizes the projector %s', (file) => {
+    expect(isProjectorFile(file)).toBe(true)
+  })
+
+  it.each([
+    'Qwen3.6-35B-A3B-Uncensored-Claude-Genesis-V4-APEX-Compact.gguf',
+    'model.gguf',
+    'mmprojector.gguf',
+    'some-mmproj-f16.gguf',
+    'README.md',
+  ])('does not mistake the model file %s for a projector', (file) => {
+    expect(isProjectorFile(file)).toBe(false)
+  })
+})
+
+describe('vision projector registry safety', () => {
+  const PROJECTOR_FILE = 'mmproj-Qwen3.6-35B-A3B-Uncensored-Genesis-f16.gguf'
+
+  /** Write a registry document by hand, the way an older build left it on disk. */
+  function handWrittenRegistry(fixture: StoreFixture, models: LlamaModel[]): void {
+    mkdirSync(fixture.models, { recursive: true })
+    writeFileSync(
+      join(fixture.models, MODEL_REGISTRY_FILENAME),
+      JSON.stringify({ version: MODEL_REGISTRY_VERSION, models }),
+    )
+  }
+
+  it('never lists a projector entry, even with its file on disk', async () => {
+    const fixture = store()
+    const projector = prepared(fixture, PROJECTOR_FILE)
+    handWrittenRegistry(fixture, [projector])
+    expect(await listModels(fixture.environment)).toStrictEqual([])
+  })
+
+  it('refuses to register a projector as a model', async () => {
+    const fixture = store()
+    const projector = prepared(fixture, PROJECTOR_FILE)
+    // The refusal is synchronous, like deriveModelId's: no registry write begins.
+    expect(() => registerModel(projector, fixture.environment)).toThrow(/vision projector/)
+    expect(await listModels(fixture.environment)).toStrictEqual([])
+    expect(existsSync(join(fixture.models, MODEL_REGISTRY_FILENAME))).toBe(false)
+  })
+
+  it('round-trips a model companion path through the registry', async () => {
+    const fixture = store()
+    const companion = prepared(fixture, PROJECTOR_FILE)
+    const model = prepared(fixture, 'model.Q4_K_M.gguf', { companionPath: companion.path })
+    await registerModel(model, fixture.environment)
+    expect(await listModels(fixture.environment)).toStrictEqual([model])
+    expect(registryModels(fixture)).toStrictEqual([model])
+  })
+
+  it('drops the companion path from the listing when the companion file is gone', async () => {
+    const fixture = store()
+    const companion = prepared(fixture, PROJECTOR_FILE)
+    const model = prepared(fixture, 'model.Q4_K_M.gguf', { companionPath: companion.path })
+    await registerModel(model, fixture.environment)
+    rmSync(companion.path)
+    const [listed] = await listModels(fixture.environment)
+    expect(listed).toStrictEqual({
+      id: model.id,
+      repo: model.repo,
+      file: model.file,
+      path: model.path,
+      sizeBytes: model.sizeBytes,
+      downloadedAt: model.downloadedAt,
+    })
+  })
+
+  it('deletes an unreferenced companion file with its model', async () => {
+    const fixture = store()
+    const companion = prepared(fixture, PROJECTOR_FILE)
+    const model = prepared(fixture, 'model.Q4_K_M.gguf', { companionPath: companion.path })
+    await registerModel(model, fixture.environment)
+    await deleteModel(model.id, fixture.environment)
+    expect(existsSync(companion.path)).toBe(false)
+    expect(await listModels(fixture.environment)).toStrictEqual([])
+  })
+
+  it('keeps a companion file another model still references', async () => {
+    const fixture = store()
+    const companion = prepared(fixture, PROJECTOR_FILE)
+    const first = prepared(fixture, 'first.Q4_K_M.gguf', { companionPath: companion.path, downloadedAt: 1_000 })
+    const second = prepared(fixture, 'second.Q8_0.gguf', { companionPath: companion.path, downloadedAt: 2_000 })
+    await registerModel(first, fixture.environment)
+    await registerModel(second, fixture.environment)
+    await deleteModel(first.id, fixture.environment)
+    expect(existsSync(companion.path)).toBe(true)
+    expect(await listModels(fixture.environment)).toStrictEqual([second])
   })
 })
 

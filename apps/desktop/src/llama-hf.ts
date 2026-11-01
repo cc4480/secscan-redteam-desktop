@@ -12,6 +12,7 @@ import { mkdir, open, rename, stat, unlink } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { FileHandle } from 'node:fs/promises'
 import type { LlamaDownloadProgress, LlamaRepoFile } from './llama-api.ts'
+import { isProjectorFile } from './llama-models.ts'
 
 /** Origin every Hub request is built from. */
 const HUGGING_FACE_ORIGIN = 'https://huggingface.co'
@@ -293,7 +294,8 @@ async function closeQuietly(handle: FileHandle): Promise<void> {
  * A tree failure never fails the listing.
  *
  * @param options - repository, optional token, optional transport.
- * @returns every sibling, with `isGguf` set and sized entries first in ascending size order.
+ * @returns every sibling, with `isGguf` set (`isProjector` on a vision projector
+ *   instead) and sized entries first in ascending size order.
  * @throws Error for a malformed repo, a refused or absent repository, or an unreadable reply.
  */
 export async function listRepoFiles(options: ListRepoFilesOptions): Promise<LlamaRepoFile[]> {
@@ -309,9 +311,13 @@ export async function listRepoFiles(options: ListRepoFilesOptions): Promise<Llam
       throw new Error('Hugging Face returned an unexpected repository listing')
     }
     const size = byteCount(entry.size)
+    const projector = isProjectorFile(entry.rfilename)
     files.push({
       file: entry.rfilename,
-      isGguf: GGUF_FILE_PATTERN.test(entry.rfilename),
+      // A vision projector ships as a `.gguf` but is a companion asset, never a
+      // model file the manager offers.
+      isGguf: GGUF_FILE_PATTERN.test(entry.rfilename) && !projector,
+      ...projector ? { isProjector: true } : {},
       ...size === undefined ? {} : { sizeBytes: size },
     })
   }
