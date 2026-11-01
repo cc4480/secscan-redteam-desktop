@@ -453,6 +453,7 @@
     { "path": "./packages/redteam/auth-gate" },
     { "path": "./packages/redteam/llm-router" },
     { "path": "./packages/redteam/harness-plugin" },
+    { "path": "./packages/redteam/console-share" },
     { "path": "./packages/redteam/desktop-bundle" },
     { "path": "./packages/redteam/foundry-gate" },
     { "path": "./apps/cli" },
