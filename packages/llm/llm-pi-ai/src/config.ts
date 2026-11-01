@@ -69,15 +69,19 @@ export const DEFAULT_MAX_TOKENS = 32_768
 
 /**
  * Modalities assumed for a model neither configuration nor the catalog
- * declares. Text is the floor every supported protocol certainly carries, so
- * this is the absence of a declaration rather than a guess at the endpoint:
- * nothing can interrogate a gateway for its modalities, and the two wrong
- * answers do not cost the same. Under-claiming refuses the image before it is
- * attached, naming the model. Over-claiming admits one the provider then
- * rejects mid-turn, after the message is durable, leaving the session
- * repeating a request that cannot succeed.
+ * declares. This is the absence of a declaration rather than a guess at the
+ * endpoint: nothing can interrogate a gateway for its modalities. Silence is
+ * read as image-capable because the routes this default serves are operator
+ * deployments whose hand-declared models are expected to take the media the
+ * operator attaches; a text-only answer to silence refused the operator's
+ * images at admission, naming the model, for no declared reason. The cost of
+ * the other wrong answer is accepted and stays visible: a model whose
+ * endpoint truly cannot take images is refused by the provider mid-turn
+ * instead. A deployment that knows a model is text-only says so — an entry's
+ * `input`, a route's `defaultInput`, and the installed catalog's record all
+ * still outrank this fallback.
  */
-export const DEFAULT_INPUT: readonly PiAiModality[] = ['text']
+export const DEFAULT_INPUT: readonly PiAiModality[] = ['text', 'image']
 
 export type {
   PiAiCompatProfile,
@@ -140,7 +144,7 @@ export interface PiAiProviderProfile {
   /**
    * Request modalities for a model this route lists that neither its entry's
    * {@link PiAiModelProfile.input} nor the installed catalog declares (default
-   * `[text]`). A fallback like the capacities above, not an override: a
+   * `[text, image]`). A fallback like the capacities above, not an override: a
    * catalog model keeps the modalities the catalog records for it, and this
    * value never narrows one. A gateway serving vision models the catalog does
    * not describe declares `[text, image]` once here instead of on every entry.

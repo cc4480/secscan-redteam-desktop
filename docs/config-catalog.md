@@ -1610,7 +1610,7 @@ export interface PiAiProviderProfile {
   /**
    * Request modalities for a model this route lists that neither its entry's
    * {@link PiAiModelProfile.input} nor the installed catalog declares (default
-   * `[text]`). A fallback like the capacities above, not an override: a
+   * `[text, image]`). A fallback like the capacities above, not an override: a
    * catalog model keeps the modalities the catalog records for it, and this
    * value never narrows one. A gateway serving vision models the catalog does
    * not describe declares `[text, image]` once here instead of on every entry.
@@ -1670,10 +1670,10 @@ export interface PiAiModelProfile {
   /**
    * Request modalities this model accepts. Absent — or empty, which describes
    * a model that accepts nothing and so states no answer either — keeps the
-   * installed catalog entry's modalities, then the route's `defaultInput`.
-   * Declaring images is what makes a hand-declared vision model usable, and
-   * declaring text alone corrects a catalog model whose gateway does not serve
-   * what the catalog records. This is a claim about the endpoint, not a check
+   * installed catalog entry's modalities, then the route's `defaultInput`,
+   * whose own default already includes images, so silence never makes a
+   * hand-declared model text-only. Declaring text alone corrects a model
+   * whose gateway does not serve images. This is a claim about the endpoint, not a check
    * of it: nothing interrogates a gateway for what it accepts, so a model
    * claiming images its endpoint refuses is refused by the provider instead,
    * mid-turn.
@@ -1814,7 +1814,7 @@ export type PiAiThinkingTokenBudgetField = NonNullable<OpenAICompletionsCompat['
 
 Depends on: `Api` (`@earendil-works/pi-ai`) · `CacheRetention` (`@earendil-works/pi-ai`) · `Model` (`@earendil-works/pi-ai`) · `ModelThinkingLevel` (`@earendil-works/pi-ai`) · `OpenAICompletionsCompat` (`@earendil-works/pi-ai`) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets` (`@earendil-works/pi-ai`) · `Transport` (`@earendil-works/pi-ai`) · `Volatile` (`@deepseek-ai/cordis`)
 
-Source: [`packages/llm/llm-pi-ai/src/config.ts:222`](../packages/llm/llm-pi-ai/src/config.ts)
+Source: [`packages/llm/llm-pi-ai/src/config.ts:226`](../packages/llm/llm-pi-ai/src/config.ts)
 
 <a id="deepseek-aidsh-llm-replay"></a>
 
@@ -1976,6 +1976,14 @@ export interface StdioConfig {
   args: string[]
   /** Extra env vars merged on top of scrubbed ambient env. */
   env: Record<string, string>
+  /**
+   * Env names whose values the host process environment supplies to the child at
+   * spawn. Names only: a value never appears in config. Each named value is
+   * resolved when a connection generation starts and merged over the scrubbed
+   * ambient env and `env`, because the scrub drops credential-shaped names by
+   * design. An unset or empty name is not injected.
+   */
+  secretEnv: string[]
   /** Working directory for the child process. */
   cwd: string
   /** Timeout per tool call or resource request in milliseconds. */
@@ -2025,7 +2033,7 @@ export interface ReconnectConfig {
 }
 ```
 
-Source: [`packages/mcp/mcp-client/src/index.ts:104`](../packages/mcp/mcp-client/src/index.ts)
+Source: [`packages/mcp/mcp-client/src/index.ts:115`](../packages/mcp/mcp-client/src/index.ts)
 
 <a id="deepseek-aidsh-message-feedback"></a>
 
@@ -4124,6 +4132,33 @@ export interface Config {
 
 Source: [`packages/deliverables/workspace-changes/src/index.ts:33`](../packages/deliverables/workspace-changes/src/index.ts)
 
+<a id="secscanredteam-console-share"></a>
+
+## `@secscan/redteam-console-share`
+
+Requires: `webServer` · `connection`
+
+```ts config-catalog
+/** Console-share host configuration. */
+export interface Config {
+  /**
+   * The runner console's address: its base URL or its MCP URL
+   * (`REDTEAM_MCP_URL`'s form, ending in `/mcp`); the `/mcp` suffix is
+   * stripped at load. Defaults to the bundled console's loopback base.
+   */
+  readonly baseUrl: string
+  /**
+   * The console's startup token (`REDTEAM_UI_TOKEN`'s value), attached as
+   * the bearer on every forwarded call. The empty string forwards without
+   * one — the console then refuses, which the browser sees as the console's
+   * own 401 rather than data.
+   */
+  readonly token: string
+}
+```
+
+Source: [`packages/redteam/console-share/src/index.ts:42`](../packages/redteam/console-share/src/index.ts)
+
 ## Loadable plugins with no config
 
 These load from a `cordis.yml` entry with no `config:` block; they declare no configuration API.
@@ -4158,6 +4193,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-client-ui-open-in-app` ([`packages/client/ui-open-in-app/src/index.ts`](../packages/client/ui-open-in-app/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-permission-presets` ([`packages/client/ui-permission-presets/src/index.ts`](../packages/client/ui-permission-presets/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-plan` ([`packages/client/ui-plan/src/index.ts`](../packages/client/ui-plan/src/index.ts))
+- `@deepseek-ai/dsh-client-ui-redteam-console` ([`packages/client/ui-redteam-console/src/index.ts`](../packages/client/ui-redteam-console/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-reference` ([`packages/client/ui-reference/src/index.ts`](../packages/client/ui-reference/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-renderer` ([`packages/client/ui-renderer/src/index.ts`](../packages/client/ui-renderer/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-schedule` ([`packages/client/ui-schedule/src/index.ts`](../packages/client/ui-schedule/src/index.ts))
@@ -4308,5 +4344,6 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 - `@deepseek-ai/dsh-win32-process` ([`packages/subprocess/win32-process/src/index.ts`](../packages/subprocess/win32-process/src/index.ts))
 - `@secscan/redteam-auth-gate` ([`packages/redteam/auth-gate/src/index.ts`](../packages/redteam/auth-gate/src/index.ts))
 - `@secscan/redteam-desktop-bundle` ([`packages/redteam/desktop-bundle/src/index.ts`](../packages/redteam/desktop-bundle/src/index.ts))
+- `@secscan/redteam-fleet-skills` ([`packages/redteam/fleet-skills/src/index.ts`](../packages/redteam/fleet-skills/src/index.ts))
 - `@secscan/redteam-foundry-gate` ([`packages/redteam/foundry-gate/src/index.ts`](../packages/redteam/foundry-gate/src/index.ts))
 - `@secscan/redteam-llm-router` ([`packages/redteam/llm-router/src/index.ts`](../packages/redteam/llm-router/src/index.ts))
