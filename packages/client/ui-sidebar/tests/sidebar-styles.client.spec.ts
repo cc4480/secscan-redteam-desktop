@@ -29,7 +29,7 @@ describe('SidebarRoot.module.css', () => {
   it('shares and cancels the wide shell trailing padding structurally', () => {
     const root = declarations('.root')
     expect(root?.get('--dsh-sidebar-inline-padding')).toBe('12px')
-    expect(root?.get('padding')).toBe('6px var(--dsh-sidebar-inline-padding)')
+    expect(root?.get('padding')).toBe('8px var(--dsh-sidebar-inline-padding)')
     expect(declarations('.regionArea')?.get('margin-left')).toBe('-4px')
     expect(declarations('.regionArea')?.get('padding-left')).toBe('4px')
     expect(declarations('.regionArea')?.get('margin-right')).toBe(
@@ -62,6 +62,45 @@ describe('SidebarRoot.module.css', () => {
     expect(declarations('.collapsed .logoRow')?.get('justify-content')).toBe('flex-start')
     expect(declarations('.collapsed .newSession')?.get('align-self')).toBe('flex-start')
     expect(declarations('.collapsed .newSession')?.get('width')).toBe('36px')
+  })
+
+  it('keeps one uniform menu cadence in both states', () => {
+    // 36px controls, 12px between every block and every panel row.
+    expect(declarations('.logoRow')?.get('margin-bottom')).toBe('12px')
+    expect(declarations('.newSession')?.get('height')).toBe('36px')
+    expect(declarations('.newSession')?.get('margin')).toBe('0 2px 12px')
+    expect(declarations('.panelList')?.get('gap')).toBe('12px')
+    expect(declarations('.panelList')?.get('margin-bottom')).toBe('12px')
+    expect(declarations('.collapsed .panelList')?.get('gap')).toBe('12px')
+    expect(declarations('.panelRow')?.get('height')).toBe('36px')
+    expect(declarations('.collapsed .panelRow')?.get('height')).toBe('36px')
+  })
+
+  it('seats the brand apart from the collapse toggle in the rail', () => {
+    expect(declarations('.railBrand')?.get('width')).toBe('36px')
+    expect(declarations('.railBrand')?.get('height')).toBe('36px')
+    expect(declarations('.toggleRow')?.get('margin-bottom')).toBe('12px')
+    // The mark no longer rides inside the toggle: no swap rules remain.
+    expect(css).not.toContain('railMark')
+    expect(css).not.toContain('.collapsed .toggle .panelIcon')
+  })
+
+  it('keeps the Windows caption seats clear of the expanded brand column', () => {
+    // Expanded: the toggle returns to the logo row (static, right edge).
+    expect(
+      declarations(':global([data-windows-titlebar]) .root:not(.collapsed):not(.fading) .toggle')?.get('position'),
+    ).toBe('static')
+    // Collapsed: brand tile, toggle, New Session — three fixed seats in a row.
+    const brand = declarations(':global([data-windows-titlebar]) .collapsed .railBrand')
+    expect(brand?.get('position')).toBe('fixed')
+    expect(brand?.get('left')).toBe('12px')
+    expect(brand?.get('width')).toBe('28px')
+    expect(declarations(':global([data-windows-titlebar]) .collapsed .toggle')?.get('left')).toBe('48px')
+    expect(declarations(':global([data-windows-titlebar]) .collapsed .newSession')?.get('left')).toBe('84px')
+    expect(
+      declarations(":global(html[data-windows-titlebar]:has([data-sidebar-collapsed='true']))")
+        ?.get('--dsh-windows-menu-start'),
+    ).toBe('120px')
   })
 
   it('keeps the slotted brand row at the full artwork height', () => {

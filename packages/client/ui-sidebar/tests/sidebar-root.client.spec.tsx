@@ -193,6 +193,16 @@ describe('SidebarRoot shell', () => {
     expect(screen.getByRole('button', { name: 'Open sidebar' })).toBeTruthy()
   })
 
+  it('seats the collapsed brand in its own tile, apart from the toggle', () => {
+    mountShell({ collapsed: true })
+    const mark = screen.getByTestId('custom-brand-mark')
+    const toggle = screen.getByRole('button', { name: 'Open sidebar' })
+    // The mark is not inside the toggle, and its seat precedes the toggle's
+    // own row in the column.
+    expect(toggle.contains(mark)).toBe(false)
+    expect(mark.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it('shows only the badge bubble while the rail badge is hovered inside the toggle', () => {
     vi.useFakeTimers()
     render(<SidebarRoot

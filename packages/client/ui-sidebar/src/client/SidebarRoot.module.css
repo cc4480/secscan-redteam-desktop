@@ -1,5 +1,7 @@
-/* Sidebar column (figma 133:7629): vertical stack, padding 12/6, sidebar
-   fill + 1px right border painted by the layout column. Collapse is a
+/* Sidebar column (figma 133:7629): vertical stack, sidebar fill + 1px right
+   border painted by the layout column. One spacing cadence governs the whole
+   menu stack in both states: 36px controls, 12px between every block and
+   every panel row, on the 4/8/12/16/24/32 token scale. Collapse is a
    slide + crossfade, not a morph: the content holds its frozen expanded
    layout (inline width set by the component) and fades in place (.fading)
    while the sliding column (AppFrame grid tracks) clips it; the rail layout
@@ -11,7 +13,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 6px var(--dsh-sidebar-inline-padding);
+  padding: 8px var(--dsh-sidebar-inline-padding);
   box-sizing: border-box;
   background: var(--dsw-specific-sidebar-fill);
   color: var(--dsw-alias-label-primary);
@@ -29,16 +31,16 @@
 }
 
 /* Rail geometry (figma rail spec): 36x36 control boxes centered in the 56px
-   rail (10px side padding), 12px vertical rhythm, 18px from the rail top to
-   the brand mark's box (24px to the 24px brand glyph itself). */
+   rail (10px side padding — the derived centering inset for a 36px box),
+   12px vertical rhythm, 16px from the rail top to the brand seat's box. */
 .root.collapsed {
-  padding: 18px 10px 6px;
+  padding: 16px 10px 8px;
 }
 
 /* The brand stays in the sidebar; fixed caption controls survive zero-width collapse. */
 :global([data-windows-titlebar]) .root .logoRow {
   height: 40px;
-  margin: 0;
+  margin: 0 0 12px;
   padding: 0;
 }
 
@@ -48,6 +50,32 @@
   left: 12px;
   z-index: 30;
   -webkit-app-region: no-drag;
+}
+
+/* Expanded, the toggle leaves the caption strip and takes the logo row's
+   right edge — its seat on every other layout. The fixed caption position
+   shares the brand glyph's x-column and reads as a control sitting on top
+   of the logo; only the collapsed state (and the collapse fade, before the
+   rail settles) keeps it in the strip, ahead of the caption brand tile. */
+:global([data-windows-titlebar]) .root:not(.collapsed):not(.fading) .toggle {
+  position: static;
+}
+
+/* Collapsed, the caption strip hosts three fixed seats in a row — the brand
+   tile, the toggle, New Session — each in its own 28px box on the same 8px
+   cadence the expanded strip uses (toggle at 12px, menus from 48px). */
+:global([data-windows-titlebar]) .collapsed .railBrand {
+  position: fixed;
+  top: calc((var(--dsh-windows-titlebar-height) - 28px) / 2);
+  left: 12px;
+  width: 28px;
+  height: 28px;
+  z-index: 30;
+  -webkit-app-region: no-drag;
+}
+
+:global([data-windows-titlebar]) .collapsed .toggle {
+  left: 48px;
 }
 
 :global([data-windows-titlebar]) .root.collapsed .logoRow {
@@ -74,25 +102,23 @@
   padding: 0;
 }
 
-:global([data-windows-titlebar]) .root:not(.collapsed) .newSession {
-  margin-top: 8px;
-  margin-left: 0;
-}
-
 :global([data-windows-titlebar]) .collapsed .panelList,
 :global([data-windows-titlebar]) .collapsed .regionArea,
 :global([data-windows-titlebar]) .collapsed .footArea {
   display: none;
 }
 
+/* Collapsed caption seats end at 112px (brand 12 + toggle 48 + New Session
+   84, three 28px boxes on an 8px cadence); the caption menus and the main
+   column's collapsed clearance start after them. */
 :global(html[data-windows-titlebar]:has([data-sidebar-collapsed='true'])) {
-  --dsh-windows-menu-start: 84px;
+  --dsh-windows-menu-start: 120px;
 }
 
 :global([data-windows-titlebar]) .collapsed .newSession {
   position: fixed;
   top: calc((var(--dsh-windows-titlebar-height) - 28px) / 2);
-  left: 48px;
+  left: 84px;
   margin: 0;
   padding: 0;
   border: none;
@@ -112,10 +138,6 @@
   border-radius: 50%;
   corner-shape: round;
   color: var(--dsw-alias-label-secondary);
-}
-
-:global([data-windows-titlebar]) .collapsed .toggle .panelIcon {
-  display: inline;
 }
 
 /* Scrollbars in the column are a pointer affordance: the shell adds this
@@ -155,7 +177,8 @@
 .railIn .iconButton,
 .railIn .newSession,
 .railIn .panelList,
-.railIn .regionArea {
+.railIn .regionArea,
+.railIn .railBrand {
   animation: rail-in 150ms var(--ds-ease-in-out) backwards;
 }
 
@@ -185,7 +208,7 @@
   justify-content: flex-end;
   height: 52px;
   box-sizing: border-box;
-  margin: -6px calc(-1 * var(--dsh-sidebar-inline-padding)) 0;
+  margin: -8px calc(-1 * var(--dsh-sidebar-inline-padding)) 0;
   /* The 2px foot centres the 28px toggle at y 25, level with the collapsed
      seat (ui-layout .leadingSeat, top 11) and the conversation title row, so
      collapse/expand never shifts it vertically. */
@@ -216,7 +239,7 @@
   gap: 8px;
   height: 60px;
   padding: 8px 0 8px 4px;
-  margin-bottom: 4px;
+  margin-bottom: 12px;
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -226,6 +249,27 @@
   padding: 0;
   margin-bottom: 12px;
   justify-content: flex-start;
+}
+
+/* Rail brand seat: the mark's own 36px tile at the rail top — a plain seat,
+   never a control — with the toggle in its own row below it, so the collapse
+   control no longer carries or covers the logo. On the Windows caption
+   layout the seat becomes the fixed caption tile (see the titlebar rules). */
+.railBrand {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+}
+
+/* The collapsed toggle's own row under the brand seat: same 36px box and
+   12px cadence as every other rail block. */
+.toggleRow {
+  flex: none;
+  display: flex;
+  margin-bottom: 12px;
 }
 
 /* macOS hiddenInset titlebar: the logo row extends the frame band's drag
@@ -341,27 +385,6 @@
   border-radius: 12px;
 }
 
-/* Rail logo swap: collapsed, the toggle rests as the brand mark (no hover
-   circle) and hovering reveals the panel icon — the expand
-   affordance (figma sidebar-hover flow). Expanded it is a plain panel icon. */
-.collapsed .toggle .panelIcon {
-  display: none;
-}
-
-.collapsed .toggle:hover .panelIcon {
-  display: inline;
-}
-
-.collapsed .toggle:hover .railMark {
-  display: none;
-}
-
-.railMark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
 /* Rail icons ride the primary ink (figma rail spec); expanded keeps the
    secondary icon-button ink. */
 .collapsed .iconButton {
@@ -384,16 +407,17 @@
   white-space: nowrap;
 }
 
-/* New Session: 38px bar, 12px radius (figma 133:7634 geometry, squared-off
-   corners); collapsed it renders as the rail's plain icon control. */
+/* New Session: 36px bar — the menu stack's one control height — 12px radius
+   (figma 133:7634 geometry, squared-off corners); collapsed it renders as
+   the rail's plain icon control. */
 .newSession {
   flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 38px;
-  padding: 8px 16px;
+  height: 36px;
+  padding: 0 16px;
   margin: 0 2px 12px;
   box-sizing: border-box;
   border: 0.5px solid var(--dsw-alias-border-l3);
@@ -459,19 +483,23 @@
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 8px;
+  gap: 12px;
+  min-width: 0;
+  margin-bottom: 12px;
 }
 
 /* Panel entries share the New Session bar's 12px radius and 2px inset, the
-   session rows' hover/selected surface, and the primary ink. */
+   session rows' hover/selected surface, and the primary ink. Every row is
+   the stack's one control height (36px) in both states, so a long label
+   ellipsises inside its row instead of widening the column. */
 .panelRow {
   display: flex;
   align-items: center;
   gap: 8px;
   margin: 0 2px;
-  min-height: 36px;
-  padding: 7px 8px;
+  min-width: 0;
+  height: 36px;
+  padding: 0 8px;
   box-sizing: border-box;
   border: none;
   border-radius: 12px;
@@ -582,7 +610,8 @@
   .railIn .newSession,
   .railIn .panelList,
   .railIn .footArea,
-  .railIn .regionArea {
+  .railIn .regionArea,
+  .railIn .railBrand {
     transition: none;
     animation: none;
   }
@@ -608,12 +637,12 @@
   box-shadow: var(--glass-rim), var(--shadow-panel);
 }
 
-/* Collapsed, the brand toggle rests as a glass tile (the sample's rail
+/* Collapsed, the brand seat rests as a glass tile (the sample's rail
    tile): the card plane inside the rail panel — a solid step, no blur of
    its own, with the rim and the tile elevation. Scoped away from the
-   Windows caption layout, whose fixed 28px caption controls keep their
+   Windows caption layout, whose fixed 28px caption seats keep their
    own geometry. */
-:global(html:not([data-windows-titlebar])) :global([data-ds-dark-theme]) .collapsed .toggle {
+:global(html:not([data-windows-titlebar])) :global([data-ds-dark-theme]) .collapsed .railBrand {
   background: var(--glass-top-light), var(--glass-hi);
   border: 1px solid var(--glass-line);
   border-radius: 11px;

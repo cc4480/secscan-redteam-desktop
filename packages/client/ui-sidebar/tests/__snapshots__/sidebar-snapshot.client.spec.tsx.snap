@@ -12,6 +12,24 @@ exports[`sidebar shell snapshots > renders Windows caption controls in expanded 
     <div
       class="logoRow"
     >
+      <span
+        aria-hidden="true"
+        class="railBrand"
+      >
+        <div
+          data-slot="sidebar.brand.mark"
+          style="display: contents;"
+        >
+          <svg
+            aria-hidden="true"
+            data-content="1bfdc891"
+            fill="none"
+            height="24"
+            viewBox="0 0 100 100"
+            width="24"
+          />
+        </div>
+      </span>
       <button
         aria-label="Open sidebar"
         class="iconButton toggle"
@@ -228,29 +246,33 @@ exports[`sidebar shell snapshots > renders the collapsed rail after the crossfad
     <div
       class="logoRow"
     >
+      <span
+        aria-hidden="true"
+        class="railBrand"
+      >
+        <div
+          data-slot="sidebar.brand.mark"
+          style="display: contents;"
+        >
+          <svg
+            aria-hidden="true"
+            data-content="1bfdc891"
+            fill="none"
+            height="24"
+            viewBox="0 0 100 100"
+            width="24"
+          />
+        </div>
+      </span>
+    </div>
+    <div
+      class="toggleRow"
+    >
       <button
         aria-label="Open sidebar"
         class="iconButton toggle"
         type="button"
       >
-        <span
-          aria-hidden="true"
-          class="railMark"
-        >
-          <div
-            data-slot="sidebar.brand.mark"
-            style="display: contents;"
-          >
-            <svg
-              aria-hidden="true"
-              data-content="1bfdc891"
-              fill="none"
-              height="24"
-              viewBox="0 0 100 100"
-              width="24"
-            />
-          </div>
-        </span>
         <svg
           aria-hidden="true"
           class="panelIcon"

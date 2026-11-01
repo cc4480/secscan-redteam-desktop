@@ -5,7 +5,10 @@
  * while the sliding column (AppFrame grid tracks) clips it — nothing reflows
  * mid-slide. At settle the wide-only content unmounts and the upper
  * controls enter the 56px rail from the same horizontal offset (one icon each,
- * same top-down order) on one fade that ends with the slide. The bottom-pinned
+ * same top-down order) on one fade that ends with the slide. The rail's top
+ * seat is the brand mark alone — a plain tile, never a control — and the
+ * collapse toggle takes its own row below it, so the control never carries
+ * or covers the logo in either state. The bottom-pinned
  * settings control only fades. The workspace/session browsing region between
  * global panel rows and the foot is the `sidebar.workspaces` registrant's,
  * and the foot holds `sidebar.settings` plus `sidebar.footer.action`; the shell
@@ -169,9 +172,9 @@ export function SidebarRoot({
   const buildVersion = localBuildVersion()
 
   const darwinDesktop = isDarwinDesktop()
-  // Rail resting state is the brand mark; hovering swaps in the panel icon
-  // (the expand affordance, figma sidebar-hover flow). Expanded it is a plain
-  // panel icon.
+  // The toggle is only ever the panel icon: the brand mark has its own seat
+  // (the rail tile in the logo row, or the Windows caption tile), so this
+  // control never carries or covers the logo in either sidebar state.
   const toggle = (
     <Tooltip label={collapsed ? t('toggle.open') : t('toggle.collapse')} delayMs={500} side={captionTooltipSide}>
       <button
@@ -180,11 +183,6 @@ export function SidebarRoot({
         aria-label={collapsed ? t('toggle.open') : t('toggle.collapse')}
         onClick={() => { toggleSidebar() }}
       >
-        {!wide && !windowsTitlebar && (
-          <span className={css.railMark} aria-hidden="true">
-            {renderSlot('sidebar.brand.mark', { size: 24 }, { fallback: <DiamondLogo size={24} /> })}
-          </span>
-        )}
         {/* Rail icons render at 18 (figma rail spec); expanded keeps the glyph-native sizes. */}
         <IconPanelLeftOutlineRegular className={css.panelIcon} size={wide || windowsTitlebar ? 16 : 18} />
         {!wide && renderSlot('sidebar.toggle.badge', {})}
@@ -212,8 +210,16 @@ export function SidebarRoot({
       <div className={css.logoRow}>
         {/* Expanded, the brand doubles as a New Session shortcut — except on
             macOS, where it stays part of the logo row's window-drag surface
-            (a button would subtract itself through the global no-drag rule);
-            the collapsed rail's logo is the expand toggle below instead. */}
+            (a button would subtract itself through the global no-drag rule).
+            Collapsed, the brand mark gets its own seat in this row instead:
+            a plain tile, never a control, with the toggle in its own row
+            below (or, on the Windows caption layout, the fixed caption tile
+            the CSS positions ahead of the caption controls). */}
+        {!wide && (
+          <span className={css.railBrand} aria-hidden="true">
+            {renderSlot('sidebar.brand.mark', { size: 24 }, { fallback: <DiamondLogo size={24} /> })}
+          </span>
+        )}
         {wide && (() => {
           const identity = (
             <span className={css.brandIdentity} aria-hidden="true">
@@ -247,8 +253,13 @@ export function SidebarRoot({
               </button>
             )
         })()}
-        {!darwinDesktop && toggle}
+        {/* The toggle rides the logo row while expanded — and on the Windows
+            caption layout, where the CSS fixes it into the caption strip
+            while collapsed. The plain rail gives it a row of its own below
+            the brand seat instead. */}
+        {!darwinDesktop && (wide || windowsTitlebar) && toggle}
       </div>
+      {!darwinDesktop && !wide && !windowsTitlebar && <div className={css.toggleRow}>{toggle}</div>}
 
       {/* Expanded, the button carries its own label — tooltip only on the rail. */}
       <Tooltip label={t('session.new.label')} delayMs={500} disabled={wide} side={captionTooltipSide}>
