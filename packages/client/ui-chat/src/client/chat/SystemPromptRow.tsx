@@ -2,6 +2,7 @@ import { memo, useState } from 'react'
 import type { ChatNodeViewProps, ChatViewSlotProps } from '../contract/slots.ts'
 import { DisclosureRow, IconBrowseOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { OpaqueBody } from './ContextBody.tsx'
+import { ThreadItem } from './ThreadItem.tsx'
 import css from './ContextInjectionRow.module.css'
 
 /** Props for one complete system prompt disclosure. */
@@ -46,5 +47,9 @@ export function SystemPromptRow({ text, update = false, t }: SystemPromptRowProp
 export const SystemPromptNodeView = memo(function SystemPromptNodeView({
   node, t,
 }: Pick<ChatNodeViewProps<'system-prompt'>, 'node' | 't'>) {
-  return <SystemPromptRow text={node.data.text} update={node.data.update === true} t={t} />
+  return (
+    <ThreadItem family="status">
+      <SystemPromptRow text={node.data.text} update={node.data.update === true} t={t} />
+    </ThreadItem>
+  )
 })

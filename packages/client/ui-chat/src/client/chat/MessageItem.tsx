@@ -8,6 +8,7 @@ import type { ModelRetryNode, TurnErrorNode, UserMessageNode } from '../contract
 import { CompactionItem } from './CompactionItem.tsx'
 import { ContextInjectionRow } from './ContextInjectionRow.tsx'
 import { MessageIconActions } from './MessageIconActions.tsx'
+import { ThreadItem } from './ThreadItem.tsx'
 import css from './MessageItem.module.css'
 
 type UserImage = Extract<UserMessageNode['content'][number], { type: 'image' }>
@@ -156,7 +157,7 @@ function TurnMaxTokensItem({ t }: {
 /** Right-aligned bubble shared by user and steering rows. */
 function UserStyleBubble({
   content, renderMessageImages, actions, pending = false, echo = false, referenceLabels = [], skillNames = [],
-  previewAttachments, references, t,
+  previewAttachments, references, threadKind = 'user', t,
 }: {
   content: readonly unknown[]
   renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
@@ -166,6 +167,8 @@ function UserStyleBubble({
   pending?: boolean
   /** Whether this is a local submission echo (invisible marker; the echo renders exactly like its durable replacement). */
   echo?: boolean
+  /** Thread family label seat: an ordinary turn input or a mid-turn steering input. */
+  threadKind?: 'user' | 'steering'
   /** Exact session mention labels associated by the adjacent recall node. */
   referenceLabels?: readonly string[]
   /** Skill names the step's `skill-invocation` injections loaded for this message. */
@@ -181,50 +184,52 @@ function UserStyleBubble({
   const truncated = (total: number): string => t('json.truncated', { total })
   const showBubble = text !== '' || rest.length > 0
   return (
-    <div
-      className={css.userRow}
-      data-pending-steering={pending || undefined}
-      data-submission-echo={echo || undefined}
-    >
-      <div className={css.userStack}>
-        {attachments.length > 0 && (
-          <div className={css.attachmentRow} data-message-attachments>
-            {attachments.map((attachment, index) => attachment.type === 'image'
-              ? (
-                <Fragment key={`image:${index}`}>
-                  {renderMessageImages({
-                    images: [attachment.image],
-                    align: 'end',
-                    compact: compactImages,
-                  })}
-                </Fragment>
-              )
-              : (
-                <span key={`file:${index}`} className={css.fileCard} title={attachment.file.name}>
-                  <FileTypeIcon path={attachment.file.name} className={css.fileIcon} />
-                  <span className={css.fileContent}>
-                    <span className={css.fileName}>{attachment.file.name}</span>
-                    <span className={css.fileMeta}>
-                      {[fileExtension(attachment.file.name).toUpperCase().slice(0, 8), fileSizeText(attachment.file.bytes)]
-                        .filter(Boolean).join(' ')}
+    <ThreadItem family="user" label={t(threadKind === 'steering' ? 'thread.steering' : 'thread.you')}>
+      <div
+        className={css.userRow}
+        data-pending-steering={pending || undefined}
+        data-submission-echo={echo || undefined}
+      >
+        <div className={css.userStack}>
+          {attachments.length > 0 && (
+            <div className={css.attachmentRow} data-message-attachments>
+              {attachments.map((attachment, index) => attachment.type === 'image'
+                ? (
+                  <Fragment key={`image:${index}`}>
+                    {renderMessageImages({
+                      images: [attachment.image],
+                      align: 'end',
+                      compact: compactImages,
+                    })}
+                  </Fragment>
+                )
+                : (
+                  <span key={`file:${index}`} className={css.fileCard} title={attachment.file.name}>
+                    <FileTypeIcon path={attachment.file.name} className={css.fileIcon} />
+                    <span className={css.fileContent}>
+                      <span className={css.fileName}>{attachment.file.name}</span>
+                      <span className={css.fileMeta}>
+                        {[fileExtension(attachment.file.name).toUpperCase().slice(0, 8), fileSizeText(attachment.file.bytes)]
+                          .filter(Boolean).join(' ')}
+                      </span>
                     </span>
                   </span>
-                </span>
-              ))}
-          </div>
-        )}
-        {showBubble && <div className={css.bubble}>
-          {projectUserText(text, referenceLabels, skillNames, 'skill', references)}
-          {rest.map((block, i) => <JsonBlock key={i} label={t('message.extraBlock')} payload={block} truncatedLabel={truncated} />)}
-        </div>}
-        {referenceLabels.length > 0 && (
-          <div className={css.referenceSummary}>
-            {t('message.referenceSummary', { labels: referenceLabels.join(t('message.referenceSeparator')) })}
-          </div>
-        )}
+                ))}
+            </div>
+          )}
+          {showBubble && <div className={css.bubble}>
+            {projectUserText(text, referenceLabels, skillNames, 'skill', references)}
+            {rest.map((block, i) => <JsonBlock key={i} label={t('message.extraBlock')} payload={block} truncatedLabel={truncated} />)}
+          </div>}
+          {referenceLabels.length > 0 && (
+            <div className={css.referenceSummary}>
+              {t('message.referenceSummary', { labels: referenceLabels.join(t('message.referenceSeparator')) })}
+            </div>
+          )}
+        </div>
+        {actions?.(text)}
       </div>
-      {actions?.(text)}
-    </div>
+    </ThreadItem>
   )
 }
 
@@ -244,6 +249,7 @@ export function PendingSteeringBubble({ content, renderMessageImages, t }: {
       content={content}
       renderMessageImages={renderMessageImages}
       pending
+      threadKind="steering"
       t={t}
       actions={text => (
         <MessageIconActions
@@ -297,6 +303,7 @@ export function PendingSubmissionBubble({ submission, renderMessageImages, t }: 
       renderMessageImages={renderMessageImages}
       pending={submission.placement === 'steering'}
       echo
+      threadKind={submission.placement === 'steering' ? 'steering' : 'user'}
       t={t}
       actions={text => (
         <MessageIconActions
@@ -319,6 +326,7 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
   return (
     <UserStyleBubble
       content={data.content}
+      threadKind={node.kind}
       references={{ openFile, openSkill }}
       renderMessageImages={renderMessageImages}
       {...data.referenceLabels === undefined ? {} : { referenceLabels: data.referenceLabels }}
@@ -341,47 +349,67 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
 export const ContextMessageNodeView = memo(function ContextMessageNodeView({ node, t }: ChatNodeViewProps<'context'>) {
   const data = node.data
   return (
-    <ContextInjectionRow
-      content={data.content}
-      source={data.source}
-      producer={data.producer}
-      form={data.form}
-      t={t}
-    />
+    <ThreadItem family="status">
+      <ContextInjectionRow
+        content={data.content}
+        source={data.source}
+        producer={data.producer}
+        form={data.form}
+        t={t}
+      />
+    </ThreadItem>
   )
 })
 
 /** Automatic compaction keyed Chat renderer. */
 export const CompactionNodeView = memo(function CompactionNodeView({ node, t }: ChatNodeViewProps<'compaction'>) {
-  return <CompactionItem node={node.data} t={t} />
+  return (
+    <ThreadItem family="status">
+      <CompactionItem node={node.data} t={t} />
+    </ThreadItem>
+  )
 })
 
 /** Correlated retry-chain keyed Chat renderer. */
 export const RetryNodeView = memo(function RetryNodeView({ node, t }: ChatNodeViewProps<'model-retry'>) {
   const data = node.data
-  return <ModelRetryItem node={data.current} active={data.current.retryState === 'scheduled'} t={t} />
+  return (
+    <ThreadItem family="retry" label={t('thread.retry')}>
+      <ModelRetryItem node={data.current} active={data.current.retryState === 'scheduled'} t={t} />
+    </ThreadItem>
+  )
 })
 
 /** Terminal turn-error keyed Chat renderer. */
 export const TurnErrorNodeView = memo(function TurnErrorNodeView({ node, t }: ChatNodeViewProps<'turn-error'>) {
-  return <TurnErrorItem node={node.data} t={t} />
+  return (
+    <ThreadItem family="error" label={t('thread.error')}>
+      <TurnErrorItem node={node.data} t={t} />
+    </ThreadItem>
+  )
 })
 
 /** Max-tokens turn-end notice keyed Chat renderer. */
 export const TurnMaxTokensNodeView = memo(function TurnMaxTokensNodeView({ t }: ChatNodeViewProps<'turn-max-tokens'>) {
-  return <TurnMaxTokensItem t={t} />
+  return (
+    <ThreadItem family="warning" label={t('thread.warning')}>
+      <TurnMaxTokensItem t={t} />
+    </ThreadItem>
+  )
 })
 
 /** Explicit unknown-surface keyed Chat renderer. */
 export const UnknownNodeView = memo(function UnknownNodeView({ node, t }: ChatNodeViewProps<'unknown'>) {
   const data = node.data
   return (
-    <div className={css.contextRow}>
-      <JsonBlock
-        label={t('message.unknownSurface', { type: data.type })}
-        payload={data.data}
-        truncatedLabel={total => t('json.truncated', { total })}
-      />
-    </div>
+    <ThreadItem family="status" label={t('thread.unknown')}>
+      <div className={css.contextRow}>
+        <JsonBlock
+          label={t('message.unknownSurface', { type: data.type })}
+          payload={data.data}
+          truncatedLabel={total => t('json.truncated', { total })}
+        />
+      </div>
+    </ThreadItem>
   )
 })

@@ -198,3 +198,59 @@
 :global([data-ds-dark-theme]) .toBottom:hover {
   background: var(--glass-strong);
 }
+
+/* Thread organization (Q-CHAT-ORG): node kinds whose renderers live in
+   other packages receive the uniform thread card at this flow seam, keyed
+   by the seat's flow kind — the same surface, radius, and accent language
+   as the ThreadItem cards ui-chat renders directly. Kinds that render
+   their own cards or panels (submitted plan, workflow run) and the
+   turn-process control take only the accent bar, so nothing double-frames. */
+.flowItem[data-chat-flow-kind='tool-call'] {
+  --thread-accent: var(--dsw-alias-state-warn-primary);
+}
+
+.flowItem[data-chat-flow-kind='command-input'] {
+  --thread-accent: var(--dsw-alias-state-business-primary);
+}
+
+.flowItem[data-chat-flow-kind='tool-call'],
+.flowItem[data-chat-flow-kind='command-input'] {
+  border-radius: 14px;
+  padding: 10px 14px 12px 18px;
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow:
+    inset 0 0 0 1px var(--dsw-alias-border-l1),
+    inset 3px 0 0 var(--thread-accent);
+}
+
+.flowItem[data-chat-flow-kind='submitted-plan'] {
+  --thread-accent: var(--dsw-alias-state-success-primary);
+}
+
+.flowItem[data-chat-flow-kind='workflow-run'] {
+  --thread-accent: var(--dsw-alias-state-warn-primary);
+}
+
+.flowItem[data-chat-flow-kind='submitted-plan'],
+.flowItem[data-chat-flow-kind='workflow-run'] {
+  padding-left: 10px;
+  box-shadow: inset 3px 0 0 var(--thread-accent);
+}
+
+.flowItem[data-chat-flow-kind='turn-process'] {
+  padding-left: 10px;
+  box-shadow: inset 3px 0 0 var(--dsw-alias-state-idle-primary);
+}
+
+/* Glass shell (dark): the seam cards take the same glass surface as the
+   ThreadItem cards — translucent fill, top highlight and hairline ring —
+   with the family accent kept as the left edge light. No backdrop-filter
+   at item level (performance guardrail): blur lives on containers only. */
+:global([data-ds-dark-theme]) .flowItem[data-chat-flow-kind='tool-call'],
+:global([data-ds-dark-theme]) .flowItem[data-chat-flow-kind='command-input'] {
+  background: var(--glass);
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge),
+    inset 0 0 0 1px var(--glass-line),
+    inset 3px 0 0 var(--thread-accent);
+}

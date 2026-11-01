@@ -1,0 +1,134 @@
+/* Uniform thread item anatomy (Q-CHAT-ORG): one card for every content
+   row — colored left accent, header chip row, content area. The accent is
+   the type color code; families consume the shared state/brand aliases so
+   the thread speaks the same color language as the rest of the client:
+   business blue = the human, success green = the model, amber = executed
+   or pending action, idle gray = quiet status, red = failure. */
+
+.card {
+  --thread-accent: var(--dsw-alias-state-idle-primary);
+  position: relative;
+  min-width: 0;
+  border-radius: 14px;
+  padding: 10px 14px 12px 18px;
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l1);
+}
+
+/* The accent bar follows the card's radius and stops short of the corners,
+   so it reads as an edge light on the card rather than a full-height rule. */
+.card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--thread-accent);
+}
+
+.user {
+  --thread-accent: var(--dsw-alias-state-business-primary);
+}
+
+.model {
+  --thread-accent: var(--dsw-alias-state-success-primary);
+}
+
+.command,
+.retry,
+.warning {
+  --thread-accent: var(--dsw-alias-state-warn-primary);
+}
+
+.error {
+  --thread-accent: var(--dsw-alias-state-error-primary);
+}
+
+/* reasoning / status / event keep the idle default: quiet by design. */
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 2px 9px 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--thread-accent) 13%, transparent);
+}
+
+.dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--thread-accent);
+}
+
+.dot[data-running] {
+  animation: thread-item-pulse 1.6s ease-in-out infinite;
+}
+
+.chipLabel {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--thread-accent);
+}
+
+/* Muted families keep their text at the secondary label color: the idle
+   alias at 11px on glass would fall below readable contrast, and quiet
+   rows are supposed to read quiet — the dot and tint carry the code. */
+.reasoning .chipLabel,
+.status .chipLabel,
+.event .chipLabel {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.meta {
+  flex: none;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.body {
+  min-width: 0;
+}
+
+@keyframes thread-item-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot[data-running] {
+    animation: none;
+  }
+}
+
+/* Glass shell (dark): thread cards take the glass surface language —
+   translucent fill over the thread panel, top highlight and hairline ring
+   instead of the light theme's border. No backdrop-filter at item level
+   (performance guardrail): blur lives on the shell containers only, so a
+   long thread pays no per-item filtering cost. */
+:global([data-ds-dark-theme]) .card {
+  background: var(--glass);
+  box-shadow: inset 0 1px 0 var(--glass-edge), inset 0 0 0 1px var(--glass-line);
+}

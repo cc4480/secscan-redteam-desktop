@@ -7,6 +7,7 @@ import type { ChatNodeOwnerProps, ChatViewSlotProps, UseDisclosure, UsePresentat
 import type { AssistantBlock } from '../contract/snapshot.ts'
 import { markdownLabels } from '../markdown-labels.ts'
 import { ReasoningRow } from './ReasoningRow.tsx'
+import { ThreadItem } from './ThreadItem.tsx'
 import { useSearchableHidden } from './searchable-hidden.ts'
 import css from './AssistantMarkdown.module.css'
 
@@ -139,7 +140,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
         )
     }
   }
-  return (
+  const inner = (
     <div className={css.root} data-streaming={streaming || undefined}>
       <div className={css.body}>
         {rendered}
@@ -148,6 +149,21 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
           && <span className={css.stopped}>{t('message.stopped')}</span>}
       </div>
     </div>
+  )
+  // When the turn-process disclosure folds this step's reasoning and no
+  // other content remains, the card would paint an empty shell around a
+  // hidden box; keep the bare root so the folded state stays invisible.
+  const onlyHiddenReasoning = reasoningHidden
+    && !blocks.some(block => block.kind !== 'reasoning' && block.kind !== 'tool-call')
+  if (onlyHiddenReasoning) return inner
+  return (
+    <ThreadItem
+      family={groupPart === 'reasoning' ? 'reasoning' : 'model'}
+      label={t(groupPart === 'reasoning' ? 'thread.reasoning' : 'thread.model')}
+      running={streaming}
+    >
+      {inner}
+    </ThreadItem>
   )
 })
 

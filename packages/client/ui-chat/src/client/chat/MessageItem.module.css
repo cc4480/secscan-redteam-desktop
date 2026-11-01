@@ -387,11 +387,12 @@
 }
 
 /* Glass shell (dark): the user bubble is the strongest glass in the thread
-   (the sample's treatment) — translucent fill and backdrop blur over the
-   thread panel, with the top highlight and hairline ring. */
+   (the sample's treatment) — the strongest translucent fill over the thread
+   panel, with the top highlight and hairline ring. No backdrop-filter on
+   this per-message item (performance guardrail, 2026-11-01): blur lives on
+   the shell containers only, so a long thread pays no per-bubble filtering
+   cost; the bubble's depth reads from the container glass behind it. */
 :global([data-ds-dark-theme]) .bubble {
   background: var(--glass-strong);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
   box-shadow: inset 0 1px 0 var(--glass-edge), inset 0 0 0 1px var(--glass-line);
 }
