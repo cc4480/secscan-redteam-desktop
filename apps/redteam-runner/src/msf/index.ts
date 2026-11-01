@@ -5,8 +5,11 @@
  * brings the ~2,000 CVE-SPECIFIC exploits the battery can't hardcode. The
  * bridge closes that gap WITHOUT hardcoding CVEs: recon detects a
  * service/version → suggestModules maps it to candidate modules →
- * the coordinator approves → run() fires ONE module with a benign canary
- * marker as the only payload action.
+ * the coordinator approves → run() fires ONE module: with a generic
+ * payload the benign canary marker is the only payload action; with a
+ * Meterpreter session payload the run's session opens as its mechanical
+ * follow-through (marker proven through the session), and session_command /
+ * credential_dump / session_close act through that registered session.
  *
  * Every call goes through the same discipline as host-exec: kill switch,
  * exact-hostname ROE scope, module/payload denylists, vault credentials,

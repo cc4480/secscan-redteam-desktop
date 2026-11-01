@@ -24,7 +24,7 @@ export const PROTECTIONS_IN_FORCE: string[] = [
   "exact-hostname ROE scope enforcement (out-of-scope targets refused before any packet)",
   "destructive-command denylist (fail closed; refused commands are DENIED events the coordinator re-plans around)",
   "DoS/resource-exhaustion exclusion (T1499) in every mode — DoS modules and destructive payloads refused mechanically",
-  "canary-only payload policy (validated exploits execute a runner-built benign marker, nothing else)",
+  "payload policy (generic payloads execute only the runner-built benign canary marker; a Meterpreter session payload opens only as the follow-through of a validated exploit run — Tier 2, exploit phase, marker proven through the session — and credential dumps run only the curated post-module allowlist, raw output sealed to the evidence store)",
   "per-target rate limiting (token bucket, stated rps/host, mechanically enforced)",
   "per-target auto-halt (distress threshold → target halted, never hammered)",
   "credential-attempt lockout interlock (per host×protocol failed-validation budget of lockout threshold − 1, enforced in the dispatcher before the rate limiter; lockout signals trip the host; opaque multi-attempt runs call-budgeted; campaign ceiling on total failed validations; resume only via a recorded operator decision)",
@@ -43,6 +43,7 @@ export const PROTECTIONS_IN_FORCE: string[] = [
  */
 export const RESIDUAL_RISKS: string[] = [
   "A validated exploit still executes a benign command on the target host — the canary marker is harmless by construction, but it IS code execution on the client's infrastructure.",
+  "A validated exploit run may open an interactive Meterpreter session on the target host (Tier 2, exploit phase): session commands execute on the client's infrastructure and their full responses are written to the engagement audit log, and credential dumps collect the target's stored credential material into the sealed evidence store (0600 + sha256 manifest) — dump results and reports carry counts, types, and references only, never raw secrets.",
   "Rate limits bound request volume, not request cleverness — a single well-formed request can still trigger an expensive code path on the target (e.g. a heavy report query).",
   "Auto-halt reacts to distress signals; a target that degrades silently (slow responses, no errors) may not trip it before the engagement's own caps do.",
   "PII redaction is pattern-based (email, phone, SSN-like, card-like with Luhn) — novel PII shapes, or PII inside binary/encoded blobs, may pass through.",
@@ -66,7 +67,7 @@ export interface SafetyManifest {
   };
   killSwitch: { armed: boolean; aborts: number };
   destructiveDenylist: { version: string; patternCount: number; patterns: string[] };
-  payloadPolicy: "canary-only";
+  payloadPolicy: "canary-or-gated-session";
   dosPolicy: "excluded-always";
   humanOverride: {
     operator: string;
@@ -159,7 +160,7 @@ export function buildSafetyManifest(input: ManifestInputs): SafetyManifest {
       patternCount: destructiveDenyList().length,
       patterns: destructiveDenyList(),
     },
-    payloadPolicy: "canary-only",
+    payloadPolicy: "canary-or-gated-session",
     dosPolicy: "excluded-always",
     humanOverride: {
       operator: input.operator,

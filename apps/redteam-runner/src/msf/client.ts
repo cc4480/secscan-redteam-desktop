@@ -3,8 +3,9 @@
  *
  * Covers what the bridge needs: auth, module search, console-based module
  * execution WITH output capture (the evidence for "command execution
- * achieved"), and session hygiene (a validation payload must never leave a
- * session behind — any unexpected session is stopped immediately).
+ * achieved"), session read/write for registered sessions, and session
+ * hygiene (a session no validated run registered is stopped immediately;
+ * a Meterpreter run's own session is registered, never stopped by hygiene).
  *
  * All methods throw MsfTransportError / MsfAuthError on failure; callers
  * translate those into DENIED/failed results with redacted messages.
@@ -101,7 +102,7 @@ export class MsfClient {
     });
   }
 
-  /** Current sessions (id → info). Used for hygiene: validation runs must not leave sessions. */
+  /** Current sessions (id → info). The executor diffs this list around a run: an unregistered newcomer is stopped by hygiene; a Meterpreter run's session is registered from it. */
   async sessionList(): Promise<Record<string, Record<string, unknown>>> {
     const res = await this.call("session.list", []);
     const out: Record<string, Record<string, unknown>> = {};

@@ -221,7 +221,7 @@ describe("compliance evidence pack", () => {
     });
     const md = renderCompliancePackMarkdown(buildCompliancePack({ ...input, safety: manifest }));
     assert.ok(md.includes("## 3. Safety case (mechanical protections, runner-enforced)"));
-    assert.ok(md.includes("canary-only"));
+    assert.ok(md.includes("canary-or-gated-session"));
     assert.ok(md.includes("Residual risks"));
     assert.ok(md.includes("CLEAN"));
   });

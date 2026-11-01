@@ -109,7 +109,7 @@ export const METHODOLOGY_TOOLS: string[] = [
   "nfs_enum (userland NFS export enumeration)",
   "winrm_probe (unauthenticated WinRM listener probe)",
   "rdp_shadow_prep (RDP session enumeration for human handoff)",
-  "msf_exec (Metasploit module suggest/search/run — coordinator-approved, canary payloads only)",
+  "msf_exec (Metasploit module suggest/search/run + session actions — coordinator-approved; generic payloads run the runner-built canary marker only, Meterpreter session payloads open only on a validated run, credential dumps sealed to the evidence store)",
 ];
 
 /** What the runner never does — stated in the methodology so a QSA sees the boundary. */
@@ -185,8 +185,11 @@ export function buildCompliancePack(input: CompliancePackInput): CompliancePack 
       toolsUsed: METHODOLOGY_TOOLS,
       validationStandard:
         "Proof of execution, not assertion: every claimed exploitation is validated by a runner-built benign canary marker " +
-        "(e.g. echo REDTEAM-MARKER-<id>) whose echo back IS the validation. No destructive payloads, no real data exfiltration, " +
-        "no persistent changes to the target. Killed hypotheses are recorded with their killing observations as negative evidence.",
+        "(e.g. echo REDTEAM-MARKER-<id>) whose echo back IS the validation — echoed through the session itself when a " +
+        "Meterpreter session payload delivered the run. No destructive payloads, no persistent changes to the target. " +
+        "Credential material an authorized dump collects is sealed to the engagement evidence store; results and reports " +
+        "carry counts, types, and references only, never raw secrets. Killed hypotheses are recorded with their killing " +
+        "observations as negative evidence.",
       exclusions: METHODOLOGY_EXCLUSIONS,
       authorization:
         "Authorization was proven before any active testing via server-authoritative domain-ownership verification " +

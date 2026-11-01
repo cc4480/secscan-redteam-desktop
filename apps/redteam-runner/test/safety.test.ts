@@ -296,7 +296,7 @@ describe("buildSafetyManifest", () => {
     assert.deepEqual(m.scopeAllowlist, ["secscan.us"]);
     assert.equal(m.rateLimit.rpsPerHost, 5);
     assert.equal(m.killSwitch.armed, true);
-    assert.equal(m.payloadPolicy, "canary-only");
+    assert.equal(m.payloadPolicy, "canary-or-gated-session");
     assert.equal(m.dosPolicy, "excluded-always");
     assert.ok(m.destructiveDenylist.patternCount > 0);
     assert.ok(m.protectionsInForce.length >= 10);
