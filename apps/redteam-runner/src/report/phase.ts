@@ -37,6 +37,7 @@ import { buildDetailInput, recordReportMeta } from "./predecessor.js";
 import { type DetailInput } from "./detail.js";
 import { buildGradeSection, gradeFindings } from "./grading.js";
 import { applyCellVerdicts, haltedFindingFromLive } from "./cell-verdicts.js";
+import { applyPeerVerdicts } from "./peer-verdicts.js";
 
 export { applyCellVerdicts, haltedFindingFromLive } from "./cell-verdicts.js";
 
@@ -129,6 +130,9 @@ export async function reportPhase(
       `proof bundles, and safety manifest below are the runner-computed record of ` +
       `work completed up to the halt — no reporter-agent narrative was generated.\n`;
     findings = ctx.liveFindings.map((lf, i) => haltedFindingFromLive(lf, i));
+    // Q-FLEET-XCHECK: peer stamps ride the halted path too — the pass
+    // ran before the halt for any finding it challenged.
+    applyPeerVerdicts(findings, { live: ctx.liveFindings, killed: ctx.peerKilledLive ?? [], deferred: ctx.peerDeferredLive ?? [] });
   } else if (ctx.config.dryRunAgents) {
     reportMd = `# Engagement report (dry-run)\n\nTarget: ${ctx.input.target}\nMode: ${ctx.input.mode}\n`;
     findings = [];
@@ -138,7 +142,7 @@ export async function reportPhase(
       "reporter",
       "report",
       reporterPrompt(promptCtx(ctx)),
-      `Write the client report now.\n\nAuthorization: ${ctx.verificationProof}\n\nOperation plan: ${JSON.stringify(ctx.plan)}\n\nShared verdicts this engagement — confirmed (${ctx.liveFindings.length}):\n${ctx.liveFindings.map((f) => `- [${f.severity}] ${f.title} (${f.attackId}${f.vulnClass ? `, ${f.vulnClass}` : ""}${f.cellState ? `, cell: ${f.cellState.toUpperCase()}` : ""}): ${f.evidence}`).join("\n") || "(none)"}\nKilled hypotheses (${ctx.killedLive.length}):\n${ctx.killedLive.map((k) => `- ${k.hypothesis} → ${k.killingObservation}`).join("\n") || "(none)"}\nRegistry hits consulted: ${ctx.registryHits.length}. Target fingerprint: ${JSON.stringify(ctx.fingerprint)}.\n\n${batteryLine}\n\nRecon brief:\n${reconBrief.slice(0, 4000)}\n\nExploitation summary:\n${exploitSummary.slice(0, 4000)}\n\nProof of exploitation is appended mechanically by the runner from the audit log — do not invent PoC details, marker values, or reproduction steps in your narrative; describe findings only from the evidence given.\n\nEnd the report with a JSON block: \`\`\`json {"findings": [{"id":"F-1","severity":"low","title":"...","attackIds":["T1190"],"evidence":"...","fix":"...","retest":"...","status":"confirmed"}]} \`\`\``,
+      `Write the client report now.\n\nAuthorization: ${ctx.verificationProof}\n\nOperation plan: ${JSON.stringify(ctx.plan)}\n\nShared verdicts this engagement — confirmed (${ctx.liveFindings.length}):\n${ctx.liveFindings.map((f) => `- [${f.severity}] ${f.title} (${f.attackId}${f.vulnClass ? `, ${f.vulnClass}` : ""}${f.cellState ? `, cell: ${f.cellState.toUpperCase()}` : ""}${f.peerReview ? `, peer: ${f.peerReview.verdict} by ${f.peerReview.checker}` : ""}): ${f.evidence}`).join("\n") || "(none)"}\nKilled hypotheses (${ctx.killedLive.length}):\n${ctx.killedLive.map((k) => `- ${k.hypothesis} → ${k.killingObservation}`).join("\n") || "(none)"}\nPeer-review deferred (${(ctx.peerDeferredLive ?? []).length}) — challenged by a different seat and sent back for more evidence; NOT confirmed findings, mark any write-up deferred:\n${(ctx.peerDeferredLive ?? []).map((f) => `- [${f.severity}] ${f.title} (${f.attackId}) — deferred by ${f.peerReview?.checker}: ${f.peerReview?.rationale}`).join("\n") || "(none)"}\nRegistry hits consulted: ${ctx.registryHits.length}. Target fingerprint: ${JSON.stringify(ctx.fingerprint)}.\n\n${batteryLine}\n\nRecon brief:\n${reconBrief.slice(0, 4000)}\n\nExploitation summary:\n${exploitSummary.slice(0, 4000)}\n\nProof of exploitation is appended mechanically by the runner from the audit log — do not invent PoC details, marker values, or reproduction steps in your narrative; describe findings only from the evidence given.\n\nEnd the report with a JSON block: \`\`\`json {"findings": [{"id":"F-1","severity":"low","title":"...","attackIds":["T1190"],"evidence":"...","fix":"...","retest":"...","status":"confirmed"}]} \`\`\``,
       [],
       4,
     );
@@ -147,6 +151,10 @@ export async function reportPhase(
     // Q-PROVEN: join the parsed findings back to the live findings so the
     // cell verdict reaches the report (before the accountable stamp below).
     applyCellVerdicts(findings, ctx.liveFindings);
+    // Q-FLEET-XCHECK: the peer challenge reaches the report on the same
+    // join — producer + checker stamp carried, downgrades forced to the
+    // stamped rung, peer-killed/deferred matches stamped out/down.
+    applyPeerVerdicts(findings, { live: ctx.liveFindings, killed: ctx.peerKilledLive ?? [], deferred: ctx.peerDeferredLive ?? [] });
   }
   // v0.17.0 accountability: every finding records the named human
   // accountable for it. Stamped mechanically by the runner at report time —
