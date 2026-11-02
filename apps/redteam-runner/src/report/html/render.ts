@@ -12,15 +12,15 @@
  * external requests, readable with scripts off (the single script is a
  * copy-button enhancement).
  */
-import { type SecurityPosture, type PostureBanner } from "#seclayer/server/scoring.js";
-import { type Finding } from "../../types.js";
-import { type PocBundle, type NegativeProof } from "../../proof/index.js";
-import { renderMarkdown } from "../../ui/markdown.js";
-import { type ReportMeta } from "../html.js";
-import { REPORT_CSS } from "./style.js";
-import { severityChips } from "./gauge.js";
-import { findingCard, negativeProofCard, type FindingMeta } from "./cards.js";
-import { buildReportDocument, type ReportTierGroup } from "../document.js";
+import { type SecurityPosture, type PostureBanner } from '#seclayer/server/scoring.js'
+import { type Finding } from '../../types.js'
+import { type PocBundle, type NegativeProof } from '../../proof/index.js'
+import { renderMarkdown } from '../../ui/markdown.js'
+import { type ReportMeta } from '../html.js'
+import { REPORT_CSS } from './style.js'
+import { severityChips } from './gauge.js'
+import { findingCard, negativeProofCard, type FindingMeta } from './cards.js'
+import { buildReportDocument, type ReportTierGroup } from '../document.js'
 import {
   activitySection,
   allClearSection,
@@ -31,56 +31,60 @@ import {
   fixPromptSection,
   footerSection,
   haltBanner,
+  teamSection,
   type ActivityInput,
   type CoverageInput,
-} from "./sections.js";
-import { TIER_DEFINITION, TIER_LABEL, esc } from "./tokens.js";
-import type { ReportDetail } from "../detail.js";
-import type { ReportMatter } from "../detail-matter.js";
+  type TeamMember,
+} from './sections.js'
+import { TIER_DEFINITION, TIER_LABEL, esc } from './tokens.js'
+import type { ReportDetail } from '../detail.js'
+import type { ReportMatter } from '../detail-matter.js'
 import {
   limitationsSection, methodSection, riskMethodSection, scopeSection, strengthsSection,
-} from "./matter-sections.js";
-import type { HostInventoryArtifact } from "../host-inventory.js";
+} from './matter-sections.js'
+import type { HostInventoryArtifact } from '../host-inventory.js'
 import {
   breakdownSection, impactSection, pillarSection, prioritySection,
   riskAreasSection, surfaceSection, whatChangedSection,
-} from "./detail-sections.js";
-import { inventorySection } from "./inventory-sections.js";
+} from './detail-sections.js'
+import { inventorySection } from './inventory-sections.js'
 
-export type { ActivityInput, CoverageInput } from "./sections.js";
-export type { FindingMeta } from "./cards.js";
+export type { ActivityInput, CoverageInput } from './sections.js'
+export type { FindingMeta } from './cards.js'
 
 export interface EngagementReportInput {
-  meta: ReportMeta;
-  title: string;
+  meta: ReportMeta
+  title: string
   /** Reporter narrative markdown (the executive-summary prose slot). */
-  narrativeMd: string;
+  narrativeMd: string
   /** The anchored grade over the confirmed findings (grading seam). */
-  posture: SecurityPosture;
-  banner: PostureBanner | null;
-  findings: Finding[];
-  bundles: ReadonlyMap<string, PocBundle>;
+  posture: SecurityPosture
+  banner: PostureBanner | null
+  /** The fleet seats that ran this engagement (team section). */
+  team?: TeamMember[]
+  findings: Finding[]
+  bundles: ReadonlyMap<string, PocBundle>
   /** Runner-computed reason each confirmed finding has no bundle. */
-  noBundleReasons: ReadonlyMap<string, string>;
-  negativeProof: NegativeProof[];
-  findingMeta: ReadonlyMap<string, FindingMeta>;
+  noBundleReasons: ReadonlyMap<string, string>
+  negativeProof: NegativeProof[]
+  findingMeta: ReadonlyMap<string, FindingMeta>
   /** The Q-REPORT-DETAIL derivations (report/detail.ts), when the
    * phase assembled them. Absent => the pre-detail anatomy renders. */
-  detail?: ReportDetail;
+  detail?: ReportDetail
   /** The Q-RP-11 host inventory (report/host-inventory.ts), when the
    * engagement dir carries the artifact. Absent => no inventory
    * sections render (web/remote engagements are unchanged). */
-  inventory?: HostInventoryArtifact;
-  coverage: CoverageInput;
-  activity: ActivityInput;
+  inventory?: HostInventoryArtifact
+  coverage: CoverageInput
+  activity: ActivityInput
   /** The Q-RP-7 / Q-RP-8 matter derivations (report/detail-matter.ts),
    * when the phase assembled them. Absent => no matter sections render. */
-  matter?: ReportMatter;
-  haltedReason?: string;
+  matter?: ReportMatter
+  haltedReason?: string
   /** Authorization was denied before testing (Q-DELIVERABLES-AUTOFIRE
    * P3): the cover renders N/A and the blocked banner leads. */
-  blockedReason?: string;
-  dryRun?: boolean;
+  blockedReason?: string
+  dryRun?: boolean
 }
 
 /** Render one tier group of the shared report document: finding cards
@@ -89,7 +93,7 @@ export interface EngagementReportInput {
  * de-duplication — is the document's (report/document.ts), so every
  * format groups identically. */
 function tierGroupHtml(o: EngagementReportInput, group: ReportTierGroup): string {
-  const cards = group.findings.map((f) =>
+  const cards = group.findings.map(f =>
     findingCard({
       finding: f,
       bundle: o.bundles.get(f.id),
@@ -97,13 +101,13 @@ function tierGroupHtml(o: EngagementReportInput, group: ReportTierGroup): string
       meta: o.findingMeta.get(f.id),
       impact: o.detail?.findingImpacts[f.id],
     }),
-  );
-  for (const n of group.negativeProof) cards.push(negativeProofCard(n));
+  )
+  for (const n of group.negativeProof) cards.push(negativeProofCard(n))
   return (
     `<h3 class="tier-head">${TIER_LABEL[group.tier]} — ${cards.length}</h3>` +
     `<p class="tier-def">${TIER_DEFINITION[group.tier]}</p>` +
-    cards.join("")
-  );
+    cards.join('')
+  )
 }
 
 const COPY_SCRIPT = `<script>
@@ -113,85 +117,86 @@ document.querySelectorAll("[data-copy]").forEach(function (b) {
     if (el && navigator.clipboard) { navigator.clipboard.writeText(el.innerText); b.textContent = "Copied"; }
   });
 });
-</script>`;
+</script>`
 
 export function renderEngagementReportHtml(o: EngagementReportInput): string {
   // The sections render from the ONE shared report document
   // (report/document.ts) in its canonical order — the same model the
   // markdown, JSON, TXT, CSV, and DOCX renderers consume, so no format
   // can drift from the flagship's structure or counts.
-  const doc = buildReportDocument(o);
-  const counts = doc.tierCounts;
-  const halted = typeof o.haltedReason === "string" && o.haltedReason.length > 0;
-  const blocked = typeof o.blockedReason === "string" && o.blockedReason.length > 0;
-  const activeCount = counts.proven + counts.confirmed + counts.deferred;
+  const doc = buildReportDocument(o)
+  const counts = doc.tierCounts
+  const halted = typeof o.haltedReason === 'string' && o.haltedReason.length > 0
+  const blocked = typeof o.blockedReason === 'string' && o.blockedReason.length > 0
+  const activeCount = counts.proven + counts.confirmed + counts.deferred
 
-  const parts: string[] = [];
-  const d = o.detail;
+  const parts: string[] = []
+  const d = o.detail
   // The cover carries live deltas only when the baseline diff carries a
   // numeric score delta (a counts-only baseline renders none anywhere).
   const coverDelta = d && d.diff && d.diff.scoreDelta !== undefined && o.meta.baseline
     ? {
-        scoreDelta: d.diff.scoreDelta,
-        findingsDelta: d.diff.findingsDelta,
-        baselineLabel: o.meta.baseline.startedAt.slice(0, 10),
-      }
-    : undefined;
+      scoreDelta: d.diff.scoreDelta,
+      findingsDelta: d.diff.findingsDelta,
+      baselineLabel: o.meta.baseline.startedAt.slice(0, 10),
+    }
+    : undefined
   parts.push(
     coverSection({ meta: o.meta, posture: o.posture, tierCounts: counts, haltedReason: o.haltedReason, blockedReason: o.blockedReason, dryRun: o.dryRun, delta: coverDelta }),
-  );
-  if (halted) parts.push(haltBanner(o.haltedReason as string));
-  else if (blocked) parts.push(blockedBanner(o.blockedReason as string));
-  else if (o.banner) parts.push(bannerSection(o.banner));
+  )
+  if (halted) parts.push(haltBanner(o.haltedReason as string))
+  else if (blocked) parts.push(blockedBanner(o.blockedReason as string))
+  else if (o.banner) parts.push(bannerSection(o.banner))
+  if (o.team && o.team.length > 0) parts.push(teamSection(o.team))
 
-  const narrative = o.narrativeMd.trim();
+  const narrative = o.narrativeMd.trim()
   if (narrative) {
     parts.push(
       `<h2 class="sec-title">Executive Summary</h2><div class="prose">${renderMarkdown(narrative)}</div>`,
-    );
+    )
   }
 
   // The detail derivations ride inside the executive-summary segment:
   // breakdown, what changed (real predecessors only), risk areas,
   // business impact.
   if (d) {
-    parts.push(breakdownSection(d));
-    parts.push(whatChangedSection(d, o.meta.target));
-    if (d.riskAreas.length > 0) parts.push(riskAreasSection(d));
-    parts.push(impactSection(d));
+    parts.push(breakdownSection(d))
+    parts.push(whatChangedSection(d, o.meta.target))
+    if (d.riskAreas.length > 0) parts.push(riskAreasSection(d))
+    parts.push(impactSection(d))
   }
 
-  parts.push(coverageSection(o.coverage));
+  parts.push(coverageSection(o.coverage))
 
   parts.push(
     severityChips(doc.severityCounts) +
-      `<p class="accuracy">${counts.proven} proven · ${counts.confirmed} confirmed · ${counts.deferred} deferred · ${counts["ruled-out"]} ruled out</p>`,
-  );
+      `<p class="accuracy">${counts.proven} proven · ${counts.confirmed} confirmed · ${counts.deferred} deferred · ${counts['ruled-out']} ruled out</p>`,
+  )
 
-  parts.push(`<h2 class="sec-title">Findings</h2>`);
-  if (activeCount === 0 && !halted && !blocked) parts.push(allClearSection());
-  for (const g of doc.tierGroups) parts.push(tierGroupHtml(o, g));
+  parts.push('<h2 class="sec-title">Findings</h2>')
+  if (activeCount === 0 && !halted && !blocked) parts.push(allClearSection())
+  for (const g of doc.tierGroups) parts.push(tierGroupHtml(o, g))
 
-  parts.push(fixPromptSection(o.meta.target, o.findings, o.bundles));
+  parts.push(fixPromptSection(o.meta.target, o.findings, o.bundles))
   if (d) {
-    parts.push(prioritySection(d));
-    parts.push(pillarSection(d));
+    parts.push(prioritySection(d))
+    parts.push(pillarSection(d))
   }
-  if (o.matter) parts.push(strengthsSection(o.matter));
-  if (d) parts.push(surfaceSection(d));
-  const inventoryHtml = inventorySection(o.inventory);
-  if (inventoryHtml) parts.push(inventoryHtml);
-  parts.push(activitySection(o.activity));
+  if (o.matter) parts.push(strengthsSection(o.matter))
+  if (d) parts.push(surfaceSection(d))
+  const inventoryHtml = inventorySection(o.inventory)
+  if (inventoryHtml) parts.push(inventoryHtml)
+  parts.push(activitySection(o.activity))
   // The recorded frame (scope, authorisation, method, grading method)
   // and the limitations close the report as back matter — the RC6
   // exemplar's order — before the audit footer.
   if (o.matter) {
-    parts.push(scopeSection(o.matter));
-    parts.push(methodSection(o.matter));
-    parts.push(riskMethodSection(o.matter));
-    parts.push(limitationsSection(o.matter));
+    parts.push(scopeSection(o.matter))
+    parts.push(methodSection(o.matter))
+    parts.push(riskMethodSection(o.matter))
+    parts.push(limitationsSection(o.matter))
   }
-  parts.push(footerSection(o.meta));
+  parts.push(footerSection(o.meta))
 
   return `<!doctype html>
 <html lang="en">
@@ -205,9 +210,9 @@ export function renderEngagementReportHtml(o: EngagementReportInput): string {
 </head>
 <body>
 <div class="wrap">
-${parts.join("\n")}
+${parts.join('\n')}
 </div>
 ${COPY_SCRIPT}
 </body>
-</html>`;
+</html>`
 }

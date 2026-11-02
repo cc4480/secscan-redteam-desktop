@@ -55,19 +55,29 @@ a{color:var(--brand)}
 .score-block{flex:0 0 240px;text-align:center}
 .posture-word{font-family:var(--mono);font-size:13px;letter-spacing:.12em;text-transform:uppercase;margin-top:10px}
 .counts-line{color:var(--muted);font-size:12.5px;margin-top:6px;font-family:var(--mono)}
+.brand-row{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+.brand-name{font-size:19px;font-weight:700;letter-spacing:.01em}
+.brand-name span{color:#CF2B4D}
+.brand-sub{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-top:2px}
+.team-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:0 0 8px}
+.team-card{background:linear-gradient(180deg,var(--glass-hi),var(--glass-lo));border:1px solid var(--glass-line);border-radius:12px;padding:16px 18px;box-shadow:inset 0 1px 0 var(--inset)}
+.team-agent{font-size:16.5px;font-weight:700}
+.team-seat{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--brand);margin-top:2px}
+.team-role{color:var(--muted);font-size:13px;margin:8px 0 0}
+.team-summary{font-size:13px;margin:8px 0 0}
 .pill{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.06em;
   text-transform:uppercase;padding:2px 8px;border-radius:4px;border:1px solid var(--line);color:var(--muted)}
 .pill.ok{color:var(--secure);border-color:color-mix(in srgb,var(--secure) 45%,transparent)}
 .pill.bad{color:var(--red);border-color:color-mix(in srgb,var(--red) 45%,transparent)}
 /* ---- gauge ---- */
-.gauge{position:relative;width:176px;height:176px;margin:0 auto}
+.gauge{position:relative;width:176px;margin:0 auto}
 .gauge svg{display:block}
 .gauge-arc{stroke:var(--grade);stroke-dasharray:440;animation:sweep .9s var(--ease) both}
 @keyframes sweep{from{stroke-dashoffset:440}to{stroke-dashoffset:0}}
-.gauge-num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.gauge-num{position:absolute;top:0;left:0;right:0;height:176px;display:flex;flex-direction:column;align-items:center;justify-content:center}
 .gauge-score{font-family:var(--mono);font-size:42px;font-weight:700;line-height:1}
 .gauge-score small{font-size:15px;color:var(--faint);font-weight:400}
-.gauge-grade{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:5px}
+.gauge-grade{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:8px;text-align:center}
 /* ---- severity bar + chips ---- */
 .sevbar{display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--line);margin:12px auto 0;max-width:230px}
 .sevbar div{height:100%;transform-origin:left;animation:grow .6s var(--ease) both}
@@ -243,4 +253,4 @@ footer.doc code{color:var(--muted)}
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   @page{margin:1.5cm 2cm}
 }
-`;
+`
