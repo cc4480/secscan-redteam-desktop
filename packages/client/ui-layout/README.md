@@ -39,6 +39,8 @@ Windows Electron's `data-windows-titlebar` marker reserves the caption height ab
 
 The presenter consumes resolved theme snapshots and projects them onto the document: `html { color-scheme }` for native UA chrome, `body[data-ds-dark-theme]` from the active color scheme, the theme's alias tokens and `--dsh-content-font-size` as inline variables on body, and one owned `<meta name="theme-color">` whose content follows the computed body background. Disposing the presenter removes its metadata node with its other global writes.
 
+The frame's token sheet (`glass-shell.css`, imported once by `AppFrame`) also owns the product brand tokens — `--brand-red` `#CF2B4D`, `--brand-blue` `#38BDF8`, `--brand-ink` `#0B1120`, verbatim from the desktop icon — and the dark scene behind every surface: the frame paints the lit brand backdrop (white, diamond-red, crosshair-blue, and warm light pools over the deep zinc base) and the dark glass tokens carry the locked fills (`0.04`/`0.055`/`0.07`) and blur recipe (`blur(14px) saturate(140%)`). The sheet's fallback blocks keep the shell legible where the material cannot apply: opaque fills when `backdrop-filter` is unsupported, near-solid fills under `prefers-reduced-transparency`, and a system-color mapping under `forced-colors`.
+
 -----
 
 <a id="understand-the-implementation"></a>

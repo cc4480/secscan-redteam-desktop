@@ -329,8 +329,22 @@ export type ConvViewProps = PropsRuntime<'conversation.view'>
 export interface ConversationInjected {
   /** Connect and open a blank Session in the selected Workspace. */
   selectWorkspace: (workspaceId: WorkspaceId) => Promise<void>
-  /** Session-addressed composer block source, or the stable absent source. */
-  hooks: { composerBlock: ObservableSnapshot<ComposerBlock | undefined> }
+  /** Open an existing Session (the home start state's Continue rows). */
+  openSession: (sessionId: SessionId) => void
+  /** Start a fresh blank Session, the same action as the sidebar's New Session button. */
+  startNewSession: () => void
+  /** Return keyboard focus to this occurrence's composer editor; a no-op without a Session. */
+  focusComposer: () => void
+  /** Pin one home command identity to the favorites. */
+  pinCommand: (id: string) => void
+  /** Remove one home command identity from the favorites. */
+  unpinCommand: (id: string) => void
+  hooks: {
+    /** Session-addressed composer block source, or the stable absent source. */
+    composerBlock: ObservableSnapshot<ComposerBlock | undefined>
+    /** Profile-global pinned home commands, in favorites display order. */
+    pinnedCommands: ObservableSnapshot<readonly string[]>
+  }
 }
 
 /** Business callbacks injected into the strict Session body. */

@@ -68,21 +68,35 @@ body {
      motion collapse below zeroes the effect without touching rules. */
   --tilt-x: 1.1deg;
   --tilt-y: -1.1deg;
+
+  /* Brand tokens: the SecScan RedTeam mark's own colors, verbatim from
+     apps/desktop/resources/icon.svg (diamond red, crosshair blue, the
+     mark's interior ink). Theme-independent — the mark does not change
+     with the theme — and shared by every branded surface: home, chat,
+     and the HTML report carry the same three values. */
+  --brand-red: #cf2b4d;
+  --brand-blue: #38bdf8;
+  --brand-ink: #0b1120;
 }
 
 body[data-ds-dark-theme] {
-  --glass: rgba(255, 255, 255, 0.09);
-  --glass-hi: rgba(255, 255, 255, 0.11);
-  --glass-strong: rgba(255, 255, 255, 0.14);
+  /* The locked glass fills (home sample, approved as the one glass
+     language for home + chat): a quieter tint ladder than the earlier
+     playbook values, so the lit brand backdrop stays visible through
+     the panes instead of being averaged away. */
+  --glass: rgba(255, 255, 255, 0.04);
+  --glass-hi: rgba(255, 255, 255, 0.055);
+  --glass-strong: rgba(255, 255, 255, 0.07);
   --glass-line: rgba(255, 255, 255, 0.09);
   --glass-edge: rgba(255, 255, 255, 0.05);
   --glass-edge-hi: rgba(255, 255, 255, 0.16);
   --glass-line-float: rgba(255, 255, 255, 0.18);
   --well: rgba(0, 0, 0, 0.34);
-  /* Saturation does the depth work: blur alone averages the backdrop to
-     mud, so the chain re-amplifies chroma and lifts the pane a step. */
-  --glass-blur: blur(18px) saturate(165%) brightness(1.05);
-  --glass-blur-float: blur(22px) saturate(170%) brightness(1.06);
+  /* The locked recipe: blur(14px) saturate(140%) — saturation does the
+     depth work (blur alone averages the backdrop to mud), at the one
+     strength every glass surface in the shell shares. */
+  --glass-blur: blur(14px) saturate(140%);
+  --glass-blur-float: blur(14px) saturate(140%);
   --glass-solid: #0d0d10;
   /* The solid card plane inside a glass panel: one lightness step above
      the panel's composited tone, no backdrop filter of its own. */
@@ -153,6 +167,56 @@ body[data-ds-dark-theme] {
     --glass-strong: rgba(24, 24, 28, 0.99);
     --glass-blur: none;
     --glass-blur-float: none;
+  }
+}
+
+/* No backdrop-filter: the translucent fills composite to opaque steps
+   (each value is its translucent counterpart flattened over the theme's
+   scene base), so every glass surface keeps a defined fill and boundary
+   on engines without the filter instead of washing out to the backdrop. */
+@supports not (backdrop-filter: blur(14px)) {
+  body {
+    --glass: #f4f4f5;
+    --glass-hi: #ececef;
+    --glass-strong: #e4e4e7;
+    --glass-blur: none;
+    --glass-blur-float: none;
+  }
+
+  body[data-ds-dark-theme] {
+    --glass: #111114;
+    --glass-hi: #17171a;
+    --glass-strong: #1e1e22;
+    --glass-blur: none;
+    --glass-blur-float: none;
+  }
+}
+
+/* Forced colors: glass steps resolve to the system canvas, boundaries to
+   the system text color, and the decorative depth (blur, top light,
+   shadows) drops out, so the shell stays legible under Windows High
+   Contrast and similar modes. */
+@media (forced-colors: active) {
+  body {
+    --glass: Canvas;
+    --glass-hi: Canvas;
+    --glass-strong: Canvas;
+    --glass-line: CanvasText;
+    --glass-line-float: CanvasText;
+    --glass-edge: transparent;
+    --glass-edge-hi: CanvasText;
+    --well: Canvas;
+    --glass-blur: none;
+    --glass-blur-float: none;
+    --glass-top-light: none;
+    --glass-hero-glow: none;
+    --shadow: none;
+    --shadow-lift: none;
+    --shadow-panel: none;
+    --shadow-card: none;
+    --shadow-float: none;
+    --shadow-tile: none;
+    --shadow-well: none;
   }
 }
 

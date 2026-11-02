@@ -80,6 +80,8 @@ File chips and editable skill references share a whole-reference hover backgroun
 
 When another writer owns the Session, the send-error toast asks the user to quit other running DSH instances and retry.
 
+The main occurrence's hero phase is the home start state: the composer seat becomes the hero panel (product mark, wordmark, the resident composer, and a favorites strip), and guide sections — Quick start, the Most-used commands panel, Continue (real recent Sessions only), and a side panel — compose around it in the scroll body's home grid, without ever changing the composer seat's parent. Home commands run through the standard `inputActions` exactly as if typed; runner-protocol commands insert as ordinary message text. Favorites are the operator's pinned command ids, a profile-global snapshot source persisted to localStorage (`dsh.conversation.pinned-commands.v1`, defaults: New session, `/scan`, `/status`, `/report`, `/model`) and delivered to the factory through the inject `hooks` compartment alongside `openSession`, `startNewSession`, `focusComposer`, `pinCommand`, and `unpinCommand`. Embedded occurrences keep the compact centered hero. See the Agent Note [Home start state and the brand palette lock](../../../.agents/notes/implemented/feature/2026-11-02-home-start-state-brand-palette.md).
+
 <a id="temporary-composer-entries"></a>
 ## Temporary composer entries
 

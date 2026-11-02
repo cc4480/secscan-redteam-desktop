@@ -610,3 +610,76 @@ button.crumb:hover {
     var(--glass-card-solid) 36px
   );
 }
+
+/* Brand lock (dark): inside the conversation window the send action and
+   the business-primary accents (selected tab, caret, control accents)
+   ride the mark's crosshair blue instead of the generic info blue, so
+   the logo palette brands the whole chat window, not only the home.
+   The rebind is scoped to the conversation root; other surfaces keep
+   the theme's own values. */
+:global([data-ds-dark-theme]) .root {
+  --dsw-alias-button-info-fill: var(--brand-blue);
+  --dsw-alias-button-info-hover: color-mix(in srgb, var(--brand-blue) 82%, white);
+  --dsw-alias-state-business-primary: var(--brand-blue);
+}
+
+/* Home start state (the main occurrence's hero phase): the root steps
+   back to a transparent frame like the active phase, and the composer
+   seat becomes the hero panel — mark, wordmark, composer, favorites —
+   while the guide sections compose beside and below it in the scroll
+   body's home grid. The seat's card cap opens to the panel width so
+   the composer spans the hero like the sample's start bar. */
+.root[data-phase='hero'] .composerSeat {
+  --dsh-composer-card-max-width: 100%;
+}
+
+.root[data-phase='hero'] .composerHero {
+  align-self: stretch;
+  width: 100%;
+  padding-bottom: 0;
+}
+
+.root[data-phase='hero'] .scrollBodyHome {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 304px;
+  gap: 16px;
+  align-content: start;
+  width: 100%;
+  max-width: 1560px;
+  margin: 0 auto;
+}
+
+@media (max-width: 1100px) {
+  .root[data-phase='hero'] .scrollBodyHome {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Light theme: the hero panel is a bordered surface on the base field. */
+.root[data-phase='hero'] .composerSeat {
+  padding: 34px 36px 26px;
+  background: var(--dsw-alias-bg-base);
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: 18px;
+}
+
+/* Glass shell (dark): the hero root is transparent and the seat is the
+   glass hero panel, floating on the lit brand scene like every other
+   plane of the shell. */
+:global([data-ds-dark-theme]) .root[data-phase='hero'] {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-color: transparent;
+  box-shadow: none;
+  gap: 16px;
+}
+
+:global([data-ds-dark-theme]) .root[data-phase='hero'] .composerSeat {
+  background: var(--glass-top-light), var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-line);
+  border-radius: 18px;
+  box-shadow: var(--glass-rim), var(--shadow-panel);
+}

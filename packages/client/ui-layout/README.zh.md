@@ -39,6 +39,8 @@ Windows Electron 的 `data-windows-titlebar` 标记在所有列上方预留顶�
 
 呈现器消费解析后的主题快照，并投影到 document：`html { color-scheme }` 驱动原生 UA 控件，依据当前配色方案设置 `body[data-ds-dark-theme]`，把主题的别名 token 与 `--dsh-content-font-size` 设为 body 上的内联变量，并持有一个 `<meta name="theme-color">`，其内容随计算后的 body 背景色更新。对呈现器执行 dispose（资源释放）时，它会连同其他全局写入一起移除自己的元数据节点。
 
+框架的令牌表（`glass-shell.css`，由 `AppFrame` 引入一次）还持有产品品牌令牌——`--brand-red` `#CF2B4D`、`--brand-blue` `#38BDF8`、`--brand-ink` `#0B1120`，逐字取自桌面图标——以及每个表面背后的深色场景：框架绘制点亮的品牌背景（白色、菱形红、十字线蓝与暖色光池覆于深锌基底之上），深色玻璃令牌携带锁定填充（`0.04`/`0.055`/`0.07`）与模糊配方（`blur(14px) saturate(140%)`）。该表的回退块在材质无法应用时保持外壳可读：不支持 `backdrop-filter` 时使用不透明填充，`prefers-reduced-transparency` 下使用近实色填充，`forced-colors` 下使用系统颜色映射。
+
 -----
 
 <a id="understand-the-implementation"></a>

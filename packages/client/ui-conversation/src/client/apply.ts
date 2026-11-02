@@ -6,6 +6,7 @@ import { IconPaperclipOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitiv
 import { createSnapshotStore, type BoundActions } from '@deepseek-ai/dsh-client-store'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 // Type-only service and declaration merges used by this assembly.
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -38,6 +39,9 @@ import { ConversationHeader } from './skeleton/ConversationHeader.tsx'
 import { ConversationSession, ConversationSessionHeader } from './skeleton/ConversationSession.tsx'
 import { InputBar } from './skeleton/InputBar.tsx'
 import { todoDockEntry } from './skeleton/TodoPanel.tsx'
+import {
+  createPinnedCommandsSource, pinCommand, unpinCommand,
+} from './skeleton/home-commands.ts'
 import { DEVELOPER_TOOLS_VIEW_ID, resolveActiveView } from './view-selection.ts'
 import { en, NS, zh, type ConversationKey } from './locales.ts'
 import { CONVERSATION_SETTINGS_NAMESPACE, type ConversationSettings } from '../submission-settings.ts'
@@ -111,6 +115,7 @@ interface WorkspaceNavigation {
     workspaceId: Parameters<ConversationInjected['selectWorkspace']>[0],
     beforeOpen: (sessionId: SessionId) => void,
   ): Promise<void>
+  startSession(workspaceId?: WorkspaceId): void
 }
 
 /** Action registration used by the composer without importing its command-UI consumer. */
@@ -227,6 +232,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
 
   const inputHub = new InputHub(ctx, t)
   const composerBlocks = new ComposerBlockRegistry()
+  const pinnedCommands = createPinnedCommandsSource()
 
   ctx.inject(['commandUi'], (scope) => {
     const commands = scope.get('commandUi') as FileCommandRegistry
@@ -286,7 +292,15 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     inject: (sessionId: SessionId | undefined): ConversationInjected => ({
       hooks: {
         composerBlock: sessionId === undefined ? ABSENT_BLOCK : composerBlocks.storeFor(sessionId),
+        pinnedCommands,
       },
+      openSession: (targetId) => { workspaceNavigation.openSession(targetId) },
+      startNewSession: () => { workspaceNavigation.startSession() },
+      focusComposer: () => {
+        if (sessionId !== undefined) inputHub.shell(sessionId).focus()
+      },
+      pinCommand: (id) => { pinCommand(pinnedCommands, id) },
+      unpinCommand: (id) => { unpinCommand(pinnedCommands, id) },
       selectWorkspace: workspaceId => workspaceNavigation.openWorkspace(workspaceId, (nextId) => {
         if (sessionId !== undefined && nextId !== sessionId) {
           const from = inputHub.shell(sessionId)

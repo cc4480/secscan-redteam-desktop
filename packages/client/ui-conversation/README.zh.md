@@ -80,6 +80,8 @@ Send 和 Stop 按钮禁用时不显示提示气泡，轮次结束后由 Stop 切
 
 当会话被其他写句柄占用时，发送失败的 toast 提示用户退出其他正在运行的 DSH 后重试。
 
+主实例的主视觉阶段即主页起始状态：输入区座位成为主视觉面板（产品标志、字标、常驻输入框与收藏条），指南区段——快速开始、常用命令面板、继续（仅真实的最近会话）与侧栏面板——在滚动主体的主页网格中围绕其组合，且永不改变输入区座位的父级。主页命令通过标准 `inputActions` 执行，与手输无异；runner 协议命令作为普通消息文本插入。收藏是操作员固定的命令 id 列表，一个按配置文件全局的快照源，持久化于 localStorage（`dsh.conversation.pinned-commands.v1`，默认：新会话、`/scan`、`/status`、`/report`、`/model`），并与 `openSession`、`startNewSession`、`focusComposer`、`pinCommand`、`unpinCommand` 一起通过注入 `hooks` 隔间交付给工厂。嵌入实例保留紧凑的居中主视觉区。见 Agent Note [主页起始状态与品牌色板锁定](../../../.agents/notes/implemented/feature/2026-11-02-home-start-state-brand-palette.zh.md)。
+
 <a id="temporary-composer-entries"></a>
 ## 临时 composer entry
 

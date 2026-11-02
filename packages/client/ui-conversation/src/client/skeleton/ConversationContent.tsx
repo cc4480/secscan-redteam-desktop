@@ -3,6 +3,8 @@ import clsx from 'clsx'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import type { ConversationContentProps, ConversationViewsProps, InputZone } from '../contract/slots.ts'
 import { HeroShell, WorkspaceChip, workspaceLabel } from './EmptyHero.tsx'
+import { HomeFavorites } from './HomeFavorites.tsx'
+import { HomeSections } from './HomeSections.tsx'
 import css from './ConversationRoot.module.css'
 
 function ConversationSessionView({ renderSlot }: ConversationViewsProps) {
@@ -21,8 +23,9 @@ function NoConversationWidthControls() {
 export function ConversationContent(props: ConversationContentProps) {
   const {
     sessionId, phase, hero, useSession, useSessions, useSessionStatus,
-    useWorkspaces, useInput, useComposerBlock, renderSlot, renderSlotChain,
-    selectWorkspace, t, useFactorySlot,
+    useWorkspaces, useInput, useComposerBlock, usePinnedCommands, renderSlot, renderSlotChain,
+    selectWorkspace, openSession, startNewSession, focusComposer, pinCommand, unpinCommand,
+    inputActions, t, useFactorySlot,
   } = props
   const session = useSession(snapshot => snapshot)
   const Views = useFactorySlot('views', ConversationSessionView)
@@ -36,6 +39,11 @@ export function ConversationContent(props: ConversationContentProps) {
   // A plugin this package cannot import (ui-model-selection) says this session cannot
   // send; its reason is already localized by whoever raised it.
   const composerBlock = useComposerBlock(block => block)
+  const pinned = usePinnedCommands(pins => pins)
+  // The home start state is the main occurrence's hero phase: the hero
+  // panel plus guide sections compose the start page there. Embedded
+  // occurrences keep the compact centered hero.
+  const home = hero && props.variant === 'main'
 
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pendingWorkspaceId, setPendingWorkspaceId] = useState<WorkspaceId | undefined>()
@@ -156,10 +164,26 @@ export function ConversationContent(props: ConversationContentProps) {
 
   const composerBar = (
     <div className={clsx(css.composerStack, hero && css.composerHero)}>
-      {hero && <HeroShell t={t} renderSlot={renderSlot} />}
+      {hero && (
+        <HeroShell
+          t={t}
+          renderSlot={renderSlot}
+          variant={props.variant === 'main' ? 'home' : 'compact'}
+        />
+      )}
       {hero && heroWorkspaceRow}
       {zone !== undefined && renderSlot('conversation.input.dock', zone)}
       {inputBar}
+      {home && (
+        <HomeFavorites
+          t={t}
+          pinned={pinned}
+          inputActions={inputActions}
+          disabled={inert || blocked}
+          onStartNewSession={startNewSession}
+          focusComposer={focusComposer}
+        />
+      )}
     </div>
   )
 
@@ -186,9 +210,26 @@ export function ConversationContent(props: ConversationContentProps) {
       data-conversation-content=""
       data-content-phase={phase}
     >
-      <div className={css.scrollBody} data-conversation-scroll="">
+      <div
+        className={clsx(css.scrollBody, home && css.scrollBodyHome)}
+        data-conversation-scroll=""
+      >
         {sessionId === undefined ? null : <Views />}
         {composerSeat}
+        {home && (
+          <HomeSections
+            t={t}
+            useSessions={useSessions}
+            currentSessionId={sessionId}
+            inputActions={inputActions}
+            disabled={inert || blocked}
+            pinned={pinned}
+            pinCommand={pinCommand}
+            unpinCommand={unpinCommand}
+            openSession={openSession}
+            focusComposer={focusComposer}
+          />
+        )}
       </div>
       <WidthControls container={body} phase={phase} />
     </div>
