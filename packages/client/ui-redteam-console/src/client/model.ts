@@ -49,11 +49,23 @@ export interface ModelSeat {
   readonly model: string
 }
 
+/**
+ * The desktop's local model from `GET /api/models`, present only while its
+ * llama-server provably serves the operator's active pick.
+ */
+export interface LocalModelEntry {
+  readonly provider: string
+  readonly model: string
+  readonly label: string
+  readonly baseUrl: string
+}
+
 /** `GET /api/models` response body. */
 export interface ModelsResponse {
   readonly providers: unknown
   readonly activeProvider: string | null
   readonly seats: readonly ModelSeat[]
+  readonly localModel: LocalModelEntry | null
 }
 
 /**

@@ -66,12 +66,13 @@ export const LIST_RESPONSE: ConsoleEngagementsResponse = {
   engagements: [LIVE_ENGAGEMENT, DONE_ENGAGEMENT],
 }
 
-/** The models answer: the fleet's five seats on Meta Muse Spark. */
+/** The models answer: the fleet's five seats on Meta Muse Spark, no local server serving. */
 export const MODELS_RESPONSE: ModelsResponse = {
   providers: [],
   activeProvider: 'meta',
   seats: ['coordinator', 'recon', 'exploiter', 'architect', 'reporter']
     .map(role => ({ role, provider: 'meta', model: 'muse-spark-1.3' })),
+  localModel: null,
 }
 
 /** The fixture finding with a proof bundle (reverify-capable). */

@@ -16,6 +16,12 @@
  *   REDTEAM_LLM_PROVIDER=local     routes every agent role here (see policy.ts)
  *   REDTEAM_LOCAL_MODEL            the model name the server exposes
  *
+ * The base URL is resolved on every call, not captured at construction: the
+ * desktop app starts its bundled llama-server on an ephemeral loopback port
+ * and publishes the live endpoint (through this variable) only once the
+ * server is up, which can be long after this provider was constructed. A
+ * base URL passed to the constructor still wins over the environment.
+ *
  * The endpoint is assumed reachable; a down or unloaded server fails at request
  * time with the URL and the HTTP status, never with a credential.
  */
@@ -47,11 +53,23 @@ export class LocalOpenAiProvider implements LlmProvider {
   readonly id = LOCAL_PROVIDER_ID
   readonly label = 'Local model (OpenAI-compatible)'
 
-  private readonly baseUrl: string
+  /** Constructor-pinned endpoint; wins over the environment when set. */
+  private readonly baseUrlOverride: string | undefined
 
   constructor(baseUrl?: string) {
+    const pinned = baseUrl?.trim()
+    this.baseUrlOverride = pinned ? pinned.replace(/\/+$/, '') : undefined
+  }
+
+  /**
+   * The endpoint for this call: the constructor value when pinned, else
+   * `REDTEAM_LOCAL_BASE_URL` read now, else the llama.cpp default root.
+   * @returns the base URL, without a trailing slash.
+   */
+  private resolveBaseUrl(): string {
+    if (this.baseUrlOverride !== undefined) return this.baseUrlOverride
     const fromEnv = process.env[LOCAL_BASE_URL_ENV]?.trim()
-    this.baseUrl = (baseUrl?.trim() || fromEnv || LOCAL_BASE_URL).replace(/\/+$/, '')
+    return (fromEnv || LOCAL_BASE_URL).replace(/\/+$/, '')
   }
 
   /** A local endpoint needs no credential; reachability is a per-request failure. */
@@ -67,6 +85,7 @@ export class LocalOpenAiProvider implements LlmProvider {
   }
 
   async complete(options: CompleteOptions): Promise<ChatResult> {
+    const baseUrl = this.resolveBaseUrl()
     const body: Record<string, unknown> = {
       model: options.model,
       messages: toWireMessages(options.messages),
@@ -90,7 +109,7 @@ export class LocalOpenAiProvider implements LlmProvider {
 
     let res: Response
     try {
-      res = await fetch(`${this.baseUrl}/chat/completions`, {
+      res = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
@@ -100,7 +119,7 @@ export class LocalOpenAiProvider implements LlmProvider {
     catch (err) {
       throw providerTransportError(
         this.id,
-        `[llm-router] local model request to ${this.baseUrl} failed`,
+        `[llm-router] local model request to ${baseUrl} failed`,
         err,
       )
     }

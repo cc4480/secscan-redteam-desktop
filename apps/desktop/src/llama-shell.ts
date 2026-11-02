@@ -8,7 +8,10 @@
  * surface the manager window talks to, exposes the window opener the application
  * menu calls, and mirrors the running server into the environment the engagement
  * runner reads at spawn - so a local model becomes the runner's LLM provider
- * without the operator exporting anything.
+ * without the operator exporting anything. The same state is published to
+ * `server-state.json` beside the model store (see `llama-server-state.ts`)
+ * so the runner's model catalog can offer the serving model to the chat
+ * picker while the runner is already running.
  *
  * Keeping this here rather than in `main.ts` keeps that file's diff to an import,
  * one install call, one menu entry and one quit-time dispose, and keeps every
@@ -25,7 +28,9 @@ import {
   type LlamaIpcWindow,
   type LlamaService,
 } from './llama-ipc.ts'
+import type { LlamaServerState } from './llama-api.ts'
 import { LlamaServer, type LlamaServerLocation, type LlamaServerOptions } from './llama-server.ts'
+import { writeServerState } from './llama-server-state.ts'
 import { openLlamaWindow } from './llama-window.ts'
 
 /** Path suffix of the manager renderer document; only that document owns the bridge. */
@@ -158,11 +163,30 @@ export function installLlamaShell(options: LlamaShellOptions): LlamaShell {
     restore(target)
   }
 
+  /**
+   * Publish the server state beside the model store, for readers outside
+   * this process: the runner's model catalog reads `server-state.json` at
+   * request time, because the environment mirror below can only reach a
+   * runner spawned after the server starts. Best effort by design — the
+   * document is a mirror, and a failed write leaves the previous document
+   * in place for the catalog's probe to overrule.
+   */
+  const publishServerState = (state: LlamaServerState = server.state): void => {
+    try {
+      writeServerState(state, environment)
+    } catch {
+      // The write failed; the server's own state machine is unaffected.
+    }
+  }
+
   // `publish` sets the state before notifying, so a listener always reads the new one.
   const detachState = server.onState(() => {
+    publishServerState()
     const target = attached
     if (target !== undefined) mirror(target)
   })
+  // The document reflects this process from install, before any transition.
+  publishServerState()
 
   /** Attach a runner environment and apply the state the server is in right now. */
   const attachRunnerEnvironment = (target: NodeJS.ProcessEnv): void => {
@@ -229,6 +253,9 @@ export function installLlamaShell(options: LlamaShellOptions): LlamaShell {
     // a graceful SIGTERM may not finish before this process does, and a llama-server
     // that outlives the shell would keep its model file open and its port held.
     server.killNow()
+    // The state listener is already detached, so say it directly: after this
+    // process exits nothing is serving, whatever the last transition claimed.
+    publishServerState({ status: 'stopped' })
   }
 
   const shell: LlamaShell = { openWindow, attachRunnerEnvironment, startOnLaunch, dispose }

@@ -47,6 +47,7 @@ import {
   type LlamaModelMetadata,
 } from '../src/llama-models.ts'
 import { readSettings, writeSettings } from '../src/llama-settings.ts'
+import { readServerState } from '../src/llama-server-state.ts'
 import { installLlamaShell, type LlamaShell } from '../src/llama-shell.ts'
 import type { LlamaChild, LlamaFetch, LlamaServerStartInput } from '../src/llama-server.ts'
 
@@ -524,6 +525,38 @@ describe('shell wiring and the runner environment', () => {
     // Disposing the install removes exactly the names it injected.
     await installed.shell.dispose()
     expect(runnerEnvironment).toEqual({})
+  })
+
+  it('publishes the server state beside the model store on every transition', async () => {
+    const environment = createEnvironment()
+    const model = await seedModel(environment)
+    writeSettings(settingsFor(model), environment)
+    const installed = installShell(environment)
+
+    // From install, before any transition: this process serves nothing.
+    expect(readServerState(environment)).toMatchObject({ version: 1, status: 'stopped' })
+
+    await expect(installed.invoke(LLAMA_IPC.startServer)).resolves.toMatchObject({ status: 'running' })
+    // The runner's catalog reads exactly this document: where the server is
+    // and which model it serves, in the registry's own id.
+    expect(readServerState(environment)).toMatchObject({
+      version: 1,
+      status: 'running',
+      baseUrl: `http://127.0.0.1:${SHELL_PORT}/v1`,
+      modelId: model.id,
+    })
+
+    await expect(installed.invoke(LLAMA_IPC.stopServer)).resolves.toMatchObject({ status: 'stopped' })
+    const stopped = readServerState(environment)
+    expect(stopped).toMatchObject({ version: 1, status: 'stopped' })
+    expect(stopped?.baseUrl).toBeUndefined()
+    expect(stopped?.modelId).toBeUndefined()
+
+    // Disposing after a fresh start still leaves a stopped document behind:
+    // nothing serves once this process is gone.
+    await expect(installed.invoke(LLAMA_IPC.startServer)).resolves.toMatchObject({ status: 'running' })
+    await installed.shell.dispose()
+    expect(readServerState(environment)).toMatchObject({ version: 1, status: 'stopped' })
   })
 
   it('never overrides a provider the operator already configured', async () => {

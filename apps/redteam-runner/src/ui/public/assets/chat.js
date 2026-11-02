@@ -4,6 +4,14 @@
  * the words to the same launch path the old form used (POST /api/engagements)
  * with the operator's text as the objective. Progress lives on the
  * engagement's live view (#/e/<id>). Past runs list under the chat.
+ *
+ * The model picker above the input chooses WHO answers. "Team engine" is
+ * the default and keeps the launch flow above. Any other entry is a direct
+ * chat with that one model (POST /api/chat): the fleet's seated models, and
+ * — while the desktop's llama-server is serving the operator's active local
+ * model — that local model, labelled "· Local". When the local server
+ * stops, /api/models stops listing it and the picker falls back to the
+ * team engine rather than offering a dead entry.
  */
 "use strict";
 
@@ -12,9 +20,14 @@ window.renderChat = function (el) {
   <div class="chat-wrap">
     <div class="engine-banner" id="engine-banner">Checking which models the team is running…</div>
     <div class="chat-log" id="chat-log"></div>
+    <div class="chat-model-row">
+      <label for="chat-model">Model</label>
+      <select id="chat-model"><option value="fleet">Team engine</option></select>
+      <span class="small muted" id="chat-model-note"></span>
+    </div>
     <form class="chat-input" id="chat-form">
       <input id="chat-text" autocomplete="off" placeholder="Tell the team what to hit — e.g. run a full pentest on secscan.us">
-      <button type="submit">Send the team</button>
+      <button type="submit" id="chat-send">Send the team</button>
     </form>
     <div class="card chat-history"><h3>Past runs</h3><div id="chat-runs"><p class="muted">Loading…</p></div></div>
     <div class="card chat-foundry"><h3>Foundry</h3><div id="chat-foundry"><p class="muted">Loading…</p></div></div>
@@ -23,6 +36,35 @@ window.renderChat = function (el) {
   const log = el.querySelector("#chat-log");
   const form = el.querySelector("#chat-form");
   const input = el.querySelector("#chat-text");
+  const picker = el.querySelector("#chat-model");
+  const pickerNote = el.querySelector("#chat-model-note");
+  const sendButton = el.querySelector("#chat-send");
+
+  // The picker's current target: the fleet (engagement launch) or one direct
+  // model from the catalog (option values index into directOptions, so model
+  // ids never need escaping). Direct conversations keep their own history.
+  let directOptions = [];
+  let pick = { kind: "fleet" };
+  let directHistory = [];
+
+  const applyPick = () => {
+    directHistory = [];
+    const option = directOptions[Number(picker.value)];
+    if (option === undefined) {
+      pick = { kind: "fleet" };
+      sendButton.textContent = "Send the team";
+      input.placeholder = "Tell the team what to hit — e.g. run a full pentest on secscan.us";
+      pickerNote.textContent = "";
+      return;
+    }
+    pick = { kind: "direct", provider: option.provider, model: option.model };
+    sendButton.textContent = "Send";
+    input.placeholder = `Chat with ${option.model} directly`;
+    pickerNote.textContent = option.provider === "local"
+      ? "Runs on this machine — no cloud call."
+      : "Direct chat — this does not launch the team.";
+  };
+  picker.onchange = applyPick;
 
   const bubble = (who, text) => {
     const d = document.createElement("div");
@@ -42,6 +84,29 @@ window.renderChat = function (el) {
         `Team engine: <strong>${esc(active ? active.label : m.activeProvider || "unknown")}</strong>` +
         (active ? (active.configured ? " — connected" : " — NOT connected") : "") +
         (seats ? `<div class="small muted">${esc(seats)}</div>` : "");
+      // Picker entries: the fleet's seated models (deduped), then the local
+      // model while the catalog says its server is serving it.
+      const seen = new Set();
+      directOptions = [];
+      for (const s of m.seats || []) {
+        const key = `${s.provider}/${s.model}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        directOptions.push({ provider: s.provider, model: s.model, label: `${s.model} · ${s.provider}` });
+      }
+      if (m.localModel) {
+        directOptions.push({ provider: "local", model: m.localModel.model, label: m.localModel.label });
+      }
+      picker.innerHTML = `<option value="fleet">Team engine</option>` +
+        directOptions.map((o, i) => `<option value="${i}">${esc(o.label)}</option>`).join("");
+      // A re-render can land after the operator already picked: if the pick
+      // vanished from the catalog (the local server stopped), fall back to
+      // the team engine instead of leaving a dead selection in place.
+      if (pick.kind === "direct"
+        && !directOptions.some((o) => o.provider === pick.provider && o.model === pick.model)) {
+        picker.value = "fleet";
+        applyPick();
+      }
     } catch {
       el.querySelector("#engine-banner").textContent = "Team engine: could not check (is the runner up?)";
     }
@@ -100,6 +165,26 @@ window.renderChat = function (el) {
     if (!text) return;
     input.value = "";
     bubble("me", text);
+    if (pick.kind === "direct") {
+      // Direct chat with the picked model: no target, no launch — one
+      // completion through /api/chat, with this conversation's history.
+      directHistory.push({ role: "user", content: text });
+      const working = bubble("team", "…");
+      try {
+        const reply = await api.post("/api/chat", {
+          provider: pick.provider,
+          model: pick.model,
+          messages: directHistory,
+        });
+        directHistory.push({ role: "assistant", content: reply.text });
+        working.textContent = reply.text;
+      } catch (err) {
+        // The failed turn stays out of the history: a retry starts clean.
+        directHistory.pop();
+        working.textContent = `Couldn't reach ${pick.model}: ${err.message}`;
+      }
+      return;
+    }
     const m = text.match(/https?:\/\/[^\s]+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+)?(?:\/[^\s]*)?/i);
     if (!m) {
       bubble("team", "I need a target in there — a domain or URL, like secscan.us — then I can put the team on it.");
