@@ -103,6 +103,18 @@ describe('SidebarRoot.module.css', () => {
     ).toBe('120px')
   })
 
+  it('makes the panel list a scroll region sharing the column height', () => {
+    // Both regions grow into the leftover height and may shrink to zero
+    // (flex: 1, min-height: 0); the panel list scrolls internally, so
+    // every registered panel row stays reachable.
+    const list = declarations('.panelList')
+    expect(list?.get('flex')).toBe('1')
+    expect(list?.get('min-height')).toBe('0')
+    expect(list?.get('overflow-y')).toBe('auto')
+    expect(declarations('.regionArea')?.get('flex')).toBe('1')
+    expect(declarations('.regionArea')?.get('min-height')).toBe('0')
+  })
+
   it('keeps the slotted brand row at the full artwork height', () => {
     expect(declarations('.brandIdentity')?.get('height')).toBe('24px')
     expect(declarations('.brandName')?.get('height')).toBe('24px')

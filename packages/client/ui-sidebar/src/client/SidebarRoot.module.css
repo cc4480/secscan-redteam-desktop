@@ -479,13 +479,22 @@
   max-width: 0;
 }
 
+/* Panel list: the column's upper scroll region. It shares the column's
+   leftover height with the browsing region below (both flex: 1 with
+   min-height: 0), so when the registered panels outgrow their share the
+   list scrolls internally instead of pushing rows past the column's edge,
+   unreachable. Its scrollbar rides the column's ui-theme indirection (the
+   .root thumb vars and the .quietBars rebinding), the same pattern as the
+   workspace list's scroll region. */
 .panelList {
-  flex: none;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
   min-width: 0;
   margin-bottom: 12px;
+  overflow-y: auto;
 }
 
 /* Panel entries share the New Session bar's 12px radius and 2px inset, the
