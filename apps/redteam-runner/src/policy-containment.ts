@@ -95,6 +95,19 @@ export interface FallbackRunnerDeps {
   messages: ChatMessage[]
   /** The refused call's resolved route (provider/model for the empty result). */
   resolvedRoute: RoleRoute
+  /**
+   * Whether the refused call's task must produce an artifact (M6):
+   * forwarded into the §3 chain so its hops classify with the same
+   * artifact expectations as the gate that entered it. Absent = the
+   * chain's default (not an artifact task).
+   */
+  artifactTask?: boolean
+  /**
+   * The artifact check for the refused call's task (M6): forwarded
+   * with {@link FallbackRunnerDeps.artifactTask}; the chain's hops and
+   * its format-repair pass apply it exactly as the primary gate does.
+   */
+  artifactCheck?: (text: string) => boolean
   /** Fallback-chain call implementation seam; the chain supplies its own when absent. */
   fallbackCall?: FallbackCallImpl
   /** Elicit (or fetch the cached) phase anchor for this call. */
@@ -156,6 +169,8 @@ export function createFallbackRunner(deps: FallbackRunnerDeps): () => Promise<Ch
       taskType: phase,
       messages: taskMessages,
       anchor,
+      ...(deps.artifactTask !== undefined ? { artifactTask: deps.artifactTask } : {}),
+      ...(deps.artifactCheck ? { artifactCheck: deps.artifactCheck } : {}),
       affinity: affinityFor(ctx),
       callImpl: deps.fallbackCall,
       onTelemetry: (event) => {

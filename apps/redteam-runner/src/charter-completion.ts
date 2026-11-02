@@ -361,6 +361,17 @@ export function createCharteredComplete(
           responseFormat: o.responseFormat,
         }))
 
+    // M6: resolve the REAL artifact flag + check once, here — per-call
+    // options win, otherwise the phase this completion was built for
+    // decides (isArtifactPhase / artifactCheckForPhase). Hardcoding
+    // artifactTask:false made classifyResponse's soft_refusal branch
+    // dead for every artifact-producing (report/scribe) call. The pair
+    // is shared by the refusal gate below and the §3 fallback chain
+    // (forwarded through FallbackRunnerDeps), so hops inside the chain
+    // classify with the same artifact expectations as the gate.
+    const artifactTask = opts.artifactTask ?? isArtifactPhase(phase)
+    const artifactCheck = opts.artifactCheck ?? (artifactTask ? artifactCheckForPhase(phase) : undefined)
+
     // The spec §3 fallback chain for this call, fed from the call's own
     // messages (policy-containment.ts). Shared by the prose-refusal gate
     // below and the thrown-policy containment: both end here rather
@@ -373,6 +384,8 @@ export function createCharteredComplete(
       engagement,
       messages,
       resolvedRoute,
+      artifactTask,
+      ...(artifactCheck ? { artifactCheck } : {}),
       fallbackCall: seams.fallbackCall,
       elicitAnchor: () => anchorFor(ctx, phase, charterRole, engagement, seams),
     })
@@ -393,20 +406,8 @@ export function createCharteredComplete(
     // Refusal gate: only a tool-less response can be a refusal outcome —
     // a response that acts is an answer, whatever its prose says.
     if (result.toolCalls && result.toolCalls.length > 0) return result
-    // M6: thread the REAL artifact flag + check — per-call options win,
-    // otherwise the phase this completion was built for decides
-    // (isArtifactPhase / artifactCheckForPhase). Hardcoding
-    // artifactTask:false here made classifyResponse's soft_refusal
-    // branch dead for every artifact-producing (report/scribe) call.
-    // SEAM (M6, remaining hop, policy-containment.ts — owned by another
-    // builder): createFallbackRunner's FallbackRunnerDeps carries no
-    // artifactTask/artifactCheck and its completeWithFallback call
-    // passes none, so hops INSIDE the §3 chain still classify without
-    // the artifact check. Forwarding these two values there is the
-    // exact remaining hop; the gate here now enters the chain on a
-    // soft refusal regardless.
-    const artifactTask = opts.artifactTask ?? isArtifactPhase(phase)
-    const artifactCheck = opts.artifactCheck ?? (artifactTask ? artifactCheckForPhase(phase) : undefined)
+    // The artifact pair resolved at the fallback runner's construction
+    // above is reused here: the gate and the chain classify identically.
     const classified = classifyResponse(result, {
       artifactTask,
       ...(artifactCheck ? { artifactCheck } : {}),

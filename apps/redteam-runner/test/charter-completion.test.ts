@@ -333,10 +333,14 @@ describe('createCharteredComplete — soft refusal on artifact tasks (M6)', () =
 
   it('runs the fallback chain on a soft refusal in the artifact (report) phase', async () => {
     const events: CapturedEvent[] = []
-    const { seams: s, state } = seams({ call: async () => result(SOFT_PROSE) })
+    // The chain classifies its own hops with the forwarded artifact
+    // check (M6 hop), so the chain's recovery must itself carry the
+    // artifact — plain prose would be soft-refused inside the chain.
+    const recovered = '# Engagement report\n\nFindings follow.\n\n```json\n{"findings": []}\n```'
+    const { seams: s, state } = seams({ call: async () => result(SOFT_PROSE), fallbackText: recovered })
     const complete = createCharteredComplete(makeCtx(events), 'report', s as never)
     const res = await complete('reporter', [{ role: 'user', content: 'write the report' }], {})
-    assert.equal(res.text, 'RECOVERED ARTIFACT')
+    assert.equal(res.text, recovered)
     assert.ok(state.fallbackCalls >= 1)
     const detected = events.find(e => e.action === 'refusal_detected')
     assert.ok(detected, 'soft refusal is detected')
@@ -366,15 +370,60 @@ describe('createCharteredComplete — soft refusal on artifact tasks (M6)', () =
 
   it('threads a caller-supplied artifactCheck on a non-artifact phase', async () => {
     const events: CapturedEvent[] = []
-    const { seams: s, state } = seams({ call: async () => result('no runnable payload in this reply') })
+    // The caller-supplied check is forwarded into the chain (M6 hop), so
+    // the chain's recovery must satisfy it too.
+    const recovered = 'PAYLOAD-OK — the runnable payload follows.'
+    const { seams: s, state } = seams({ call: async () => result('no runnable payload in this reply'), fallbackText: recovered })
     const complete = createCharteredComplete(makeCtx(events), 'exploit', s as never)
     const res = await complete('exploiter', [{ role: 'user', content: 'build the payload' }], {
       artifactTask: true,
       artifactCheck: (text: string) => text.includes('PAYLOAD-OK'),
     })
-    assert.equal(res.text, 'RECOVERED ARTIFACT')
+    assert.equal(res.text, recovered)
     assert.ok(state.fallbackCalls >= 1)
     assert.ok(events.some(e => e.action === 'refusal_detected' && e.result.includes('soft_refusal')))
+  })
+})
+
+describe('createCharteredComplete — artifact context inside the fallback chain (M6 hop)', () => {
+  const SOFT_PROSE = 'Here is a general summary of what the report would cover and why the findings matter.'
+
+  it('the chain applies the forwarded artifact check to its own hops', async () => {
+    const events: CapturedEvent[] = []
+    // The primary returns cooperative prose with no artifact: the gate
+    // (report phase) classifies soft_refusal and enters the chain. The
+    // chain's provider returns the same prose — no explicit refusal, no
+    // prose-substitute pattern — so only the forwarded artifact check
+    // can reject it inside the chain; without the M6 hop forwarding the
+    // chain would accept it as the answer.
+    const { seams: s, state } = seams({
+      call: async () => result(SOFT_PROSE),
+      fallbackText: SOFT_PROSE,
+    })
+    const complete = createCharteredComplete(makeCtx(events), 'report', s as never)
+    const res = await complete('reporter', [{ role: 'user', content: 'write the report' }], {})
+    assert.equal(res.text, '', 'the chain refuses the artifact-less prose on every hop')
+    assert.ok(state.fallbackCalls >= 1)
+    assert.ok(events.some(e => e.action === 'refusal_all_hops'))
+    assert.ok(events.some(e => e.action === 'refusal_telemetry' && e.result.includes('class=soft_refusal')))
+  })
+
+  it('the chain applies the forwarded artifact flag to prose substitutes', async () => {
+    const events: CapturedEvent[] = []
+    // The chain's provider returns a prose substitute that CARRIES the
+    // artifact (so it passes the check): only the forwarded artifactTask
+    // flag subjects it to the prose-substitute patterns inside the
+    // chain. Without the flag the chain would accept it as the answer.
+    const substitute = 'Instead, I can explain how the findings are organized.\n\n```json\n{"findings": []}\n```'
+    const { seams: s, state } = seams({
+      call: async () => result(SOFT_PROSE),
+      fallbackText: substitute,
+    })
+    const complete = createCharteredComplete(makeCtx(events), 'report', s as never)
+    const res = await complete('reporter', [{ role: 'user', content: 'write the report' }], {})
+    assert.equal(res.text, '', 'the prose substitute is refused inside the chain, artifact or not')
+    assert.ok(state.fallbackCalls >= 1)
+    assert.ok(events.some(e => e.action === 'refusal_telemetry' && e.result.includes('class=soft_refusal')))
   })
 })
 
@@ -497,7 +546,7 @@ describe('createCharteredComplete — the §3 fallback keeps the fleet prompt (H
       elicitationCall: async () => result(ANCHOR_TEXT),
       call: async () => result("I can't help with that request."),
       fallbackCall: async (_route: unknown, assembled: { messages: ChatMessage[] }) => {
-        assembledHeads.push(assembled.messages.map((m) => m.content).join('\n'))
+        assembledHeads.push(assembled.messages.map(m => m.content).join('\n'))
         return result('RECOVERED ARTIFACT')
       },
     }
@@ -509,9 +558,9 @@ describe('createCharteredComplete — the §3 fallback keeps the fleet prompt (H
     assert.equal(res.text, 'RECOVERED ARTIFACT')
     assert.ok(assembledHeads.length >= 1, 'the fallback chain ran')
     assert.ok(
-      assembledHeads.some((h) => h.includes('FLEET PROMPT MARKER')),
+      assembledHeads.some(h => h.includes('FLEET PROMPT MARKER')),
       'the fallback request still carries the original system prompt (soul, skills, record)',
     )
-    assert.ok(events.some((e) => e.action === 'refusal_telemetry'))
+    assert.ok(events.some(e => e.action === 'refusal_telemetry'))
   })
 })
