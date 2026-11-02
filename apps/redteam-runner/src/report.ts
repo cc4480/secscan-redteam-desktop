@@ -6,6 +6,7 @@
  * This barrel keeps the `./report.js` import path working unchanged.
  */
 export * from "./report/phase.js";
+export * from "./report/scribe.js";
 export * from "./report/proof.js";
 export * from "./report/integrations.js";
 export * from "./report/safety.js";

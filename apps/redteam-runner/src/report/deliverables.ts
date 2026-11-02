@@ -34,11 +34,15 @@
  * de-duplicated negative proofs), sections (the canonical section ids
  * the record carries, report/document.ts REPORT_SECTION_ORDER), and
  * fixPrompt (the consolidated fix prompt text, "" when nothing is
- * actionable).
+ * actionable). Two further fields are stamped into report.json after
+ * emission by the Scribe gate (report/scribe.ts): artifactSignoff (the
+ * publisher seat's signature) or artifactUnsigned (why the set shipped
+ * unsigned) — exactly one of them on a completed close.
  */
 import { statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Ctx } from "../context.js";
+import { type ArtifactSignoff, type ArtifactUnsigned } from "../events.js";
 import { type Finding } from "../types.js";
 import { gradeFindings } from "./grading.js";
 import { REPORT_PACKAGE_NAME } from "./package.js";
@@ -83,6 +87,11 @@ export interface ReportModel {
   sections?: string[];
   /** The consolidated fix prompt, when the document was built. */
   fixPrompt?: string;
+  /** SCRIBE GATE: the publisher seat's sign-off on this set, stamped
+   * into report.json by report/scribe.ts after the model is emitted. */
+  artifactSignoff?: ArtifactSignoff | null;
+  /** SCRIBE GATE: why this set shipped unsigned, when it did. */
+  artifactUnsigned?: ArtifactUnsigned | null;
   findingCount: number;
   batteryTotals: { total: number; confirmed: number; executedClean: number; killed: number; blocked: number; na: number; pending: number };
   coverageCells: { target: string; category: string; state: string }[];

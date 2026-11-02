@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import {
   buildEngagementInjection,
@@ -224,6 +226,35 @@ test('reporter assembly carries the html-report-design skill body', () => {
   assert.ok(designAt > gradingAt, 'design body follows the grading body');
   assert.ok(prompt.includes('## Acceptance checklist'), 'the delivered body is the full design skill, checklist included');
   assert.ok(prompt.includes('4 / 8 / 12 / 16 / 24 / 32'), 'the spacing scale rides the assembled prompt');
+});
+
+test('publisher assembly carries the scribe soul, both report skills, and the cycle knob', () => {
+  // The publisher seat (the SCRIBE, dedicated report writer) assembles
+  // from the bundled scribe soul + the same two report skills, and the
+  // default knob set carries its reject/rewrite budget.
+  const metas = discoverSkills([bundledSkillsRoot()]);
+  const byName = new Map(metas.map(meta => [meta.name, meta]));
+  const skillBodies = ['findings-grading-reporting', 'html-report-design'].map(name => {
+    const meta = byName.get(name);
+    assert.ok(meta, `bundled skill present: ${name}`);
+    return { name, body: loadSkillBody(meta) };
+  });
+  const soul = readFileSync(join(bundledSkillsRoot(), '..', 'prompts', 'souls', 'scribe.md'), 'utf8');
+  const prompt = assembleFleetPrompt({
+    master: 'MASTER-TEXT',
+    soul,
+    seatDelta: 'PUBLISHER-SEAT-TEXT',
+    record: makeRecord(),
+    skillIndex: skillIndexBlock(metas),
+    skillBodies,
+  });
+  const soulAt = prompt.indexOf('# The SCRIBE');
+  const seatAt = prompt.indexOf('PUBLISHER-SEAT-TEXT');
+  assert.ok(soulAt !== -1, 'the scribe soul rides the assembled prompt');
+  assert.ok(seatAt > soulAt, 'the seat delta follows the soul');
+  assert.ok(prompt.includes('<skill_content name="findings-grading-reporting">'), 'grading skill body bound');
+  assert.ok(prompt.includes('<skill_content name="html-report-design">'), 'design skill body bound');
+  assert.ok(prompt.includes('SCRIBE_MAX_CYCLES = 2'), 'the default knobs carry the scribe cycle budget');
 });
 
 test('assembly defaults knobs when none are supplied', () => {

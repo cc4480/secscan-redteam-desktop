@@ -16,7 +16,7 @@ import { type VulnerabilityRegistry, loadRegistryFile, saveRegistryFile, seedReg
 import { WebProber, allHostsPrivateOrLoopback } from "../prober.js";
 import { activeTargets } from "../targets.js";
 import { buildItemLedger } from "../coverage/items.js";
-import { fireSlack, reportPhase } from "../report.js";
+import { fireSlack, reportPhase, scribeGate } from "../report.js";
 import { finalizeDeliverables } from "../report/deliverables.js";
 import { inTestWindow, scopeHosts } from "../gate.js";
 import { safeEngagementId } from "../util.js";
@@ -266,12 +266,12 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
     );
     const findings = await reportPhase(ctx, brief, summary);
     void fireSlack(ctx, { kind: "phase", phase: "report" });
-    // Q-DELIVERABLES-AUTOFIRE: verify the closing deliverable set on disk
-    // before the completion is recorded — the clean engagement_complete
-    // event is emitted only when the whole set is present; otherwise the
-    // deliverable_failed event + state stamp are the closing record.
-    const delivered = finalizeDeliverables(ctx);
+    // SCRIBE GATE, then Q-DELIVERABLES-AUTOFIRE: the publisher seat signs
+    // the closing set (or leaves it UNSIGNED — report/scribe.ts); the set
+    // is then verified on disk before the completion is recorded.
     events.updateState({ status: "complete", phase: "done" });
+    await scribeGate(ctx);
+    const delivered = finalizeDeliverables(ctx);
     if (delivered.ok) {
       events.append({ phase: "done", actor: "runner", action: "engagement_complete", result: `Complete. ${findings.length} findings.` });
     }

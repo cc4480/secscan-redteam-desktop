@@ -22,3 +22,4 @@ export { exploiterPrompt } from "./prompts/exploiter.js";
 export type { TaskBrief } from "./prompts/task.js";
 export { taskPrompt } from "./prompts/task.js";
 export { reporterPrompt } from "./prompts/reporter.js";
+export { publisherPrompt } from "./prompts/publisher.js";

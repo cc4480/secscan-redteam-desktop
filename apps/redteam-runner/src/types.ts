@@ -34,7 +34,7 @@ export type EngagementStatus =
   | 'blocked'
   | 'halted'
 
-export type ActorRole = 'coordinator' | 'recon' | 'exploiter' | 'reporter' | 'architect' | 'runner'
+export type ActorRole = 'coordinator' | 'recon' | 'exploiter' | 'reporter' | 'architect' | 'runner' | 'publisher'
 
 /** Daily blackout window, 24h "HH:MM" strings. May cross midnight. */
 export interface BlackoutWindow {

@@ -12,6 +12,7 @@ export const KNOWN_KNOBS: Record<string, string> = {
   SPEED: 'thorough',
   SESSIONS: 'on',
   REPORT: 'full',
+  SCRIBE_MAX_CYCLES: '2',
   SEAT_MODELS: '',
   RISK_LINE: '',
 };
