@@ -137,6 +137,20 @@ export interface EngagementInput {
    * REDTEAM_TIER2_PROD_CONFIRM=1).
    */
   confirmTier2Production?: boolean
+  /**
+   * How deep the verified access runs (L12): carried through authorize
+   * into the fleet record's accessLevel (same value set as the record
+   * type's). Unset → 'verified-domain' (authorize is the precondition)
+   * — the value every run carried before this field existed.
+   */
+  accessLevel?: 'public' | 'verified-domain' | 'credentialed' | 'second-account' | 'oob-collector'
+  /**
+   * Whether a session may be opened mechanically after a proven
+   * exploit (L12): carried through authorize into the fleet record's
+   * sessionsAllowed. Unset → true; the SESSIONS knob still narrows it
+   * at prompt assembly.
+   */
+  sessionsAllowed?: boolean
 }
 
 /** One streamed event. Written to events.jsonl as it happens. */

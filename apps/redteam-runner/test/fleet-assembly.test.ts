@@ -195,7 +195,7 @@ describe('black-team mode — the SMITH mask (H2)', () => {
 })
 
 describe('verifiedRecordFor — the authorize record mapping', () => {
-  function fakeCtx(over: { proof?: string; verifiedAt?: string }): Ctx {
+  function fakeCtx(over: { proof?: string; verifiedAt?: string; input?: Partial<Ctx['input']> }): Ctx {
     return {
       domain: 'example.com',
       hosts: ['app.example.com', 'example.com'],
@@ -211,6 +211,7 @@ describe('verifiedRecordFor — the authorize record mapping', () => {
         client: 'Example Owner LLC',
         operatorName: 'Named Operator',
         roe: { scope: ['app.example.com', 'example.com'], outOfScope: ['staging.example.com'] },
+        ...(over.input ?? {}),
       },
     } as Ctx
   }
@@ -228,6 +229,29 @@ describe('verifiedRecordFor — the authorize record mapping', () => {
     assert.deepEqual(record.targets, ['app.example.com', 'example.com'])
     assert.deepEqual(record.outOfScope, ['staging.example.com'])
     assert.equal(record.accessLevel, 'verified-domain')
+  })
+
+  it('carries the input accessLevel/sessionsAllowed into the record (L12)', () => {
+    const record = verifiedRecordFor(
+      fakeCtx({
+        proof: 'Credentialed access attested',
+        verifiedAt: '2026-11-01T05:00:00.000Z',
+        input: { accessLevel: 'credentialed', sessionsAllowed: false },
+      }),
+    )
+    assert.equal(record.accessLevel, 'credentialed')
+    assert.equal(record.sessionsAllowed, false)
+  })
+
+  it('unset accessLevel/sessionsAllowed reproduce the historical record (L12)', () => {
+    const stamp = { proof: 'DNS TXT record', verifiedAt: '2026-11-01T05:00:00.000Z' }
+    const unset = verifiedRecordFor(fakeCtx(stamp))
+    const explicitDefaults = verifiedRecordFor(
+      fakeCtx({ ...stamp, input: { accessLevel: 'verified-domain', sessionsAllowed: true } }),
+    )
+    assert.deepEqual(unset, explicitDefaults)
+    assert.equal(unset.accessLevel, 'verified-domain')
+    assert.equal(unset.sessionsAllowed, true)
   })
 
   it('fails loud when authorize has not stamped proof data', () => {
