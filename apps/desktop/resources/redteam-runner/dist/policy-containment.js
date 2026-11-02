@@ -114,6 +114,8 @@ export function createFallbackRunner(deps) {
             taskType: phase,
             messages: taskMessages,
             anchor,
+            ...(deps.artifactTask !== undefined ? { artifactTask: deps.artifactTask } : {}),
+            ...(deps.artifactCheck ? { artifactCheck: deps.artifactCheck } : {}),
             affinity: affinityFor(ctx),
             callImpl: deps.fallbackCall,
             onTelemetry: (event) => {

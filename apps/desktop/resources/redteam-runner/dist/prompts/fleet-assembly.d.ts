@@ -65,9 +65,11 @@ export declare function fleetPackageRoot(): string;
  *               back to Ctx.verifiedScope (authorize's attested raw scope
  *               entries), then the input target
  *   outOfScope ← RulesOfEngagement.outOfScope (deny beats allow)
- *   accessLevel ← 'verified-domain' (authorize is the precondition)
+ *   accessLevel ← EngagementInput.accessLevel ?? 'verified-domain'
+ *                 (authorize is the precondition)
  *   roe       ← {@link roeSummary} over the input ROE + mode + objective
- *   sessionsAllowed ← true here; the SESSIONS knob narrows it at assembly
+ *   sessionsAllowed ← EngagementInput.sessionsAllowed ?? true; the
+ *                 SESSIONS knob narrows it at assembly
  *
  * @param ctx - the engagement context, after authorize has run
  * @returns the verified engagement record for prompt assembly

@@ -1,4 +1,6 @@
+import { promptCtx } from "../agents.js";
 import { createCharteredComplete } from "../charter-completion.js";
+import { buildFleetPrompt } from "../prompts/fleet-assembly.js";
 import { extractJsonBlock } from "../util.js";
 import { addSubtask, adhocTask, buildFlowFromPlan, completeSubtask, failSubtask, flowProgress, recordAction, startSubtask, } from "./graph.js";
 import { refineAfterSubtask } from "./refiner.js";
@@ -159,20 +161,37 @@ export const REFINE_FORMAT = {
         additionalProperties: false,
     },
 };
-/** The production RefineFn: one coordinator completion over the graph. */
+/**
+ * The production RefineFn: one coordinator completion over the graph.
+ *
+ * The system prompt is fleet-assembled for the coordinator seat (L2):
+ * the refine instructions below are the seat delta, wrapped by
+ * buildFleetPrompt in the master charter, the MORPHEUS soul, and the
+ * verified engagement record — the same assembly every other seat's
+ * steering call runs under — because the returned JSON applies
+ * addSubtasks / skipSubtaskIds / reprioritize to the live graph.
+ * The assembly is gated on the same stamp promptCtx itself checks:
+ * a context authorize never stamped (unit fixtures, pre-authorize
+ * calls) gets the delta unchanged, byte for byte. The JSON output
+ * contract and its parsing are unchanged.
+ */
 async function coordinatorRefine(ctx, flow, resultSummary) {
     const complete = ctx.deps.completeForRole ?? createCharteredComplete(ctx, "exploit");
     const pending = flow.tasks.flatMap((t) => t.subtasks.filter((s) => s.status === "pending").map((s) => `${s.id} [task ${t.id}, ${t.phase}] ${s.title}`));
     const taskList = flow.tasks
         .map((t) => `${t.id} [${t.phase}${t.attackId ? ` ${t.attackId}` : ""}, ${t.status}, priority ${t.priority}] ${t.title}`)
         .join("\n");
+    const seatText = "You are the coordinator refining a penetration-test work-graph after a subtask completed. " +
+        "Answer with JSON only: {\"addSubtasks\":[{\"taskId\":\"...\",\"title\":\"...\",\"kind\":\"probe|recon\"}]," +
+        "\"skipSubtaskIds\":[\"...\"],\"reprioritize\":[{\"taskId\":\"...\",\"priority\":0}]}. " +
+        "Propose only changes the new result actually justifies; an empty object is a valid, common answer.";
+    const system = ctx.verificationProof && ctx.verifiedAt
+        ? buildFleetPrompt("coordinator", seatText, promptCtx(ctx))
+        : seatText;
     const messages = [
         {
             role: "system",
-            content: "You are the coordinator refining a penetration-test work-graph after a subtask completed. " +
-                "Answer with JSON only: {\"addSubtasks\":[{\"taskId\":\"...\",\"title\":\"...\",\"kind\":\"probe|recon\"}]," +
-                "\"skipSubtaskIds\":[\"...\"],\"reprioritize\":[{\"taskId\":\"...\",\"priority\":0}]}. " +
-                "Propose only changes the new result actually justifies; an empty object is a valid, common answer.",
+            content: system,
         },
         {
             role: "user",

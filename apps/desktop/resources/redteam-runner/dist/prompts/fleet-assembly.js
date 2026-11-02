@@ -159,9 +159,11 @@ function roeSummary(ctx) {
  *               back to Ctx.verifiedScope (authorize's attested raw scope
  *               entries), then the input target
  *   outOfScope ← RulesOfEngagement.outOfScope (deny beats allow)
- *   accessLevel ← 'verified-domain' (authorize is the precondition)
+ *   accessLevel ← EngagementInput.accessLevel ?? 'verified-domain'
+ *                 (authorize is the precondition)
  *   roe       ← {@link roeSummary} over the input ROE + mode + objective
- *   sessionsAllowed ← true here; the SESSIONS knob narrows it at assembly
+ *   sessionsAllowed ← EngagementInput.sessionsAllowed ?? true; the
+ *                 SESSIONS knob narrows it at assembly
  *
  * @param ctx - the engagement context, after authorize has run
  * @returns the verified engagement record for prompt assembly
@@ -188,9 +190,9 @@ export function verifiedRecordFor(ctx) {
         verifiedAt: ctx.verifiedAt,
         targets,
         ...(ctx.input.roe.outOfScope?.length ? { outOfScope: [...ctx.input.roe.outOfScope] } : {}),
-        accessLevel: 'verified-domain',
+        accessLevel: ctx.input.accessLevel ?? 'verified-domain',
         roe: roeSummary(ctx),
-        sessionsAllowed: true,
+        sessionsAllowed: ctx.input.sessionsAllowed ?? true,
     };
 }
 /**
@@ -237,7 +239,7 @@ export function buildFleetPrompt(role, seatText, ctx) {
             throw new Error(`buildFleetPrompt: skill body "${name}" missing for role ${role}`);
         skillBodies.push({ name, body });
     }
-    if (black && !skillBodies.some((b) => b.name === 'blackteam-adversary-emulation')) {
+    if (black && !skillBodies.some(b => b.name === 'blackteam-adversary-emulation')) {
         const body = assets.skillBodies.get('blackteam-adversary-emulation');
         if (!body)
             throw new Error('buildFleetPrompt: skill body "blackteam-adversary-emulation" missing for black-team mode');
