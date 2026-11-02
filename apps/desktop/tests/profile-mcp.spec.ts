@@ -56,6 +56,18 @@ it('keeps one shared resource consumer beside the fork MCP clients', () => {
     args: ['-y', '@seclayer/mcp@1.0.0'],
     secretEnv: ['SECLAYER_API_KEY'],
   })
+  // The engagement engine is not optional in the shipped profile: a failed
+  // initial connection must reject this row instead of silently leaving the
+  // chat without redteam tools, and its reconnect budget must not give up.
+  expect(rows.find(row => row.id === 'mcp-redteam-runner')?.config).toMatchObject({
+    serverName: 'redteam',
+    transport: 'streamable-http',
+    failOnStartupError: true,
+    reconnect: {
+      enabled: true,
+      maxAttempts: Number.MAX_SAFE_INTEGER,
+    },
+  })
   expect(rows.find(row => row.id === 'webserver')).toMatchObject({ name: '@deepseek-ai/dsh-host-webserver' })
   expect(rows.find(row => row.id === 'webserver')?.disabled).not.toBe(true)
   expect(warnings).toEqual([])

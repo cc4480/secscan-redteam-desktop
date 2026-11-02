@@ -190,10 +190,10 @@
     # person is driving a shared or remote one:
     #     REDTEAM_MCP_URL=https://console.example.test/mcp REDTEAM_UI_TOKEN=... \
     #       npx redteam-runner ui        # or their own console, 127.0.0.1:8787
-    # If no console is reachable at all, the harness still starts and the
-    # mcp__redteam__* tools are simply unavailable - the same failure mode as an
-    # unset SECSCAN_MCP_TOKEN. That is why the bundled console failing to start
-    # is reported instead of ignored.
+    # If no console is reachable at all, this row fails plugin activation
+    # instead of leaving a session with the mcp__redteam__* tools silently
+    # unavailable. Its reconnect budget is the schema maximum, so a later
+    # outage does not permanently unregister the tools.
     #
     # Safety: every tool delegates to the same handler the console UI calls, so
     # the safety core, launch validation, tier rules and approval logging all
@@ -213,6 +213,12 @@
           # REDTEAM_UI_TOKEN when launching the console; otherwise copy the
           # random token it prints. It must be >= the strength floor.
           Authorization: !!js "'Bearer ' + (process.env.REDTEAM_UI_TOKEN || '')"
+        failOnStartupError: true
+        reconnect:
+          enabled: true
+          # The supervisor requires a finite budget; the schema maximum is
+          # the supported equivalent of never giving up.
+          maxAttempts: 9007199254740991
 
     # The console's data channel into the chat client (Q-CONSOLE-MERGE
     # Phase 0). The console's /api surface — the A4 engagement views, the
