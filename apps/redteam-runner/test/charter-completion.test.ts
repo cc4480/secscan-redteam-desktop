@@ -328,6 +328,131 @@ describe('createCharteredComplete — thrown-policy containment (W2)', () => {
   })
 })
 
+describe('createCharteredComplete — soft refusal on artifact tasks (M6)', () => {
+  const SOFT_PROSE = 'Here is a general summary of what the report would cover and why the findings matter.'
+
+  it('runs the fallback chain on a soft refusal in the artifact (report) phase', async () => {
+    const events: CapturedEvent[] = []
+    const { seams: s, state } = seams({ call: async () => result(SOFT_PROSE) })
+    const complete = createCharteredComplete(makeCtx(events), 'report', s as never)
+    const res = await complete('reporter', [{ role: 'user', content: 'write the report' }], {})
+    assert.equal(res.text, 'RECOVERED ARTIFACT')
+    assert.ok(state.fallbackCalls >= 1)
+    const detected = events.find(e => e.action === 'refusal_detected')
+    assert.ok(detected, 'soft refusal is detected')
+    assert.ok(detected.result.includes('soft_refusal'), `classified soft_refusal, got: ${detected.result}`)
+  })
+
+  it('returns the same prose unchanged on a non-artifact (recon) task', async () => {
+    const events: CapturedEvent[] = []
+    const { seams: s, state } = seams({ call: async () => result(SOFT_PROSE) })
+    const complete = createCharteredComplete(makeCtx(events), 'recon', s as never)
+    const res = await complete('recon', [{ role: 'user', content: 'summarize the surface' }], {})
+    assert.equal(res.text, SOFT_PROSE)
+    assert.equal(state.fallbackCalls, 0)
+    assert.ok(!events.some(e => e.action === 'refusal_detected'))
+  })
+
+  it('accepts a report response that carries a real artifact', async () => {
+    const events: CapturedEvent[] = []
+    const artifact = '# Engagement report\n\nFindings follow.\n\n```json\n{"findings": []}\n```'
+    const { seams: s, state } = seams({ call: async () => result(artifact) })
+    const complete = createCharteredComplete(makeCtx(events), 'report', s as never)
+    const res = await complete('reporter', [{ role: 'user', content: 'write the report' }], {})
+    assert.equal(res.text, artifact)
+    assert.equal(state.fallbackCalls, 0)
+    assert.ok(!events.some(e => e.action === 'refusal_detected'))
+  })
+
+  it('threads a caller-supplied artifactCheck on a non-artifact phase', async () => {
+    const events: CapturedEvent[] = []
+    const { seams: s, state } = seams({ call: async () => result('no runnable payload in this reply') })
+    const complete = createCharteredComplete(makeCtx(events), 'exploit', s as never)
+    const res = await complete('exploiter', [{ role: 'user', content: 'build the payload' }], {
+      artifactTask: true,
+      artifactCheck: (text: string) => text.includes('PAYLOAD-OK'),
+    })
+    assert.equal(res.text, 'RECOVERED ARTIFACT')
+    assert.ok(state.fallbackCalls >= 1)
+    assert.ok(events.some(e => e.action === 'refusal_detected' && e.result.includes('soft_refusal')))
+  })
+})
+
+describe('createCharteredComplete — anchor elicitation containment (L1)', () => {
+  function elicitationSeams(over: { elicit: () => Promise<ChatResult>; fallbackText?: string }) {
+    const state = { elicitations: 0, fallbackCalls: 0 }
+    return {
+      state,
+      seams: {
+        elicitationCall: async () => {
+          state.elicitations++
+          return over.elicit()
+        },
+        call: async () => result('working'),
+        fallbackCall: async () => {
+          state.fallbackCalls++
+          return result(over.fallbackText ?? 'RECOVERED ARTIFACT')
+        },
+      },
+    }
+  }
+
+  it('contains a thrown policy rejection during elicitation — the condensed re-issue recovers the anchor', async () => {
+    const events: CapturedEvent[] = []
+    let first = true
+    const { seams: s, state } = elicitationSeams({
+      elicit: async () => {
+        if (first) {
+          first = false
+          throw policyError()
+        }
+        return result(ANCHOR_TEXT)
+      },
+    })
+    const complete = createCharteredComplete(makeCtx(events), 'exploit', s as never)
+    const res = await complete('exploiter', [{ role: 'user', content: 'probe it' }], {})
+    assert.equal(res.text, 'working')
+    assert.equal(state.elicitations, 2, 'elicitation call + exactly one contained re-issue')
+    assert.ok(events.some(e => e.action === 'policy_containment'))
+    assert.ok(events.some(e => e.action === 'policy_reissue_recovered'))
+    assert.ok(events.some(e => e.action === 'phase_anchor'), 'anchor was elicited, not flagged missing')
+    assert.ok(!events.some(e => e.action === 'phase_anchor_missing'))
+  })
+
+  it('routes elicitation into the fallback chain when the re-issue is also policy-rejected', async () => {
+    const events: CapturedEvent[] = []
+    const { seams: s, state } = elicitationSeams({
+      elicit: async () => {
+        throw policyError()
+      },
+      fallbackText: ANCHOR_TEXT,
+    })
+    const complete = createCharteredComplete(makeCtx(events), 'exploit', s as never)
+    const res = await complete('exploiter', [{ role: 'user', content: 'probe it' }], {})
+    assert.equal(res.text, 'working')
+    assert.equal(state.elicitations, 2, 'original elicitation + one re-issue, then the chain')
+    assert.ok(state.fallbackCalls >= 1)
+    assert.ok(events.some(e => e.action === 'policy_containment_failed'))
+    assert.ok(events.some(e => e.action === 'phase_anchor'), 'the chain supplied the anchor answers')
+    assert.ok(!events.some(e => e.action === 'phase_anchor_missing'))
+  })
+
+  it('keeps the historical flag on a non-policy elicitation failure (no containment)', async () => {
+    const events: CapturedEvent[] = []
+    const { seams: s, state } = elicitationSeams({
+      elicit: async () => {
+        throw new Error('provider down')
+      },
+    })
+    const complete = createCharteredComplete(makeCtx(events), 'exploit', s as never)
+    const res = await complete('exploiter', [{ role: 'user', content: 'probe it' }], {})
+    assert.equal(res.text, 'working')
+    assert.equal(state.elicitations, 1, 'no re-issue for non-policy failures')
+    assert.ok(!events.some(e => e.action === 'policy_containment'))
+    assert.ok(events.some(e => e.action === 'phase_anchor_missing'))
+  })
+})
+
 describe('condensedReissueMessages', () => {
   it('carries the record and a summary, never the full context', () => {
     const out = condensedReissueMessages([
