@@ -4,6 +4,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync } from 'node:fs'
 import { createServer } from 'node:net'
+import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
   REDTEAM_CONSOLE_ENVIRONMENT_NAMES,
@@ -22,6 +23,9 @@ export const REDTEAM_TOOLS_RESOURCE_DIRECTORY = 'tools'
 
 /** Port the console prefers, and the one an operator's own console normally holds. */
 export const DEFAULT_REDTEAM_RUNNER_PORT = 8787
+
+/** Base URL of the operator's AlterEgo bridge when a launch names none: the bridge on this machine. */
+export const DEFAULT_PC_BRIDGE_URL = 'http://127.0.0.1:8765'
 
 /** Only address the console is ever bound to: it drives live pentest tooling. */
 export const REDTEAM_RUNNER_LOOPBACK = '127.0.0.1'
@@ -89,6 +93,8 @@ export interface RedteamRunnerOptions {
   readonly engagementsDir: string
   /** Environment names this process already installed from the operator's credential document. */
   readonly installed: ReadonlySet<McpEnvironmentName>
+  /** Home directory of the app user, under which the paired bridge token file resolves; a test names a directory it controls. */
+  readonly homeDir?: string
   /** Overrides the loopback port probe; a test supplies a fixed port instead of binding one. */
   readonly allocatePort?: (preferred: number) => Promise<number>
   /** Overrides the readiness probe; a test answers without a socket. */
@@ -135,6 +141,50 @@ export function redteamToolsDirectory(location: RedteamRunnerLocation): string {
   const configured = location.environment?.REDTEAM_TOOLS_DIR
   if (configured !== undefined && configured !== '') return configured
   return join(dirname(redteamRunnerResources(location).directory), REDTEAM_TOOLS_RESOURCE_DIRECTORY)
+}
+
+/**
+ * Resolve the paired AlterEgo bridge token location for one app user:
+ * `~/.config/pc-bridge/token`, the file AlterEgo's own client writes and the
+ * runner reads when `PC_BRIDGE_TOKEN_FILE` names none. This platform's
+ * separators are used because the supervisor and the runner child it arms run
+ * on the same machine.
+ * @param homeDir - Home directory to resolve under; defaults to the app user's home.
+ * @returns The standard token file path, or `undefined` when no home directory is known.
+ */
+export function defaultPcBridgeTokenFile(homeDir: string = homedir()): string | undefined {
+  return homeDir === '' ? undefined : join(homeDir, '.config', 'pc-bridge', 'token')
+}
+
+/** The AlterEgo bridge configuration a launch offers the fleet, as the supervisor can state it. */
+export interface PcBridgeArming {
+  /** Base URL the fleet reaches the bridge at: the launch value, or the loopback default. */
+  readonly url: string
+  /** File the paired token is read from: the launch value, or the standard location. */
+  readonly tokenFile: string | undefined
+  /** Whether a paired token file is present at that location. */
+  readonly tokenFilePresent: boolean
+}
+
+/**
+ * Resolve the AlterEgo bridge configuration a launch offers the fleet, changing
+ * nothing: a value the launch environment already carries wins verbatim, and an
+ * empty value names nothing. The runner resolves the same two names the same
+ * way, so what is resolved here is what the runner child inherits once the
+ * supervisor publishes it.
+ * @param environment - Launch environment to read the bridge names from.
+ * @param homeDir - Home directory the standard token location resolves under.
+ * @returns The URL, the token file, and whether that file is present.
+ */
+export function pcBridgeArming(environment: NodeJS.ProcessEnv, homeDir: string = homedir()): PcBridgeArming {
+  const configuredUrl = environment.PC_BRIDGE_URL ?? ''
+  const configuredTokenFile = environment.PC_BRIDGE_TOKEN_FILE ?? ''
+  const tokenFile = configuredTokenFile.trim() === '' ? defaultPcBridgeTokenFile(homeDir) : configuredTokenFile
+  return {
+    url: configuredUrl.trim() === '' ? DEFAULT_PC_BRIDGE_URL : configuredUrl,
+    tokenFile,
+    tokenFilePresent: tokenFile !== undefined && existsSync(tokenFile),
+  }
 }
 
 /**
@@ -275,10 +325,21 @@ async function pause(milliseconds: number): Promise<void> {
  * exported is passed through unchanged and never overwritten. When this installation
  * carries no tools payload the variable is left unset, so the tools stay PATH-resolved
  * and readiness reports them missing rather than claiming they are present.
+ *
+ * The fleet's AlterEgo bridge tools are gated on the bridge being live and paired
+ * on this machine, which the runner child resolves from `PC_BRIDGE_URL` and
+ * `PC_BRIDGE_TOKEN_FILE` in the environment it is spawned with. `start()` therefore
+ * publishes both names into the same environment before the child is spawned - the
+ * launch value when one is set, otherwise the loopback default and the standard
+ * paired token location - and logs whether a paired token file is present, so an
+ * unarmed bridge is a stated fact at startup rather than a silent absence inside
+ * an engagement. The two names describe machine-local configuration, not the
+ * console, so they are published once per instance and stay published across `stop()`.
  */
 export class DesktopRedteamRunner {
   private child: ChildProcess | undefined
   private exited: Promise<void> | undefined
+  private bridgeReported = false
   private diagnostic = ''
   private active: RedteamRunnerConsole | undefined
   private stopping = false
@@ -315,6 +376,7 @@ export class DesktopRedteamRunner {
    */
   async start(): Promise<RedteamRunnerConsole | undefined> {
     if (this.active !== undefined) return this.active
+    this.armBridge()
     const testMode = isRedteamTestMode(this.environment)
     const operator = REDTEAM_CONSOLE_ENVIRONMENT_NAMES.filter(name => !this.options.installed.has(name)
       && (this.environment[name] ?? '') !== '')
@@ -456,6 +518,32 @@ export class DesktopRedteamRunner {
     if (this.exitHook === undefined) return
     process.removeListener('exit', this.exitHook)
     this.exitHook = undefined
+  }
+
+  /**
+   * Publish the AlterEgo bridge configuration the runner child inherits, once per
+   * instance, and log whether the fleet's bridge tools can arm. A paired token
+   * file present at the resolved location is what separates armed from not
+   * armed in this log line, because whether the bridge answers is probed by the
+   * runner at engagement time, not by the supervisor at startup.
+   */
+  private armBridge(): void {
+    if (this.bridgeReported) return
+    this.bridgeReported = true
+    const arming = this.options.homeDir === undefined
+      ? pcBridgeArming(this.environment)
+      : pcBridgeArming(this.environment, this.options.homeDir)
+    if ((this.environment.PC_BRIDGE_URL ?? '').trim() === '') this.environment.PC_BRIDGE_URL = arming.url
+    if ((this.environment.PC_BRIDGE_TOKEN_FILE ?? '').trim() === '' && arming.tokenFile !== undefined) {
+      this.environment.PC_BRIDGE_TOKEN_FILE = arming.tokenFile
+    }
+    if (arming.tokenFile === undefined) {
+      console.info('desktop engagement runner: the AlterEgo bridge is not armed for the fleet: no home directory is known, so the standard paired token location cannot be named')
+    } else if (arming.tokenFilePresent) {
+      console.info(`desktop engagement runner: the AlterEgo bridge is armed for the fleet at ${arming.url}: paired token file ${arming.tokenFile}`)
+    } else {
+      console.info(`desktop engagement runner: the AlterEgo bridge is not armed for the fleet: no paired token file at ${arming.tokenFile}`)
+    }
   }
 
   /**

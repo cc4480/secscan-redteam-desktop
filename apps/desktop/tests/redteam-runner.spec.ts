@@ -6,18 +6,21 @@
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  DEFAULT_PC_BRIDGE_URL,
   DesktopRedteamRunner,
   DesktopRedteamRunnerStartupError,
   REDTEAM_RUNNER_ENTRY,
   REDTEAM_RUNNER_READY_TIMEOUT_MS,
   REDTEAM_TOOLS_RESOURCE_DIRECTORY,
   allocateLoopbackPort,
+  defaultPcBridgeTokenFile,
   generatedRedteamToken,
   isRedteamConsoleToken,
   isRedteamTestMode,
+  pcBridgeArming,
   probeRedteamConsole,
   redteamConsoleEndpoint,
   redteamRunnerResources,
@@ -95,6 +98,14 @@ function payload(): { root: string; resources: RedteamRunnerResources; engagemen
   mkdirSync(join(directory, 'dist'), { recursive: true })
   writeFileSync(join(directory, ...REDTEAM_RUNNER_ENTRY.split('/')), '// the runner entry point\n')
   return { root, resources: { node: join(root, 'SecScan RedTeam.exe'), directory }, engagements: join(root, 'profile', 'engagements', 'live') }
+}
+
+/** Write a paired bridge token file at the standard location under one test home. */
+function pairedTokenFile(home: string): string {
+  const file = join(home, '.config', 'pc-bridge', 'token')
+  mkdirSync(dirname(file), { recursive: true })
+  writeFileSync(file, 'test-only-paired-token\n')
+  return file
 }
 
 /** @returns the newest captured spawn, which every lifecycle test asserts against. */
@@ -582,5 +593,135 @@ describe('bundled tools payload', () => {
 
     await runner.start()
     expect(lastSpawn().options.env.REDTEAM_TOOLS_DIR).toBe(provisioned)
+  })
+})
+
+describe('AlterEgo bridge arming', () => {
+  it('publishes the loopback default and the standard token location to the runner child', async () => {
+    const { root, resources, engagements } = payload()
+    const environment: NodeJS.ProcessEnv = {}
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const runner = new DesktopRedteamRunner(resources, environment, {
+      engagementsDir: engagements,
+      installed: new Set(),
+      homeDir: root,
+      allocatePort: async () => 18_795,
+      probe: async () => true,
+    })
+
+    await runner.start()
+    const tokenFile = join(root, '.config', 'pc-bridge', 'token')
+    expect(DEFAULT_PC_BRIDGE_URL).toBe('http://127.0.0.1:8765')
+    expect(environment.PC_BRIDGE_URL).toBe(DEFAULT_PC_BRIDGE_URL)
+    expect(environment.PC_BRIDGE_TOKEN_FILE).toBe(tokenFile)
+    // The runner child is spawned with a copy of this environment, which is where
+    // its fleet bridge gate reads the two names from.
+    expect(lastSpawn().options.env.PC_BRIDGE_URL).toBe(DEFAULT_PC_BRIDGE_URL)
+    expect(lastSpawn().options.env.PC_BRIDGE_TOKEN_FILE).toBe(tokenFile)
+    // No paired file under this home: the startup log states the bridge is not
+    // armed, naming where pairing would have to land, instead of staying silent.
+    expect(info.mock.calls.flat().join('\n'))
+      .toContain(`the AlterEgo bridge is not armed for the fleet: no paired token file at ${tokenFile}`)
+  })
+
+  it('reports the bridge armed when a paired token file is present at the standard location', async () => {
+    const { root, resources, engagements } = payload()
+    const tokenFile = pairedTokenFile(root)
+    const environment: NodeJS.ProcessEnv = {}
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const runner = new DesktopRedteamRunner(resources, environment, {
+      engagementsDir: engagements,
+      installed: new Set(),
+      homeDir: root,
+      allocatePort: async () => 18_796,
+      probe: async () => true,
+    })
+
+    await runner.start()
+    expect(environment.PC_BRIDGE_TOKEN_FILE).toBe(tokenFile)
+    expect(info.mock.calls.flat().join('\n'))
+      .toContain(`the AlterEgo bridge is armed for the fleet at ${DEFAULT_PC_BRIDGE_URL}: paired token file ${tokenFile}`)
+  })
+
+  it('never overwrites a bridge URL or token file named for this run', async () => {
+    const { root, resources, engagements } = payload()
+    const operatorFile = join(root, 'operator', 'bridge-token')
+    const environment: NodeJS.ProcessEnv = { PC_BRIDGE_URL: 'https://pc.secscan.info', PC_BRIDGE_TOKEN_FILE: operatorFile }
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const runner = new DesktopRedteamRunner(resources, environment, {
+      engagementsDir: engagements,
+      installed: new Set(),
+      homeDir: root,
+      allocatePort: async () => 18_797,
+      probe: async () => true,
+    })
+
+    await runner.start()
+    expect(environment.PC_BRIDGE_URL).toBe('https://pc.secscan.info')
+    expect(environment.PC_BRIDGE_TOKEN_FILE).toBe(operatorFile)
+    expect(lastSpawn().options.env.PC_BRIDGE_URL).toBe('https://pc.secscan.info')
+    // The operator's file is absent, so the log names their path as the unarmed reason.
+    expect(info.mock.calls.flat().join('\n'))
+      .toContain(`the AlterEgo bridge is not armed for the fleet: no paired token file at ${operatorFile}`)
+  })
+
+  it('still publishes and reports the bridge state when an operator console keeps the bundled console off', async () => {
+    const { root, resources, engagements } = payload()
+    const environment: NodeJS.ProcessEnv = { REDTEAM_UI_TOKEN: 'token-from-the-launch-environment' }
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const runner = new DesktopRedteamRunner(resources, environment, {
+      engagementsDir: engagements,
+      installed: new Set(),
+      homeDir: root,
+      allocatePort: async () => 18_798,
+      probe: async () => true,
+    })
+
+    expect(await runner.start()).toBeUndefined()
+    expect(harness.spawns).toHaveLength(0)
+    expect(environment.PC_BRIDGE_URL).toBe(DEFAULT_PC_BRIDGE_URL)
+    expect(environment.PC_BRIDGE_TOKEN_FILE).toBe(join(root, '.config', 'pc-bridge', 'token'))
+    expect(info.mock.calls.flat().join('\n')).toContain('the AlterEgo bridge is not armed for the fleet')
+  })
+
+  it('publishes and reports the bridge state once, and leaves it published across a stop', async () => {
+    const { root, resources, engagements } = payload()
+    const environment: NodeJS.ProcessEnv = {}
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const runner = new DesktopRedteamRunner(resources, environment, {
+      engagementsDir: engagements,
+      installed: new Set(),
+      homeDir: root,
+      allocatePort: async () => 18_799,
+      probe: async () => true,
+    })
+
+    await runner.start()
+    await runner.stop()
+    // The bridge names describe machine-local configuration, not the stopped
+    // console, so they stay published for the next start.
+    expect(environment.PC_BRIDGE_URL).toBe(DEFAULT_PC_BRIDGE_URL)
+    await runner.start()
+    const bridgeLines = info.mock.calls.flat().filter(line => String(line).includes('AlterEgo bridge'))
+    expect(bridgeLines).toHaveLength(1)
+  })
+
+  it('resolves the standard token location and honors launch values verbatim', () => {
+    const home = join('operator-home')
+    expect(defaultPcBridgeTokenFile(home)).toBe(join(home, '.config', 'pc-bridge', 'token'))
+    expect(defaultPcBridgeTokenFile('')).toBeUndefined()
+    expect(pcBridgeArming({}, home)).toEqual({
+      url: DEFAULT_PC_BRIDGE_URL,
+      tokenFile: join(home, '.config', 'pc-bridge', 'token'),
+      tokenFilePresent: false,
+    })
+    expect(pcBridgeArming({ PC_BRIDGE_URL: 'https://pc.secscan.info', PC_BRIDGE_TOKEN_FILE: '/operator/token' }, home))
+      .toEqual({ url: 'https://pc.secscan.info', tokenFile: '/operator/token', tokenFilePresent: false })
+    // An empty value names nothing, so the defaults resolve as if it were absent.
+    expect(pcBridgeArming({ PC_BRIDGE_URL: '  ', PC_BRIDGE_TOKEN_FILE: '' }, home)).toEqual({
+      url: DEFAULT_PC_BRIDGE_URL,
+      tokenFile: join(home, '.config', 'pc-bridge', 'token'),
+      tokenFilePresent: false,
+    })
   })
 })
