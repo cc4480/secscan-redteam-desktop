@@ -5,7 +5,7 @@
 # and before the profile's own cordis.patch.yml - so a person can still override
 # or disable any row by id in their own patch layer.
 #
-# Twelve rows:
+# Thirteen rows:
 #   1. mcp-secscan      - the harness-NATIVE MCP client
 #                         (@deepseek-ai/dsh-mcp-client) over Streamable HTTP.
 #                         Tools appear namespaced mcp__secscan__scan_url,
@@ -21,31 +21,37 @@
 #                         bundles, compliance packs) as a second MCP client, over
 #                         the console's POST /mcp. Tools appear namespaced
 #                         mcp__redteam__*.
-#   5. agent-team       - the Agent Teams roster, durable peer mailbox and
+#   5. mcp-alterego     - AlterEgo, the operator's PC bridge, as a fourth
+#                         MCP client over Streamable HTTP: the chat
+#                         surface's direct wire to the bridge's live tool
+#                         registry, beside the runner's engagement-only
+#                         bridge gate. Tools appear namespaced
+#                         mcp__alterego__*.
+#   6. agent-team       - the Agent Teams roster, durable peer mailbox and
 #                         shared task DAG. This is what makes the engagement a
 #                         TEAM: the session agent is the Lead and creates named
 #                         teammates (recon, exploiter, reporter) that persist
 #                         across crashes and restarts.
-#   6. tool-agent-team  - the model-facing Team tools: spawn_teammate,
+#   7. tool-agent-team  - the model-facing Team tools: spawn_teammate,
 #                         send_message, list_agents, wait_agent,
 #                         interrupt_agent, team_task_{create,list,get,update}.
-#   7. ui-agent-team    - the Web UI for viewing the roster and task board.
-#   8. command-redteam  - @secscan/redteam-command: the operator's RedTeam
+#   8. ui-agent-team    - the Web UI for viewing the roster and task board.
+#   9. command-redteam  - @secscan/redteam-command: the operator's RedTeam
 #                         slash commands (/scan, /status, /report, /stop,
 #                         /use) over the harness command registry.
-#   9. speech-to-text   - the dictation provider registry
+#  10. speech-to-text   - the dictation provider registry
 #                         (@deepseek-ai/dsh-experimental-speech-to-text):
 #                         exact provider routing with no fallback; its
 #                         volatile Settings (provider, language) are the
 #                         operator's audio options.
-#  10. speech-to-text-sensevoice - the local SenseVoice recognizer
+#  11. speech-to-text-sensevoice - the local SenseVoice recognizer
 #                         (provider id sensevoice-local): ONNX inference in
 #                         a managed subprocess; models download only on the
 #                         operator's explicit preparation, never on mount.
-#  11. api-speech-to-text - the authenticated loopback channel carrying
+#  12. api-speech-to-text - the authenticated loopback channel carrying
 #                         complete recordings from the client to the Host
 #                         provider.
-#  12. ui-voice-input   - the composer microphone control: record on click,
+#  13. ui-voice-input   - the composer microphone control: record on click,
 #                         transcribe on Stop, insert the text into the draft.
 #                         Nothing reaches the model until the operator
 #                         submits the draft as ordinary text.
@@ -218,6 +224,72 @@
           enabled: true
           # The supervisor requires a finite budget; the schema maximum is
           # the supported equivalent of never giving up.
+          maxAttempts: 9007199254740991
+
+    # AlterEgo, the operator's PC bridge, as a FOURTH MCP client - the chat
+    # surface's direct wire to the bridge, beside the engagement-only one.
+    #
+    # The runner already speaks to this same server inside engagements
+    # (apps/redteam-runner/src/bridge/*): MCP over Streamable HTTP, the
+    # paired session token carried as a bearer header. This row mirrors
+    # that client's configuration exactly:
+    #   - endpoint: PC_BRIDGE_URL names the bridge BASE url and defaults
+    #     to loopback 127.0.0.1:8765; a bare origin gets the bridge's /mcp
+    #     path appended, a URL that already carries a path is used as
+    #     given, and a malformed or non-HTTP(S) value falls back to the
+    #     default endpoint (the runner's resolveBridgeEndpoint /
+    #     resolveBridgeConfig rules);
+    #   - auth: the token is read from a FILE - the file named by
+    #     PC_BRIDGE_TOKEN_FILE, or ~/.config/pc-bridge/token, the bridge's
+    #     own client token location - never accepted as an env VALUE and
+    #     never written in this file (the runner client's readBridgeToken
+    #     rule). The header expression below reads that file when this
+    #     profile composes; a missing or empty file is that client's
+    #     "not paired" state and resolves the header to an empty string -
+    #     the bridge answers 401, this row's connect fails and is logged,
+    #     and startup proceeds (see the fail-loud note below).
+    #
+    # Two honest limitations, stated once: the header resolves when this
+    # profile composes, so a re-pairing after app start takes effect only
+    # on profile reload/restart (the runner's client, by contrast,
+    # re-reads the token file on every operation); and a tools/call on a
+    # write or destructive bridge op can wait on the bridge's own consent
+    # dialog - a human at the PC - which is the bridge's design, not
+    # something this row configures.
+    #
+    # Tools arrive namespaced mcp__alterego__*: whatever the bridge's live
+    # registry offers (108 tools today) - the client filters nothing, the
+    # same no-filtering rule the runner's bridge client follows.
+    # Destructive bridge ops stay gated by the bridge's own native consent
+    # dialog on the PC; this row adds reach, not authority.
+    #
+    # failOnStartupError is FALSE here, deliberately - the opposite choice
+    # from mcp-redteam-runner above, for the opposite reason. The runner
+    # is the product's core: its absence must stop startup loudly. The
+    # bridge is a peripheral on the operator's machine: it may be stopped,
+    # unpaired, or not installed at all, and none of that may block the
+    # app from starting. A failed connect is logged by the client and the
+    # mcp__alterego__* tools simply do not appear until the bridge is live
+    # and paired. Do not "fix" this to true.
+    - id: mcp-alterego
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: alterego
+        transport: streamable-http
+        url: !!js >-
+          (() => { const URLCtor = process.getBuiltinModule('node:url').URL; const raw = (process.env.PC_BRIDGE_URL || '').trim() || 'http://127.0.0.1:8765'; try { const parsed = new URLCtor(raw); if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return 'http://127.0.0.1:8765/mcp'; if (parsed.pathname.replace(/\/+$/, '') === '') parsed.pathname = '/mcp'; return parsed.toString(); } catch { return 'http://127.0.0.1:8765/mcp'; } })()
+        headers:
+          # The paired session token, read from its file at composition
+          # time (see the row comment above). The value never appears in
+          # this file or in any profile source.
+          Authorization: !!js >-
+            (() => { try { const fs = process.getBuiltinModule('node:fs'); const path = process.getBuiltinModule('node:path'); const os = process.getBuiltinModule('node:os'); const named = (process.env.PC_BRIDGE_TOKEN_FILE || '').trim(); const file = named || path.join(os.homedir(), '.config', 'pc-bridge', 'token'); const raw = fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim() : ''; return raw === '' ? '' : 'Bearer ' + raw; } catch { return ''; } })()
+        failOnStartupError: false
+        reconnect:
+          enabled: true
+          # Copied from the runner row: the schema maximum is the
+          # supported equivalent of never giving up, so a bridge restart
+          # mid-session does not permanently unregister these tools.
           maxAttempts: 9007199254740991
 
     # The console's data channel into the chat client (Q-CONSOLE-MERGE
