@@ -190,6 +190,53 @@ describe('web e2e: settings modal and General preferences', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
+  it('gives the dialog its designed measure at desktop and 1280 widths', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-settings-geometry'))
+    // Rendered-geometry contract for the shell. The package suites pin the
+    // stylesheet and the mounting slot as source text; this scenario pins
+    // what the browser computes, because the failure it guards — the
+    // overlay resolving against a constrained ancestor instead of the
+    // frame — fails in silence: the 800px dialog clamps into a ~300px
+    // strip, the nav keeps its 188px, the content column collapses to
+    // ~100px, prose wraps a word per line, and nothing throws.
+    const dialog = page.getByRole('dialog', { name: '设置' })
+    const measureShell = async (viewportWidth: number) => {
+      const box = await dialog.boundingBox()
+      expect(box).not.toBeNull()
+      // Full measure at both widths, centered in the frame: a trapped
+      // overlay docks into its host column instead of centering.
+      expect(box!.width).toBeGreaterThanOrEqual(792)
+      expect(box!.width).toBeLessThanOrEqual(808)
+      expect(Math.abs(box!.x - (viewportWidth - box!.width) / 2)).toBeLessThanOrEqual(2)
+      const nav = await dialog.locator('nav').boundingBox()
+      expect(nav).not.toBeNull()
+      expect(nav!.width).toBeGreaterThanOrEqual(184)
+      expect(nav!.width).toBeLessThanOrEqual(192)
+      const options = await dialog.locator('div[class*="options"]').boundingBox()
+      expect(options).not.toBeNull()
+      expect(options!.width).toBeGreaterThanOrEqual(520)
+      // The prose witness: the section intro paragraph takes the options
+      // measure, so a squeezed column shows up here as a narrow ribbon.
+      const prose = await dialog.locator('p').first().boundingBox()
+      expect(prose).not.toBeNull()
+      expect(prose!.width).toBeGreaterThanOrEqual(420)
+    }
+    await openSettings(page, 'zh')
+    await dialog.waitFor({ timeout: 10_000 })
+    await measureShell(1680)
+    // The shell box is section-independent: Models renders in the same
+    // dialog, so the measure must survive the switch.
+    await dialog.getByRole('button', { name: '模型', exact: true }).click()
+    await expect.poll(() => dialog.getByRole('button', { name: '模型', exact: true }).getAttribute('aria-current'), { timeout: 5_000 }).toBe('true')
+    await measureShell(1680)
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await measureShell(1280)
+    await page.setViewportSize({ width: 1680, height: 1000 })
+    await page.keyboard.press('Escape')
+    await expect.poll(() => page.getByRole('dialog', { name: '设置' }).count(), { timeout: 5_000 }).toBe(0)
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
   it('scrolls overflowing section navigation independently of the title and settings content', async () => {
     const overflowPage = await browser.newPage({ viewport: { width: 1280, height: 768 }, locale: ZH_BROWSER_LOCALE })
     onTestFinished(() => overflowPage.close())
