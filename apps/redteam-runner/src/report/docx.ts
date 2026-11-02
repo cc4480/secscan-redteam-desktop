@@ -110,6 +110,15 @@ export function buildReportDocx(o: EngagementReportInput): Uint8Array {
   const tc = doc.tierCounts
 
   const body: string[] = [
+    // The brand line: the wordmark in the logo palette, set in the
+    // BrandLine style above the ink-band Title (styles: docx-xml.ts).
+    para(
+      [
+        { text: 'SecScan ', bold: true, color: '0B1120' },
+        { text: 'RedTeam', bold: true, color: 'CF2B4D' },
+      ],
+      'BrandLine',
+    ),
     para(o.title, 'Title'),
     heading(m.target, 1),
     metaLine('Engagement', m.engagementId),
