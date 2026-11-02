@@ -405,6 +405,91 @@ describe("dispatch scope gate — the choke point", () => {
     assert.match(r.result, /out-of-scope list/);
     assert.equal(probes.length, 0);
   });
+
+  it("dispatches to the attested bare hostname a desktop local-host record carries", async () => {
+    // The desktop launch against the operator's own machine: the record
+    // authorize stamped names the target by its bare machine hostname.
+    const { ctx, probes, sshCommands } = fakeCtx({ scope: ["Cho-zen1"] }, { verifiedScope: ["Cho-zen1"] });
+    const probe = await dispatchTool(ctx, "recon", "recon", call("http_probe", { url: "http://cho-zen1/" }));
+    assert.match(probe.result, /^HTTP 200/);
+    assert.equal(probes.length, 1, "the probe reached the attested host");
+    const ssh = await dispatchTool(
+      ctx,
+      "exploiter",
+      "exploit",
+      call("ssh_exec", { host: "cho-zen1", targetProfile: "linux", command: "hostname" }),
+    );
+    assert.ok(!/DENIED by scope/.test(ssh.result), "the executor call is not scope-denied");
+    assert.deepEqual(sshCommands, ["hostname"]);
+  });
+
+  it("still refuses a bare hostname the record never attested, zero dispatch", async () => {
+    const { ctx, appended, probes } = fakeCtx({ scope: ["Cho-zen1"] }, { verifiedScope: ["Cho-zen1"] });
+    const r = await dispatchTool(ctx, "recon", "recon", call("http_probe", { url: "http://other-host/" }));
+    assert.match(r.result, /DENIED by scope/);
+    assert.match(r.result, /host not listed/);
+    assert.equal(probes.length, 0);
+    assert.ok(appended.some((e) => e.action === "scope_violation" && e.target === "other-host"));
+  });
+});
+
+describe("verified record — attested bare hostnames (the desktop local-host path)", () => {
+  it("fromEntries still cannot place a bare hostname (scope-file classification is unchanged)", () => {
+    const { set, skipped } = HostSet.fromEntries(["Cho-zen1"]);
+    assert.equal(set.size, 0);
+    assert.deepEqual(skipped, ["Cho-zen1"]);
+  });
+
+  it("fromAttestedEntries places a bare hostname as a domain, case preserved by normalisation", () => {
+    const { set, skipped } = HostSet.fromAttestedEntries(["Cho-zen1"]);
+    assert.deepEqual(skipped, []);
+    assert.ok(set.domains.has("cho-zen1"));
+    assert.equal(set.contains("Cho-zen1").member, true);
+    assert.equal(set.contains("cho-zen1").member, true);
+  });
+
+  it("fromAttestedEntries still reports entries that are not hostnames at all", () => {
+    const { set, skipped } = HostSet.fromAttestedEntries(["Acme iOS app", "999.1.1.1", "Cho-zen1"]);
+    assert.deepEqual(skipped, ["Acme iOS app", "999.1.1.1"]);
+    assert.ok(set.domains.has("cho-zen1"));
+  });
+
+  it("a guard built from the record allows the attested bare host in either case", () => {
+    const g = ScopeGuard.fromVerifiedRecord({ verifiedScope: ["Cho-zen1"] });
+    assert.equal(g.checkHost("Cho-zen1").allowed, true);
+    assert.equal(g.checkHost("cho-zen1").allowed, true);
+    assert.deepEqual(g.skippedEntries, []);
+  });
+
+  it("hosts the record never attested are still refused as not listed", () => {
+    const g = ScopeGuard.fromVerifiedRecord({ verifiedScope: ["Cho-zen1"] });
+    for (const h of ["other-host", "cho-zen2", "example.com"]) {
+      const v = g.checkHost(h);
+      assert.equal(v.allowed, false, h);
+      assert.equal(v.kind, "allow", h);
+      assert.match(v.reason, /host not listed/, h);
+    }
+  });
+
+  it("the ROE deny list still beats the record allow set", () => {
+    const g = ScopeGuard.fromVerifiedRecord({
+      verifiedScope: ["Cho-zen1", "acme.com"],
+      outOfScope: ["status.acme.com"],
+    });
+    const v = g.checkHost("status.acme.com");
+    assert.equal(v.allowed, false);
+    assert.equal(v.kind, "deny");
+    assert.equal(g.checkHost("cho-zen1").allowed, true);
+  });
+
+  it("the local-host literal-listing rule is unchanged on the record path", () => {
+    const unlisted = ScopeGuard.fromVerifiedRecord({ verifiedScope: ["Cho-zen1"] });
+    const v = unlisted.checkHost("localhost");
+    assert.equal(v.allowed, false);
+    assert.match(v.reason, /local host/);
+    const listed = ScopeGuard.fromVerifiedRecord({ verifiedScope: ["127.0.0.1"] });
+    assert.equal(listed.checkHost("127.0.0.1").allowed, true, "a literally listed local host stays allowed");
+  });
 });
 
 describe("scopeGuardFor — the verified record is the allow source", () => {
@@ -467,4 +552,5 @@ describe("authorize phase — stamps the verified record the guard derives from"
     assert.equal(guard.checkHost("api.example.com").allowed, true, "the attested host stays in scope");
     assert.equal(guard.checkHost("mutated.example.org").allowed, false, "the unattested host stays out of scope");
   });
+
 });
