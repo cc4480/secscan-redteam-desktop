@@ -1,8 +1,10 @@
-/* Home guide sections + side panel: glass panels in the hero scroll
-   body's home grid (ConversationRoot sheet owns the grid; this sheet
-   owns placement and the panels' insides). Inner cards are plane-2
-   solid fills — never their own backdrop-filter — and every value
-   rides the shell tokens, so home and chat stay one glass language. */
+/* Home guide sections + side panel in the hero scroll body's home
+   grid (ConversationRoot sheet owns the grid; this sheet owns
+   placement and the panels' insides). The sections are glass panels;
+   the side panel rides the solid card plane (see .aside). Inner
+   cards are plane-2 solid fills — never their own backdrop-filter —
+   and every value rides the shell tokens, so home and chat stay one
+   glass language. */
 
 /* The glass primitive, token form: top light over the tint, the locked
    blur recipe, the specular rim, the layered panel elevation. */
@@ -42,7 +44,14 @@
 }
 
 /* The side panel spans the center column's full height and sticks
-   while the sections scroll past it. */
+   while the sections scroll past it. It rides the solid card plane —
+   the de-blurred treatment TodoPanel and QueueDock already use —
+   not the glass plane: the shell budget is five backdrop-filtered
+   surfaces per viewport, and the populated home state carries five
+   without it (sidebar, hero seat, Quick start, Commands, Continue).
+   The sticky rail also stays off the scroll path's re-blur cost; its
+   boundary comes from the panel rim and shadow, as on the solid
+   surfaces. */
 .aside {
   grid-column: 2;
   grid-row: 1 / span 12;
@@ -53,6 +62,9 @@
   flex-direction: column;
   gap: 18px;
   padding: 18px;
+  background: var(--glass-top-light), var(--glass-card-solid);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .panelHead {
