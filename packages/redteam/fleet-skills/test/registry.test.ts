@@ -10,7 +10,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, test } from 'node:test'
 import { parseSkillFrontmatter } from '../src/frontmatter.js'
-import { bundledSkillsRoot, discoverSkills, loadSkillBody, skillIndexBlock } from '../src/registry.js'
+import { bundledSkillsRoot, discoverSkills, loadSkillBody, loadSkillBodyByName, skillIndexBlock } from '../src/registry.js'
 
 const BUNDLED_NAMES = [
   'blackteam-adversary-emulation',
@@ -137,5 +137,47 @@ describe('parseSkillFrontmatter', () => {
       () => parseSkillFrontmatter('---\nname: Webapp_Scan\ndescription: "present"\n---\n'),
       /kebab-case/,
     )
+  })
+})
+
+describe('loadSkillBodyByName (Layer 2 by name)', () => {
+  test('loads a bundled skill by its index name, byte-identical to the meta path', () => {
+    const roots = [bundledSkillsRoot()]
+    const meta = discoverSkills(roots).find(m => m.name === 'webapp-scan')
+    assert.ok(meta)
+    const body = loadSkillBodyByName(roots, 'webapp-scan')
+    assert.equal(body, loadSkillBody(meta))
+    assert.ok(body.includes('name: webapp-scan'), 'frontmatter rides along')
+    assert.ok(body.includes('# Web App Scan — Fleet Skill'), 'full body, not a summary')
+  })
+
+  test('every bundled skill in the Layer-1 index is loadable by name', () => {
+    const roots = [bundledSkillsRoot()]
+    for (const name of BUNDLED_NAMES) {
+      const body = loadSkillBodyByName(roots, name)
+      assert.ok(body.length > 0, `${name} loads`)
+      assert.ok(body.includes(`name: ${name}`), `${name} body carries its frontmatter`)
+    }
+  })
+
+  test('an unknown name throws, naming the miss and listing what exists', () => {
+    assert.throws(
+      () => loadSkillBodyByName([bundledSkillsRoot()], 'no-such-skill'),
+      /no skill named "no-such-skill"; available: .*webapp-scan/,
+    )
+  })
+
+  test('earlier roots shadow later ones, exactly as discovery does', () => {
+    const first = mkdtempSync(join(tmpdir(), 'skill-first-'))
+    const second = mkdtempSync(join(tmpdir(), 'skill-second-'))
+    try {
+      writeSkill(first, 'webapp-scan', 'first copy')
+      writeSkill(second, 'webapp-scan', 'second copy')
+      const body = loadSkillBodyByName([first, second], 'webapp-scan')
+      assert.ok(body.includes('first copy'), 'the shadowing (earlier) root supplies the body')
+    } finally {
+      rmSync(first, { recursive: true, force: true })
+      rmSync(second, { recursive: true, force: true })
+    }
   })
 })

@@ -125,3 +125,15 @@ export const READ_SPILL_TOOL: JsonSchemaTool = {
     required: ['path'],
   },
 }
+export const LOAD_SKILL_TOOL: JsonSchemaTool = {
+  name: 'load_skill',
+  description:
+    'Load the full SKILL.md text (Layer 2) of a fleet skill by name. Your prompt carries the Layer-1 index — skill names and trigger descriptions only. When a task matches a skill whose full body is not already in your prompt, call this BEFORE using its tools: the body carries the procedure, the proof standard, and the limits. Args: name (required) — the exact skill name from the index, e.g. "webapp-scan".',
+  parameters: {
+    type: 'object',
+    properties: {
+      name: { type: 'string' },
+    },
+    required: ['name'],
+  },
+}

@@ -85,6 +85,29 @@ export function loadSkillBody(meta: SkillMeta): string {
 }
 
 /**
+ * Load a skill's full `SKILL.md` text (Layer 2) by name — the seat-facing
+ * counterpart to {@link loadSkillBody}. A caller holding only a name from
+ * the Layer-1 index resolves it against ordered roots (same precedence
+ * and shadowing as {@link discoverSkills}) and receives the body.
+ *
+ * @param roots - skill roots in precedence order
+ * @param name - the skill name exactly as listed in the Layer-1 index
+ * @returns the complete file text, frontmatter included
+ * @throws Error naming the skill and listing the available names when no
+ *   root carries a skill by that name
+ */
+export function loadSkillBodyByName(roots: string[], name: string): string {
+  const metas = discoverSkills(roots)
+  const meta = metas.find(candidate => candidate.name === name)
+  if (!meta) {
+    throw new Error(
+      `loadSkillBodyByName: no skill named "${name}"; available: ${metas.map(m => m.name).join(', ') || '(none)'}`,
+    )
+  }
+  return loadSkillBody(meta)
+}
+
+/**
  * Collect the files a bundle carries under `references/`, `scripts/`, and
  * `assets/`, recursively.
  *
