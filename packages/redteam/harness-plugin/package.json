@@ -22,7 +22,7 @@
   },
   "private": true,
   "scripts": {
-    "build": "tsc -p tsconfig.json && tsdown && node ../scripts/dist-hash.mjs write . lib",
+    "build": "tsc -b tsconfig.json && tsdown && node ../scripts/dist-hash.mjs write . lib",
     "pack:selfcontained": "node ../scripts/pack-plugin.mjs",
     "test": "tsc -p tsconfig.test.json && node --test dist-test/test/*.test.js",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json"
