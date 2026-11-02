@@ -348,3 +348,90 @@ describe('CredentialPool persistence (PoolStateStore)', () => {
     assert.equal(store.text, null)
   })
 })
+
+describe('CredentialPool death record + refusal explanation (FIX-DEADKEY)', () => {
+  test('the persisted death entry carries status, code, and the death timestamp', () => {
+    const clock = fakeClock()
+    const store = new MemoryPoolStore()
+    const pool = new CredentialPool('fake', ['key-a'], { now: clock.now, store })
+    pool.reportFailure(0, MODEL, failure('auth_dead', { status: 401, code: 'invalid_api_key' }))
+    const doc = JSON.parse(store.text ?? 'null') as {
+      providers: {
+        fake: {
+          entries: Array<{
+            dead: boolean
+            deadReason?: string
+            deadAtMs?: number
+            deadStatus?: number
+            deadCode?: string
+          }>
+        }
+      }
+    }
+    const entry = doc.providers.fake.entries[0]
+    assert.equal(entry?.dead, true)
+    assert.equal(entry?.deadReason, 'auth_dead')
+    assert.equal(entry?.deadAtMs, 1_000_000, 'death stamped on the pool clock')
+    assert.equal(entry?.deadStatus, 401)
+    assert.equal(entry?.deadCode, 'invalid_api_key')
+
+    // And the record survives a restart onto the snapshot surface.
+    const restored = new CredentialPool('fake', ['key-a'], { now: clock.now, store })
+    const snap = restored.snapshot()[0]
+    assert.equal(snap?.dead, true)
+    assert.equal(snap?.deadAtMs, 1_000_000)
+    assert.equal(snap?.deadStatus, 401)
+    assert.equal(snap?.deadCode, 'invalid_api_key')
+  })
+
+  test('a death recorded without provider fields persists reason + timestamp only', () => {
+    const clock = fakeClock()
+    const store = new MemoryPoolStore()
+    const pool = new CredentialPool('fake', ['key-a'], { now: clock.now, store })
+    pool.reportFailure(0, MODEL, failure('billing'))
+    const snap = pool.snapshot()[0]
+    assert.equal(snap?.deadReason, 'billing')
+    assert.equal(snap?.deadAtMs, 1_000_000)
+    assert.equal(snap?.deadStatus, undefined)
+    assert.equal(snap?.deadCode, undefined)
+  })
+
+  test('refusalExplanation: all-dead names every death; a living key clears it', () => {
+    const clock = fakeClock()
+    const pool = new CredentialPool('fake', ['key-a', 'key-b'], { now: clock.now })
+    pool.reportFailure(0, MODEL, failure('auth_dead', { status: 401, code: 'invalid_api_key' }))
+    assert.equal(pool.refusalExplanation(MODEL), undefined, 'key-b still serves')
+    pool.reportFailure(1, MODEL, failure('billing', { status: 402 }))
+    const refusal = pool.refusalExplanation(MODEL)
+    assert.equal(refusal?.kind, 'all-dead')
+    assert.equal(refusal?.dead.length, 2)
+    assert.equal(refusal?.dead[0]?.deadReason, 'auth_dead')
+    assert.equal(refusal?.dead[0]?.deadStatus, 401)
+    assert.equal(refusal?.dead[0]?.deadCode, 'invalid_api_key')
+    assert.equal(refusal?.dead[0]?.deadAtMs, 1_000_000)
+    assert.equal(refusal?.dead[1]?.deadReason, 'billing')
+  })
+
+  test('refusalExplanation: a pool-wide model bench outranks per-key state', () => {
+    const clock = fakeClock()
+    const pool = new CredentialPool('fake', ['key-a', 'key-b'], { now: clock.now })
+    pool.benchModel(MODEL, 30_000)
+    const refusal = pool.refusalExplanation(MODEL)
+    assert.equal(refusal?.kind, 'model-benched')
+    assert.equal(refusal?.benchUntilMs, 1_030_000)
+    clock.advance(30_001)
+    assert.equal(pool.refusalExplanation(MODEL), undefined, 'bench lapsed: keys serve again')
+  })
+
+  test('refusalExplanation: keys-benched reports the earliest lift; permanent benches flagged', () => {
+    const clock = fakeClock()
+    const pool = new CredentialPool('fake', ['key-a', 'key-b'], { now: clock.now })
+    pool.reportFailure(0, MODEL, failure('rate_limit', { retryAfterMs: 5_000 }))
+    pool.reportFailure(1, MODEL, failure('entitlement'))
+    const refusal = pool.refusalExplanation(MODEL)
+    assert.equal(refusal?.kind, 'keys-benched')
+    assert.equal(refusal?.benchUntilMs, 1_005_000)
+    assert.equal(refusal?.permanentBench, true)
+    assert.equal(pool.refusalExplanation(OTHER), undefined, 'other models are untouched')
+  })
+})

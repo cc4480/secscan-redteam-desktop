@@ -45,7 +45,9 @@ export {
   COOLDOWN_MAX_MS,
   type AcquiredCredential,
   type CredentialPoolOptions,
+  type DeadCredentialInfo,
   type PoolEntrySnapshot,
+  type PoolRefusalExplanation,
   type PoolRestoreReport,
   type PoolStateStore,
 } from './pool.js'
@@ -69,6 +71,7 @@ export {
 } from './executor.js'
 export {
   ResilientProvider,
+  poolRefusalFailure,
   resilienceConfigFromEnv,
   RESILIENCE_ENV,
   type FallbackProviderTarget,

@@ -38,8 +38,8 @@
 
 import { appendFileSync } from 'node:fs'
 import type { ChatResult, CompleteOptions, LlmProvider } from './types.js'
-import type { ClassifiedFailure } from './classifier.js'
-import { CredentialPool, COOLDOWN_BASE_MS } from './pool.js'
+import type { ClassifiedFailure, FailoverReason, RecoveryHints } from './classifier.js'
+import { CredentialPool, COOLDOWN_BASE_MS, type PoolRefusalExplanation } from './pool.js'
 import {
   executeStep,
   ResilienceError,
@@ -162,6 +162,86 @@ export function resilienceConfigFromEnv(
     config.maxDelayMs = parseNonNegativeInt(RESILIENCE_ENV.maxDelayMs, maxDelayRaw.trim())
   }
   return { ...config, ...overrides }
+}
+
+const NO_ROTATE_HINTS: RecoveryHints = {
+  retryable: false,
+  rotateCredential: true,
+  fallbackModel: false,
+  fallbackProvider: true,
+  compress: false,
+}
+
+/**
+ * Build the give-up classification + cause for a pool refusal (acquire()
+ * returned null before any attempt). The terminal cause is stated as the
+ * pool recorded it: a DEAD credential is named as dead — provider,
+ * deadReason, the killing response's status/code, and when the death was
+ * recorded — and is never dressed up as a rate limit; a genuine bench is
+ * named as a bench with its expiry.
+ * @param providerId - The refusing provider's router id.
+ * @param model - The model the refused call would request.
+ * @param refusal - The pool's explanation, or undefined when it offered none.
+ * @returns The classification and the cause message for the ResilienceError.
+ */
+export function poolRefusalFailure(
+  providerId: string,
+  model: string,
+  refusal: PoolRefusalExplanation | undefined,
+): { failure: ClassifiedFailure; causeMessage: string } {
+  if (refusal?.kind === 'all-dead') {
+    const first = refusal.dead[0]
+    const reason: FailoverReason =
+      first?.deadReason === 'billing' ? 'billing' : 'auth_dead'
+    const segments = refusal.dead.map((d) => {
+      const said: string[] = []
+      if (d.deadStatus !== undefined) said.push(`HTTP ${d.deadStatus}`)
+      if (d.deadCode !== undefined) said.push(d.deadCode)
+      return (
+        `key …${d.fingerprint} marked ${d.deadReason ?? 'dead'}` +
+        (d.deadAtMs !== undefined ? ` at ${new Date(d.deadAtMs).toISOString()}` : '') +
+        (said.length > 0 ? ` (${said.join(' ')})` : '')
+      )
+    })
+    const failure: ClassifiedFailure = {
+      reason,
+      hints: { ...NO_ROTATE_HINTS },
+      detail: 'all-credentials-dead',
+    }
+    if (first?.deadStatus !== undefined) failure.status = first.deadStatus
+    if (first?.deadCode !== undefined) failure.code = first.deadCode
+    // Kept short on purpose: ResilienceError embeds the cause excerpt
+    // truncated at 300 chars, and the remedy must survive that truncation
+    // into the halt text an operator reads.
+    return {
+      failure,
+      causeMessage:
+        `[llm-router] provider '${providerId}' cannot serve '${model}': ` +
+        `every pooled credential is DEAD — ${segments.join('; ')}. ` +
+        'Re-seat a valid key and restart: the provider rejected the key — not a rate limit, no bench lifts it.',
+    }
+  }
+  if (refusal?.kind === 'model-benched' && refusal.benchUntilMs !== undefined) {
+    return {
+      failure: { reason: 'rate_limit', hints: { ...NO_ROTATE_HINTS }, detail: 'model-benched' },
+      causeMessage:
+        `[llm-router] model '${model}' is benched pool-wide for provider '${providerId}' ` +
+        `until ${new Date(refusal.benchUntilMs).toISOString()} (upstream rate limit); ` +
+        'no credential can serve it before then.',
+    }
+  }
+  const benchTail =
+    refusal?.kind === 'keys-benched'
+      ? refusal.benchUntilMs !== undefined
+        ? ` until ${new Date(refusal.benchUntilMs).toISOString()}`
+        : refusal.permanentBench
+          ? ' — at least one bench is permanent (entitlement) and never lifts on its own'
+          : ''
+      : ''
+  return {
+    failure: { reason: 'rate_limit', hints: { ...NO_ROTATE_HINTS }, detail: 'all-credentials-benched' },
+    causeMessage: `[llm-router] every pooled credential is benched or dead for this model${benchTail}`,
+  }
 }
 
 export interface ResilientProviderOptions {
@@ -334,27 +414,31 @@ export class ResilientProvider implements LlmProvider {
     if (pool && pool.size > 0) {
       const acquired = pool.acquire(options.model)
       if (!acquired) {
-        const failure: ClassifiedFailure = {
-          reason: 'rate_limit',
-          hints: {
-            retryable: false,
-            rotateCredential: true,
-            fallbackModel: false,
-            fallbackProvider: true,
-            compress: false,
-          },
-          detail: 'all-credentials-benched',
-        }
-        this.onEvent?.({
+        // The pool refused before any attempt: the give-up names the
+        // terminal cause the pool recorded (dead key vs bench — see
+        // poolRefusalFailure), never a blanket rate-limit label.
+        const { failure, causeMessage } = poolRefusalFailure(
+          this.inner.id,
+          options.model,
+          pool.refusalExplanation(options.model),
+        )
+        // Through the same sink as attempt events: with no custom sink
+        // configured (the router's construction), the default trajectory
+        // log must still record the refusal — emitting only via an
+        // optional custom sink dropped these records entirely.
+        const refusalSink: RetryEventSink = this.onEvent ?? (event => this.logEvent(event, options))
+        refusalSink({
           kind: 'attempt-failed',
           attempt: 0,
           providerId: this.inner.id,
           model: options.model,
           reason: failure.reason,
           detail: failure.detail,
+          status: failure.status,
+          code: failure.code,
           ts: new Date(this.now()).toISOString(),
         })
-        throw new ResilienceError(failure, 0, new Error('[llm-router] every pooled credential is benched or dead for this model'))
+        throw new ResilienceError(failure, 0, new Error(causeMessage))
       }
       initial.keyId = acquired.keyId
       initial.apiKey = acquired.apiKey

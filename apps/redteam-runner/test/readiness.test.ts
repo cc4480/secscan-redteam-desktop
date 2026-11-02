@@ -269,6 +269,35 @@ describe('readiness report — llm_credential_pool (Q-POOLPERSIST)', () => {
     )
   })
 
+  it('renders the death evidence (status, code, time) when the pool recorded it', () => {
+    const deadAtMs = NOW - 5 * 60_000
+    const item = credentialPoolItem(
+      [
+        {
+          providerId: 'meta',
+          entries: [
+            {
+              keyId: 0,
+              fingerprint: 'cf323c24',
+              dead: true,
+              deadReason: 'auth_dead',
+              deadAtMs,
+              deadStatus: 401,
+              deadCode: 'invalid_api_key',
+              benchedModels: [],
+            },
+          ],
+        },
+      ],
+      NOW,
+    )
+    assert.equal(item?.id, 'llm_credential_pool')
+    assert.equal(
+      item?.detail,
+      `meta: key …cf323c24 dead (auth_dead) — provider answered HTTP 401 invalid_api_key at ${new Date(deadAtMs).toISOString()}`,
+    )
+  })
+
   it('skips benches that already lapsed by render time', () => {
     const item = credentialPoolItem(
       [

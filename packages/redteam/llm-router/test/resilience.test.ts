@@ -294,6 +294,105 @@ describe('trajectory log cause fields (Q-HALT Item 1)', () => {
   })
 })
 
+describe('pool refusal honesty (FIX-DEADKEY)', () => {
+  test('a dead key refuses as DEAD — never as rate_limit — with the death evidence and remedy', async () => {
+    const h = harness([http(401, 'invalid api key', { code: 'invalid_api_key' })], { keys: ['key-a'] })
+    // First call: the provider rejects the key; the pool records the death.
+    await assert.rejects(
+      h.call(),
+      (err: unknown) => err instanceof ResilienceError && err.classified.reason === 'auth_dead' && err.attempts === 1,
+    )
+    // Second call: the pool refuses before any attempt. The give-up must
+    // name the death — reason, status, code, recorded time — not a bench.
+    const err = await h.call().then(
+      () => null,
+      (e: unknown) => e,
+    )
+    assert.ok(err instanceof ResilienceError)
+    assert.equal(err.attempts, 0)
+    assert.equal(err.classified.reason, 'auth_dead')
+    assert.equal(err.classified.detail, 'all-credentials-dead')
+    assert.equal(err.classified.status, 401)
+    assert.equal(err.classified.code, 'invalid_api_key')
+    assert.equal(err.classified.hints.fallbackProvider, true, 'provider cascade still allowed')
+    assert.doesNotMatch(err.message, /rate_limit/)
+    assert.doesNotMatch(err.message, /all-credentials-benched/)
+    assert.match(err.message, /DEAD/)
+    assert.match(err.message, /auth_dead/)
+    assert.match(err.message, /HTTP 401/)
+    assert.match(err.message, /invalid_api_key/)
+    assert.match(err.message, /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/, 'the recorded death time is named')
+    assert.match(err.message, /Re-seat a valid key/)
+    assert.match(err.message, /not a rate limit/)
+    const refusal = h.events.find(e => e.kind === 'attempt-failed' && e.attempt === 0)
+    assert.equal(refusal?.reason, 'auth_dead')
+    assert.equal(refusal?.status, 401)
+    assert.equal(refusal?.code, 'invalid_api_key')
+  })
+
+  test('a genuinely benched key keeps its bench wording and expiry', async () => {
+    const h = harness([http(429, 'slow down', { retryAfterMs: 3_600_000 })], { keys: ['key-a'] })
+    await assert.rejects(
+      h.call(),
+      (err: unknown) => err instanceof ResilienceError && err.classified.reason === 'rate_limit' && err.attempts === 1,
+    )
+    const err = await h.call().then(
+      () => null,
+      (e: unknown) => e,
+    )
+    assert.ok(err instanceof ResilienceError)
+    assert.equal(err.attempts, 0)
+    assert.equal(err.classified.reason, 'rate_limit')
+    assert.equal(err.classified.detail, 'all-credentials-benched')
+    assert.match(err.message, /benched/)
+    assert.match(err.message, /until \d{4}-\d{2}-\d{2}T/, 'the bench expiry is named')
+    assert.doesNotMatch(err.message, /DEAD/)
+  })
+
+  test('a pool-wide model bench refuses as a bench with its expiry', async () => {
+    const h = harness([ok('model-a')], { keys: ['key-a', 'key-b'] })
+    h.pool.benchModel('model-a', 60_000)
+    const err = await h.call().then(
+      () => null,
+      (e: unknown) => e,
+    )
+    assert.ok(err instanceof ResilienceError)
+    assert.equal(err.attempts, 0)
+    assert.equal(err.classified.reason, 'rate_limit')
+    assert.equal(err.classified.detail, 'model-benched')
+    assert.match(err.message, /benched pool-wide/)
+    assert.match(err.message, /until \d{4}-\d{2}-\d{2}T/)
+  })
+
+  test('the refusal reaches the trajectory log with NO custom sink configured', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'resilience-refusal-log-'))
+    const logPath = join(dir, 'trajectories.jsonl')
+    const inner = new FakeProvider([http(401, 'invalid api key', { code: 'invalid_api_key' })])
+    const provider = new ResilientProvider(inner, {
+      pool: new CredentialPool('fake', ['key-a']),
+      config: config({ logPath }),
+      sleep: async () => {},
+    })
+    const call = (): Promise<ChatResult> =>
+      provider.complete({ model: 'model-a', messages: [{ role: 'user', content: 'hi' }] })
+    await assert.rejects(call(), (err: unknown) => err instanceof ResilienceError)
+    await assert.rejects(
+      call(),
+      (err: unknown) => err instanceof ResilienceError && err.attempts === 0,
+    )
+    const records = readFileSync(logPath, 'utf8')
+      .trim()
+      .split('\n')
+      .map(line => JSON.parse(line) as Record<string, unknown>)
+    const refusal = records.find(r => r['kind'] === 'llm/attempt-failed' && r['attempt'] === 0)
+    assert.ok(refusal, 'the attempt-0 refusal was written to the trajectory log')
+    assert.equal(refusal['reason'], 'auth_dead')
+    assert.equal(refusal['detail'], 'all-credentials-dead')
+    assert.equal(refusal['http_status'], 401)
+    assert.equal(refusal['error_code'], 'invalid_api_key')
+  })
+})
+
 describe('safety-rejection fixture (Q-HALT brief §8, router leg)', () => {
   test('a safety_blocked 400 surfaces content_policy with the cause on the attempt-failed event', async () => {
     const body =

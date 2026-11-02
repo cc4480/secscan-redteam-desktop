@@ -96,7 +96,42 @@ export interface PoolEntrySnapshot {
   fingerprint: string
   dead: boolean
   deadReason?: string
+  /** Epoch-ms when the killing failure was recorded (dead entries only). */
+  deadAtMs?: number
+  /** HTTP status of the killing response, when the provider sent one. */
+  deadStatus?: number
+  /** Provider error code of the killing response, when the provider sent one. */
+  deadCode?: string
   benchedModels: Array<{ model: string; untilMs: number | null }>
+}
+
+/** One dead credential's recorded death: who died, why, and what the provider said. */
+export interface DeadCredentialInfo {
+  keyId: number
+  /** First 8 hex chars of the key's SHA-256 — identifies a key without exposing it. */
+  fingerprint: string
+  deadReason?: string
+  /** Epoch-ms when the killing failure was recorded. */
+  deadAtMs?: number
+  /** HTTP status of the killing response, when the provider sent one. */
+  deadStatus?: number
+  /** Provider error code of the killing response, when the provider sent one. */
+  deadCode?: string
+}
+
+/**
+ * Why the pool cannot serve a model right now — the structured form of an
+ * acquire() refusal, so the resilience layer can name the terminal cause
+ * honestly (a dead key is not a rate limit) instead of guessing.
+ */
+export interface PoolRefusalExplanation {
+  kind: 'all-dead' | 'model-benched' | 'keys-benched'
+  /** Every dead entry (kind 'all-dead': every entry in the pool). */
+  dead: DeadCredentialInfo[]
+  /** Epoch-ms when the earliest bench lifts, when a finite bench bounds the refusal. */
+  benchUntilMs?: number
+  /** At least one refusing bench is permanent (entitlement): it never lifts on its own. */
+  permanentBench: boolean
 }
 
 /**
@@ -159,6 +194,9 @@ interface PoolEntry {
   fingerprint: string
   dead: boolean
   deadReason?: string
+  deadAtMs?: number
+  deadStatus?: number
+  deadCode?: string
   benches: Map<string, ModelBench>
 }
 
@@ -181,6 +219,12 @@ interface StoredPoolEntry {
   fingerprint: string
   dead: boolean
   deadReason?: string
+  /** Epoch-ms when the killing failure was recorded (dead entries only). */
+  deadAtMs?: number
+  /** HTTP status of the killing response, when the provider sent one. */
+  deadStatus?: number
+  /** Provider error code of the killing response, when the provider sent one. */
+  deadCode?: string
   benches: StoredBench[]
 }
 
@@ -244,6 +288,13 @@ function parseStoredPoolEntry(raw: unknown): StoredPoolEntry | undefined {
   }
   const entry: StoredPoolEntry = { fingerprint: raw.fingerprint, dead: raw.dead, benches }
   if (typeof raw.deadReason === 'string') entry.deadReason = raw.deadReason
+  if (typeof raw.deadAtMs === 'number' && Number.isFinite(raw.deadAtMs) && raw.deadAtMs >= 0) {
+    entry.deadAtMs = raw.deadAtMs
+  }
+  if (typeof raw.deadStatus === 'number' && Number.isFinite(raw.deadStatus)) {
+    entry.deadStatus = raw.deadStatus
+  }
+  if (typeof raw.deadCode === 'string') entry.deadCode = raw.deadCode
   return entry
 }
 
@@ -412,6 +463,9 @@ export class CredentialPool {
       if (stored.dead) {
         entry.dead = true
         if (stored.deadReason !== undefined) entry.deadReason = stored.deadReason
+        if (stored.deadAtMs !== undefined) entry.deadAtMs = stored.deadAtMs
+        if (stored.deadStatus !== undefined) entry.deadStatus = stored.deadStatus
+        if (stored.deadCode !== undefined) entry.deadCode = stored.deadCode
       }
       for (const bench of stored.benches) {
         if (bench.untilMs !== null && bench.untilMs <= nowMs) {
@@ -466,6 +520,11 @@ export class CredentialPool {
       if (!entry.dead && benches.length === 0) continue
       const stored: StoredPoolEntry = { fingerprint: entry.fingerprint, dead: entry.dead, benches }
       if (entry.deadReason !== undefined) stored.deadReason = entry.deadReason
+      if (entry.dead) {
+        if (entry.deadAtMs !== undefined) stored.deadAtMs = entry.deadAtMs
+        if (entry.deadStatus !== undefined) stored.deadStatus = entry.deadStatus
+        if (entry.deadCode !== undefined) stored.deadCode = entry.deadCode
+      }
       entries.push(stored)
     }
     const modelBenches: StoredModelBench[] = []
@@ -609,6 +668,12 @@ export class CredentialPool {
       case 'billing':
         entry.dead = true
         entry.deadReason = failure.reason
+        // The death record carries the killing response's evidence — when
+        // it happened, and what the provider answered — so a later refusal
+        // can name the cause instead of a generic terminal label.
+        entry.deadAtMs = this.now()
+        if (failure.status !== undefined) entry.deadStatus = failure.status
+        if (failure.code !== undefined) entry.deadCode = failure.code
         this.save()
         return
       case 'entitlement': {
@@ -675,7 +740,62 @@ export class CredentialPool {
           })),
       }
       if (entry.deadReason !== undefined) snap.deadReason = entry.deadReason
+      if (entry.dead) {
+        if (entry.deadAtMs !== undefined) snap.deadAtMs = entry.deadAtMs
+        if (entry.deadStatus !== undefined) snap.deadStatus = entry.deadStatus
+        if (entry.deadCode !== undefined) snap.deadCode = entry.deadCode
+      }
       return snap
     })
+  }
+
+  /**
+   * Explain why acquire() cannot serve `model`, in terminal-cause terms.
+   * Dead credentials outrank benches: when every key is dead the refusal
+   * is a death, not a throttle, and the explanation says which keys died,
+   * why, and what the provider answered. A pool-wide model bench outranks
+   * per-key benches (it refuses even a healthy key).
+   * @param model - The model the refused call would request.
+   * @returns The explanation, or undefined when a credential can serve now.
+   */
+  refusalExplanation(model: string): PoolRefusalExplanation | undefined {
+    const nowMs = this.now()
+    const dead: DeadCredentialInfo[] = []
+    for (const entry of this.entries) {
+      if (!entry.dead) continue
+      const info: DeadCredentialInfo = { keyId: entry.keyId, fingerprint: entry.fingerprint }
+      if (entry.deadReason !== undefined) info.deadReason = entry.deadReason
+      if (entry.deadAtMs !== undefined) info.deadAtMs = entry.deadAtMs
+      if (entry.deadStatus !== undefined) info.deadStatus = entry.deadStatus
+      if (entry.deadCode !== undefined) info.deadCode = entry.deadCode
+      dead.push(info)
+    }
+    if (this.entries.length > 0 && dead.length === this.entries.length) {
+      return { kind: 'all-dead', dead, permanentBench: false }
+    }
+    const modelBenchUntil = this.modelBenches.get(model)
+    if (modelBenchUntil !== undefined && modelBenchUntil > nowMs) {
+      return { kind: 'model-benched', dead, benchUntilMs: modelBenchUntil, permanentBench: false }
+    }
+    let benchUntilMs: number | undefined
+    let permanentBench = false
+    let benched = false
+    for (const entry of this.entries) {
+      if (entry.dead) continue
+      const bench = entry.benches.get(model)
+      if (bench === undefined) return undefined // A living, unbenched key serves.
+      if (bench.untilMs === Infinity) {
+        permanentBench = true
+        benched = true
+        continue
+      }
+      if (bench.untilMs <= nowMs) return undefined // Bench lapsed: the key serves.
+      benched = true
+      if (benchUntilMs === undefined || bench.untilMs < benchUntilMs) benchUntilMs = bench.untilMs
+    }
+    if (!benched) return undefined
+    const out: PoolRefusalExplanation = { kind: 'keys-benched', dead, permanentBench }
+    if (benchUntilMs !== undefined) out.benchUntilMs = benchUntilMs
+    return out
   }
 }

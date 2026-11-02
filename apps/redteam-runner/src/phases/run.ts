@@ -24,6 +24,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { verifiedRecordFor } from "../prompts/fleet-assembly.js";
 import { authorizePhase } from "./authorize.js";
+import { deadCredentialHaltReason } from "./dead-credential.js";
 import { planPhase } from "./plan.js";
 import { reconPhase } from "./recon.js";
 import { exploitPhase } from "./exploit.js";
@@ -33,6 +34,7 @@ import { coordinatorSignOff } from "./signoff.js";
 import { peerReviewPhase } from "./peer-review.js";
 import { resolveVariantCap } from "../variants/index.js";
 import { captureEngagementTrajectory } from "../harness2/trajectory.js";
+import { poolSnapshots, roleModelPolicy } from "@secscan/redteam-llm-router";
 import {
   MemoryError,
   commitMemoryForRun,
@@ -240,6 +242,13 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
     // record itself is rebuilt per prompt by agents.ts promptCtx.)
     verifiedRecordFor(ctx);
     injectStartMemory(ctx);
+    // FIX-DEADKEY fail-fast: a fleet credential the provider already
+    // pronounced dead (recorded in the router's pool) halts the
+    // engagement here — before the plan phase — with the honest terminal
+    // cause and the remedy, instead of dying mid-plan behind a generic
+    // give-up. Living credentials (or no pool) pass through untouched.
+    const deadReason = deadCredentialHaltReason(poolSnapshots(), roleModelPolicy().coordinator.provider);
+    if (deadReason !== undefined) throw new HaltError(deadReason);
     await planPhase(ctx);
     await coordinatorSignOff(ctx, "plan→recon", `Operation plan:\n${JSON.stringify(ctx.plan, null, 1)}`);
     void fireSlack(ctx, { kind: "phase", phase: "recon" });
