@@ -279,7 +279,15 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
     // the closing set (or leaves it UNSIGNED — report/scribe.ts); the set
     // is then verified on disk before the completion is recorded.
     events.updateState({ status: "complete", phase: "done" });
-    await scribeGate(ctx);
+    const scribeOutcome = await scribeGate(ctx);
+    events.append({
+      phase: "report",
+      actor: "runner",
+      action: "scribe_gate_outcome",
+      result: scribeOutcome.signed
+        ? `Scribe gate outcome: signed after ${scribeOutcome.cycles} review cycle(s).`
+        : `Scribe gate outcome: shipped unsigned (${scribeOutcome.reason ?? "unspecified"}) after ${scribeOutcome.cycles} review cycle(s).`,
+    });
     const delivered = finalizeDeliverables(ctx);
     if (delivered.ok) {
       events.append({ phase: "done", actor: "runner", action: "engagement_complete", result: `Complete. ${findings.length} findings.` });

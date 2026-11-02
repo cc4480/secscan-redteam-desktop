@@ -19,7 +19,7 @@
  */
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { AgentRole, ChatMessage, ChatResult, ToolCallRequest } from "@secscan/redteam-llm-router";
@@ -177,6 +177,47 @@ describe("scribe gate — the close-out loop", () => {
     assert.equal(model.artifactSignoff?.by, "scribe");
     assert.equal(model.artifactUnsigned, null);
     assert.ok(readEvents(dir).some((e) => e.action === "artifact_signed"), "artifact_signed event recorded");
+  });
+
+  it("(1b) the review brief carries each finding's evidence and its decisive PoC events", async () => {
+    writeFixtureSet(dir);
+    // F-1's PoC bundle on disk, as the report phase leaves it: one
+    // validating (decisive) step and one step with no validation signal.
+    mkdirSync(join(dir, "poc"));
+    writeFileSync(join(dir, "poc", "F-1.json"), JSON.stringify({
+      version: 1,
+      bundleId: "POC-eng-scribe-fixture-F-1",
+      engagementId: "eng-scribe-fixture",
+      findingId: "F-1",
+      attackIds: ["T1190"],
+      severity: "critical",
+      title: TITLES[0],
+      target: "secscan.us",
+      operator: "Fixture Operator",
+      generatedAt: "2026-11-01T00:00:00.000Z",
+      steps: [
+        { seq: 7, ts: "2026-11-01T00:00:07.000Z", tool: "http_probe", command: "GET https://secscan.us/probe", result: "marker REDTEAM-MARKER-FIXTURE echoed back in the response body", validation: "marker-echo", marker: "FIXTURE", replay: null },
+        { seq: 8, ts: "2026-11-01T00:00:08.000Z", tool: "http_probe", command: "GET https://secscan.us/other", result: "unvalidated noise step result", validation: "none", replay: null },
+      ],
+      validationTier: "execution",
+      proves: "http_probe executed the runner-built canary on secscan.us (T1190); marker REDTEAM-MARKER-FIXTURE echoed back.",
+      doesNotProve: "Full impact beyond the executed action.",
+      reverifyCommand: "redteam-runner reverify --bundle poc/F-1.json --scope secscan.us --execute",
+    }));
+    let brief = "";
+    const complete: CompleteFn = async (_role, messages) => {
+      brief = messages.map((m) => m.content).join("\n");
+      return textOnly('{"verdict":"sign","defects":[]}');
+    };
+    const outcome = await scribeGate(fixtureCtx(dir, complete), { regenerate: () => {} });
+    assert.equal(outcome.signed, true);
+    assert.ok(brief.includes("fixture evidence 1"), "the brief carries F-1's evidence text");
+    assert.ok(brief.includes("fixture evidence 2"), "the brief carries F-2's evidence text");
+    assert.ok(brief.includes("PoC (execution tier, poc/F-1.json)"), "the brief names F-1's PoC bundle and tier");
+    assert.ok(brief.includes("marker REDTEAM-MARKER-FIXTURE echoed back"), "the brief carries the bundle's proves line");
+    assert.ok(brief.includes("Decisive PoC events: seq 7 http_probe: marker REDTEAM-MARKER-FIXTURE echoed back in the response body"), "the brief carries the decisive PoC event");
+    assert.ok(!brief.includes("unvalidated noise step result"), "steps without a validation signal are not decisive and stay out");
+    assert.equal(brief.split("Decisive PoC events").length - 1, 1, "only F-1 has a bundle — F-2 gets no PoC claim");
   });
 
   it("(2) reject → regenerate → rewrite → sign, the defect riding the event", async () => {
@@ -363,6 +404,9 @@ describe("scribe gate — end to end", () => {
     const events = readEvents(engDir);
     assert.ok(events.some((e) => e.action === "scribe_html_authored"));
     assert.ok(events.some((e) => e.action === "artifact_signed"));
+    const gateOutcome = events.find((e) => e.action === "scribe_gate_outcome");
+    assert.ok(gateOutcome, "the run records the scribe gate's returned outcome (L13)");
+    assert.ok(gateOutcome.result.includes("signed after 1 review cycle"), "the recorded outcome carries the gate's verdict and cycles");
     assert.ok(existsSync(join(engDir, "report-package.zip")), "the package still ships");
   });
 

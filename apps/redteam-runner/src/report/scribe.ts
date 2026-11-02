@@ -40,6 +40,7 @@ import {
   type ArtifactUnsigned,
   type ScribeDefect,
 } from "../events.js";
+import { bundleFileName, type PocBundle } from "../proof/index.js";
 import { DELIVERABLE_FILES, REPORT_JSON_NAME, type ReportModel } from "./deliverables.js";
 import { regenerateReport } from "./regenerate.js";
 import { emitReportPackage } from "./package.js";
@@ -126,6 +127,33 @@ function readCapped(dir: string, name: string, cap: number): string {
   return text.length > cap ? `${text.slice(0, cap)}\n[truncated at ${cap} of ${text.length} bytes]` : text;
 }
 
+/**
+ * The decisive PoC events for one finding, from its on-disk bundle
+ * (poc/<finding-id>.json, written by the report phase before this gate
+ * runs): the steps carrying a validation signal — the steps the
+ * bundle's verdict rests on — rendered in the audit-event form
+ * report/proof.ts uses for decisive events (result capped at 160).
+ * A missing or unparseable bundle yields an empty string: the brief
+ * carries no PoC claim for that finding rather than an invented one.
+ *
+ * @param dir - the engagement directory
+ * @param findingId - the finding whose bundle to excerpt
+ * @returns the excerpt lines, or "" when no bundle is on disk
+ */
+function pocExcerpt(dir: string, findingId: string): string {
+  try {
+    const bundle = JSON.parse(readFileSync(join(dir, "poc", bundleFileName(findingId)), "utf8")) as PocBundle;
+    const decisive = (bundle.steps ?? []).filter((s) => s.validation !== "none");
+    if (decisive.length === 0) return "";
+    return (
+      `\n  PoC (${bundle.validationTier} tier, poc/${bundleFileName(findingId)}): ${bundle.proves.slice(0, 500)}` +
+      `\n  Decisive PoC events: ${decisive.map((e) => `seq ${e.seq} ${e.tool}: ${e.result.slice(0, 160)}`).join(" | ")}`
+    );
+  } catch {
+    return "";
+  }
+}
+
 /** The review brief: the model of truth, then the artifacts themselves. */
 function reviewMessages(ctx: Ctx, dir: string, model: ReportModel): ChatMessage[] {
   const user =
@@ -134,7 +162,7 @@ function reviewMessages(ctx: Ctx, dir: string, model: ReportModel): ChatMessage[
     `grade ${model.grade ? `${model.grade.letter} (${model.grade.score}/100, ${model.grade.rating})` : "N/A"}, ` +
     `severity counts ${JSON.stringify(model.severityCounts)}, ${model.findingCount} findings, battery totals ${JSON.stringify(model.batteryTotals)}` +
     `${model.sections ? `, document sections: ${model.sections.join(", ")}` : ""}.\n` +
-    `Findings of record:\n${model.findings.map((f) => `- [${f.severity}] ${f.title}`).join("\n") || "(none)"}\n\n` +
+    `Findings of record:\n${model.findings.map((f) => `- [${f.severity}] ${f.title}\n  Evidence of record: ${f.evidence.slice(0, 500)}${pocExcerpt(dir, f.id)}`).join("\n") || "(none)"}\n\n` +
     `The deliverable set is: ${DELIVERABLE_FILES.join(", ")}. report.docx and ${DELIVERABLE_FILES[DELIVERABLE_FILES.length - 1]} are binary, rendered from the same document as report.md — judge them by it.\n\n` +
     `=== report.md ===\n${readCapped(dir, "report.md", 12000)}\n\n` +
     `=== report.txt ===\n${readCapped(dir, "report.txt", 6000)}\n\n` +
