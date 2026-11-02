@@ -5,7 +5,7 @@
   "name": "@secscan/redteam-auth-gate",
   "private": true,
   "scripts": {
-    "build": "tsc -p tsconfig.json && node ../scripts/dist-hash.mjs write . lib",
+    "build": "tsc -p tsconfig.json && tsdown && node ../scripts/dist-hash.mjs write . lib",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "type": "module",
