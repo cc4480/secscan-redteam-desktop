@@ -11,9 +11,11 @@ import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { ProviderError, providerErrorFromResponse } from '../src/errors.js'
 import { ResilienceError, type RetryEvent } from '../src/executor.js'
-import { CredentialPool } from '../src/pool.js'
+import { CredentialPool, COOLDOWN_BASE_MS } from '../src/pool.js'
 import {
   ResilientProvider,
+  DEFAULT_MAX_BENCH_WAIT_MS,
+  normalizeResilienceConfig,
   resilienceConfigFromEnv,
   type ResilienceConfig,
 } from '../src/resilience.js'
@@ -63,6 +65,7 @@ function config(overrides: Partial<ResilienceConfig> = {}): ResilienceConfig {
     maxAttempts: 3,
     stayOnPrimaryResetMs: 0,
     maxDelayMs: 30_000,
+    maxBenchWaitMs: 240_000,
     fallbackModels: {},
     fallbackProviders: {},
     logPath: null,
@@ -247,6 +250,22 @@ describe('resilienceConfigFromEnv', () => {
     assert.equal(c.maxAttempts, 4)
     assert.equal(c.stayOnPrimaryResetMs, 0)
   })
+  test('bench-wait ceiling: default covers the base bench; below-floor values are raised, never honored', () => {
+    const dflt = resilienceConfigFromEnv({} as NodeJS.ProcessEnv)
+    assert.equal(dflt.maxBenchWaitMs, DEFAULT_MAX_BENCH_WAIT_MS)
+    assert.ok(dflt.maxBenchWaitMs >= COOLDOWN_BASE_MS, 'default ceiling covers the base bench')
+    const envLow = resilienceConfigFromEnv({ REDTEAM_LLM_MAX_BENCH_WAIT_MS: '1000' } as NodeJS.ProcessEnv)
+    assert.equal(envLow.maxBenchWaitMs, COOLDOWN_BASE_MS, 'env below the base bench clamps up to it')
+    const envHigh = resilienceConfigFromEnv({ REDTEAM_LLM_MAX_BENCH_WAIT_MS: '300000' } as NodeJS.ProcessEnv)
+    assert.equal(envHigh.maxBenchWaitMs, 300_000, 'env above the floor is honored')
+    const overrideLow = resilienceConfigFromEnv({} as NodeJS.ProcessEnv, { maxBenchWaitMs: 5 })
+    assert.equal(overrideLow.maxBenchWaitMs, COOLDOWN_BASE_MS, 'code overrides clamp the same way')
+    const literal = normalizeResilienceConfig({ ...dflt, maxBenchWaitMs: 1 })
+    assert.equal(literal.maxBenchWaitMs, COOLDOWN_BASE_MS, 'a raw literal config normalizes identically')
+    assert.throws(() =>
+      resilienceConfigFromEnv({ REDTEAM_LLM_MAX_BENCH_WAIT_MS: 'soon' } as NodeJS.ProcessEnv),
+    )
+  })
   test('REDTEAM_LLM_RESILIENCE=off disables', () => {
     const c = resilienceConfigFromEnv({ REDTEAM_LLM_RESILIENCE: 'off' } as NodeJS.ProcessEnv)
     assert.equal(c.enabled, false)
@@ -328,6 +347,7 @@ describe('pool refusal honesty (FIX-DEADKEY)', () => {
     assert.equal(refusal?.reason, 'auth_dead')
     assert.equal(refusal?.status, 401)
     assert.equal(refusal?.code, 'invalid_api_key')
+    assert.deepEqual(h.sleeps, [], 'a dead key never waits: no bench-wait sleep on either call')
   })
 
   test('a genuinely benched key keeps its bench wording and expiry', async () => {
@@ -390,6 +410,113 @@ describe('pool refusal honesty (FIX-DEADKEY)', () => {
     assert.equal(refusal['detail'], 'all-credentials-dead')
     assert.equal(refusal['http_status'], 401)
     assert.equal(refusal['error_code'], 'invalid_api_key')
+  })
+})
+
+describe('rate-limit survival (FIX-DEADKEY scope expansion)', () => {
+  /** Pool + provider on one fake clock; sleeping advances the clock. */
+  function clockHarness(
+    script: Outcome[],
+    opts: { keys?: string[]; config?: Partial<ResilienceConfig>; startMs?: number } = {},
+  ) {
+    let nowMs = opts.startMs ?? 1_000_000
+    const now = (): number => nowMs
+    const sleeps: number[] = []
+    const events: RetryEvent[] = []
+    const inner = new FakeProvider(script)
+    const pool = new CredentialPool('fake', opts.keys ?? ['key-a'], { now })
+    const provider = new ResilientProvider(inner, {
+      pool,
+      config: config(opts.config),
+      now,
+      sleep: async (ms) => {
+        sleeps.push(ms)
+        nowMs += ms
+      },
+      onEvent: e => events.push(e),
+    })
+    const call = (model = 'model-a'): Promise<ChatResult> =>
+      provider.complete({ model, messages: [{ role: 'user', content: 'hi' }] })
+    return { inner, pool, provider, call, sleeps, events }
+  }
+
+  test('SURVIVAL: a 429 benches the only key — the SAME call waits out the bench and succeeds', async () => {
+    const h = clockHarness([http(429, 'rate limit exceeded'), ok('model-a')])
+    const res = await h.call()
+    assert.equal(res.text, 'ok', 'the call survived the rate limit with no operator intervention')
+    assert.deepEqual(h.sleeps, [COOLDOWN_BASE_MS], 'waited exactly the base bench, on the same call')
+    assert.deepEqual(
+      h.inner.seen.map(s => s.apiKey),
+      ['key-a', 'key-a'],
+      'the retry rode the same credential after its bench lapsed',
+    )
+    const scheduled = h.events.find(e => e.kind === 'retry-scheduled')
+    assert.equal(scheduled?.reason, 'rate_limit')
+    assert.equal(scheduled?.delayMs, COOLDOWN_BASE_MS)
+    assert.equal(h.pool.snapshot()[0]?.benchedModels.length, 0, 'success cleared the bench')
+  })
+
+  test('SURVIVAL at call start: a call arriving during a finite bench waits it out, then serves', async () => {
+    const h = clockHarness([ok('model-a')])
+    // An earlier call's failure benched the only key for the base cooldown.
+    h.pool.reportFailure(0, 'model-a', {
+      reason: 'rate_limit',
+      hints: { retryable: true, rotateCredential: true, fallbackModel: false, fallbackProvider: true, compress: false },
+      detail: 'test-bench',
+    })
+    const res = await h.call()
+    assert.equal(res.text, 'ok')
+    assert.deepEqual(h.sleeps, [COOLDOWN_BASE_MS], 'waited the remaining bench before the first attempt')
+    assert.deepEqual(
+      h.inner.seen.map(s => s.apiKey),
+      ['key-a'],
+      'exactly one provider attempt, after the wait',
+    )
+    const scheduled = h.events.find(e => e.kind === 'retry-scheduled' && e.attempt === 0)
+    assert.equal(scheduled?.delayMs, COOLDOWN_BASE_MS)
+  })
+
+  test('SURVIVAL under a below-floor configured ceiling: normalization raises it, the bench is still waited out', async () => {
+    const h = clockHarness([http(429, 'rate limit exceeded'), ok('model-a')], {
+      config: { maxBenchWaitMs: 1 },
+    })
+    const res = await h.call()
+    assert.equal(res.text, 'ok')
+    assert.deepEqual(h.sleeps, [COOLDOWN_BASE_MS], 'the 1ms ceiling was normalized to the base bench')
+  })
+
+  test('a bench past the ceiling gives up honestly: bench wording, expiry, no wait', async () => {
+    const h = harness([http(429, 'slow down', { retryAfterMs: 600_000 })], { keys: ['key-a'] })
+    const err = await h.call().then(
+      () => null,
+      (e: unknown) => e,
+    )
+    assert.ok(err instanceof ResilienceError)
+    assert.equal(err.attempts, 1, 'the attempt count survives the re-expression')
+    assert.equal(err.classified.reason, 'rate_limit')
+    assert.equal(err.classified.detail, 'all-credentials-benched')
+    assert.match(err.message, /benched/)
+    assert.match(err.message, /until \d{4}-\d{2}-\d{2}T/, 'the bench expiry is named')
+    assert.doesNotMatch(err.message, /DEAD/)
+    assert.deepEqual(h.sleeps, [], 'a 600s bench is beyond the 240s ceiling: no wait was attempted')
+  })
+
+  test('a permanent (entitlement) bench never waits and gives up as permanent', async () => {
+    const h = harness([http(403, 'model_not_supported', { code: 'model_not_supported' })], { keys: ['key-a'] })
+    await assert.rejects(
+      h.call(),
+      (err: unknown) => err instanceof ResilienceError && err.classified.reason === 'entitlement',
+    )
+    const err = await h.call().then(
+      () => null,
+      (e: unknown) => e,
+    )
+    assert.ok(err instanceof ResilienceError)
+    assert.equal(err.attempts, 0)
+    assert.equal(err.classified.detail, 'all-credentials-benched')
+    assert.match(err.message, /permanent \(entitlement\)/)
+    assert.match(err.message, /never lifts/)
+    assert.deepEqual(h.sleeps, [], 'no wait was attempted for a permanent bench')
   })
 })
 

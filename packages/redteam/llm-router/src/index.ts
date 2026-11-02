@@ -71,8 +71,10 @@ export {
 } from './executor.js'
 export {
   ResilientProvider,
+  normalizeResilienceConfig,
   poolRefusalFailure,
   resilienceConfigFromEnv,
+  DEFAULT_MAX_BENCH_WAIT_MS,
   RESILIENCE_ENV,
   type FallbackProviderTarget,
   type ResilienceConfig,

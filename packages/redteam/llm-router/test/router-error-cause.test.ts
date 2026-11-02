@@ -27,6 +27,7 @@ function config(overrides: Partial<ResilienceConfig> = {}): ResilienceConfig {
     maxAttempts: 1,
     stayOnPrimaryResetMs: 0,
     maxDelayMs: 30_000,
+    maxBenchWaitMs: 240_000,
     fallbackModels: {},
     fallbackProviders: {},
     logPath: null,
