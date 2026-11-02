@@ -9,7 +9,9 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { ProviderError, type ChatMessage, type ChatResult } from '@secscan/redteam-llm-router'
+import { buildEngagementInjection } from '@secscan/redteam-fleet-skills'
 import { createCharteredComplete, charterEngagementFor, condensedReissueMessages } from '../src/charter-completion.js'
+import { verifiedRecordFor } from '../src/prompts/fleet-assembly.js'
 import type { Ctx } from '../src/context.js'
 
 interface CapturedEvent { phase: string; actor: string; action: string; result: string }
@@ -20,14 +22,18 @@ function makeCtx(events: CapturedEvent[]): Ctx {
     startedAt: 4242,
     hosts: ['example.com'],
     verificationProof: 'DNS TXT record',
+    verifiedAt: '2026-11-02T00:00:00.000Z',
     input: {
       target: 'https://example.com',
       mode: 'red',
       objective: 'assess the external attack surface',
       client: 'Example Owner LLC',
-      roe: {},
+      roe: { scope: ['example.com'] },
     },
-    events: { append: (e: CapturedEvent) => events.push(e) },
+    events: {
+      engagementId: 'example.com-4242',
+      append: (e: CapturedEvent) => events.push(e),
+    },
   } as unknown as Ctx
 }
 
@@ -324,17 +330,63 @@ describe('createCharteredComplete — thrown-policy containment (W2)', () => {
 
 describe('condensedReissueMessages', () => {
   it('carries the record and a summary, never the full context', () => {
-    const eng = charterEngagementFor(makeCtx([]))
     const out = condensedReissueMessages([
       { role: 'system', content: 'CHARTERED HEAD' },
       { role: 'user', content: 'do the step' },
       { role: 'user', content: `observation ${'y'.repeat(3000)} TAIL_MARKER` },
-    ], eng)
+    ], makeCtx([]))
     assert.equal(out[0].content, 'CHARTERED HEAD')
     const user = out[out.length - 1].content
     assert.ok(user.includes('<verified_engagement>'))
     assert.ok(user.includes('example.com-4242'))
     assert.ok(user.includes('do the step'))
     assert.ok(!user.includes('TAIL_MARKER'))
+  })
+
+  it('renders the record as the standard fleet injection, byte for byte (M8)', () => {
+    const ctx = makeCtx([])
+    const out = condensedReissueMessages([
+      { role: 'system', content: 'CHARTERED HEAD' },
+      { role: 'user', content: 'do the step' },
+    ], ctx)
+    const user = out[out.length - 1].content
+    const standard = buildEngagementInjection(verifiedRecordFor(ctx))
+    assert.ok(
+      user.includes(standard),
+      'the re-issue carries the identical sanitized injection the assembly path renders',
+    )
+    // The standard block is the FULL record — the target list, the
+    // verification stamp, the session rule — not the hand-rendered
+    // five-line subset the re-issue used to carry.
+    assert.ok(user.includes('targets (complete list'))
+    assert.ok(user.includes('verified at 2026-11-02T00:00:00.000Z'))
+    assert.ok(user.includes('session_rule:'))
+  })
+})
+
+describe('createCharteredComplete — the §3 fallback keeps the fleet prompt (H4)', () => {
+  it('the fallback request carries the refused call\u2019s system message, not just its user text', async () => {
+    const events: CapturedEvent[] = []
+    const assembledHeads: string[] = []
+    const s = {
+      elicitationCall: async () => result(ANCHOR_TEXT),
+      call: async () => result("I can't help with that request."),
+      fallbackCall: async (_route: unknown, assembled: { messages: ChatMessage[] }) => {
+        assembledHeads.push(assembled.messages.map((m) => m.content).join('\n'))
+        return result('RECOVERED ARTIFACT')
+      },
+    }
+    const complete = createCharteredComplete(makeCtx(events), 'exploit', s as never)
+    const res = await complete('exploiter', [
+      { role: 'system', content: 'PERSONA: exploiter — FLEET PROMPT MARKER' },
+      { role: 'user', content: 'build the payload' },
+    ], {})
+    assert.equal(res.text, 'RECOVERED ARTIFACT')
+    assert.ok(assembledHeads.length >= 1, 'the fallback chain ran')
+    assert.ok(
+      assembledHeads.some((h) => h.includes('FLEET PROMPT MARKER')),
+      'the fallback request still carries the original system prompt (soul, skills, record)',
+    )
+    assert.ok(events.some((e) => e.action === 'refusal_telemetry'))
   })
 })

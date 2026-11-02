@@ -53,12 +53,27 @@ const FINDINGS_JSON = JSON.stringify({
   ],
 });
 
+/** The same two findings as a task's VERDICTS block — the path real
+ * findings take into the live record (mergeVerdictBlock). Since the
+ * H3 reconciliation, the signed record is built from the LIVE record
+ * and the reporter's JSON (FINDINGS_JSON) contributes prose only, so
+ * the fixture records its findings live, exactly as a task that
+ * confirmed them would; reporter items with no live counterpart are
+ * dropped by design and no longer reach the deliverables. */
+const LIVE_VERDICTS = JSON.stringify({
+  verdicts: [
+    { kind: "confirmed", severity: "critical", title: "Fixture critical flaw", attackId: "T1190", evidence: "fixture evidence one" },
+    { kind: "confirmed", severity: "low", title: "Fixture low flaw", attackId: "T1190", evidence: "fixture evidence two" },
+  ],
+});
+
 /** The battery suite's scripted LLM, with a parameterized reporter and
  * an optional sign-off refusal (the deterministic halt trigger). */
-function scriptedLlm(opts: { reporterFindings?: string; refuseSignOff?: boolean } = {}) {
+function scriptedLlm(opts: { reporterFindings?: string; refuseSignOff?: boolean; liveFindings?: boolean } = {}) {
   const counts: Record<string, number> = {};
   const taskCalls: Record<string, number> = {};
   let replans = 0;
+  let verdictBlockSent = false;
   const probe = (category: string, id: number): ToolCallRequest => ({
     id: `call-${id}`,
     name: "http_probe",
@@ -107,6 +122,10 @@ function scriptedLlm(opts: { reporterFindings?: string; refuseSignOff?: boolean 
       const cat = sys.match(/Battery category: (\w+)/)?.[1] ?? "logic";
       return { text: `${cat} hypothesis`, toolCalls: [probe(cat, n)], provider: "fake", model: "fake" };
     }
+    if (opts.liveFindings && !verdictBlockSent) {
+      verdictBlockSent = true;
+      return textOnly("TRIED: probe / OBSERVED: markers present / VERDICT: confirmed\n```json " + LIVE_VERDICTS + " ```");
+    }
     return textOnly("TRIED: probe / OBSERVED: 200 ok / VERDICT: killed - no flaw");
   };
 }
@@ -140,7 +159,7 @@ describe("deliverable autofire (Q-DELIVERABLES-AUTOFIRE)", () => {
 
   it("a completed engagement emits all seven artifacts and names them on the record", async () => {
     const input: EngagementInput = { target: "secscan.us", mode: "red", objective: "deliverables test", roe: { scope: ["secscan.us"] } };
-    const res = await runEngagement(input, runOpts(scriptedLlm({ reporterFindings: FINDINGS_JSON })));
+    const res = await runEngagement(input, runOpts(scriptedLlm({ reporterFindings: FINDINGS_JSON, liveFindings: true })));
     assert.equal(res.status, "complete");
     assert.equal(res.deliverableFailed, undefined, "no deliverable failure on a clean close");
     const engDir = join(dir, res.engagementId);
@@ -166,7 +185,7 @@ describe("deliverable autofire (Q-DELIVERABLES-AUTOFIRE)", () => {
 
   it("counts reconcile across HTML, JSON, TXT, MD, and CSV — and the package carries the twins", async () => {
     const input: EngagementInput = { target: "secscan.us", mode: "red", objective: "reconciliation test", roe: { scope: ["secscan.us"] } };
-    const res = await runEngagement(input, runOpts(scriptedLlm({ reporterFindings: FINDINGS_JSON })));
+    const res = await runEngagement(input, runOpts(scriptedLlm({ reporterFindings: FINDINGS_JSON, liveFindings: true })));
     assert.equal(res.status, "complete");
     const engDir = join(dir, res.engagementId);
     const model = JSON.parse(readFileSync(join(engDir, "report.json"), "utf8")) as ReportModel;

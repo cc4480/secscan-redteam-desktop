@@ -263,6 +263,32 @@ describe('the reviewer pass — outcomes change what reaches the reporter', () =
     assert.match(summary!.result, /2 unchallenged/)
   })
 
+  it('the checker runs under the fleet-assembled ARCHITECT prompt when the record is stamped (H5)', async () => {
+    const { ctx } = makeCtx(
+      [live({ title: 'SQL injection in login' })],
+      [['SQL injection in login', { verdict: 'upheld', rationale: 'proof in evidence' }]],
+    )
+    // Stamp the authorize record the way production carries it.
+    const stamped = ctx as unknown as Record<string, unknown>
+    stamped.verificationProof = 'DNS TXT record'
+    stamped.verifiedAt = '2026-11-02T00:00:00.000Z'
+    const systems: string[] = []
+    const inner = ctx.deps.completeForRole!
+    ctx.deps.completeForRole = (async (role: AgentRole, messages: ChatMessage[]) => {
+      const sys = messages.find((m) => m.role === 'system')
+      if (sys) systems.push(sys.content)
+      return inner(role, messages)
+    }) as typeof inner
+    await peerReviewPhase(ctx)
+    assert.equal(ctx.liveFindings[0]!.peerReview?.verdict, 'upheld', 'verdict mechanics unchanged')
+    assert.equal(systems.length, 1)
+    const system = systems[0]!
+    assert.ok(system.includes('# The ARCHITECT — Evaluator / Reporter'), 'the ARCHITECT soul heads the checker prompt')
+    assert.ok(system.includes('<verified_engagement>'), 'the attested record is injected, not a generic system')
+    assert.ok(system.includes('engagement_id: eng-xcheck'), 'the record is this engagement\u2019s own')
+    assert.ok(system.includes('PEER REVIEWER'), 'the challenge delta survives inside the assembly')
+  })
+
   it('dry runs skip the pass entirely', async () => {
     const { ctx, seenRoles } = makeCtx([live({ title: 'Dry finding' })], [['Dry finding', { verdict: 'killed', rationale: 'x' }]])
     ctx.config.dryRunAgents = true

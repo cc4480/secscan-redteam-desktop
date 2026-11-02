@@ -38,10 +38,10 @@ import { emitDeliverables, stampFindingRefs } from "./finding-refs.js";
 import { buildDetailInput, recordReportMeta } from "./predecessor.js";
 import { type DetailInput } from "./detail.js";
 import { buildGradeSection, gradeFindings } from "./grading.js";
-import { applyCellVerdicts, haltedFindingFromLive } from "./cell-verdicts.js";
+import { applyCellVerdicts, haltedFindingFromLive, mergeReporterFindings } from "./cell-verdicts.js";
 import { peerDeferredPromptSection, peerVerdictSuffix, stampPeerVerdicts } from "./peer-verdicts.js";
 
-export { applyCellVerdicts, haltedFindingFromLive } from "./cell-verdicts.js";
+export { applyCellVerdicts, haltedFindingFromLive, mergeReporterFindings } from "./cell-verdicts.js";
 
 export async function reportPhase(
   ctx: Ctx,
@@ -146,7 +146,12 @@ export async function reportPhase(
       4,
     );
     const parsed = extractJsonBlock(reportMd) as { findings?: Finding[] } | null;
-    findings = Array.isArray(parsed?.findings) ? parsed.findings : [];
+    // H3: the findings set is built from the live record — the reporter
+    // JSON supplies prose only (mergeReporterFindings in cell-verdicts);
+    // unmatched reporter items are dropped and logged, never silently.
+    findings = mergeReporterFindings(ctx.liveFindings, Array.isArray(parsed?.findings) ? parsed.findings : [], (dropped) => {
+      ctx.events.append({ phase: "report", actor: "runner", action: "report_finding_dropped", result: `Reporter finding "${dropped.title}" matches no live finding — excluded from the record.` });
+    });
     for (const f of findings) { delete f.producer; delete f.peerReview; } // attribution is runner-stamped by the joins below, never model-set
     // Q-PROVEN: join the parsed findings back to the live findings so the
     // cell verdict reaches the report (before the accountable stamp below).

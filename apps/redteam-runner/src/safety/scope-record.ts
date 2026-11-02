@@ -6,13 +6,15 @@
  * outOfScope) and the AUTHORIZE phase's verified record (the attested
  * scope entries persisted on the engagement record). The deny list
  * parses identically for both — the operator's out-of-scope entries
- * through HostSet.fromEntries, so its classification and
- * skipped-entry surfacing never differ. The allow side differs by
- * what the entries are: declared entries are scope-file lines and
- * parse through the same file classification, while attested entries
- * are authorization output — hosts that already passed authorization
- * — and place through HostSet.fromAttestedEntries, which also places
- * the bare hostnames among them. The decision itself stays in
+ * through HostSet.fromAttestedEntries, so a bare hostname in the deny
+ * list is placed and denies: deny-beats-allow must not silently fail
+ * for exactly the bare hosts the attested placement exists to serve.
+ * The allow side differs by what the entries are: declared entries
+ * are scope-file lines and parse through the file classification
+ * (HostSet.fromEntries), while attested entries are authorization
+ * output — hosts that already passed authorization — and place
+ * through HostSet.fromAttestedEntries, which also places the bare
+ * hostnames among them. The decision itself stays in
  * scope-guard.ts (ScopeGuard).
  */
 import { HostSet } from "./scope-hostset.js";
@@ -36,7 +38,7 @@ function assembleSets(
   outOfScope: readonly string[] | undefined,
 ): ScopeGuardSets {
   const denyDeclared = outOfScope !== undefined;
-  const denyBuilt = denyDeclared ? HostSet.fromEntries(outOfScope ?? []) : { set: new HostSet(), skipped: [] as string[] };
+  const denyBuilt = denyDeclared ? HostSet.fromAttestedEntries(outOfScope ?? []) : { set: new HostSet(), skipped: [] as string[] };
   return {
     allow: allowBuilt.set,
     deny: denyBuilt.set,
@@ -49,8 +51,10 @@ function assembleSets(
 
 /**
  * Parse the guard's sets from raw declared allow entries and an
- * optional deny list: both sides through the scope-file
- * classification (HostSet.fromEntries).
+ * optional deny list: the allow side through the scope-file
+ * classification (HostSet.fromEntries), the deny side through the
+ * attested placement (HostSet.fromAttestedEntries) so a bare
+ * hostname in the deny list is placed and denies.
  *
  * @param allowEntries - The raw allow entries (the declared ROE scope).
  * @param outOfScope - The raw deny entries, or undefined when no deny list was declared.
@@ -73,8 +77,9 @@ export function scopeGuardSetsFromEntries(
  * HostSet.fromAttestedEntries: the attested hosts are placed as the
  * hosts they are, bare machine hostnames included, instead of being
  * dropped by the scope-file classification's dot requirement. The
- * deny set still comes from the ROE `outOfScope`, parsed as declared
- * entries: deny always beats allow, record or not.
+ * deny set still comes from the ROE `outOfScope`, parsed through the
+ * same attested placement, so a bare hostname there denies too:
+ * deny always beats allow, record or not.
  *
  * @param record - The attested scope entries and the ROE deny list.
  * @returns The parsed sets for a guard allow-sourced from the record.

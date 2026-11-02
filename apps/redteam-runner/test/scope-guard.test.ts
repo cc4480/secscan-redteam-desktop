@@ -482,6 +482,29 @@ describe("verified record — attested bare hostnames (the desktop local-host pa
     assert.equal(g.checkHost("cho-zen1").allowed, true);
   });
 
+  it("a bare host in the ROE deny list denies the attested bare host (M2)", () => {
+    // Before the deny side went through the attested placement, the
+    // bare deny entry was dropped by the scope-file classification's
+    // dot requirement and this check came back ALLOWED — deny
+    // silently failed for exactly the hosts the record path serves.
+    const g = ScopeGuard.fromVerifiedRecord({
+      verifiedScope: ["Cho-zen1"],
+      outOfScope: ["Cho-zen1"],
+    });
+    const v = g.checkHost("cho-zen1");
+    assert.equal(v.allowed, false);
+    assert.equal(v.kind, "deny");
+    assert.deepEqual(g.skippedEntries, [], "the bare deny entry is placed, not skipped");
+  });
+
+  it("the declared path places a bare-host deny entry too (M2)", () => {
+    const g = ScopeGuard.fromRoe({ scope: ["example.com"], outOfScope: ["Cho-zen1"] });
+    assert.deepEqual(g.skippedEntries, []);
+    const v = g.checkHost("cho-zen1");
+    assert.equal(v.allowed, false);
+    assert.equal(v.kind, "deny");
+  });
+
   it("the local-host literal-listing rule is unchanged on the record path", () => {
     const unlisted = ScopeGuard.fromVerifiedRecord({ verifiedScope: ["Cho-zen1"] });
     const v = unlisted.checkHost("localhost");
@@ -489,6 +512,48 @@ describe("verified record — attested bare hostnames (the desktop local-host pa
     assert.match(v.reason, /local host/);
     const listed = ScopeGuard.fromVerifiedRecord({ verifiedScope: ["127.0.0.1"] });
     assert.equal(listed.checkHost("127.0.0.1").allowed, true, "a literally listed local host stays allowed");
+  });
+});
+
+describe("verified record — attested underscore hostnames (L9)", () => {
+  it("fromAttestedEntries places an underscore hostname as a domain", () => {
+    const { set, skipped } = HostSet.fromAttestedEntries(["my_host"]);
+    assert.deepEqual(skipped, []);
+    assert.ok(set.domains.has("my_host"));
+    assert.equal(set.contains("my_host").member, true);
+    assert.equal(set.contains("MY_HOST").member, true);
+  });
+
+  it("a guard built from the record allows the attested underscore host", () => {
+    const g = ScopeGuard.fromVerifiedRecord({ verifiedScope: ["my_host"] });
+    assert.equal(g.checkHost("my_host").allowed, true);
+    assert.equal(g.checkHost("MY_HOST").allowed, true);
+    assert.deepEqual(g.skippedEntries, []);
+  });
+
+  it("an underscore host in the deny list is denied (deny beats allow)", () => {
+    const g = ScopeGuard.fromVerifiedRecord({
+      verifiedScope: ["my_host"],
+      outOfScope: ["my_host"],
+    });
+    const v = g.checkHost("my_host");
+    assert.equal(v.allowed, false);
+    assert.equal(v.kind, "deny");
+  });
+
+  it("an underscore host the record never attested is still refused as not listed", () => {
+    const g = ScopeGuard.fromVerifiedRecord({ verifiedScope: ["Cho-zen1"] });
+    const v = g.checkHost("my_host");
+    assert.equal(v.allowed, false);
+    assert.equal(v.kind, "allow");
+    assert.match(v.reason, /host not listed/);
+  });
+
+  it("dotted underscore hostnames classify as domains on the declared path", () => {
+    assert.equal(classifyScopeEntry("my_host.example.com"), "domain");
+    const { set, skipped } = HostSet.fromEntries(["my_host.example.com"]);
+    assert.deepEqual(skipped, []);
+    assert.ok(set.domains.has("my_host.example.com"));
   });
 });
 

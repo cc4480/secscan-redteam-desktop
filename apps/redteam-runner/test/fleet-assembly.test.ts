@@ -153,6 +153,47 @@ describe('fleet prompt assembly', () => {
   })
 })
 
+describe('black-team mode — the SMITH mask (H2)', () => {
+  it('swaps the seat soul for SMITH and binds the blackteam skill full-body, seat delta kept', () => {
+    const prompt = exploiterPrompt({ ...fixtureCtx(true), mode: 'black' })
+    assert.ok(
+      prompt.includes('# AGENT SMITH — Black-Team Mode Only'),
+      'the SMITH soul is the seat\u2019s soul in black mode',
+    )
+    assert.ok(!prompt.includes('# NEO — Exploiter'), 'the seat soul is swapped out, not stacked under the mask')
+    assert.ok(
+      prompt.includes('<skill_content name="blackteam-adversary-emulation">'),
+      'the blackteam skill is bound full-body in black mode',
+    )
+    assert.ok(
+      prompt.includes('# Exploiter — NEO, the One who bends the Matrix'),
+      'the runner\u2019s seat delta is kept under the mask',
+    )
+    assert.ok(
+      prompt.includes('<skill_content name="webapp-exploit">'),
+      'the seat\u2019s own Layer-2 bodies still ride in black mode',
+    )
+    assert.ok(prompt.includes('<verified_engagement>'), 'the verified record is injected in black mode too')
+  })
+
+  it('applies the mask to every seat, not only the exploiter', () => {
+    const prompt = coordinatorPrompt({ ...fixtureCtx(true), mode: 'black' })
+    assert.ok(prompt.includes('# AGENT SMITH — Black-Team Mode Only'))
+    assert.ok(!prompt.includes('# MORPHEUS — Coordinator'))
+    assert.ok(prompt.includes('<skill_content name="blackteam-adversary-emulation">'))
+  })
+
+  it('red mode assembles without the mask or the blackteam body', () => {
+    const prompt = exploiterPrompt(fixtureCtx(true))
+    assert.ok(prompt.includes('# NEO — Exploiter'))
+    assert.ok(!prompt.includes('AGENT SMITH'), 'no SMITH soul in red mode')
+    assert.ok(
+      !prompt.includes('<skill_content name="blackteam-adversary-emulation">'),
+      'the blackteam skill stays index-only in red mode',
+    )
+  })
+})
+
 describe('verifiedRecordFor — the authorize record mapping', () => {
   function fakeCtx(over: { proof?: string; verifiedAt?: string }): Ctx {
     return {

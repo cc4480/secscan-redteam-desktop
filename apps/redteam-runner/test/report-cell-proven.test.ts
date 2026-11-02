@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { verifyBundleIntegrity, type PocBundle } from '../src/proof/bundle.js'
 import { buildProofSection } from '../src/report/proof.js'
-import { applyCellVerdicts, haltedFindingFromLive } from '../src/report/phase.js'
+import { applyCellVerdicts, haltedFindingFromLive, mergeReporterFindings } from '../src/report/phase.js'
 import { cellReceiptBlock, findingCard, tierOf } from '../src/report/html/cards.js'
 import { renderEngagementReportHtml, type EngagementReportInput } from '../src/report/html/render.js'
 import { gradeBanner, gradeFindings } from '../src/report/grading.js'
@@ -379,5 +379,93 @@ describe('§4 rendered report — a cell-proven web finding lands in the Proven 
     assert.match(html, /1 proven/)
     assert.match(html, /Cell Receipt — Proven Live/)
     assert.doesNotMatch(html, /No replayable bundle/)
+  })
+})
+
+describe('H3 normal-path reconciliation (mergeReporterFindings)', () => {
+  const liveA = liveFinding({
+    title: 'SQL injection in login',
+    attackId: 'T1190',
+    severity: 'critical',
+    evidence: 'runner-side evidence A',
+  })
+  const liveB = liveFinding({
+    title: 'Reflected XSS in search',
+    attackId: 'T1059',
+    severity: 'high',
+    evidence: 'runner-side evidence B',
+  })
+
+  it('a live finding the reporter omits still reaches the record, with runner-side evidence', () => {
+    const reporter = [
+      confirmedFinding({
+        id: 'F-1',
+        title: 'SQL injection in login',
+        attackIds: ['T1190'],
+        evidence: 'reporter prose A',
+        fix: 'parameterize the query',
+        retest: 'replay the payload',
+      }),
+    ]
+    const dropped: Finding[] = []
+    const out = mergeReporterFindings([liveA, liveB], reporter, (f) => dropped.push(f))
+    assert.equal(out.length, 2, 'both live findings reach the record — the omission deletes nothing')
+    assert.deepEqual(dropped, [])
+    const [a, b] = out
+    assert.equal(a!.id, 'F-1')
+    assert.equal(a!.evidence, 'reporter prose A', 'matched finding carries the reporter\u2019s narrative')
+    assert.equal(a!.fix, 'parameterize the query')
+    assert.equal(a!.retest, 'replay the payload')
+    assert.equal(b!.id, 'F-2')
+    assert.equal(b!.title, 'Reflected XSS in search')
+    assert.equal(b!.severity, 'high', 'identity fields are the live record\u2019s, not the reporter\u2019s')
+    assert.equal(b!.status, 'confirmed')
+    assert.equal(b!.evidence, 'runner-side evidence B', 'omitted finding keeps the runner-side evidence')
+    assert.match(b!.fix, /reporter omitted/)
+    assert.match(b!.retest, /reporter omitted/)
+  })
+
+  it('a reporter item matching no live finding is dropped and reported, never silently', () => {
+    const invented = confirmedFinding({ id: 'F-9', title: 'Invented catastrophe', attackIds: ['T9999'] })
+    const dropped: Finding[] = []
+    const out = mergeReporterFindings([liveA], [invented], (f) => dropped.push(f))
+    assert.equal(out.length, 1)
+    assert.equal(out[0]!.title, 'SQL injection in login')
+    assert.deepEqual(dropped, [invented], 'the unmatched reporter item is surfaced through the drop callback')
+  })
+
+  it('matches by ATT&CK id when the reporter renumbers, and keeps the live title', () => {
+    const reporter = [
+      confirmedFinding({
+        id: 'F-7',
+        title: 'SQLi (reporter retitle)',
+        attackIds: ['t1190'],
+        evidence: 'reporter prose',
+        fix: 'fix prose',
+        retest: 'retest prose',
+      }),
+    ]
+    const out = mergeReporterFindings([liveA, liveB], reporter)
+    assert.equal(out[0]!.evidence, 'reporter prose', 'the prose joined by attackId despite the renumbering')
+    assert.equal(out[0]!.title, 'SQL injection in login', 'the live title stands — peer/cell joins key on it')
+    assert.equal(out[1]!.evidence, 'runner-side evidence B')
+  })
+
+  it('an empty reporter JSON still yields the full live set', () => {
+    const out = mergeReporterFindings([liveA, liveB], [])
+    assert.equal(out.length, 2)
+    assert.equal(out[0]!.evidence, 'runner-side evidence A')
+    assert.equal(out[1]!.evidence, 'runner-side evidence B')
+  })
+
+  it('the cell verdict rides the merged record from the live finding, not the reporter text', () => {
+    const out = mergeReporterFindings([PROVEN_LIVE], [
+      confirmedFinding({ id: 'F-1', title: 'Reflected XSS in search', attackIds: ['T1059'] }),
+    ])
+    assert.equal(out[0]!.cellState, 'proven')
+    assert.deepEqual(out[0]!.provenClaim, {
+      expectedMarker: 'REDTEAM-MARKER-cell1',
+      targetUrl: 'https://target.example/search',
+    })
   })
 })

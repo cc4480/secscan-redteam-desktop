@@ -37,7 +37,9 @@
  * HaltError (deliberate stop) rethrows untouched.
  */
 import { describeErrorCause, type AgentRole, type ChatMessage } from "@secscan/redteam-llm-router";
+import { promptCtx } from "../agents.js";
 import { createCharteredComplete } from "../charter-completion.js";
+import { buildFleetPrompt } from "../prompts/fleet-assembly.js";
 import { HaltError, type Ctx, type KilledLive, type LiveFinding } from "../context.js";
 import { type ActorRole, type PeerReviewStamp } from "../types.js";
 import { extractJsonBlock } from "../util.js";
@@ -104,7 +106,10 @@ export function parsePeerVerdict(text: string): ParsedPeerVerdict | null {
 
 function challengeMessages(ctx: Ctx, lf: LiveFinding, checker: AgentRole): ChatMessage[] {
   const producer = lf.producer ?? "unknown seat (recorded before producer stamps)";
-  const system =
+  // The checker prompt is fleet-assembled for the ARCHITECT seat
+  // (buildFleetPrompt + the verified record), not a hardcoded system.
+  const system = buildFleetPrompt(
+    "reporter",
     `You are the ${checker} seat of an autonomous red-team fleet whose seats check each other's work. ` +
     `For this task you are NOT the producer — you are the PEER REVIEWER of the finding in the record below, ` +
     `and your job is to challenge the claim, not the target: producer and checker are never the same seat, and no finding ` +
@@ -117,7 +122,9 @@ function challengeMessages(ctx: Ctx, lf: LiveFinding, checker: AgentRole): ChatM
     `- upheld: the evidence proves it and the severity is honest.\n` +
     `- downgraded: real, but the claimed severity overstates the demonstrated impact.\n` +
     `- needs-evidence: plausible, but the recorded evidence does not prove it yet — send it back rather than let it print as confirmed.\n` +
-    `- killed: the evidence refutes it or shows the benign explanation. A kill stands unless stronger proof exists.`;
+    `- killed: the evidence refutes it or shows the benign explanation. A kill stands unless stronger proof exists.`,
+    promptCtx(ctx),
+  );
   const user =
     `FINDING UNDER CHALLENGE\n` +
     `Producer seat: ${producer}\n` +
