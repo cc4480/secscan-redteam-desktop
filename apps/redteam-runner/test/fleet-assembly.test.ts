@@ -6,7 +6,7 @@
  *
  * These tests pin: the assembled order, the soul per role, the injection
  * carrying the fixture record's targets and proof, the index listing all
- * 8 bundled skills, the per-role skill bodies (and no other role's), the
+ * 9 bundled skills, the per-role skill bodies (and no other role's), the
  * record mapping from the authorize phase's stamped Ctx fields, the
  * fail-loud path when proof data is absent, and the byte-stability of
  * engagement-independent contexts (agent-docs canonical rendering).
