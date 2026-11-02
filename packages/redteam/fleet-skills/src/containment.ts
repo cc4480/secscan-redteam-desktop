@@ -1,4 +1,12 @@
 /**
+ * DISPOSITION NOTE: this module is a library-only reference implementation;
+ * it is NOT the production refusal path. Production refusal handling is the
+ * runner's policy-containment (chartered completion seam) together with the
+ * llm-router classifier/refusal modules. Classifier convergence between this
+ * module and the production path is deliberately deferred.
+ */
+
+/**
  * Step-level containment for provider and transport failures.
  *
  * A failed model call is contained at the step that made it, never at the

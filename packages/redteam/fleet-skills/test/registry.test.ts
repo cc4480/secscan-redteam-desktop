@@ -4,9 +4,10 @@
  * All local — no network, no model calls.
  */
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, test } from 'node:test'
 import { parseSkillFrontmatter } from '../src/frontmatter.js'
 import { bundledSkillsRoot, discoverSkills, loadSkillBody, skillIndexBlock } from '../src/registry.js'
@@ -58,6 +59,38 @@ describe('discoverSkills over the bundled root', () => {
     assert.ok(block.trimEnd().endsWith('</fleet_skills_index>'))
     for (const name of BUNDLED_NAMES) {
       assert.ok(block.includes(`- ${name}:`), `index block lists ${name}`)
+    }
+  })
+})
+
+describe('bundledSkillsRoot in the desktop payload layout', () => {
+  test('resolves lib/fleet-skills/skills beside the bundled module', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'fleet-skills-payload-'))
+    try {
+      // Simulated payload tree, mirroring the desktop vendor layout
+      // (placeFleetSkillsAssets in apps/desktop/scripts/vendor-redteam-runner.mjs
+      // and the checked-in apps/desktop/resources payload): the package's
+      // bundled module sits in lib/, the package's own skills/ directory is
+      // not shipped, and the vendor step places the skill assets at
+      // lib/fleet-skills/skills/<name>/SKILL.md.
+      const libDir = join(base, 'payload', 'node_modules', '@secscan', 'redteam-fleet-skills', 'lib')
+      mkdirSync(libDir, { recursive: true })
+      const compiledSrcDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'src')
+      for (const file of ['registry.js', 'frontmatter.js']) {
+        cpSync(join(compiledSrcDir, file), join(libDir, file))
+      }
+      writeSkill(join(libDir, 'fleet-skills', 'skills'), 'webapp-scan', 'payload copy trigger')
+      const payloadRegistry: typeof import('../src/registry.js') = await import(
+        pathToFileURL(join(libDir, 'registry.js')).href,
+      )
+      const root = payloadRegistry.bundledSkillsRoot()
+      assert.equal(root, join(libDir, 'fleet-skills', 'skills'))
+      assert.deepEqual(
+        payloadRegistry.discoverSkills([root]).map(meta => meta.name),
+        ['webapp-scan'],
+      )
+    } finally {
+      rmSync(base, { recursive: true, force: true })
     }
   })
 })

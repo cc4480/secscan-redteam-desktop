@@ -134,14 +134,21 @@ export function skillIndexBlock(metas: SkillMeta[]): string {
  * Resolve this package's bundled `skills/` directory. Candidates are tried
  * relative to this module so the same code resolves from the source tree
  * (`src/` beside `skills/`), the compiled test tree (`dist-test/src/` two
- * levels below it), and the built library (`lib/` beside it).
+ * levels below it), the built library (`lib/` beside it), and the desktop
+ * payload layout, where the vendor step places the skill assets under
+ * `lib/fleet-skills/skills/` beside the bundled module and the package's
+ * own `skills/` directory is not shipped.
  *
  * @returns the first candidate path that exists
  * @throws Error naming the searched candidates when none exists
  */
 export function bundledSkillsRoot(): string {
   const moduleDir = dirname(fileURLToPath(import.meta.url))
-  const candidates = [join(moduleDir, '..', 'skills'), join(moduleDir, '..', '..', 'skills')]
+  const candidates = [
+    join(moduleDir, '..', 'skills'),
+    join(moduleDir, '..', '..', 'skills'),
+    join(moduleDir, 'fleet-skills', 'skills'),
+  ]
   for (const candidate of candidates) {
     if (existsSync(candidate)) return candidate
   }
