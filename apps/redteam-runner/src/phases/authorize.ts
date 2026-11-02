@@ -2,7 +2,7 @@
  * Authorization phase (v0.19.0 refactor — extracted from phases.ts).
  */
 import { type Ctx } from "../context.js";
-import { type GateVerdict, checkAuthorization, checkScopeAuthorization } from "../gate.js";
+import { type GateVerdict, checkAuthorization, checkScopeAuthorization, scopeHosts } from "../gate.js";
 import { scopeGuardFor } from "../safety/scope-guard.js";
 
 /**
@@ -41,9 +41,28 @@ export const TEST_MODE_ATTESTATION =
  * test-mode path where the record is the operator's self-attestation —
  * always before appendScopeGuardEvent, so the audit event describes
  * the record-derived guard that will actually be enforced.
+ *
+ * Only entries this phase actually checked are stamped. The checked
+ * set is represented by ctx.hosts: run.ts builds it with scopeHosts
+ * over the same ROE, checkAuthorization verified ctx.domain from it,
+ * and checkScopeAuthorization was called over exactly it (and, on the
+ * normal path, allowed only when every one of those hosts passed).
+ * A raw ROE entry whose parsed host is not in ctx.hosts was therefore
+ * never checked — scopeHosts could not parse it into a host at all
+ * (an operator typo, a product name, a malformed address), or it was
+ * never part of the checked host list — and copying it into the
+ * record would let the guard treat as attested a host authorization
+ * never saw. Such entries are dropped from the stamp; the kept
+ * entries stay in their raw ROE form (case, scheme, port, CIDR
+ * notation) so the guard's normalisation sees exactly what the
+ * operator declared for the hosts that were checked.
  */
 function stampVerifiedScope(ctx: Ctx): void {
-  ctx.verifiedScope = [...ctx.input.roe.scope];
+  const checked = new Set(ctx.hosts.map((h) => h.trim().toLowerCase().replace(/\.+$/, "")));
+  ctx.verifiedScope = ctx.input.roe.scope.filter((entry) => {
+    const parsed = scopeHosts({ scope: [entry] });
+    return parsed.length > 0 && checked.has(parsed[0]!.replace(/\.+$/, ""));
+  });
 }
 
 /** The scope-guard audit event, appended on every authorize path. */
