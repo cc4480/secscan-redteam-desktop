@@ -4,11 +4,11 @@
  * The executive-summary and findings sections are assembled by render.ts
  * (they own the prose renderer and the tier grouping respectively).
  */
-import { type SecurityPosture, type PostureBanner } from "#seclayer/server/scoring.js";
-import { type Finding } from "../../types.js";
-import { type PocBundle } from "../../proof/index.js";
-import { type ReportMeta } from "../html.js";
-import { type ReportTier } from "./tokens.js";
+import { type SecurityPosture, type PostureBanner } from '#seclayer/server/scoring.js';
+import { type Finding } from '../../types.js';
+import { type PocBundle } from '../../proof/index.js';
+import { type ReportMeta } from '../html.js';
+import { type ReportTier } from './tokens.js';
 export interface CoverInput {
     meta: ReportMeta;
     posture: SecurityPosture;
@@ -28,6 +28,22 @@ export interface CoverInput {
  * the left, the score block on the right) in Seclayer's tokens. A halted
  * engagement renders the N/A gauge and states why it halted. */
 export declare function coverSection(o: CoverInput): string;
+/** The SecScan RedTeam brand mark (the app icon's diamond and
+ * crosshair), inlined so the standalone report file carries the brand
+ * with no external asset. Artwork: apps/desktop/resources/icon.svg. */
+export declare const BRAND_MARK_SVG: string;
+/** One fleet seat's line on the report's team section. `summary` is
+ * the seat's contribution to this engagement; absent renders the
+ * role alone. */
+export interface TeamMember {
+    agent: string;
+    seat: string;
+    role: string;
+    summary?: string;
+}
+/** The engagement team: every fleet seat that ran, its role, and its
+ * contribution — rendered after the posture banner. */
+export declare function teamSection(team: TeamMember[]): string;
 /** The halt banner: why the engagement stopped, in place of a grade. */
 export declare function haltBanner(reason: string): string;
 /** The blocked banner: authorization denied before any testing ran —
@@ -36,7 +52,7 @@ export declare function blockedBanner(reason: string): string;
 /** Section 2 — the posture banner: severity-proportioned, worst finding
  * named (the grading seam's bannerForPosture output, verbatim). */
 export declare function bannerSection(banner: PostureBanner): string;
-export type CoverageCellState = "done" | "blocked" | "missing";
+export type CoverageCellState = 'done' | 'blocked' | 'missing';
 export interface CoverageCell {
     target: string;
     category: string;

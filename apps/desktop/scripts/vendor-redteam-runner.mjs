@@ -262,6 +262,36 @@ function buildRunnerFromSource(source) {
   script(join(source, 'scripts', 'stamp-deps.mjs'))
 }
 
+/** The Scribe (publisher seat) modules the assembled payload must carry. */
+const SCRIBE_PAYLOAD_FILES = ['report/scribe.js', 'report/scribe-html.js']
+
+/**
+ * Fail the vendoring run when the assembled payload lacks the Scribe.
+ *
+ * The desktop application executes this payload, not the runner source
+ * tree. A payload assembled from a source snapshot that predates the
+ * Scribe seat shipped with no Scribe at all — the 2026-11-01 revendor
+ * (17:43) predates the seat's landing (19:11) — so every engagement the
+ * desktop ran completed without the publisher sign-off gate and nothing
+ * failed. Asserting the seat's modules and its gate call in the
+ * engagement close keeps that stale-payload class from shipping again
+ * silently.
+ * @param {string} payloadRoot - The vendored payload root to inspect.
+ */
+export function assertScribeInPayload(payloadRoot) {
+  const dist = join(payloadRoot, 'dist')
+  const missing = SCRIBE_PAYLOAD_FILES.filter(file => !existsSync(join(dist, ...file.split('/'))))
+  const runPath = join(dist, 'phases', 'run.js')
+  if (!existsSync(runPath)) {
+    missing.push('phases/run.js')
+  } else if (!readFileSync(runPath, 'utf8').includes('scribeGate')) {
+    missing.push('phases/run.js (no scribeGate call)')
+  }
+  if (missing.length > 0) {
+    throw new Error(`vendor-redteam-runner: the payload at ${payloadRoot} is missing the Scribe (${missing.join(', ')}); the desktop application executes this payload, so shipping it would run engagements with no publisher sign-off`)
+  }
+}
+
 /**
  * Vendor the runner payload and report what was copied.
  * @param {{ from: string, to?: string }} options - Runner checkout and payload destination.
@@ -461,6 +491,7 @@ function vendorRedteamRunner(options) {
     excludedOptionalDependencies: [{ name: 'nan', reason: "ssh2's build-time C++ header; an optional dependency by contract" }],
   }
   writeFileSync(join(destination, 'provenance.json'), `${JSON.stringify(provenance, undefined, 2)}\n`)
+  assertScribeInPayload(destination)
   return { version: manifest.version, packages: provenance.packages }
 }
 

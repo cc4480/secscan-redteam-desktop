@@ -1,15 +1,16 @@
 /**
  * Report phase orchestrator (v0.19.0 refactor — extracted from report.ts).
  *
- * reportPhase drives the reporter agent, reconciles battery coverage
- * (cells + per-item ledger), and assembles report.md from runner-computed
- * sections (proof bundles, item reconciliation, integrations). Artifact
- * writers live in ./safety.ts, ./compliance.ts, ./proof.ts, ./integrations.ts.
+ * reportPhase drives the publisher seat (the Scribe — report authorship
+ * moved from the reporter seat in the 2026-11-01 seat change), reconciles
+ * battery coverage (cells + per-item ledger), and assembles report.md from
+ * runner-computed sections (proof bundles, item reconciliation,
+ * integrations). Artifact writers: ./safety.ts, ./compliance.ts, ./proof.ts.
  */
 import { writeFileSync } from "node:fs";
 import { groupNotApplicable, renderNotApplicable } from "./grouping.js";
 import { join } from "node:path";
-import { reporterPrompt } from "../prompts.js";
+import { publisherPrompt } from "../prompts.js";
 import { BATTERY_CATEGORIES } from "../battery.js";
 import { TARGET_PROFILES, activeTargets, targetCellStatus } from "../targets.js";
 import { ledgerSummary, serializeLedger } from "../coverage/items.js";
@@ -27,7 +28,7 @@ import { writeSafetyArtifacts } from "./safety.js";
 import { writeComplianceArtifacts } from "./compliance.js";
 import { extractNarrative } from "./narrative.js";
 import { buildEngagementMeta } from "./html.js";
-import { renderEngagementReportHtml } from "./html/render.js";
+import { resolveReportHtml } from "./scribe-html.js";
 import { buildEngagementReportInput, buildFindingMeta } from "./html/wire.js";
 import { emitDeliverables, stampFindingRefs } from "./finding-refs.js";
 import { buildDetailInput, recordReportMeta } from "./predecessor.js";
@@ -97,9 +98,9 @@ export async function reportPhase(ctx, reconBrief, exploitSummary, opts = {}) {
     let reportMd;
     let findings;
     if (opts.haltedReason || opts.blockedReason) {
-        // Halt path (action/duration cap, aborted
-        // sign-off, unexpected error) and blocked path (authorization denied;
-        // Q-DELIVERABLES-AUTOFIRE P3): NEVER run the reporter LLM here — it could
+        // Halt path (action/duration cap, aborted sign-off, unexpected error)
+        // and blocked path (authorization denied; Q-DELIVERABLES-AUTOFIRE P3):
+        // NEVER run the seat LLM here — it could
         // re-hit the same cap and we would lose the accountability record exactly
         // when it matters most. Build the report mechanically from the audit-log
         // state; findings are the live set recorded so far.
@@ -118,7 +119,7 @@ export async function reportPhase(ctx, reconBrief, exploitSummary, opts = {}) {
         findings = [];
     }
     else {
-        reportMd = await agentLoop(ctx, "reporter", "report", reporterPrompt(promptCtx(ctx)), `Write the client report now.\n\nAuthorization: ${ctx.verificationProof}\n\nOperation plan: ${JSON.stringify(ctx.plan)}\n\nShared verdicts this engagement — confirmed (${ctx.liveFindings.length}):\n${ctx.liveFindings.map((f) => `- [${f.severity}] ${f.title} (${f.attackId}${f.vulnClass ? `, ${f.vulnClass}` : ""}${f.cellState ? `, cell: ${f.cellState.toUpperCase()}` : ""}${peerVerdictSuffix(f)}): ${f.evidence}`).join("\n") || "(none)"}\nKilled hypotheses (${ctx.killedLive.length}):\n${ctx.killedLive.map((k) => `- ${k.hypothesis} → ${k.killingObservation}`).join("\n") || "(none)"}\n${peerDeferredPromptSection(ctx.peerDeferredLive)}Registry hits consulted: ${ctx.registryHits.length}. Target fingerprint: ${JSON.stringify(ctx.fingerprint)}.\n\n${batteryLine}\n\nRecon brief:\n${reconBrief.slice(0, 4000)}\n\nExploitation summary:\n${exploitSummary.slice(0, 4000)}\n\nProof of exploitation is appended mechanically by the runner from the audit log — do not invent PoC details, marker values, or reproduction steps in your narrative; describe findings only from the evidence given.\n\nEnd the report with a JSON block: \`\`\`json {"findings": [{"id":"F-1","severity":"low","title":"...","attackIds":["T1190"],"evidence":"...","fix":"...","retest":"...","status":"confirmed"}]} \`\`\``, [], 4);
+        reportMd = await agentLoop(ctx, "reporter", "report", publisherPrompt(promptCtx(ctx)), `Write the client report now.\n\nAuthorization: ${ctx.verificationProof}\n\nOperation plan: ${JSON.stringify(ctx.plan)}\n\nShared verdicts this engagement — confirmed (${ctx.liveFindings.length}):\n${ctx.liveFindings.map((f) => `- [${f.severity}] ${f.title} (${f.attackId}${f.vulnClass ? `, ${f.vulnClass}` : ""}${f.cellState ? `, cell: ${f.cellState.toUpperCase()}` : ""}${peerVerdictSuffix(f)}): ${f.evidence}`).join("\n") || "(none)"}\nKilled hypotheses (${ctx.killedLive.length}):\n${ctx.killedLive.map((k) => `- ${k.hypothesis} → ${k.killingObservation}`).join("\n") || "(none)"}\n${peerDeferredPromptSection(ctx.peerDeferredLive)}Registry hits consulted: ${ctx.registryHits.length}. Target fingerprint: ${JSON.stringify(ctx.fingerprint)}.\n\n${batteryLine}\n\nRecon brief:\n${reconBrief.slice(0, 4000)}\n\nExploitation summary:\n${exploitSummary.slice(0, 4000)}\n\nProof of exploitation is appended mechanically by the runner from the audit log — do not invent PoC details, marker values, or reproduction steps in your narrative; describe findings only from the evidence given.\n\nEnd the report with a JSON block: \`\`\`json {"findings": [{"id":"F-1","severity":"low","title":"...","attackIds":["T1190"],"evidence":"...","fix":"...","retest":"...","status":"confirmed"}]} \`\`\``, [], 4);
         const parsed = extractJsonBlock(reportMd);
         findings = Array.isArray(parsed?.findings) ? parsed.findings : [];
         for (const f of findings) {
@@ -139,15 +140,13 @@ export async function reportPhase(ctx, reconBrief, exploitSummary, opts = {}) {
             f.accountableOperator = accountable;
     }
     stampFindingRefs(findings, ctx.liveFindings);
-    // The unified operation narrative ("Megazord"): the reporter writes it first
-    // as plain paragraphs; the runner extracts it for the console header.
+    // The unified operation narrative ("Megazord"): the Scribe writes it first as plain paragraphs; the runner extracts it.
     const narrative = extractNarrative(reportMd);
     if (narrative) {
         ctx.operationNarrative = narrative;
         ctx.events.updateState({ operationNarrative: narrative });
     }
-    // Snapshot for the HTML renderer's executive-summary slot: the narrative
-    // before the runner-computed sections are appended to report.md below.
+    // Snapshot for the HTML executive-summary slot: the narrative before appends.
     const narrativeSource = reportMd;
     // Runner-computed facts are appended deterministically — never trusted to the model.
     reportMd += `\n\n---\n\n## Battery coverage (runner-computed)\n\n${batteryLine}\n`;
@@ -268,7 +267,7 @@ export async function reportPhase(ctx, reconBrief, exploitSummary, opts = {}) {
             blockedReason: opts.blockedReason,
             detailInput,
         });
-        writeFileSync(join(ctx.events.dir, "report.html"), renderEngagementReportHtml(reportInput));
+        writeFileSync(join(ctx.events.dir, "report.html"), await resolveReportHtml(ctx, reportInput));
         ctx.events.append({ phase: "report", actor: "runner", action: "report_html_written", result: "HTML report written alongside report.md." });
     }
     catch (err) {

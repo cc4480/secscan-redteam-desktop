@@ -15,7 +15,7 @@ import type { AutonomyTier } from './accountability/tiers.js';
 import type { MemoryEngagementReceipt } from './memory/types.js';
 export type EngagementPhase = 'authorize' | 'plan' | 'recon' | 'exploit' | 'report' | 'done' | 'blocked' | 'halted';
 export type EngagementStatus = 'queued' | 'authorizing' | 'running' | 'complete' | 'blocked' | 'halted';
-export type ActorRole = 'coordinator' | 'recon' | 'exploiter' | 'reporter' | 'architect' | 'runner';
+export type ActorRole = 'coordinator' | 'recon' | 'exploiter' | 'reporter' | 'architect' | 'runner' | 'publisher';
 /** Daily blackout window, 24h "HH:MM" strings. May cross midnight. */
 export interface BlackoutWindow {
     start: string;

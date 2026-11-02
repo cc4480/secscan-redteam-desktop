@@ -28,6 +28,7 @@ import { handleMcp } from './mcp-endpoint.js';
 import { resolveArsenalConfig } from '../arsenal/config.js';
 import { startArsenalRefreshTimer } from '../arsenal/refresh.js';
 import { handleModels } from './routes/models.js';
+import { handleChat } from './routes/chat.js';
 import { handleFoundry, handleFoundryLoop, handleFoundryRunGold, handleFoundryVerify } from './routes/foundry.js';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MIME = {
@@ -171,6 +172,12 @@ async function route(store, token, req, res) {
     try {
         if (seg[1] === 'models' && method === 'GET' && seg.length === 2)
             return handleModels(res);
+        if (seg[1] === 'chat' && method === 'POST' && seg.length === 2) {
+            const body = await readBodyOrReject(req, res);
+            if (body === BODY_REJECTED)
+                return;
+            return handleChat(res, body);
+        }
         if (seg[1] === 'engagements' && method === 'GET' && seg.length === 2)
             return handleList(store, res);
         if (seg[1] === 'engagements' && method === 'POST' && seg.length === 2) {

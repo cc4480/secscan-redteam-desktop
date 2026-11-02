@@ -7,7 +7,7 @@
  *   Layer-1 skills index → Layer-2 skill bodies for the seat's phase
  *
  * The seat delta is the runner's EXISTING role prompt (coordinator.ts,
- * recon.ts, exploiter.ts, reporter.ts): nothing in those prompts is
+ * recon.ts, exploiter.ts, reporter.ts, publisher.ts): nothing in those prompts is
  * deleted, the fleet layers wrap them. The package's own seat assets
  * (prompts/seats/*.md in the fleet package) are deliberately NOT also
  * spliced in — the runner prompts are their supersets (persona, doctrine,
@@ -34,6 +34,7 @@ const SOUL_BY_ROLE = {
     exploiter: 'neo',
     reporter: 'architect',
     coder: 'tank',
+    publisher: 'scribe',
 };
 /**
  * Layer-2 skill bodies attached per seat: the skills whose tool families
@@ -46,6 +47,7 @@ const SKILLS_BY_ROLE = {
     exploiter: ['webapp-exploit', 'browser-action-execution'],
     reporter: ['findings-grading-reporting', 'html-report-design'],
     coder: ['exploit-coding-toolbuilding'],
+    publisher: ['findings-grading-reporting', 'html-report-design'],
 };
 /**
  * Resolve the fleet-skills package root. Candidates cover, in order: the

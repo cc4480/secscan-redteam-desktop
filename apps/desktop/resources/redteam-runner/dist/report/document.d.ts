@@ -33,20 +33,21 @@
  * against a real predecessor scan — that rule lives in detail.ts; the
  * PROVEN tier exists only behind execution-tier proof — tierOf).
  */
-import { type PostureBanner, type SecurityPosture } from "#seclayer/server/scoring.js";
-import { type Finding } from "../types.js";
-import { type NegativeProof, type PocBundle } from "../proof/index.js";
-import { type ReportMeta } from "./html.js";
-import { type FindingMeta } from "./html/cards.js";
-import { type ReportTier, type SeverityName } from "./html/tokens.js";
-import { type ActivityInput, type CoverageInput, type EngagementReportInput } from "./html/render.js";
-import { type ReportDetail } from "./detail.js";
-import { type ReportMatter } from "./detail-matter.js";
-import { type HostInventoryArtifact } from "./host-inventory.js";
+import { type PostureBanner, type SecurityPosture } from '#seclayer/server/scoring.js';
+import { type Finding } from '../types.js';
+import { type NegativeProof, type PocBundle } from '../proof/index.js';
+import { type ReportMeta } from './html.js';
+import { type FindingMeta } from './html/cards.js';
+import { type TeamMember } from './html/sections.js';
+import { type ReportTier, type SeverityName } from './html/tokens.js';
+import { type ActivityInput, type CoverageInput, type EngagementReportInput } from './html/render.js';
+import { type ReportDetail } from './detail.js';
+import { type ReportMatter } from './detail-matter.js';
+import { type HostInventoryArtifact } from './host-inventory.js';
 /** The canonical anatomy, in order. Every renderer's section sequence
  * is a subsequence of this list; `sections` on the document names the
  * ones the record actually carries. */
-export declare const REPORT_SECTION_ORDER: readonly ["cover", "banner", "executive-summary", "coverage", "severity-breakdown", "findings", "fix-prompt", "priority-actions", "pillars", "strengths", "surface", "inventory", "activity", "recorded-frame", "limitations", "footer"];
+export declare const REPORT_SECTION_ORDER: readonly ["cover", "banner", "team", "executive-summary", "coverage", "severity-breakdown", "findings", "fix-prompt", "priority-actions", "pillars", "strengths", "surface", "inventory", "activity", "recorded-frame", "limitations", "footer"];
 export type ReportSectionId = (typeof REPORT_SECTION_ORDER)[number];
 /** One truth tier of the Findings section: its findings in report
  * order, plus — on the ruled-out tier only — the negative proofs that
@@ -64,6 +65,8 @@ export interface ReportDocument {
     /** The anchored grade over the confirmed findings (grading seam). */
     posture: SecurityPosture;
     banner: PostureBanner | null;
+    /** The fleet seats that ran, when the record names them. */
+    team?: TeamMember[];
     haltedReason?: string;
     blockedReason?: string;
     dryRun?: boolean;

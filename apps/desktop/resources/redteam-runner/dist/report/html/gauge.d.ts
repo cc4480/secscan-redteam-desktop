@@ -7,7 +7,7 @@
  * Gauge semantics are POSTURE (higher is better, the embedded engine's
  * math) — never SecScan's inverted risk label.
  */
-import { type SeverityName } from "./tokens.js";
+import { type SeverityName } from './tokens.js';
 export interface GaugeOptions {
     /** Posture score 0–100, or null for the N/A (incomplete/halted) state. */
     score: number | null;

@@ -34,7 +34,10 @@
  * de-duplicated negative proofs), sections (the canonical section ids
  * the record carries, report/document.ts REPORT_SECTION_ORDER), and
  * fixPrompt (the consolidated fix prompt text, "" when nothing is
- * actionable).
+ * actionable). Two further fields are stamped into report.json after
+ * emission by the Scribe gate (report/scribe.ts): artifactSignoff (the
+ * publisher seat's signature) or artifactUnsigned (why the set shipped
+ * unsigned) — exactly one of them on a completed close.
  */
 import { statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";

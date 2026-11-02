@@ -1,4 +1,5 @@
 import { type Ctx } from "../context.js";
+import { type ArtifactSignoff, type ArtifactUnsigned } from "../events.js";
 import { type Finding } from "../types.js";
 import { type ReportDocument } from "./document.js";
 export declare const REPORT_JSON_NAME = "report.json";
@@ -43,6 +44,11 @@ export interface ReportModel {
     sections?: string[];
     /** The consolidated fix prompt, when the document was built. */
     fixPrompt?: string;
+    /** SCRIBE GATE: the publisher seat's sign-off on this set, stamped
+     * into report.json by report/scribe.ts after the model is emitted. */
+    artifactSignoff?: ArtifactSignoff | null;
+    /** SCRIBE GATE: why this set shipped unsigned, when it did. */
+    artifactUnsigned?: ArtifactUnsigned | null;
     findingCount: number;
     batteryTotals: {
         total: number;

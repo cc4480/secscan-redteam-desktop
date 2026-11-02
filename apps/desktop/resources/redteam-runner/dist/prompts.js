@@ -19,4 +19,5 @@ export { reconPrompt } from "./prompts/recon.js";
 export { exploiterPrompt } from "./prompts/exploiter.js";
 export { taskPrompt } from "./prompts/task.js";
 export { reporterPrompt } from "./prompts/reporter.js";
+export { publisherPrompt } from "./prompts/publisher.js";
 //# sourceMappingURL=prompts.js.map

@@ -1,4 +1,4 @@
-import { type ReportDocument } from "./document.js";
+import { type ReportDocument } from './document.js';
 export interface ReportMarkdownAnnexes {
     /** The runner-computed battery coverage line (phase.ts). */
     batteryLine: string;

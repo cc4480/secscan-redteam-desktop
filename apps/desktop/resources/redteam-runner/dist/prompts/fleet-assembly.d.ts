@@ -7,7 +7,7 @@
  *   Layer-1 skills index → Layer-2 skill bodies for the seat's phase
  *
  * The seat delta is the runner's EXISTING role prompt (coordinator.ts,
- * recon.ts, exploiter.ts, reporter.ts): nothing in those prompts is
+ * recon.ts, exploiter.ts, reporter.ts, publisher.ts): nothing in those prompts is
  * deleted, the fleet layers wrap them. The package's own seat assets
  * (prompts/seats/*.md in the fleet package) are deliberately NOT also
  * spliced in — the runner prompts are their supersets (persona, doctrine,
@@ -27,7 +27,7 @@ import { type VerifiedEngagementRecord } from '@secscan/redteam-fleet-skills';
 import type { Ctx } from '../context.js';
 import type { PromptContext } from './shared.js';
 /** The fleet seats this module assembles prompts for. */
-export type FleetSeatRole = 'coordinator' | 'recon' | 'exploiter' | 'reporter' | 'coder';
+export type FleetSeatRole = 'coordinator' | 'recon' | 'exploiter' | 'reporter' | 'coder' | 'publisher';
 /** The knob sources and record a production prompt context carries. */
 export interface FleetPromptInput {
     /** The verified engagement record (see {@link verifiedRecordFor}). */

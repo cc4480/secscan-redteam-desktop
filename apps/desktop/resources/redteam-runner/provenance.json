@@ -178,6 +178,7 @@
     "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/prompts/souls/morpheus.md",
     "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/prompts/souls/neo.md",
     "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/prompts/souls/operator.md",
+    "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/prompts/souls/scribe.md",
     "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/prompts/souls/smith.md",
     "node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/prompts/souls/tank.md"
   ],

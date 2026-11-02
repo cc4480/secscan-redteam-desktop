@@ -147,6 +147,9 @@ pre.dump { background: #010409; padding: 12px; border-radius: 6px; overflow-x: a
 .bubble.me { align-self: flex-end; background: #1d4ed8; color: #fff; border-bottom-right-radius: 4px; }
 .bubble.team { align-self: flex-start; background: var(--card, #16202c); border: 1px solid var(--line, #2a3a4a); border-bottom-left-radius: 4px; }
 .bubble a { color: var(--accent, #6cb2f5); }
+.chat-model-row { display: flex; align-items: center; gap: 8px; }
+.chat-model-row label { font-size: 13px; color: var(--muted, #8b98a5); }
+.chat-model-row select { width: auto; flex: 0 1 420px; }
 .chat-input { display: flex; gap: 8px; }
 .chat-input input { flex: 1; }
 .chat-history table { width: 100%; }

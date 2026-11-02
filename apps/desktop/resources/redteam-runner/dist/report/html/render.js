@@ -1,20 +1,20 @@
-import { renderMarkdown } from "../../ui/markdown.js";
-import { REPORT_CSS } from "./style.js";
-import { severityChips } from "./gauge.js";
-import { findingCard, negativeProofCard } from "./cards.js";
-import { buildReportDocument } from "../document.js";
-import { activitySection, allClearSection, bannerSection, blockedBanner, coverSection, coverageSection, fixPromptSection, footerSection, haltBanner, } from "./sections.js";
-import { TIER_DEFINITION, TIER_LABEL, esc } from "./tokens.js";
-import { limitationsSection, methodSection, riskMethodSection, scopeSection, strengthsSection, } from "./matter-sections.js";
-import { breakdownSection, impactSection, pillarSection, prioritySection, riskAreasSection, surfaceSection, whatChangedSection, } from "./detail-sections.js";
-import { inventorySection } from "./inventory-sections.js";
+import { renderMarkdown } from '../../ui/markdown.js';
+import { REPORT_CSS } from './style.js';
+import { severityChips } from './gauge.js';
+import { findingCard, negativeProofCard } from './cards.js';
+import { buildReportDocument } from '../document.js';
+import { activitySection, allClearSection, bannerSection, blockedBanner, coverSection, coverageSection, fixPromptSection, footerSection, haltBanner, teamSection, } from './sections.js';
+import { TIER_DEFINITION, TIER_LABEL, esc } from './tokens.js';
+import { limitationsSection, methodSection, riskMethodSection, scopeSection, strengthsSection, } from './matter-sections.js';
+import { breakdownSection, impactSection, pillarSection, prioritySection, riskAreasSection, surfaceSection, whatChangedSection, } from './detail-sections.js';
+import { inventorySection } from './inventory-sections.js';
 /** Render one tier group of the shared report document: finding cards
  * in report order, then the group's negative-proof cards (ruled-out
  * tier). The grouping itself — tiers, ordering, negative-proof
  * de-duplication — is the document's (report/document.ts), so every
  * format groups identically. */
 function tierGroupHtml(o, group) {
-    const cards = group.findings.map((f) => findingCard({
+    const cards = group.findings.map(f => findingCard({
         finding: f,
         bundle: o.bundles.get(f.id),
         noBundleReason: o.noBundleReasons.get(f.id),
@@ -25,7 +25,7 @@ function tierGroupHtml(o, group) {
         cards.push(negativeProofCard(n));
     return (`<h3 class="tier-head">${TIER_LABEL[group.tier]} — ${cards.length}</h3>` +
         `<p class="tier-def">${TIER_DEFINITION[group.tier]}</p>` +
-        cards.join(""));
+        cards.join(''));
 }
 const COPY_SCRIPT = `<script>
 document.querySelectorAll("[data-copy]").forEach(function (b) {
@@ -42,8 +42,8 @@ export function renderEngagementReportHtml(o) {
     // can drift from the flagship's structure or counts.
     const doc = buildReportDocument(o);
     const counts = doc.tierCounts;
-    const halted = typeof o.haltedReason === "string" && o.haltedReason.length > 0;
-    const blocked = typeof o.blockedReason === "string" && o.blockedReason.length > 0;
+    const halted = typeof o.haltedReason === 'string' && o.haltedReason.length > 0;
+    const blocked = typeof o.blockedReason === 'string' && o.blockedReason.length > 0;
     const activeCount = counts.proven + counts.confirmed + counts.deferred;
     const parts = [];
     const d = o.detail;
@@ -63,6 +63,8 @@ export function renderEngagementReportHtml(o) {
         parts.push(blockedBanner(o.blockedReason));
     else if (o.banner)
         parts.push(bannerSection(o.banner));
+    if (o.team && o.team.length > 0)
+        parts.push(teamSection(o.team));
     const narrative = o.narrativeMd.trim();
     if (narrative) {
         parts.push(`<h2 class="sec-title">Executive Summary</h2><div class="prose">${renderMarkdown(narrative)}</div>`);
@@ -79,8 +81,8 @@ export function renderEngagementReportHtml(o) {
     }
     parts.push(coverageSection(o.coverage));
     parts.push(severityChips(doc.severityCounts) +
-        `<p class="accuracy">${counts.proven} proven · ${counts.confirmed} confirmed · ${counts.deferred} deferred · ${counts["ruled-out"]} ruled out</p>`);
-    parts.push(`<h2 class="sec-title">Findings</h2>`);
+        `<p class="accuracy">${counts.proven} proven · ${counts.confirmed} confirmed · ${counts.deferred} deferred · ${counts['ruled-out']} ruled out</p>`);
+    parts.push('<h2 class="sec-title">Findings</h2>');
     if (activeCount === 0 && !halted && !blocked)
         parts.push(allClearSection());
     for (const g of doc.tierGroups)
@@ -120,7 +122,7 @@ export function renderEngagementReportHtml(o) {
 </head>
 <body>
 <div class="wrap">
-${parts.join("\n")}
+${parts.join('\n')}
 </div>
 ${COPY_SCRIPT}
 </body>

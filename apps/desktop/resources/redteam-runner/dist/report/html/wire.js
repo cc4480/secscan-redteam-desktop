@@ -1,11 +1,11 @@
-import { BATTERY_CATEGORIES } from "../../battery.js";
-import { TARGET_PROFILES, activeTargets } from "../../targets.js";
-import { projectApprovals, projectDanglingCauses, projectToolStats } from "../../events/projections.js";
-import { gradeBanner, gradeFindings } from "../grading.js";
-import { buildReportDetail } from "../detail.js";
-import { buildReportMatter } from "../detail-matter.js";
-import { tierOf } from "./cards.js";
-import { readHostInventory } from "../host-inventory.js";
+import { BATTERY_CATEGORIES } from '../../battery.js';
+import { TARGET_PROFILES, activeTargets } from '../../targets.js';
+import { projectApprovals, projectDanglingCauses, projectToolStats } from '../../events/projections.js';
+import { gradeBanner, gradeFindings } from '../grading.js';
+import { buildReportDetail } from '../detail.js';
+import { buildReportMatter } from '../detail-matter.js';
+import { tierOf } from './cards.js';
+import { readHostInventory } from '../host-inventory.js';
 /**
  * Remove the reporter's trailing findings JSON block from the narrative.
  * The block is machine data — the findings render as cards — and leaving
@@ -18,7 +18,7 @@ export function stripFindingsJson(md) {
     if (!m || m.index === undefined)
         return md;
     try {
-        const parsed = JSON.parse(m[1] ?? "");
+        const parsed = JSON.parse(m[1] ?? '');
         if (parsed && Array.isArray(parsed.findings)) {
             return (md.slice(0, m.index) + md.slice(m.index + m[0].length)).trimEnd();
         }
@@ -38,11 +38,11 @@ export function stripFindingsJson(md) {
 export function applyFindingRefs(findings, liveFindings) {
     const corroborates = (f, lf) => f.attackIds.includes(lf.attackId) || f.title === lf.title;
     for (const f of findings) {
-        const idx = Number.parseInt(f.id.replace(/^F-/, ""), 10);
+        const idx = Number.parseInt(f.id.replace(/^F-/, ''), 10);
         const positional = Number.isInteger(idx) && idx >= 1 ? liveFindings[idx - 1] : undefined;
         let source = positional && corroborates(f, positional) ? positional : undefined;
         if (!source) {
-            const strong = liveFindings.filter((lf) => f.attackIds.includes(lf.attackId) && f.title === lf.title);
+            const strong = liveFindings.filter(lf => f.attackIds.includes(lf.attackId) && f.title === lf.title);
             if (strong.length === 1)
                 source = strong[0];
         }
@@ -69,7 +69,7 @@ export function buildFindingMeta(bundles, findings = []) {
     for (const [findingId, bundle] of bundles) {
         if (!bundle.batteryItemId)
             continue;
-        const sep = bundle.batteryItemId.indexOf(":");
+        const sep = bundle.batteryItemId.indexOf(':');
         if (sep <= 0)
             continue;
         const tid = bundle.batteryItemId.slice(0, sep);
@@ -77,7 +77,7 @@ export function buildFindingMeta(bundles, findings = []) {
         if (!Object.prototype.hasOwnProperty.call(TARGET_PROFILES, tid))
             continue;
         const profile = TARGET_PROFILES[tid];
-        const item = profile.battery.find((b) => b.id === itemId);
+        const item = profile.battery.find(b => b.id === itemId);
         if (item)
             out.set(findingId, { category: item.category, owasp: item.owasp });
     }
@@ -102,27 +102,27 @@ function buildCoverage(deps) {
             totals: deps.totals,
             probesUsed: ctx.probesUsed,
             planOnly: deps.planOnly,
-            notCovered: deps.cells.filter((c) => c.state === "missing").map((c) => `${c.target}:${c.category}`),
+            notCovered: deps.cells.filter(c => c.state === 'missing').map(c => `${c.target}:${c.category}`),
         };
     }
     return {
         fullBattery: false,
-        cells: BATTERY_CATEGORIES.map((c) => ({
-            target: "scoped run",
+        cells: BATTERY_CATEGORIES.map(c => ({
+            target: 'scoped run',
             category: c,
-            state: ctx.coverage.has(c) ? "done" : "missing",
+            state: ctx.coverage.has(c) ? 'done' : 'missing',
         })),
         totals: deps.totals,
         probesUsed: ctx.probesUsed,
         planOnly: [],
-        notCovered: BATTERY_CATEGORIES.filter((c) => !ctx.coverage.has(c)),
+        notCovered: BATTERY_CATEGORIES.filter(c => !ctx.coverage.has(c)),
     };
 }
 function buildActivity(events) {
     const stats = projectToolStats(events);
     return {
         eventCount: events.length,
-        rows: stats.slice(0, 40).map((s) => ({
+        rows: stats.slice(0, 40).map(s => ({
             action: s.action,
             count: s.count,
             attackIds: s.attackIds,
@@ -130,7 +130,7 @@ function buildActivity(events) {
             lastSeq: s.lastSeq,
         })),
         totalActions: stats.length,
-        decisions: projectApprovals(events).map((e) => ({ action: e.action, seq: e.seq })),
+        decisions: projectApprovals(events).map(e => ({ action: e.action, seq: e.seq })),
         danglingCauses: projectDanglingCauses(events),
     };
 }
@@ -146,7 +146,7 @@ function buildMatter(deps, coverage, activity) {
     const roe = ctx.input.roe;
     const cleanByArea = new Map();
     for (const v of ctx.itemLedger.values()) {
-        if (v.disposition !== "executed-clean")
+        if (v.disposition !== 'executed-clean')
             continue;
         const key = `${v.target}|${v.category}`;
         const entry = cleanByArea.get(key) ?? { target: v.target, category: v.category, items: 0 };
@@ -154,14 +154,14 @@ function buildMatter(deps, coverage, activity) {
         cleanByArea.set(key, entry);
     }
     const killedTitles = deps.findings
-        .filter((f) => tierOf(f, deps.bundles.get(f.id)) === "ruled-out")
-        .map((f) => f.title);
-    const killedNorm = new Set(killedTitles.map((t) => t.trim().toLowerCase()));
+        .filter(f => tierOf(f, deps.bundles.get(f.id)) === 'ruled-out')
+        .map(f => f.title);
+    const killedNorm = new Set(killedTitles.map(t => t.trim().toLowerCase()));
     const ruledOut = [
         ...killedTitles,
         ...deps.proof.negative
-            .filter((n) => !killedNorm.has(n.hypothesis.trim().toLowerCase()))
-            .map((n) => n.hypothesis),
+            .filter(n => !killedNorm.has(n.hypothesis.trim().toLowerCase()))
+            .map(n => n.hypothesis),
     ];
     const planPhases = [];
     for (const s of ctx.plan?.steps ?? []) {
@@ -191,9 +191,9 @@ function buildMatter(deps, coverage, activity) {
         generatedAt: meta.generatedAt,
         fullBattery: coverage.fullBattery,
         batteryTargets: ctx.input.fullBattery
-            ? activeTargets(ctx.input).map((t) => ({ id: t, items: TARGET_PROFILES[t].battery.length }))
+            ? activeTargets(ctx.input).map(t => ({ id: t, items: TARGET_PROFILES[t].battery.length }))
             : [],
-        categoriesProbed: BATTERY_CATEGORIES.filter((c) => coverage.cells.some((cell) => cell.category === c && cell.state === "done")),
+        categoriesProbed: BATTERY_CATEGORIES.filter(c => coverage.cells.some(cell => cell.category === c && cell.state === 'done')),
         planPhases,
         probesUsed: coverage.probesUsed,
         toolActions: activity.totalActions,
@@ -202,8 +202,8 @@ function buildMatter(deps, coverage, activity) {
         notCovered: coverage.notCovered,
         planOnly: coverage.planOnly,
         blockedCells: coverage.cells
-            .filter((c) => c.state === "blocked")
-            .map((c) => `${c.target}:${c.category}`),
+            .filter(c => c.state === 'blocked')
+            .map(c => `${c.target}:${c.category}`),
         haltedReason: deps.haltedReason,
         executedClean: coverage.totals.executedClean,
         cleanAreas: [...cleanByArea.values()].sort((a, b) => a.target.localeCompare(b.target) || a.category.localeCompare(b.category)),
@@ -219,12 +219,22 @@ function deriveSection(deps, section, build) {
     }
     catch (err) {
         deps.ctx.events.append({
-            phase: "report", actor: "runner", action: "report_detail_failed",
+            phase: 'report', actor: 'runner', action: 'report_detail_failed',
             result: `Report ${section} derivation failed (report renders without it): ${err.message}`,
         });
         return undefined;
     }
 }
+/** The fleet roster as the report's team section states it: every
+ * seat, its role on the engagement. Summaries stay with the record —
+ * the wire carries the standing roles only. */
+export const FLEET_TEAM = [
+    { agent: 'Morpheus', seat: 'Lead Coordinator', role: 'Owns the engagement: the plan, the scope and authorisation gates, fleet sequencing, and final adjudication of what counts as proven.' },
+    { agent: 'Operator', seat: 'Reconnaissance', role: 'Maps the target surface — hosts, services, endpoints, and exposure — and keeps the inventory the plan runs against.' },
+    { agent: 'Neo', seat: 'Exploitation', role: 'Executes the authorised attack paths and produces the execution evidence behind every proven finding.' },
+    { agent: 'Architect', seat: 'Attack Design & Toolbuilding', role: 'Designs the attack chains and builds or adapts the tooling the plan requires.' },
+    { agent: 'Reporter', seat: 'Reporting & Deliverables', role: 'Assembles this report and the full deliverable set from the verified engagement record.' },
+];
 /** Assemble the renderer's structured input from the phase's records. */
 export function buildEngagementReportInput(deps) {
     const coverage = buildCoverage(deps);
@@ -236,16 +246,17 @@ export function buildEngagementReportInput(deps) {
         narrativeMd: stripFindingsJson(deps.narrativeMd),
         posture: gradeFindings(deps.findings),
         banner: gradeBanner(deps.findings),
+        team: FLEET_TEAM,
         findings: deps.findings,
         bundles: deps.bundles,
         noBundleReasons: deps.proof.noBundleReasons,
         negativeProof: deps.proof.negative,
         findingMeta: buildFindingMeta(deps.bundles, deps.findings),
-        detail: detailInput ? deriveSection(deps, "detail", () => buildReportDetail(detailInput)) : undefined,
+        detail: detailInput ? deriveSection(deps, 'detail', () => buildReportDetail(detailInput)) : undefined,
         inventory: readHostInventory(deps.ctx.events.dir),
         coverage,
         activity,
-        matter: deriveSection(deps, "matter", () => buildMatter(deps, coverage, activity)),
+        matter: deriveSection(deps, 'matter', () => buildMatter(deps, coverage, activity)),
         haltedReason: deps.haltedReason,
         blockedReason: deps.blockedReason,
         dryRun: deps.ctx.config.dryRunAgents,

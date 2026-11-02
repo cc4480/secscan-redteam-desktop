@@ -37,6 +37,44 @@ export interface LiveState {
     deliverables?: Record<string, string>;
     /** True when the closing deliverable set was incomplete. */
     deliverableFailed?: boolean;
+    /** SCRIBE GATE: the publisher seat's sign-off on the closing set,
+     * stamped by report/scribe.ts when the set was signed. */
+    artifactSignoff?: ArtifactSignoff | null;
+    /** SCRIBE GATE: why the closing set shipped unsigned (defects or the
+     * seat unavailable), stamped by report/scribe.ts; null when signed. */
+    artifactUnsigned?: ArtifactUnsigned | null;
+}
+/** One defect in the Scribe's review of the closing deliverable set. */
+export interface ScribeDefect {
+    /** The artifact file the defect is in (e.g. "report.html"). */
+    file: string;
+    /** accuracy = contradicts the record; completeness = a promised piece
+     * missing; craft = below the locked design standard. */
+    class: "accuracy" | "completeness" | "craft";
+    /** What fails, concretely (the line, the count, the section). */
+    detail: string;
+    /** What "fixed" looks like. */
+    fix: string;
+}
+/** The publisher seat's sign-off stamp on a closing deliverable set. */
+export interface ArtifactSignoff {
+    by: "scribe";
+    /** ISO timestamp of the signing review. */
+    at: string;
+    /** Review cycles the set went through (1 = signed on first review). */
+    cycles: number;
+}
+/** The record of a closing set that shipped without the Scribe's
+ * signature — the same honesty class as deliverableFailed: the set must
+ * never read as approved when it was not. */
+export interface ArtifactUnsigned {
+    reason: "defects" | "scribe_unavailable";
+    /** The final cycle's defect list (empty when the seat never answered). */
+    defects: ScribeDefect[];
+    /** Review cycles spent before the set shipped unsigned. */
+    cycles: number;
+    /** ISO timestamp of the unsigned stamp. */
+    at: string;
 }
 export declare class EventLog {
     readonly dir: string;
