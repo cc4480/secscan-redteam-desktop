@@ -10,7 +10,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { ScanVulnerability } from "./scanner";
-import { validatedFetch } from "./targetGuard";
+import { validatedFetch, type TargetGuardOptions } from "./targetGuard";
 
 const TIMEOUT_MS = 8_000;
 
@@ -21,11 +21,12 @@ function vuln(partial: Omit<ScanVulnerability, "id">): ScanVulnerability {
 async function safeGet(
   url: string,
   options: RequestInit = {},
+  guard: TargetGuardOptions = {},
 ): Promise<{ status: number; body: string; headers: Record<string, string> } | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    const res = await validatedFetch(url, { ...options, signal: controller.signal }, { timeoutMs: TIMEOUT_MS });
+    const res = await validatedFetch(url, { ...options, signal: controller.signal }, { timeoutMs: TIMEOUT_MS, attestedHost: guard.attestedHost });
     const body = await res.text().catch(() => "");
     const headers: Record<string, string> = {};
     res.headers.forEach((v, k) => { headers[k.toLowerCase()] = v; });
@@ -81,6 +82,7 @@ export async function runNextjsProbe(
   baseUrl: string,
   html: string,
   rawHeaders: Record<string, string> = {},
+  guard: TargetGuardOptions = {},
 ): Promise<ScanVulnerability[]> {
   const findings: ScanVulnerability[] = [];
 
@@ -95,7 +97,7 @@ export async function runNextjsProbe(
   }
 
   // ── 1. BUILD ID EXPOSURE ──────────────────────────────────────────────────
-  const buildIdRes = await safeGet(`${origin}/_next/BUILD_ID`);
+  const buildIdRes = await safeGet(`${origin}/_next/BUILD_ID`, {}, guard);
   if (buildIdRes && buildIdRes.status === 200 && buildIdRes.body.trim().length > 0) {
     const buildId = buildIdRes.body.trim().slice(0, 64);
     findings.push(vuln({
@@ -120,7 +122,7 @@ export async function runNextjsProbe(
   const chunkUrls = extractChunkUrls(html, origin);
   for (const chunkUrl of chunkUrls) {
     const mapUrl = `${chunkUrl}.map`;
-    const mapRes = await safeGet(mapUrl);
+    const mapRes = await safeGet(mapUrl, {}, guard);
     if (mapRes && mapRes.status === 200 &&
         (mapRes.headers["content-type"]?.includes("application/json") ||
          mapRes.body.startsWith('{"version":'))) {
@@ -149,7 +151,7 @@ export async function runNextjsProbe(
   // Only check if we have chunks to inspect
   const exposedEnvVars: string[] = [];
   for (const chunkUrl of chunkUrls.slice(0, 3)) {
-    const chunkRes = await safeGet(chunkUrl);
+    const chunkRes = await safeGet(chunkUrl, {}, guard);
     if (!chunkRes || chunkRes.status !== 200) continue;
     const vars = extractPublicEnvVars(chunkRes.body);
     exposedEnvVars.push(...vars);
@@ -186,7 +188,7 @@ export async function runNextjsProbe(
 
   // ── 4. NEXT.JS DEBUG ENDPOINTS ────────────────────────────────────────────
   // /_next/webpack-hmr — Hot Module Replacement websocket should never be in prod
-  const hmrRes = await safeGet(`${origin}/_next/webpack-hmr`);
+  const hmrRes = await safeGet(`${origin}/_next/webpack-hmr`, {}, guard);
   if (hmrRes && hmrRes.status === 200 && hmrRes.body.includes("webpack")) {
     findings.push(vuln({
       name: "Next.js HMR Dev Endpoint Exposed in Production",

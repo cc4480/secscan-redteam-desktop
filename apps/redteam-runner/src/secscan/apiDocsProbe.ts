@@ -8,7 +8,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { ScanVulnerability } from "./scanner";
-import { validatedFetch } from "./targetGuard";
+import { validatedFetch, type TargetGuardOptions } from "./targetGuard";
 
 const TIMEOUT_MS = 7_000;
 
@@ -18,6 +18,7 @@ function vuln(partial: Omit<ScanVulnerability, "id">): ScanVulnerability {
 
 async function safeGet(
   url: string,
+  guard: TargetGuardOptions = {},
 ): Promise<{ status: number; body: string; headers: Record<string, string> } | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -25,7 +26,7 @@ async function safeGet(
     const res = await validatedFetch(url, {
       signal: controller.signal,
       headers: { "Accept": "text/html,application/json,application/yaml,*/*" },
-    }, { timeoutMs: TIMEOUT_MS });
+    }, { timeoutMs: TIMEOUT_MS, attestedHost: guard.attestedHost });
     const body = await res.text().catch(() => "");
     const headers: Record<string, string> = {};
     res.headers.forEach((v, k) => { headers[k.toLowerCase()] = v; });
@@ -107,7 +108,7 @@ function countApiPaths(body: string): number {
   return matches?.length ?? 0;
 }
 
-export async function runApiDocsProbe(baseUrl: string): Promise<ScanVulnerability[]> {
+export async function runApiDocsProbe(baseUrl: string, guard: TargetGuardOptions = {}): Promise<ScanVulnerability[]> {
   const findings: ScanVulnerability[] = [];
 
   let origin: string;
@@ -124,7 +125,7 @@ export async function runApiDocsProbe(baseUrl: string): Promise<ScanVulnerabilit
   // Check Swagger UI
   for (const path of SWAGGER_UI_PATHS) {
     if (foundSwagger) break;
-    const res = await safeGet(`${origin}${path}`);
+    const res = await safeGet(`${origin}${path}`, guard);
     if (!res || res.status !== 200) continue;
 
     if (isSwaggerUi(res.body)) {
@@ -154,7 +155,7 @@ export async function runApiDocsProbe(baseUrl: string): Promise<ScanVulnerabilit
   // Check raw OpenAPI spec
   for (const path of OPENAPI_SPEC_PATHS) {
     if (foundOpenApiSpec) break;
-    const res = await safeGet(`${origin}${path}`);
+    const res = await safeGet(`${origin}${path}`, guard);
     if (!res || res.status !== 200) continue;
 
     const ct = res.headers["content-type"] ?? "";
@@ -185,7 +186,7 @@ export async function runApiDocsProbe(baseUrl: string): Promise<ScanVulnerabilit
   // Check Redoc
   for (const path of REDOC_PATHS) {
     if (foundRedoc || foundSwagger) break;
-    const res = await safeGet(`${origin}${path}`);
+    const res = await safeGet(`${origin}${path}`, guard);
     if (!res || res.status !== 200) continue;
 
     if (isRedoc(res.body)) {

@@ -28,7 +28,7 @@ import { type TargetId, isTargetId } from '../targets.js'
 import { techniqueAllowed } from '../gate.js'
 import { type Ctx, type LiveFinding } from '../context.js'
 import { type ActorRole, type EngagementPhase } from '../types.js'
-import { redactPii } from '../safety/index.js'
+import { redactPii, attestedHostAllowed } from '../safety/index.js'
 import type { ToolCallRequest } from '@secscan/redteam-llm-router'
 import { type DispatchResult } from './types.js'
 import { noteCategoryCoverage } from './prelude.js'
@@ -97,7 +97,7 @@ export async function handleSecscanTools(
   noteCategoryCoverage(ctx, category, targetProfile)
   let scan: ScanResult
   try {
-    scan = await runScan(url, depth === 'deep' ? 'deep' : 'basic')
+    scan = await runScan(url, depth === 'deep' ? 'deep' : 'basic', undefined, { attestedHost: (host) => attestedHostAllowed(ctx, host) })
   } catch (err) {
     return { result: `secscan_exec failed: ${(err as Error).message}`, attackId, target: url, ok: false }
   }

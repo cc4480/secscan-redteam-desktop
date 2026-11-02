@@ -9,7 +9,7 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -17,8 +17,11 @@ import {
   extractArmRuns,
   joinLiveLabels,
   normalizeTargetKey,
+  recordReportMeta,
   resolvePredecessor,
 } from "../src/report/predecessor.js";
+import { reportPhase } from "../src/report/phase.js";
+import { EventLog } from "../src/events.js";
 import { type Ctx, type LiveFinding } from "../src/context.js";
 import { type EngagementEvent, type Finding } from "../src/types.js";
 
@@ -208,5 +211,88 @@ describe("arm runs + live-label join", () => {
     );
     assert.equal(joined.get("F-1")?.vulnClass, "bola-idor");
     assert.equal(joined.get("F-2")?.vulnClass, "Injection Defense");
+  });
+});
+
+describe("recordReportMeta — halt honesty (eng-2026-11-02-or12 defect 2)", () => {
+  function metaCtx(dir: string): Ctx {
+    return {
+      input: { target: "http://127.0.0.1:8080" },
+      config: { dryRunAgents: false },
+      events: {
+        dir,
+        engagementId: "eng-test-meta",
+        snapshot: { startedAt: "2026-11-02T22:53:00.000Z" },
+      },
+    } as unknown as Ctx;
+  }
+
+  it("a null posture writes NO score/grade — no fabricated A/100", () => {
+    const dir = mkdtempSync(join(tmpdir(), "report-meta-null-"));
+    recordReportMeta(metaCtx(dir), null);
+    const meta = JSON.parse(readFileSync(join(dir, "report-meta.json"), "utf8")) as Record<string, unknown>;
+    assert.equal("score" in meta, false);
+    assert.equal("grade" in meta, false);
+    assert.equal(meta.version, 1);
+    assert.equal(meta.engagementId, "eng-test-meta");
+    assert.equal(meta.target, "http://127.0.0.1:8080");
+    assert.equal(meta.startedAt, "2026-11-02T22:53:00.000Z");
+    assert.equal(meta.dryRun, false);
+  });
+
+  it("a real posture keeps the exact completed-run byte shape", () => {
+    const dir = mkdtempSync(join(tmpdir(), "report-meta-real-"));
+    recordReportMeta(metaCtx(dir), { score: 82, grade: "B" });
+    const raw = readFileSync(join(dir, "report-meta.json"), "utf8");
+    const expected =
+      JSON.stringify(
+        {
+          version: 1, engagementId: "eng-test-meta", target: "http://127.0.0.1:8080",
+          startedAt: "2026-11-02T22:53:00.000Z", dryRun: false,
+          score: 82, grade: "B",
+        },
+        null, 2,
+      );
+    assert.equal(raw, expected);
+  });
+
+  it("the real reportPhase halt path writes a meta with no A/100", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "report-phase-halt-"));
+    const events = new EventLog(dir, "eng-test-halt", {
+      target: "http://127.0.0.1:8080",
+      mode: "red",
+      objective: "halt-path meta honesty",
+    });
+    const ctx = {
+      input: { mode: "red", target: "http://127.0.0.1:8080", fullBattery: false, operatorName: "test" },
+      config: { dryRunAgents: false },
+      events,
+      coverage: new Set(),
+      targetCoverage: new Map(),
+      itemLedger: new Map(),
+      probesUsed: 0,
+      liveFindings: [],
+      killedLive: [],
+      peerDeferredLive: [],
+      registryHits: [],
+      targetMap: [],
+      fingerprint: { host: "127.0.0.1", stack: [], appType: "test" },
+      verificationProof: "test attestation",
+      plan: undefined,
+      operationNarrative: undefined,
+      nuclei: { templateExecutions: 0, templatesRun: 0, findings: 0 },
+    } as unknown as Ctx;
+    try {
+      await reportPhase(ctx, "brief", "summary", { haltedReason: "test halt: attested target unreachable" });
+    } catch {
+      // Deliverable writers downstream of the meta write may need a
+      // fuller ctx than this fabrication; the assertion below is on
+      // the meta the halt path itself wrote before them.
+    }
+    const meta = JSON.parse(readFileSync(join(dir, "report-meta.json"), "utf8")) as Record<string, unknown>;
+    assert.equal("score" in meta, false);
+    assert.equal("grade" in meta, false);
+    assert.equal(meta.engagementId, "eng-test-halt");
+    assert.equal(meta.target, "http://127.0.0.1:8080");
   });
 });

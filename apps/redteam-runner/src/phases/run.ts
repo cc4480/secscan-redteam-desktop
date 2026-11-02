@@ -11,7 +11,7 @@ import { McpClient } from "../mcp.js";
 import { MsfExecutor } from "../msf/index.js";
 import { NucleiExecutor } from "../nuclei/index.js";
 import { NmapExecutor } from "../nmap/index.js";
-import { CredentialAttemptGuard, TargetRateLimiter, describeEnvironment, parseEnvironment, productionConfirmed, requireGraduation, resolveEffectiveRps, resolveLogRotationConfig, assertDistFresh } from "../safety/index.js";
+import { CredentialAttemptGuard, TargetRateLimiter, describeEnvironment, parseEnvironment, productionConfirmed, requireGraduation, resolveEffectiveRps, resolveLogRotationConfig, assertDistFresh, attestedHostAllowed } from "../safety/index.js";
 import { type VulnerabilityRegistry, loadRegistryFile, saveRegistryFile, seedRegistry } from "../registry.js";
 import { WebProber, allHostsPrivateOrLoopback } from "../prober.js";
 import { activeTargets } from "../targets.js";
@@ -132,7 +132,7 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
     deps,
     events,
     mcp: deps.mcp ?? new McpClient({ endpoint: config.mcpEndpoint, token: config.mcpToken }),
-    prober: deps.prober ?? new WebProber({ scopeHosts: hosts, minDelayMs: config.probeDelayMs, allowPrivateHosts: (config.localSandbox && allHostsPrivateOrLoopback(hosts)) || config.testMode }),
+    prober: deps.prober ?? new WebProber({ scopeHosts: hosts, minDelayMs: config.probeDelayMs, allowPrivateHosts: (config.localSandbox && allHostsPrivateOrLoopback(hosts)) || config.testMode, attestedHost: (host) => attestedHostAllowed(ctx, host) }),
     hostExecutor: deps.hostExecutor ?? new HostExecutor({ testMode: config.testMode }),
     msfExecutor: deps.msfExecutor ?? new MsfExecutor({ testMode: config.testMode }),
     nucleiExecutor: deps.nucleiExecutor ?? new NucleiExecutor(),

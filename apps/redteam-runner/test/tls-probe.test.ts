@@ -205,7 +205,7 @@ describe('Q-SSLLABS native TLS probe (spec T1–T3)', () => {
     it('scanner.ts derives no letter from isHttps and wires the probe', () => {
       const source = readFileSync(join(RUNNER_ROOT, 'src', 'secscan', 'scanner.ts'), 'utf8')
       assert.ok(!source.includes('isHttps ? "A"'), 'the unconditional-A stub is gone')
-      assert.ok(source.includes('probeTargetTls(finalUrl)'), 'scanner runs the guarded probe')
+      assert.ok(source.includes('probeTargetTls(finalUrl, { attestedHost: guard.attestedHost })'), 'scanner runs the guarded probe, wired with the engagement allowance')
       assert.ok(source.includes('deriveTlsGrade(observation)'), 'grade derives from the observation')
       assert.ok(source.includes('buildTlsFindings(observation, finalUrl)'), 'findings derive from the observation')
     })

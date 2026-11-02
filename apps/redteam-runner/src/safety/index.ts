@@ -100,3 +100,5 @@ export {
   NEVER_FILE_EXT_TLDS,
 } from './scope-guard.js'
 export type { HostMembership, ScopeVerdict, ScopeViolation, ScopeGuardSets } from './scope-guard.js'
+
+export { attestedHostAllowed } from './attested-host.js'

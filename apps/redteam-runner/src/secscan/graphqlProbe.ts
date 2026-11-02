@@ -11,7 +11,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { ScanVulnerability } from "./scanner";
-import { validatedFetch } from "./targetGuard";
+import { validatedFetch, type TargetGuardOptions } from "./targetGuard";
 
 const TIMEOUT_MS = 8_000;
 
@@ -22,6 +22,7 @@ function vuln(partial: Omit<ScanVulnerability, "id">): ScanVulnerability {
 async function safePost(
   url: string,
   body: unknown,
+  guard: TargetGuardOptions = {},
 ): Promise<{ status: number; body: string; headers: Record<string, string> } | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -31,7 +32,7 @@ async function safePost(
       signal: controller.signal,
       headers: { "Content-Type": "application/json", "Accept": "application/json" },
       body: JSON.stringify(body),
-    }, { timeoutMs: TIMEOUT_MS });
+    }, { timeoutMs: TIMEOUT_MS, attestedHost: guard.attestedHost });
     const text = await res.text().catch(() => "");
     const headers: Record<string, string> = {};
     res.headers.forEach((v, k) => { headers[k.toLowerCase()] = v; });
@@ -76,7 +77,7 @@ function hasIntrospectionData(body: string): boolean {
   }
 }
 
-export async function runGraphqlProbe(baseUrl: string): Promise<ScanVulnerability[]> {
+export async function runGraphqlProbe(baseUrl: string, guard: TargetGuardOptions = {}): Promise<ScanVulnerability[]> {
   const findings: ScanVulnerability[] = [];
 
   let origin: string;
@@ -88,7 +89,7 @@ export async function runGraphqlProbe(baseUrl: string): Promise<ScanVulnerabilit
 
   for (const path of COMMON_GQL_PATHS) {
     const url = `${origin}${path}`;
-    const res = await safePost(url, INTROSPECTION_QUERY);
+    const res = await safePost(url, INTROSPECTION_QUERY, guard);
     if (!res) continue;
 
     // Endpoint must respond with JSON (not HTML 404 or redirect)
@@ -145,7 +146,7 @@ export async function runGraphqlProbe(baseUrl: string): Promise<ScanVulnerabilit
       break;
     } else {
       // GraphQL is running but introspection is off — check for field suggestions leaking info
-      const probe = await safePost(url, { query: "{ __typename nonExistentField }" });
+      const probe = await safePost(url, { query: "{ __typename nonExistentField }" }, guard);
       if (
         probe &&
         isGraphQLResponse(probe.body) &&

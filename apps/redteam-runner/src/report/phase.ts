@@ -260,7 +260,7 @@ export async function reportPhase(
     let detailInput: DetailInput | undefined;
     let baselineMeta: ReportMeta["baseline"];
     try {
-      recordReportMeta(ctx, gradeFindings(findings));
+      recordReportMeta(ctx, opts.haltedReason || opts.blockedReason ? null : gradeFindings(findings));
       const assembled = buildDetailInput({
         ctx, findings, bundles: pocBundleMap, totals, cells,
         findingMeta: buildFindingMeta(pocBundleMap, findings),

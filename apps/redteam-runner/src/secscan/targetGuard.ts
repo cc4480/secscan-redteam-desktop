@@ -7,7 +7,9 @@
  * every redirect hop.
  *
  * The rule is simple: the scanner only ever talks to public IP addresses over
- * http/https, on an allowlisted port, with no credentials in the URL.
+ * http/https, on an allowlisted port, with no credentials in the URL. One
+ * exception, runner-supplied only (TargetGuardOptions): a host the verified
+ * engagement record attests may be non-public — never link-local.
  */
 
 export class TargetValidationError extends Error {
@@ -33,6 +35,38 @@ export class TargetValidationError extends Error {
 
 /** Ports the scanner is willing to probe. Everything else is rejected. */
 export const ALLOWED_TARGET_PORTS = new Set([80, 443, 3000, 8000, 8080, 8443]);
+
+/**
+ * Runner-supplied allowance for attested engagement targets. The
+ * standalone service has no engagement record and never sets this;
+ * the RedTeam runner passes its verified record's per-host verdict
+ * (safety/attested-host.ts) so a target the owner attested — a lab or
+ * LAN host — is scannable even though it is private/loopback.
+ */
+export interface TargetGuardOptions {
+  /**
+   * The verified engagement record's verdict for a host. When it
+   * allows the host, non-public addresses are accepted for that host
+   * — EXCEPT link-local (169.254.0.0/16, fe80::/10), which stays
+   * refused unconditionally: cloud metadata is never a legitimate
+   * target, attested or not. Absent, every non-public address is
+   * refused exactly as before.
+   */
+  attestedHost?: (host: string) => boolean;
+}
+
+/** True for link-local addresses (169.254.0.0/16, fe80::/10, v4-mapped forms). */
+function isLinkLocalIp(ip: string): boolean {
+  const v4 = ipv4ToInt(ip);
+  if (v4 !== null) return inCidrV4(ip, "169.254.0.0/16");
+  const v6 = expandIpv6(ip);
+  if (v6 === null) return false;
+  if (v6[5] === 0xffff && v6.slice(0, 5).every((p) => p === 0)) {
+    const emb = `${(v6[6]! >>> 8) & 0xff}.${v6[6]! & 0xff}.${(v6[7]! >>> 8) & 0xff}.${v6[7]! & 0xff}`;
+    return isLinkLocalIp(emb);
+  }
+  return (v6[0]! & 0xffc0) === 0xfe80;
+}
 
 const MAX_REDIRECTS = 5;
 
@@ -220,13 +254,18 @@ async function lookupAll(hostname: string): Promise<string[]> {
 /**
  * Resolve the hostname and require every address to be public.
  * IP literals are checked directly. Fails closed on DNS errors.
+ * With an attested-host allowance (TargetGuardOptions), non-public
+ * addresses are accepted for the attested host only — and a link-local
+ * resolution is refused even then, so an attested name can never be
+ * pivoted onto cloud metadata.
  */
-export async function assertPublicResolution(hostname: string): Promise<string[]> {
+export async function assertPublicResolution(hostname: string, opts: TargetGuardOptions = {}): Promise<string[]> {
   // Tolerate bracketed IPv6 literals ("[::1]") on direct calls.
   const host = hostname.startsWith("[") && hostname.endsWith("]") ? hostname.slice(1, -1) : hostname;
+  const attested = opts.attestedHost?.(host) ?? false;
   if (ipv4ToInt(host) !== null || expandIpv6(host) !== null) {
     // Direct IP literal — still subject to the public-IP rule.
-    if (!isPublicIpAddress(host)) {
+    if (!isPublicIpAddress(host) && !(attested && !isLinkLocalIp(host))) {
       throw new TargetValidationError(
         "private_ip",
         "Scanning private, loopback, or link-local addresses is not allowed.",
@@ -237,10 +276,19 @@ export async function assertPublicResolution(hostname: string): Promise<string[]
   const addresses = await lookupAll(host);
   const bad = addresses.find((a) => !isPublicIpAddress(a));
   if (bad) {
-    throw new TargetValidationError(
-      "private_ip",
-      `Hostname resolves to a non-public address (${bad}); refusing to scan.`,
-    );
+    if (!attested) {
+      throw new TargetValidationError(
+        "private_ip",
+        `Hostname resolves to a non-public address (${bad}); refusing to scan.`,
+      );
+    }
+    const linkLocal = addresses.find((a) => isLinkLocalIp(a));
+    if (linkLocal) {
+      throw new TargetValidationError(
+        "private_ip",
+        `Hostname resolves to a link-local address (${linkLocal}); refusing to scan.`,
+      );
+    }
   }
   if (addresses.length === 0) {
     throw new TargetValidationError(
@@ -252,9 +300,9 @@ export async function assertPublicResolution(hostname: string): Promise<string[]
 }
 
 /** Full check: structure + public DNS resolution. */
-export async function assertTargetSafe(rawUrl: string): Promise<ValidatedTarget> {
+export async function assertTargetSafe(rawUrl: string, opts: TargetGuardOptions = {}): Promise<ValidatedTarget> {
   const target = parseTargetUrl(rawUrl);
-  await assertPublicResolution(target.hostname);
+  await assertPublicResolution(target.hostname, opts);
   return target;
 }
 
@@ -264,7 +312,7 @@ export async function assertTargetSafe(rawUrl: string): Promise<ValidatedTarget>
  * Resolve a redirect `Location` against the current URL and run the full
  * target guard on the result. Exported for testing.
  */
-export async function resolveRedirectTarget(current: URL, location: string): Promise<URL> {
+export async function resolveRedirectTarget(current: URL, location: string, opts: TargetGuardOptions = {}): Promise<URL> {
   let next: URL;
   try {
     next = new URL(location, current.toString());
@@ -275,11 +323,11 @@ export async function resolveRedirectTarget(current: URL, location: string): Pro
     );
   }
   const target = parseTargetUrl(next.toString());
-  await assertPublicResolution(target.hostname);
+  await assertPublicResolution(target.hostname, opts);
   return target.url;
 }
 
-export interface ValidatedFetchOptions {
+export interface ValidatedFetchOptions extends TargetGuardOptions {
   maxRedirects?: number;
   timeoutMs?: number;
 }
@@ -300,7 +348,7 @@ export async function validatedFetch(
 
   for (let hop = 0; hop <= maxRedirects; hop++) {
     const target = parseTargetUrl(current);
-    await assertPublicResolution(target.hostname);
+    await assertPublicResolution(target.hostname, opts);
 
     let res: Response;
     try {
@@ -327,7 +375,7 @@ export async function validatedFetch(
         );
       }
       try {
-        current = (await resolveRedirectTarget(target.url, location)).toString();
+        current = (await resolveRedirectTarget(target.url, location, opts)).toString();
       } catch (err) {
         if (err instanceof TargetValidationError) throw err;
         throw new TargetValidationError(

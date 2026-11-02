@@ -32,7 +32,7 @@
  */
 
 import tls from 'node:tls'
-import { assertPublicResolution, parseTargetUrl, TargetValidationError } from './targetGuard'
+import { assertPublicResolution, parseTargetUrl, TargetValidationError, type TargetGuardOptions } from './targetGuard'
 import type { ScanVulnerability } from './scanner'
 
 /** Legacy protocol versions whose acceptance the probe tests explicitly. */
@@ -123,6 +123,8 @@ export interface TlsProbeOptions {
   defaultTimeoutMs?: number
   /** Per-attempt timeout for the pinned legacy handshakes. */
   legacyTimeoutMs?: number
+  /** The verified engagement record's per-host verdict (targetGuard allowance). */
+  attestedHost?: TargetGuardOptions['attestedHost']
 }
 
 interface HandshakeOutcome {
@@ -268,7 +270,7 @@ export async function probeTargetTls(targetUrl: string, options: TlsProbeOptions
     return { checked: false, reachable: false, legacyProtocolsAccepted: [] }
   }
   const port = url.port ? Number(url.port) : 443
-  const addresses = await assertPublicResolution(hostname)
+  const addresses = await assertPublicResolution(hostname, { attestedHost: options.attestedHost })
   const connectHost = addresses[0]
   if (connectHost === undefined) {
     // assertPublicResolution already throws on an empty result; this is the

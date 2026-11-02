@@ -13,7 +13,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { ScanVulnerability } from "./scanner";
-import { validatedFetch } from "./targetGuard";
+import { validatedFetch, type TargetGuardOptions } from "./targetGuard";
 
 const TIMEOUT_MS = 8_000;
 
@@ -23,6 +23,7 @@ function vuln(partial: Omit<ScanVulnerability, "id">): ScanVulnerability {
 
 async function safeGet(
   url: string,
+  guard: TargetGuardOptions = {},
 ): Promise<{ status: number; body: string; headers: Record<string, string> } | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -30,7 +31,7 @@ async function safeGet(
     const res = await validatedFetch(url, {
       signal: controller.signal,
       headers: { "Accept": "application/xml,application/json,*/*" },
-    }, { timeoutMs: TIMEOUT_MS });
+    }, { timeoutMs: TIMEOUT_MS, attestedHost: guard.attestedHost });
     const body = await res.text().catch(() => "");
     const headers: Record<string, string> = {};
     res.headers.forEach((v, k) => { headers[k.toLowerCase()] = v; });
@@ -161,6 +162,7 @@ const FIX_BY_PROVIDER: Record<StorageBucket["type"], string> = {
 export async function runStorageProbe(
   _baseUrl: string,
   html: string,
+  guard: TargetGuardOptions = {},
 ): Promise<ScanVulnerability[]> {
   const findings: ScanVulnerability[] = [];
   const buckets = extractBuckets(html);
@@ -168,7 +170,7 @@ export async function runStorageProbe(
 
   const results = await Promise.allSettled(
     buckets.map(async (bucket) => {
-      const res = await safeGet(bucket.listUrl);
+      const res = await safeGet(bucket.listUrl, guard);
       if (!res) return null;
       if (res.status !== 200) return null;
       if (!isPublicListResponse(res.body, bucket.type)) return null;

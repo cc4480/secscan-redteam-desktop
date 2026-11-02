@@ -13,7 +13,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { ScanVulnerability } from "./scanner";
-import { validatedFetch } from "./targetGuard";
+import { validatedFetch, type TargetGuardOptions } from "./targetGuard";
 
 const PAGE_TIMEOUT_MS = 8_000;
 const CRAWL_TIMEOUT_MS = 30_000;
@@ -98,7 +98,7 @@ interface PageResult {
   finalUrl: string;
 }
 
-async function fetchPage(url: string, timeoutMs: number): Promise<PageResult | null> {
+async function fetchPage(url: string, timeoutMs: number, guard: TargetGuardOptions = {}): Promise<PageResult | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -109,7 +109,7 @@ async function fetchPage(url: string, timeoutMs: number): Promise<PageResult | n
         "User-Agent": "Mozilla/5.0 (compatible; VibeScan-Security-Bot/1.0; +https://vibescan.app/bot)",
         "Accept": "text/html,application/xhtml+xml,*/*",
       },
-    }, { timeoutMs });
+    }, { timeoutMs, attestedHost: guard.attestedHost });
     const headers: Record<string, string> = {};
     res.headers.forEach((v, k) => { headers[k.toLowerCase()] = v; });
     const body = await res.text().catch(() => "");
@@ -134,6 +134,7 @@ async function fetchPage(url: string, timeoutMs: number): Promise<PageResult | n
 async function probeUrl(
   url: string,
   timeoutMs: number,
+  guard: TargetGuardOptions = {},
 ): Promise<{ status: number; headers: Record<string, string>; body: string; finalUrl: string } | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -141,7 +142,7 @@ async function probeUrl(
     const res = await validatedFetch(url, {
       signal: controller.signal,
       headers: { "User-Agent": "Mozilla/5.0 (compatible; VibeScan-Security-Bot/1.0)" },
-    }, { timeoutMs });
+    }, { timeoutMs, attestedHost: guard.attestedHost });
     const headers: Record<string, string> = {};
     res.headers.forEach((v, k) => { headers[k.toLowerCase()] = v; });
     const body = await res.text().catch(() => "");
@@ -193,6 +194,7 @@ async function probePathSensitiveFiles(
   origin: string,
   expectedHostname: string,
   timeoutMs: number,
+  guard: TargetGuardOptions = {},
 ): Promise<ScanVulnerability[]> {
   let pathname: string;
   try {
@@ -213,7 +215,7 @@ async function probePathSensitiveFiles(
   await Promise.allSettled(
     PATH_PROBES.map(async (probe) => {
       const probeUrl = `${origin}${dirPrefix}${probe.suffix.replace(/^\//, "")}`;
-      const result = await probeUrlFn(probeUrl, timeoutMs);
+      const result = await probeUrlFn(probeUrl, timeoutMs, guard);
       if (!result || result.status !== 200) return;
 
       // Ensure we didn't get redirected off-domain (catch-all login pages, etc.)
@@ -474,6 +476,7 @@ export async function crawlAndCheck(
   rootHtml: string,
   rootHeaders: Record<string, string>,
   maxPages: number,
+  guard: TargetGuardOptions = {},
 ): Promise<CrawlResult> {
   let origin: string;
   let expectedHostname: string;
@@ -555,7 +558,7 @@ export async function crawlAndCheck(
     // Cap per-fetch timeout to whatever budget remains (hard deadline enforcement)
     const fetchTimeout = Math.min(PAGE_TIMEOUT_MS, remaining);
 
-    const page = await fetchPage(url, fetchTimeout);
+    const page = await fetchPage(url, fetchTimeout, guard);
     if (!page || page.status === 0 || page.status >= 400) return page?.status ?? null;
 
     // Verify we didn't get redirected off-domain (catch-all login redirects, etc.)
@@ -588,7 +591,7 @@ export async function crawlAndCheck(
     const probeRemaining = crawlDeadline - Date.now();
     if (probeRemaining >= MIN_BUDGET_MS) {
       const probeTimeout = Math.min(PAGE_TIMEOUT_MS, probeRemaining);
-      const pathFindings = await probePathSensitiveFiles(url, origin, expectedHostname, probeTimeout);
+      const pathFindings = await probePathSensitiveFiles(url, origin, expectedHostname, probeTimeout, guard);
       perPageFindings.push(...pathFindings);
     }
 

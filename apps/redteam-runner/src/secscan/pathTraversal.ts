@@ -16,7 +16,7 @@
 import { randomUUID } from "node:crypto";
 import type { ScanVulnerability } from "./scanner";
 import { PATH_TRAVERSAL_TEMPLATES, classifyTraversalBody } from "./payloads";
-import { validatedFetch } from "./targetGuard";
+import { validatedFetch, type TargetGuardOptions } from "./targetGuard";
 
 const TIMEOUT_MS = 7_000;
 
@@ -45,11 +45,11 @@ const PROBE_PARAMS = ["file", "path", "doc", "page", "name"];
 
 // ─── HTTP helper ──────────────────────────────────────────────────────────────
 
-async function safeGet(url: string): Promise<{ status: number; body: string } | null> {
+async function safeGet(url: string, guard: TargetGuardOptions = {}): Promise<{ status: number; body: string } | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    const res = await validatedFetch(url, { signal: controller.signal }, { timeoutMs: TIMEOUT_MS });
+    const res = await validatedFetch(url, { signal: controller.signal }, { timeoutMs: TIMEOUT_MS, attestedHost: guard.attestedHost });
     if (!res.ok && res.status !== 200) return null;
     const body = await res.text().catch(() => "");
     return { status: res.status, body };
@@ -65,6 +65,7 @@ async function safeGet(url: string): Promise<{ status: number; body: string } | 
 export async function checkPathTraversal(
   targetUrl: string,
   html: string,
+  guard: TargetGuardOptions = {},
 ): Promise<ScanVulnerability[]> {
   let origin: string;
   let targetPath: string;
@@ -126,7 +127,7 @@ export async function checkPathTraversal(
       const testUrl = new URL(`${origin}${path}`);
       testUrl.searchParams.set(param, payload);
 
-      const result = await safeGet(testUrl.toString());
+      const result = await safeGet(testUrl.toString(), guard);
       if (!result) continue;
 
       const os = classifyTraversalBody(result.body);

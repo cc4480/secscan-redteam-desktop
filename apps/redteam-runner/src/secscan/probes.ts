@@ -10,7 +10,7 @@
 import { randomUUID } from "node:crypto";
 import type { ScanVulnerability } from "./scanner";
 import { OPEN_REDIRECT_PROBE, OPEN_REDIRECT_PARAMS } from "./payloads";
-import { validatedFetch } from "./targetGuard";
+import { validatedFetch, type TargetGuardOptions } from "./targetGuard";
 
 const PROBE_TIMEOUT_MS = 8_000;
 
@@ -22,11 +22,12 @@ async function safeGet(
   url: string,
   options: RequestInit = {},
   timeoutMs = PROBE_TIMEOUT_MS,
+  guard: TargetGuardOptions = {},
 ): Promise<{ status: number; body: string; headers: Record<string, string>; finalUrl: string } | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await validatedFetch(url, { ...options, signal: controller.signal }, { timeoutMs });
+    const res = await validatedFetch(url, { ...options, signal: controller.signal }, { timeoutMs, attestedHost: guard.attestedHost });
     const body = await res.text().catch(() => "");
     const headers: Record<string, string> = {};
     res.headers.forEach((v, k) => { headers[k.toLowerCase()] = v; });
@@ -45,7 +46,7 @@ async function safeGet(
 import { type SensitivePath, SENSITIVE_PATHS } from "./probes-data";
 
 
-export async function checkSensitiveFiles(baseUrl: string): Promise<ScanVulnerability[]> {
+export async function checkSensitiveFiles(baseUrl: string, guard: TargetGuardOptions = {}): Promise<ScanVulnerability[]> {
   let origin: string;
   let expectedHost: string;
   try {
@@ -59,7 +60,7 @@ export async function checkSensitiveFiles(baseUrl: string): Promise<ScanVulnerab
   const results = await Promise.allSettled(
     SENSITIVE_PATHS.map(async (p): Promise<ScanVulnerability | null> => {
       const url = `${origin}${p.path}`;
-      const result = await safeGet(url, { redirect: "follow" });
+      const result = await safeGet(url, { redirect: "follow" }, undefined, guard);
       if (!result || result.status !== 200) return null;
 
       // Redirected to a different host = catch-all (login page etc.)
@@ -100,8 +101,8 @@ export async function checkSensitiveFiles(baseUrl: string): Promise<ScanVulnerab
 // 2. HTTP METHODS PROBE
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function checkHttpMethods(targetUrl: string): Promise<ScanVulnerability[]> {
-  const result = await safeGet(targetUrl, { method: "OPTIONS", redirect: "follow" });
+export async function checkHttpMethods(targetUrl: string, guard: TargetGuardOptions = {}): Promise<ScanVulnerability[]> {
+  const result = await safeGet(targetUrl, { method: "OPTIONS", redirect: "follow" }, undefined, guard);
   if (!result) return [];
 
   // Only read the standard HTTP Allow header — NOT Access-Control-Allow-Methods.
@@ -165,7 +166,7 @@ export async function checkHttpMethods(targetUrl: string): Promise<ScanVulnerabi
 // 3. ACTIVE CORS TESTING
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function checkActiveCors(targetUrl: string): Promise<ScanVulnerability[]> {
+export async function checkActiveCors(targetUrl: string, guard: TargetGuardOptions = {}): Promise<ScanVulnerability[]> {
   const testOrigins = [
     "https://evil-attacker.com",
     "null",
@@ -175,7 +176,7 @@ export async function checkActiveCors(targetUrl: string): Promise<ScanVulnerabil
     const result = await safeGet(targetUrl, {
       headers: { Origin: origin },
       redirect: "follow",
-    });
+    }, undefined, guard);
     if (!result) continue;
 
     const acao = result.headers["access-control-allow-origin"];
@@ -221,7 +222,7 @@ export async function checkActiveCors(targetUrl: string): Promise<ScanVulnerabil
 // 4. OPEN REDIRECT TESTING
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function checkOpenRedirect(targetUrl: string): Promise<ScanVulnerability[]> {
+export async function checkOpenRedirect(targetUrl: string, guard: TargetGuardOptions = {}): Promise<ScanVulnerability[]> {
   const base = new URL(targetUrl);
   const probeTarget = OPEN_REDIRECT_PROBE.template;
 
@@ -229,7 +230,7 @@ export async function checkOpenRedirect(targetUrl: string): Promise<ScanVulnerab
     const testUrl = new URL(targetUrl);
     testUrl.searchParams.set(param, probeTarget);
 
-    const result = await safeGet(testUrl.toString(), { redirect: "manual" });
+    const result = await safeGet(testUrl.toString(), { redirect: "manual" }, undefined, guard);
     if (!result) continue;
 
     if (result.status >= 300 && result.status < 400) {
@@ -257,7 +258,7 @@ export async function checkOpenRedirect(targetUrl: string): Promise<ScanVulnerab
 // 5. ROBOTS.TXT ANALYSIS
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function checkRobotsTxt(baseUrl: string): Promise<ScanVulnerability[]> {
+export async function checkRobotsTxt(baseUrl: string, guard: TargetGuardOptions = {}): Promise<ScanVulnerability[]> {
   let origin: string;
   try {
     origin = new URL(baseUrl).origin;
@@ -265,7 +266,7 @@ export async function checkRobotsTxt(baseUrl: string): Promise<ScanVulnerability
     return [];
   }
 
-  const result = await safeGet(`${origin}/robots.txt`);
+  const result = await safeGet(`${origin}/robots.txt`, {}, undefined, guard);
   if (!result || result.status !== 200 || result.body.length < 10) return [];
 
   const lines = result.body.split("\n");
@@ -355,7 +356,7 @@ export async function checkSRI(html: string, baseUrl: string): Promise<ScanVulne
 // 7. ERROR PAGE DISCLOSURE
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function checkErrorDisclosure(baseUrl: string): Promise<ScanVulnerability[]> {
+export async function checkErrorDisclosure(baseUrl: string, guard: TargetGuardOptions = {}): Promise<ScanVulnerability[]> {
   let origin: string;
   try {
     origin = new URL(baseUrl).origin;
@@ -364,7 +365,7 @@ export async function checkErrorDisclosure(baseUrl: string): Promise<ScanVulnera
   }
 
   const testPath = `/_vibescan-${Date.now()}-not-a-real-path`;
-  const result = await safeGet(`${origin}${testPath}`);
+  const result = await safeGet(`${origin}${testPath}`, {}, undefined, guard);
   if (!result) return [];
 
   const body = result.body;
@@ -411,7 +412,7 @@ export async function checkErrorDisclosure(baseUrl: string): Promise<ScanVulnera
 // 8. HTTP → HTTPS REDIRECT CHECK
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function checkHttpsRedirect(targetUrl: string): Promise<ScanVulnerability[]> {
+export async function checkHttpsRedirect(targetUrl: string, guard: TargetGuardOptions = {}): Promise<ScanVulnerability[]> {
   let hostname: string;
   try {
     const parsed = new URL(targetUrl);
@@ -428,7 +429,7 @@ export async function checkHttpsRedirect(targetUrl: string): Promise<ScanVulnera
   // Follow redirects automatically. Node.js fetch with redirect:"manual" returns
   // an opaque redirect (status 0, no headers) so we can't read the Location header.
   // Using redirect:"follow" and inspecting the final URL is simpler and reliable.
-  const result = await safeGet(`http://${hostname}/`, { redirect: "follow" }, 8_000);
+  const result = await safeGet(`http://${hostname}/`, { redirect: "follow" }, 8_000, guard);
   if (!result) return []; // network error — don't false-positive
 
   // If the final URL landed on HTTPS, the redirect chain is in place — all good.
@@ -440,6 +441,8 @@ export async function checkHttpsRedirect(targetUrl: string): Promise<ScanVulnera
   // omit HTTP-level redirects and this is NOT a vulnerability.
   try {
     const apex = hostname.replace(/^www\./, "");
+    // External service, not the target: no guard forwarded — the attested
+    // allowance covers engagement targets only, never third-party lookups.
     const preloadRes = await safeGet(
       `https://hstspreload.org/api/v2/status?domain=${encodeURIComponent(apex)}`,
       {},
@@ -467,8 +470,8 @@ export async function checkHttpsRedirect(targetUrl: string): Promise<ScanVulnera
 // 9. RATE LIMITING DETECTION
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function checkRateLimiting(targetUrl: string): Promise<ScanVulnerability[]> {
-  const result = await safeGet(targetUrl, {}, 6_000);
+export async function checkRateLimiting(targetUrl: string, guard: TargetGuardOptions = {}): Promise<ScanVulnerability[]> {
+  const result = await safeGet(targetUrl, {}, 6_000, guard);
   if (!result) return [];
 
   const h = result.headers;
@@ -518,10 +521,10 @@ export async function checkRateLimiting(targetUrl: string): Promise<ScanVulnerab
 // 10. CLICKJACKING VERIFICATION
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function checkClickjacking(targetUrl: string): Promise<ScanVulnerability[]> {
+export async function checkClickjacking(targetUrl: string, guard: TargetGuardOptions = {}): Promise<ScanVulnerability[]> {
   // Only run if main scanner didn't already flag this via headers
   // This does a direct page fetch and checks the actual response headers
-  const result = await safeGet(targetUrl, {}, 6_000);
+  const result = await safeGet(targetUrl, {}, 6_000, guard);
   if (!result) return [];
 
   const xfo = result.headers["x-frame-options"];
@@ -568,6 +571,7 @@ const DIRECTORY_LISTING_PATTERNS = [
 
 export async function checkDirectoryListing(
   targetUrl: string,
+  guard: TargetGuardOptions = {},
 ): Promise<ScanVulnerability[]> {
   let origin: string;
   try {
@@ -582,7 +586,7 @@ export async function checkDirectoryListing(
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 6_000);
       try {
-        const res = await validatedFetch(url, { signal: controller.signal }, { timeoutMs: 6_000 });
+        const res = await validatedFetch(url, { signal: controller.signal }, { timeoutMs: 6_000, attestedHost: guard.attestedHost });
         if (!res.ok) return null;
         const body = await res.text();
         const matched = DIRECTORY_LISTING_PATTERNS.some((rx) => rx.test(body));
@@ -615,6 +619,7 @@ export async function checkDirectoryListing(
 
 export async function checkSecurityTxt(
   targetUrl: string,
+  guard: TargetGuardOptions = {},
 ): Promise<ScanVulnerability[]> {
   let origin: string;
   try {
@@ -628,7 +633,7 @@ export async function checkSecurityTxt(
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 6_000);
     try {
-      const res = await validatedFetch(origin + p, { signal: controller.signal }, { timeoutMs: 6_000 });
+      const res = await validatedFetch(origin + p, { signal: controller.signal }, { timeoutMs: 6_000, attestedHost: guard.attestedHost });
       if (res.ok) {
         const body = await res.text();
         if (/Contact:|Expires:|Policy:/i.test(body)) return [];
@@ -655,20 +660,21 @@ export async function checkSecurityTxt(
 export async function runAllProbes(
   targetUrl: string,
   html: string,
+  guard: TargetGuardOptions = {},
 ): Promise<ScanVulnerability[]> {
   const settled = await Promise.allSettled([
-    checkSensitiveFiles(targetUrl),
-    checkHttpMethods(targetUrl),
-    checkActiveCors(targetUrl),
-    checkOpenRedirect(targetUrl),
-    checkRobotsTxt(targetUrl),
+    checkSensitiveFiles(targetUrl, guard),
+    checkHttpMethods(targetUrl, guard),
+    checkActiveCors(targetUrl, guard),
+    checkOpenRedirect(targetUrl, guard),
+    checkRobotsTxt(targetUrl, guard),
     checkSRI(html, targetUrl),
-    checkErrorDisclosure(targetUrl),
-    checkHttpsRedirect(targetUrl),
-    checkRateLimiting(targetUrl),
-    checkClickjacking(targetUrl),
-    checkDirectoryListing(targetUrl),
-    checkSecurityTxt(targetUrl),
+    checkErrorDisclosure(targetUrl, guard),
+    checkHttpsRedirect(targetUrl, guard),
+    checkRateLimiting(targetUrl, guard),
+    checkClickjacking(targetUrl, guard),
+    checkDirectoryListing(targetUrl, guard),
+    checkSecurityTxt(targetUrl, guard),
   ]);
 
   return settled
