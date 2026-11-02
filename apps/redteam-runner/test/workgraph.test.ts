@@ -363,6 +363,58 @@ describe('wiring — plan builds the graph, relaunch resumes it', () => {
   })
 })
 
+describe('wiring — the refiner prompt is fleet-assembled for the coordinator seat (L2)', () => {
+  let dir = ''
+  beforeEach(() => {
+    dir = join(tmpdir(), `wg-refine-${process.pid}-${Date.now()}`)
+    mkdirSync(dir, { recursive: true })
+  })
+  afterEach(() => rmSync(dir, { recursive: true, force: true }))
+
+  it('the refine completion carries the MORPHEUS soul + verified record around the refine delta', async () => {
+    const events = new EventLog(dir, 'eng-wg-refine', { target: 'shop.example.test', mode: 'red', objective: 'obj' })
+    const seen: Array<Array<{ role: string; content: string }>> = []
+    const ctx = {
+      input: {
+        target: 'shop.example.test',
+        objective: 'obj',
+        mode: 'red',
+        client: 'Example Owner LLC',
+        operatorName: 'Named Operator',
+        roe: { scope: ['shop.example.test'] },
+      },
+      domain: 'shop.example.test',
+      hosts: ['shop.example.test'],
+      verifiedScope: ['shop.example.test'],
+      verificationProof: 'Operator-attested ownership: Named Operator attests…',
+      verifiedAt: '2026-11-01T05:00:00.000Z',
+      config: { localSandbox: false, testMode: false },
+      plan: { mode: 'red', objective: 'obj', adversaryProfile: 't', steps: STEPS },
+      events,
+      deps: {
+        completeForRole: async (_role: unknown, messages: Array<{ role: string; content: string }>) => {
+          seen.push(messages)
+          return { text: '{}' }
+        },
+      },
+    } as unknown as Ctx
+    const flow = ensureWorkGraph(ctx)
+    assert.ok(flow)
+    const sub = graphSubtaskFor(ctx, { kind: 'probe', brief: 'exploit the app', attackId: 'T1190' })
+    assert.ok(sub)
+    startGraphSubtask(ctx, sub.id)
+    await completeGraphSubtask(ctx, sub.id, 'confirmed finding', 0)
+    assert.equal(seen.length, 1, 'exactly one refine completion ran')
+    const system = seen[0]!.find(m => m.role === 'system')?.content ?? ''
+    assert.ok(system.includes('# MORPHEUS — Coordinator'), 'coordinator soul wraps the refine call')
+    assert.ok(system.includes('<verified_engagement>'), 'verified engagement record is injected')
+    assert.ok(
+      system.includes('refining a penetration-test work-graph'),
+      'the refine delta (JSON contract) survives as the seat text',
+    )
+  })
+})
+
 describe('graph — deadline/cost fields (Item 8)', () => {
   const PAST = '2020-01-01T00:00:00.000Z'
   const FUTURE = '2999-01-01T00:00:00.000Z'
