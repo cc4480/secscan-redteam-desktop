@@ -18,15 +18,12 @@
  */
 
 import type {
-  ChatMessage,
   ChatResult,
   CompleteOptions,
-  JsonSchemaTool,
   LlmProvider,
-  ToolCallRequest,
 } from '../types.js'
 import { providerErrorFromResponse, providerTransportError } from '../errors.js'
-import { applyResponseFormat } from './openai-wire.js'
+import { applyResponseFormat, fromWireToolCalls, toWireMessages, toWireTools } from './openai-wire.js'
 import { completionSignal, resolveCompletionTimeoutMs } from '../timeout.js'
 
 export const DEEPSEEK_API_KEY_ENV = 'DEEPSEEK_API_KEY'
@@ -37,59 +34,9 @@ export const DEEPSEEK_MODELS = {
   pro: 'deepseek-v4-pro',
 } as const
 
-function toWireMessages(messages: ChatMessage[]): Array<Record<string, unknown>> {
-  return messages.map((m) => {
-    if (m.role === 'tool') {
-      return { role: 'tool', tool_call_id: m.toolCallId ?? '', content: m.content }
-    }
-    // An assistant message that requested tool calls MUST carry them in the
-    // wire `tool_calls` field; without it the following `tool` messages are
-    // rejected ("must be a response to a preceding message with 'tool_calls'").
-    if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
-      return {
-        role: 'assistant',
-        content: m.content ?? '',
-        tool_calls: m.toolCalls.map(tc => ({
-          id: tc.id,
-          type: 'function',
-          function: { name: tc.name, arguments: JSON.stringify(tc.arguments ?? {}) },
-        })),
-      }
-    }
-    return { role: m.role, content: m.content }
-  })
-}
-
-function toWireTools(tools?: JsonSchemaTool[]): Array<Record<string, unknown>> | undefined {
-  if (!tools || tools.length === 0) return undefined
-  return tools.map(t => ({
-    type: 'function',
-    function: {
-      name: t.name,
-      description: t.description,
-      parameters: t.parameters,
-    },
-  }))
-}
-
-function fromWireToolCalls(choice: Record<string, unknown>): ToolCallRequest[] {
-  const calls = (choice['tool_calls'] as Array<Record<string, unknown>> | undefined) ?? []
-  return calls.map((c, i) => {
-    const fn = (c['function'] as Record<string, unknown>) ?? {}
-    let args: Record<string, unknown> = {}
-    try {
-      args = JSON.parse((fn['arguments'] as string) ?? '{}') as Record<string, unknown>
-    } catch {
-      args = { _raw: fn['arguments'] }
-    }
-    return {
-      id: (c['id'] as string) ?? `call_${i}`,
-      name: (fn['name'] as string) ?? 'unknown',
-      arguments: args,
-    }
-  })
-}
-
+// Wire translation is the shared OpenAI-compatible one (openai-wire.ts) —
+// this provider previously carried a private copy, which drifted from the
+// shared tool-pairing guarantee; there is now exactly one translation.
 export class DeepSeekProvider implements LlmProvider {
   readonly id = 'deepseek'
   readonly label = 'DeepSeek'

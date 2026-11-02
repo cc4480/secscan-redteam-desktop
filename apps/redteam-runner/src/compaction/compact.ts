@@ -151,6 +151,22 @@ export async function compactMessages(
     // Pull the boundary back so the whole pending group — call and results —
     // stays together in the preserved tail; the slice shrinks from the end.
     while (tailStart - 1 >= head && opensToolGroup(messages[tailStart - 1])) tailStart--
+    // Mid-group guard: the slice may not END inside a tool group either.
+    // When the preserved tail opens with a tool message, that result's
+    // owning assistant sits inside the slice — splicing would compact the
+    // call away while its later results survive in the tail, serializing
+    // tool_call_ids that point at a call no longer in the chain (the
+    // eng-2026-11-02-wcsu halt: provider 400 on messages[].tool_call_id).
+    // Pull the boundary back to the group-opening assistant so the entire
+    // group — call and every result — stays together in the tail. A run of
+    // results reaching the pinned head has no owner to pull back to; the
+    // slice is left as-is and the provider-boundary pairing check is the
+    // backstop for that malformed shape.
+    if (messages[tailStart]?.role === 'tool') {
+      let groupStart = tailStart
+      while (groupStart - 1 >= head && messages[groupStart - 1]?.role === 'tool') groupStart--
+      if (groupStart - 1 >= head && opensToolGroup(messages[groupStart - 1])) tailStart = groupStart - 1
+    }
     const slice = messages.slice(head, tailStart)
     if (slice.length < 2) break // a single message is not worth summarizing
     const sliceText = renderSlice(slice)

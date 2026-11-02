@@ -192,7 +192,14 @@ if (call.name === "msf_exec") {
     const cveTag = /^CVE-\d{4}-\d{4,7}$/i.test(String(args["cve"] ?? "")) ? ` [${String(args["cve"]).toUpperCase()}]` : "";
     const out = res.output ? ` Output: ${res.output.slice(0, 600)}` : "";
     return { result: `${res.summary}.${cveTag}${out}`, attackId, target: host, ok: res.ok };
-  } finally {
+  } catch (err) {
+    // Fail as a tool result, never as a dispatcher crash: the executor
+    // methods translate their own failures, but a throw from anywhere else
+    // in this handler (eng-2026-11-02-wcsu: an msf search died with
+    // "Cannot read properties of undefined (reading 'length')") must reach
+    // the agent as a failed call it can route around, not an exception
+    // that tears down the dispatch path.
+    return { result: `msf_exec ${action} failed: ${(err as Error).message}`, attackId, target: host, ok: false };
   }
 }
 

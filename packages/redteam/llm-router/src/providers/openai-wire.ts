@@ -9,9 +9,82 @@
 
 import type { ChatMessage, CompleteOptions, JsonSchemaTool, ResponseFormat, ToolCallRequest } from '../types.js'
 
+export interface ToolPairingRepair {
+  /** The internally consistent message list to ship. */
+  messages: ChatMessage[]
+  /** Ids of tool messages dropped: no open assistant tool call declared them, or the call was already answered. */
+  droppedToolCallIds: string[]
+  /** Assistant tool-call ids pruned because the group closed with no tool message answering them. */
+  prunedToolCallIds: string[]
+}
+
+/**
+ * Enforce the tool-pairing invariant on an outgoing conversation: every
+ * `tool` message answers a tool call declared by the assistant message
+ * whose group it sits in, and every declared call in a closed group has
+ * its answer. A violation is not hypothetical — context compaction once
+ * severed a group (call summarized away, later results kept) and the
+ * provider rejected the request (400, param messages[].tool_call_id),
+ * halting the engagement. Orphaned tool messages are dropped and
+ * unanswered calls pruned; both are reported in the return value and
+ * logged by the caller-side translation below, never silently absorbed.
+ * A group still open at the end of the list (the loop's next turn is
+ * expected to answer it) is left untouched.
+ */
+export function sanitizeToolPairing(messages: ChatMessage[]): ToolPairingRepair {
+  const out: ChatMessage[] = []
+  const droppedToolCallIds: string[] = []
+  const prunedToolCallIds: string[] = []
+  // The currently open group: the assistant copy already in `out`, plus
+  // per-call answered state. Tool messages may only answer this group.
+  let open: { assistant: ChatMessage; answered: Map<string, boolean> } | null = null
+  const closeGroup = (trailing: boolean): void => {
+    if (!open) return
+    if (!trailing) {
+      const unanswered = [...open.answered.entries()].filter(([, a]) => !a).map(([id]) => id)
+      if (unanswered.length > 0) {
+        prunedToolCallIds.push(...unanswered)
+        open.assistant.toolCalls = (open.assistant.toolCalls ?? []).filter(tc => !unanswered.includes(tc.id))
+      }
+    }
+    open = null
+  }
+  for (const m of messages) {
+    if (m.role === 'tool') {
+      const id = m.toolCallId
+      if (id !== undefined && open !== null && open.answered.get(id) === false) {
+        open.answered.set(id, true)
+        out.push(m)
+      } else {
+        droppedToolCallIds.push(id ?? '(missing toolCallId)')
+      }
+      continue
+    }
+    closeGroup(false)
+    if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+      const calls = m.toolCalls
+      const copy: ChatMessage = { ...m, toolCalls: [...calls] }
+      out.push(copy)
+      open = { assistant: copy, answered: new Map(calls.map(tc => [tc.id, false])) }
+    } else {
+      out.push(m)
+    }
+  }
+  closeGroup(true)
+  return { messages: out, droppedToolCallIds, prunedToolCallIds }
+}
+
 /** Translate router messages into the OpenAI wire form. */
 export function toWireMessages(messages: ChatMessage[]): Array<Record<string, unknown>> {
-  return messages.map((m) => {
+  const repair = sanitizeToolPairing(messages)
+  if (repair.droppedToolCallIds.length > 0 || repair.prunedToolCallIds.length > 0) {
+    console.warn(
+      `[llm-router] tool-pairing repair before send: dropped ${repair.droppedToolCallIds.length} orphaned tool message(s) ` +
+        `[${repair.droppedToolCallIds.join(', ')}]; pruned ${repair.prunedToolCallIds.length} unanswered tool call(s) ` +
+        `[${repair.prunedToolCallIds.join(', ')}]`,
+    )
+  }
+  return repair.messages.map((m) => {
     if (m.role === 'tool') {
       return { role: 'tool', tool_call_id: m.toolCallId ?? '', content: m.content }
     }

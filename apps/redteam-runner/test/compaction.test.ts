@@ -264,6 +264,63 @@ describe('compactMessages — tool-call pairing invariant (Q-HALT Item 3)', () =
     })
   }
 
+  it('pulls the boundary back when the tail would open inside a tool group (eng-2026-11-02-wcsu shape)', async () => {
+    const counter = { calls: 0 }
+    const messages: ChatMessage[] = [
+      { role: 'system', content: 'SYSTEM' },
+      { role: 'user', content: 'OBJECTIVE' },
+    ]
+    for (let i = 0; i < 2; i++) {
+      messages.push({ role: 'assistant', content: `mid ${i} reasoning ${'x'.repeat(1_500)}\nFACT: mid-${i} observed` })
+      messages.push({ role: 'user', content: `mid ${i} observation ${'y'.repeat(1_500)}` })
+    }
+    // The wcsu group: one assistant turn, three parallel calls, three results.
+    messages.push(...toolGroup('GROUP', 3))
+    messages.push(...toolGroup('NEXT', 1))
+    messages.push(...toolGroup('LAST', 1))
+    // preserveLast 6: the naive boundary lands on GROUP's third result —
+    // the slice would swallow the call and its first two results while the
+    // third result survives in the tail, orphaned. The boundary must pull
+    // back to GROUP's assistant so only the filler pairs are summarized.
+    const result = await compactMessages(messages, extractiveSummarizer(counter), {
+      budgetChars: 4_000,
+      preserveLast: 6,
+    })
+    assert.ok(result)
+    assert.equal(result.compactedCount, 4, 'only the two filler pairs were summarized')
+    assertPairing(messages)
+    const callAt = messages.findIndex(m => m.content.startsWith('GROUP CALL'))
+    assert.ok(callAt >= 0, 'the group-opening assistant survives verbatim')
+    assert.equal(messages[callAt]?.toolCalls?.length, 3)
+    for (let i = 0; i < 3; i++) {
+      assert.equal(messages[callAt + 1 + i]?.toolCallId, `GROUP-call-${i}`)
+    }
+  })
+
+  it('compacts nothing rather than sever the only group the boundary can reach', async () => {
+    const counter = { calls: 0 }
+    // The exact wcsu arithmetic: head + one 3-call group + two 1-call
+    // groups (10 messages), preserveLast 6 — the naive slice is exactly
+    // [the group-opening assistant, its first result]. Pulling the boundary
+    // back to the assistant empties the slice, so compaction must stand
+    // down and ship the chain uncompacted rather than invalid.
+    const messages: ChatMessage[] = [
+      { role: 'system', content: 'SYSTEM' },
+      { role: 'user', content: 'OBJECTIVE' },
+      ...toolGroup('GROUP', 3, 1_800),
+      ...toolGroup('NEXT', 1, 1_800),
+      ...toolGroup('LAST', 1, 1_800),
+    ]
+    const result = await compactMessages(messages, extractiveSummarizer(counter), {
+      budgetChars: 4_000,
+      preserveLast: 6,
+    })
+    assert.ok(result === null || result.compactedCount === 0, 'no message was compacted away')
+    assert.equal(counter.calls, 0, 'the summarizer was never invoked')
+    assertPairing(messages)
+    assert.equal(messages.length, 10, 'history untouched')
+  })
+
   it('holds the invariant across repeated compaction waves as the history regrows', async () => {
     const counter = { calls: 0 }
     const summarize = extractiveSummarizer(counter)

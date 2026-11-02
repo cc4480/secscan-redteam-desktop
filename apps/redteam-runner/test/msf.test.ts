@@ -44,6 +44,8 @@ import {
   countCredentialRecords,
 } from "../src/msf/index.js";
 import { runEngagement } from "../src/phases.js";
+import { handleMsfTools } from "../src/dispatch/msf.js";
+import type { Ctx } from "../src/context.js";
 import type { EngagementInput } from "../src/types.js";
 import type { AgentRole, ChatMessage, ChatResult, ToolCallRequest } from "@secscan/redteam-llm-router";
 
@@ -887,5 +889,42 @@ describe("msf_exec wiring", () => {
     } finally {
       await fake.close();
     }
+  });
+});
+
+describe("msf_exec dispatcher guard (eng-2026-11-02-wcsu rider)", () => {
+  it("returns a failed tool result instead of throwing when the executor dies with the wcsu TypeError", async () => {
+    // The live crash shape: a search whose innards read `.length` of
+    // undefined. Whatever inside the msf stack throws, the dispatcher must
+    // hand the agent a failed result it can route around — never let the
+    // exception tear down the dispatch path.
+    const throwingExecutor = {
+      search: async (): Promise<never> => {
+        throw new TypeError("Cannot read properties of undefined (reading 'length')");
+      },
+    };
+    const ctx = {
+      input: { mode: "red", roe: {} },
+      hosts: ["10.9.0.12"],
+      probesUsed: 0,
+      coverage: new Set(),
+      targetCoverage: new Map(),
+      config: undefined,
+      events: { updateState: () => {}, append: () => {} },
+      msfExecutor: throwingExecutor,
+    } as unknown as Ctx;
+    const call: ToolCallRequest = { id: "call-msf-search", name: "msf_exec", arguments: {} };
+    const args: Record<string, unknown> = {
+      action: "search",
+      host: "10.9.0.12",
+      targetProfile: "windows",
+      category: "functionality",
+      service: "smb",
+    };
+    const res = await handleMsfTools(ctx, "exploiter", "recon", call, args);
+    assert.ok(res, "the handler answers the call");
+    assert.equal(res.ok, false);
+    assert.match(res.result, /msf_exec search failed/);
+    assert.match(res.result, /reading 'length'/);
   });
 });
