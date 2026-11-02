@@ -48,6 +48,49 @@ describe('Node program process', () => {
     expect(result.sandbox).toEqual({ mode: 'danger-full-access', denied: false })
   })
 
+  it('dispatches the incident program end to end: id polls, nested args, and a no-argument call', async () => {
+    const { run } = await setup()
+    const dispatched: { name: string; args: unknown }[] = []
+    // The program shape from the 2026-11-02 desktop incident (session
+    // e0335807, seq 28): the engagement_status polls crossed intact, then
+    // `tools.list_agents()` with no argument rejected worker-side with
+    // "binding arguments must be lossless JSON" and failed the whole run.
+    const result = await run({
+      program: [
+        'const launch = await tools["mcp__redteam__engagement_launch"]({ target: "Cho-zen1", options: { mode: "red", scope: ["Cho-zen1"] } });',
+        'const id = launch.id;',
+        'let polls = 0;',
+        'for (let i = 0; i < 10; i++) {',
+        '  const s = await tools["mcp__redteam__engagement_status"]({ id });',
+        '  polls += 1;',
+        '}',
+        'const agents = await tools.list_agents();',
+        'return { polls, roster: agents.length, launched: id };',
+      ].join('\n'),
+      bindings: bindings({
+        'mcp__redteam__engagement_launch': async (args) => {
+          dispatched.push({ name: 'mcp__redteam__engagement_launch', args })
+          return { id: 'eng-2026-11-02-d9c7450b' }
+        },
+        'mcp__redteam__engagement_status': async (args) => {
+          dispatched.push({ name: 'mcp__redteam__engagement_status', args })
+          return { status: 'running', phase: 'recon' }
+        },
+        'list_agents': async (args) => {
+          dispatched.push({ name: 'list_agents', args })
+          return []
+        },
+      }),
+    })
+    expect(result.error).toBeUndefined()
+    expect(result.value).toEqual({ polls: 10, roster: 0, launched: 'eng-2026-11-02-d9c7450b' })
+    expect(dispatched.filter(call => call.name === 'mcp__redteam__engagement_status'))
+      .toEqual(Array.from({ length: 10 }, () => ({ name: 'mcp__redteam__engagement_status', args: { id: 'eng-2026-11-02-d9c7450b' } })))
+    expect(dispatched.find(call => call.name === 'mcp__redteam__engagement_launch')?.args)
+      .toEqual({ target: 'Cho-zen1', options: { mode: 'red', scope: ['Cho-zen1'] } })
+    expect(dispatched.find(call => call.name === 'list_agents')?.args).toEqual({})
+  })
+
   it('keeps native startup paths available for nested Node creation with an empty model environment', async () => {
     const { run } = await setup()
     const result = await run({

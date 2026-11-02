@@ -286,6 +286,36 @@ describe('makeNamespaces', () => {
     expect(nextId.value).toBe(1)
   })
 
+  it('dispatches a call that omits its argument as an empty arguments object, but still rejects an undefined property', async () => {
+    const port = new FakePort()
+    port.respond = message => message.type === 'call'
+      ? { type: 'reply', id: message.id, ok: true, value: encodePtcJsonWire([]) }
+      : undefined
+    const pending = new Map<number, PendingCall>()
+    wireReplies(port, pending)
+    const [tools] = makeNamespaces(
+      { namespaces: [toolNamespace(['list_agents', 'x'])] }, port, pending, { value: 1 },
+    ) as [Record<string, (args: unknown) => Promise<unknown>>]
+
+    // A tool whose parameters are all optional (list_agents takes only an
+    // optional scope) is legitimately called with no argument at all; the
+    // omitted argument must cross as `{}`, not reject as non-lossless JSON.
+    const listAgents = tools.list_agents as (() => Promise<unknown>) | undefined
+    const roster = await listAgents?.()
+    expect(roster).toEqual([])
+    const posted = port.sent.find(message => message.type === 'call')
+    expect(posted?.type).toBe('call')
+    expect(posted?.type === 'call' ? decodePtcJsonWire(posted.args) : undefined).toEqual({})
+
+    // The guard itself stands: an explicitly undefined property inside an
+    // arguments object is still not lossless JSON and still rejects.
+    const failure = await rejectionOf(tools.x?.({ id: undefined }) ?? Promise.resolve())
+    expect(failure).toMatchObject({
+      name: 'ToolCallError', toolName: 'x', message: 'binding arguments must be lossless JSON',
+    })
+    expect(port.sent.filter(message => message.type === 'call')).toHaveLength(1)
+  })
+
   it('uses ordinary Error for non-tools namespace failures', async () => {
     const deniedPort = new FakePort()
     deniedPort.respond = message => message.type === 'call'
@@ -326,6 +356,49 @@ describe('runProgram', () => {
     }, fakeStreams())
     expect(port.logs()).toEqual(['got 42'])
     expect(port.doneValue()).toEqual({ doubled: 42 })
+  })
+
+  it('runs the incident program: repeated engagement_status polls, a nested-args call, and a no-argument list_agents', async () => {
+    const port = new FakePort()
+    const calls: { name: string; args: unknown }[] = []
+    port.respond = (message) => {
+      if (message.type !== 'call') return undefined
+      const args = decodePtcJsonWire(message.args)
+      calls.push({ name: message.name, args })
+      const value = message.name === 'list_agents'
+        ? []
+        : message.name === 'mcp__redteam__engagement_launch'
+          ? { id: 'eng-2026-11-02-d9c7450b' }
+          : { status: 'running', phase: 'recon' }
+      return { type: 'reply', id: message.id, ok: true, value: encodePtcJsonWire(value) }
+    }
+    // The program shape from the 2026-11-02 desktop incident (session
+    // e0335807, seq 28): poll one engagement by id, then read the roster
+    // with a no-argument call. Before the fix the final call rejected with
+    // "binding arguments must be lossless JSON" and failed the whole run.
+    await runProgram(port, {
+      ...BOOT,
+      code: [
+        'const launch = await tools["mcp__redteam__engagement_launch"]({ target: "Cho-zen1", options: { mode: "red", scope: ["Cho-zen1"] } });',
+        'const id = launch.id;',
+        'let polls = 0;',
+        'for (let i = 0; i < 10; i++) {',
+        '  const s = await tools["mcp__redteam__engagement_status"]({ id });',
+        '  polls += 1;',
+        '}',
+        'const agents = await tools.list_agents();',
+        'return { polls, roster: agents.length, launched: id };',
+      ].join('\n'),
+      namespaces: [toolNamespace(['mcp__redteam__engagement_launch', 'mcp__redteam__engagement_status', 'list_agents'])],
+    }, fakeStreams())
+    const done = port.done()
+    expect(done?.type === 'done' ? done.error : undefined).toBeUndefined()
+    expect(port.doneValue()).toEqual({ polls: 10, roster: 0, launched: 'eng-2026-11-02-d9c7450b' })
+    expect(calls.filter(call => call.name === 'mcp__redteam__engagement_status'))
+      .toEqual(Array.from({ length: 10 }, () => ({ name: 'mcp__redteam__engagement_status', args: { id: 'eng-2026-11-02-d9c7450b' } })))
+    expect(calls.find(call => call.name === 'mcp__redteam__engagement_launch')?.args)
+      .toEqual({ target: 'Cho-zen1', options: { mode: 'red', scope: ['Cho-zen1'] } })
+    expect(calls.find(call => call.name === 'list_agents')?.args).toEqual({})
   })
 
   it('reports worker-side log capture overflow before completing', async () => {
