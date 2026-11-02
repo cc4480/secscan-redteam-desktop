@@ -5,7 +5,7 @@
 # and before the profile's own cordis.patch.yml - so a person can still override
 # or disable any row by id in their own patch layer.
 #
-# Thirteen rows:
+# Fourteen rows:
 #   1. mcp-secscan      - the harness-NATIVE MCP client
 #                         (@deepseek-ai/dsh-mcp-client) over Streamable HTTP.
 #                         Tools appear namespaced mcp__secscan__scan_url,
@@ -55,6 +55,14 @@
 #                         transcribe on Stop, insert the text into the draft.
 #                         Nothing reaches the model until the operator
 #                         submits the draft as ordinary text.
+#  14. llm-local        - @secscan/redteam-llm-local: the desktop's
+#                         downloaded GGUF models as the harness `local`
+#                         provider. The Host catalog lists them because
+#                         they exist in the registry, whether or not the
+#                         bundled llama-server is running; dispatch reads
+#                         the endpoint the desktop publishes in
+#                         server-state.json, and a stopped server fails
+#                         with the Local Models start action.
 #
 # Secrets are cordis-native: schemastery Config with env fallbacks.
 # NEVER put a raw key in this file.
@@ -420,3 +428,6 @@
 
     - id: ui-voice-input
       name: '@deepseek-ai/dsh-experimental-client-ui-voice-input'
+
+    - id: llm-local
+      name: '@secscan/redteam-llm-local'

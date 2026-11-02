@@ -452,6 +452,7 @@
     { "path": "./packages/lsp/tool-lsp" },
     { "path": "./packages/redteam/auth-gate" },
     { "path": "./packages/redteam/llm-router" },
+    { "path": "./packages/redteam/llm-local" },
     { "path": "./packages/redteam/harness-plugin" },
     { "path": "./packages/redteam/console-share" },
     { "path": "./packages/redteam/desktop-bundle" },

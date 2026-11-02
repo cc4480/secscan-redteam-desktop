@@ -543,6 +543,7 @@
       "@deepseek-ai/dsh-workspace-changes": ["./packages/deliverables/workspace-changes/src"],
       "@secscan/redteam-auth-gate": ["./packages/redteam/auth-gate/src"],
       "@secscan/redteam-llm-router": ["./packages/redteam/llm-router/src"],
+      "@secscan/redteam-llm-local": ["./packages/redteam/llm-local/src"],
       "@secscan/redteam-harness-plugin": ["./packages/redteam/harness-plugin/src"],
       "@secscan/redteam-console-share": ["./packages/redteam/console-share/src"],
       "@secscan/redteam-console-share/shared": ["./packages/redteam/console-share/src/shared.ts"],

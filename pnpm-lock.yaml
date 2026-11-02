@@ -9940,15 +9940,12 @@ importers:
       '@deepseek-ai/dsh-experimental-agent-team':
         specifier: workspace:*
         version: link:../../experimental/agent-team
-      '@deepseek-ai/dsh-experimental-client-ui-agent-team':
-        specifier: workspace:*
-        version: link:../../experimental/client-ui-agent-team
       '@deepseek-ai/dsh-experimental-api-speech-to-text':
         specifier: workspace:*
         version: link:../../experimental/api-speech-to-text
-      '@deepseek-ai/dsh-experimental-tool-agent-team':
+      '@deepseek-ai/dsh-experimental-client-ui-agent-team':
         specifier: workspace:*
-        version: link:../../experimental/tool-agent-team
+        version: link:../../experimental/client-ui-agent-team
       '@deepseek-ai/dsh-experimental-client-ui-voice-input':
         specifier: workspace:*
         version: link:../../experimental/client-ui-voice-input
@@ -9958,6 +9955,9 @@ importers:
       '@deepseek-ai/dsh-experimental-speech-to-text-sensevoice':
         specifier: workspace:*
         version: link:../../experimental/speech-to-text-sensevoice
+      '@deepseek-ai/dsh-experimental-tool-agent-team':
+        specifier: workspace:*
+        version: link:../../experimental/tool-agent-team
       '@deepseek-ai/dsh-mcp-client':
         specifier: workspace:*
         version: link:../../mcp/mcp-client
@@ -9970,6 +9970,9 @@ importers:
       '@secscan/redteam-harness-plugin':
         specifier: workspace:*
         version: link:../harness-plugin
+      '@secscan/redteam-llm-local':
+        specifier: workspace:*
+        version: link:../llm-local
 
   packages/redteam/fleet-skills: {}
 
@@ -10005,6 +10008,27 @@ importers:
       '@deepseek-ai/dsh-tools':
         specifier: workspace:*
         version: link:../../core/tools
+
+  packages/redteam/llm-local:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/cordis-plugin-include':
+        specifier: workspace:~
+        version: link:../../../vendor/include
+      '@deepseek-ai/cordis-plugin-loader':
+        specifier: workspace:~
+        version: link:../../../vendor/loader
+      '@deepseek-ai/dsh-api-session-controller':
+        specifier: workspace:~
+        version: link:../../api/session-controller
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:*
+        version: link:../../llm/llm
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
 
   packages/redteam/llm-router: {}
 
