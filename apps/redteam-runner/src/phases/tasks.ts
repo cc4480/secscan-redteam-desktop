@@ -16,6 +16,7 @@ import {
   graphSubtaskFor,
   startGraphSubtask,
 } from "../workgraph/wiring.js";
+import { requestCoderArtifact } from "../exploit-cell/coder.js";
 
 export interface TaskDef {
   id: string;
@@ -25,12 +26,23 @@ export interface TaskDef {
   category?: BatteryCategory;
   /** Battery item ID this task covers (v0.18.0) — surfaced to the specialist via taskPrompt. */
   batteryItem?: string;
+  /**
+   * Declared custom-code need (fleet audit M1): a payload, exploit script,
+   * or encoder this task must GENERATE rather than fetch. When present on a
+   * probe task, runTask requests the artifact from the coder (TANK) seat
+   * (exploit-cell/coder.ts) before the exploiter loop starts and hands the
+   * returned artifact to the exploiter in its task prompt. Probe tasks only,
+   * for the same reason batteryItem is: recon never crafts payloads.
+   */
+  codeNeed?: string;
   maxTurns: number;
 }
 
 export interface TaskResult {
   task: TaskDef;
   summary: string;
+  /** The coder (TANK) artifact this task consumed, when it declared a codeNeed. */
+  coderArtifact?: string;
   probesBefore: number;
   probesAfter: number;
   findingsBefore: number;
@@ -64,6 +76,34 @@ export async function runTask(ctx: Ctx, task: TaskDef): Promise<TaskResult> {
     attackId: task.attackId,
     result: `[${task.kind}] ${task.brief.slice(0, 200)}${task.category ? ` (${task.category})` : ""}`,
   });
+  // Fleet audit M1: a task that declares a custom-code need gets its
+  // artifact from the coder (TANK) seat BEFORE the specialist loop starts;
+  // the artifact rides into the loop's task prompt and the exploiter uses
+  // it verbatim instead of generating code inline. A coder failure never
+  // kills the task — it is logged and the task runs as it did before the
+  // seat was wired (the pre-M1 behavior is the fallback, not a stub).
+  let coderArtifact: string | undefined;
+  if (task.codeNeed) {
+    try {
+      const artifact = await requestCoderArtifact(ctx, {
+        brief: task.brief,
+        codeNeed: task.codeNeed,
+        attackId: task.attackId,
+        category: task.category,
+        batteryItem: task.batteryItem,
+      });
+      coderArtifact = artifact.text;
+    } catch (err) {
+      ctx.events.append({
+        phase: "exploit",
+        actor: "runner",
+        action: "coder_artifact_failed",
+        target: task.id,
+        attackId: task.attackId,
+        result: `Coder (TANK) artifact request failed for declared need "${task.codeNeed.slice(0, 200)}": ${(err as Error).message} — task proceeds without a coder artifact.`,
+      });
+    }
+  }
   let summary: string;
   try {
     summary = await agentLoop(
@@ -71,7 +111,9 @@ export async function runTask(ctx: Ctx, task: TaskDef): Promise<TaskResult> {
       role,
       "exploit",
       taskPrompt(promptCtx(ctx), task),
-      "Execute the task now.",
+      coderArtifact
+        ? `Execute the task now.\n\nCODER ARTIFACT (built by TANK, the coder seat, for this task's declared custom-code need: ${task.codeNeed}) — use this artifact verbatim as the task's payload/script; do not regenerate it inline:\n${coderArtifact}`
+        : "Execute the task now.",
       tools,
       task.maxTurns,
     );
@@ -99,6 +141,7 @@ export async function runTask(ctx: Ctx, task: TaskDef): Promise<TaskResult> {
   return {
     task,
     summary,
+    ...(coderArtifact ? { coderArtifact } : {}),
     probesBefore,
     probesAfter: ctx.probesUsed,
     findingsBefore,
@@ -193,7 +236,14 @@ export function validateTasks(ctx: Ctx, raw: Array<Record<string, unknown>>, cap
     // invites the reader to think something failed when nothing did.
     const rawItem = typeof r["batteryItem"] === "string" ? r["batteryItem"].trim() : "";
     const batteryItem = kind === "probe" && rawItem ? rawItem.slice(0, 40) : undefined;
-    tasks.push({ id: `task-${++taskCounter}`, kind, brief, attackId, category, batteryItem, maxTurns });
+    // A codeNeed only means something on a probe task, for the batteryItem
+    // reason above: it declares code the EXECUTING task must generate (a
+    // payload, script, or encoder the coder seat builds). A recon task
+    // never crafts payloads, so a codeNeed on one is dropped here rather
+    // than spending a coder call on a task that cannot consume it.
+    const rawNeed = typeof r["codeNeed"] === "string" ? r["codeNeed"].trim() : "";
+    const codeNeed = kind === "probe" && rawNeed ? rawNeed.slice(0, 300) : undefined;
+    tasks.push({ id: `task-${++taskCounter}`, kind, brief, attackId, category, batteryItem, codeNeed, maxTurns });
   }
   return tasks;
 }
