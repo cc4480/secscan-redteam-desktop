@@ -282,15 +282,13 @@ describe("research_fetch — dispatch", () => {
 // ---------------------------------------------------------------------------
 
 describe("research tools — catalog", () => {
-  it("registers both tools for the recon and exploit seats, not the command set, with no name collisions", () => {
-    for (const set of [RECON_TOOLS, EXPLOIT_TOOLS]) {
+  it("registers both tools for every seat — recon, exploit and command (universal access, operator's order 2026-11-01) — with no name collisions", () => {
+    for (const set of [RECON_TOOLS, EXPLOIT_TOOLS, COMMAND_TOOLS]) {
       const names = set.map((t) => t.name);
       assert.ok(names.includes("research_search"));
       assert.ok(names.includes("research_fetch"));
       assert.equal(new Set(names).size, names.length, "tool names are unique within the set");
     }
-    const command = COMMAND_TOOLS.map((t) => t.name);
-    assert.ok(!command.includes("research_search") && !command.includes("research_fetch"));
   });
 });
 
