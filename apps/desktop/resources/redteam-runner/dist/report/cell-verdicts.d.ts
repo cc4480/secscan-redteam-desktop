@@ -26,4 +26,21 @@ export declare function haltedFindingFromLive(lf: LiveFinding, index: number): F
  * completely unstamped — it renders on bundle/status alone, exactly as
  * before this build; a miss never fabricates a verdict.
  */
+/**
+ * Normal-path reconciliation: build the report's Finding set
+ * MECHANICALLY from the live findings — the same base records the
+ * halted path builds via {@link haltedFindingFromLive} — and join the
+ * reporter's narrative prose (evidence / fix / retest) onto them. The
+ * reporter is a narrator, not a source: a live finding it omits still
+ * appears, with the runner-side evidence and an explicit note where
+ * its remediation prose would have gone, and a reporter item that
+ * matches no live finding is dropped — reported through `onDropped`,
+ * never silently. A match is by positional id first (the reporter's
+ * F-N numbering follows the live list it was shown), then by ATT&CK
+ * id; each reporter item joins at most one live finding. Identity
+ * fields (id, title, severity, status, attackIds, cell verdict) are
+ * always the live record's — the reporter's restatement never moves
+ * them.
+ */
+export declare function mergeReporterFindings(liveFindings: LiveFinding[], reporterFindings: Finding[] | null, onDropped?: (f: Finding) => void): Finding[];
 export declare function applyCellVerdicts(findings: Finding[], liveFindings: LiveFinding[]): void;

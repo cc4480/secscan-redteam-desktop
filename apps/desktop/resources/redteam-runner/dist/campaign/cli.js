@@ -80,6 +80,11 @@ const USAGE = [
     'campaign run <id> [--mode red|black] [--tier 1|2] [--no-full-battery]',
     'campaign repair',
 ].join('\n  ');
+// Audit M7 exemption (see planner.ts header): this raw completeForRole
+// is the pre-engagement planner's seat — no verified engagement record
+// exists when a wave is planned, so there is nothing completeWithCharter
+// could consume here. Charter applies when the plan becomes an
+// engagement (launchCampaignWave → runEngagement → chartered agentLoop).
 async function defaultCompletion(messages) {
     const res = await completeForRole('coordinator', messages, { tools: [] });
     return res.text;

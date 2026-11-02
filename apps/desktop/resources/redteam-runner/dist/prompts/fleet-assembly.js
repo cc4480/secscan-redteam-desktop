@@ -99,7 +99,8 @@ function fleetAssets() {
     const root = fleetPackageRoot();
     const read = (rel) => readFileSync(join(root, rel), 'utf8');
     const souls = new Map();
-    for (const name of new Set(Object.values(SOUL_BY_ROLE))) {
+    // The SMITH mask loads too: black mode swaps it in per call (below).
+    for (const name of new Set([...Object.values(SOUL_BY_ROLE), 'smith'])) {
         souls.set(name, read(join('prompts', 'souls', `${name}.md`)));
     }
     const metas = discoverSkills([join(root, 'skills')]);
@@ -202,6 +203,9 @@ export function verifiedRecordFor(ctx) {
  * SESSIONS=off in the charter/engagement knob sources, the injection
  * renders the no-sessions rule instead of the W8 session rule.
  *
+ * Black-team mode (`ctx.mode === 'black'`) swaps the seat's soul for
+ * the SMITH mask and binds the blackteam skill full-body (see below).
+ *
  * @param role - the fleet seat the prompt is for
  * @param seatText - the runner's existing role prompt (the seat delta)
  * @param ctx - the prompt context; carries the fleet input in production
@@ -219,7 +223,10 @@ export function buildFleetPrompt(role, seatText, ctx) {
         ...ctx.fleet.record,
         sessionsAllowed: ctx.fleet.record.sessionsAllowed && knobs.values['SESSIONS'] !== 'off',
     };
-    const soulName = SOUL_BY_ROLE[role];
+    // Black-team mode: the seat wears the SMITH mask (soul swapped, the
+    // blackteam skill bound full-body); the seat delta is kept.
+    const black = ctx.mode === 'black';
+    const soulName = black ? 'smith' : SOUL_BY_ROLE[role];
     const soul = assets.souls.get(soulName);
     if (!soul)
         throw new Error(`buildFleetPrompt: soul asset "${soulName}" missing for role ${role}`);
@@ -229,6 +236,12 @@ export function buildFleetPrompt(role, seatText, ctx) {
         if (!body)
             throw new Error(`buildFleetPrompt: skill body "${name}" missing for role ${role}`);
         skillBodies.push({ name, body });
+    }
+    if (black && !skillBodies.some((b) => b.name === 'blackteam-adversary-emulation')) {
+        const body = assets.skillBodies.get('blackteam-adversary-emulation');
+        if (!body)
+            throw new Error('buildFleetPrompt: skill body "blackteam-adversary-emulation" missing for black-team mode');
+        skillBodies.push({ name: 'blackteam-adversary-emulation', body });
     }
     return assembleFleetPrompt({
         master: assets.master,

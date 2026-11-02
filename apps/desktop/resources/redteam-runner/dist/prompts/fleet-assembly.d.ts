@@ -85,6 +85,9 @@ export declare function verifiedRecordFor(ctx: Ctx): VerifiedEngagementRecord;
  * SESSIONS=off in the charter/engagement knob sources, the injection
  * renders the no-sessions rule instead of the W8 session rule.
  *
+ * Black-team mode (`ctx.mode === 'black'`) swaps the seat's soul for
+ * the SMITH mask and binds the blackteam skill full-body (see below).
+ *
  * @param role - the fleet seat the prompt is for
  * @param seatText - the runner's existing role prompt (the seat delta)
  * @param ctx - the prompt context; carries the fleet input in production

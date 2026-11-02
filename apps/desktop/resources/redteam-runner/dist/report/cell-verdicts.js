@@ -32,6 +32,78 @@ export function haltedFindingFromLive(lf, index) {
  * completely unstamped — it renders on bundle/status alone, exactly as
  * before this build; a miss never fabricates a verdict.
  */
+/**
+ * Normal-path reconciliation: build the report's Finding set
+ * MECHANICALLY from the live findings — the same base records the
+ * halted path builds via {@link haltedFindingFromLive} — and join the
+ * reporter's narrative prose (evidence / fix / retest) onto them. The
+ * reporter is a narrator, not a source: a live finding it omits still
+ * appears, with the runner-side evidence and an explicit note where
+ * its remediation prose would have gone, and a reporter item that
+ * matches no live finding is dropped — reported through `onDropped`,
+ * never silently. A match is by positional id first (the reporter's
+ * F-N numbering follows the live list it was shown), then by ATT&CK
+ * id; each reporter item joins at most one live finding. Identity
+ * fields (id, title, severity, status, attackIds, cell verdict) are
+ * always the live record's — the reporter's restatement never moves
+ * them.
+ */
+export function mergeReporterFindings(liveFindings, reporterFindings, onDropped) {
+    // null = the reporter emitted nothing parseable: the prose joins
+    // nothing and the live set still publishes whole.
+    const reporter = reporterFindings ?? [];
+    const consumed = new Set();
+    const byId = new Map();
+    reporter.forEach((f, i) => {
+        if (typeof f?.id === "string" && !byId.has(f.id))
+            byId.set(f.id, i);
+    });
+    const matched = new Map();
+    liveFindings.forEach((_lf, i) => {
+        const ri = byId.get(`F-${i + 1}`);
+        if (ri !== undefined && !consumed.has(ri)) {
+            matched.set(i, ri);
+            consumed.add(ri);
+        }
+    });
+    liveFindings.forEach((lf, i) => {
+        if (matched.has(i) || !lf.attackId)
+            return;
+        const ri = reporter.findIndex((f, j) => !consumed.has(j) &&
+            Array.isArray(f?.attackIds) &&
+            f.attackIds.some((a) => typeof a === "string" && a.toUpperCase() === lf.attackId.toUpperCase()));
+        if (ri >= 0) {
+            matched.set(i, ri);
+            consumed.add(ri);
+        }
+    });
+    const findings = liveFindings.map((lf, i) => {
+        const base = haltedFindingFromLive(lf, i);
+        const ri = matched.get(i);
+        if (ri === undefined) {
+            base.fix = "(reporter omitted this finding — no remediation guidance was written)";
+            base.retest = "(reporter omitted this finding — no retest plan was written)";
+            return base;
+        }
+        const prose = reporter[ri];
+        if (typeof prose.evidence === "string" && prose.evidence.trim())
+            base.evidence = prose.evidence;
+        base.fix =
+            typeof prose.fix === "string" && prose.fix.trim()
+                ? prose.fix
+                : "(reporter wrote no remediation guidance for this finding)";
+        base.retest =
+            typeof prose.retest === "string" && prose.retest.trim()
+                ? prose.retest
+                : "(reporter wrote no retest plan for this finding)";
+        return base;
+    });
+    reporter.forEach((f, j) => {
+        if (!consumed.has(j))
+            onDropped?.(f);
+    });
+    return findings;
+}
 export function applyCellVerdicts(findings, liveFindings) {
     const stampedLive = new Set();
     for (const f of findings) {

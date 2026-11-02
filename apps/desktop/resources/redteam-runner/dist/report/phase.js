@@ -33,9 +33,9 @@ import { buildEngagementReportInput, buildFindingMeta } from "./html/wire.js";
 import { emitDeliverables, stampFindingRefs } from "./finding-refs.js";
 import { buildDetailInput, recordReportMeta } from "./predecessor.js";
 import { buildGradeSection, gradeFindings } from "./grading.js";
-import { applyCellVerdicts, haltedFindingFromLive } from "./cell-verdicts.js";
+import { applyCellVerdicts, haltedFindingFromLive, mergeReporterFindings } from "./cell-verdicts.js";
 import { peerDeferredPromptSection, peerVerdictSuffix, stampPeerVerdicts } from "./peer-verdicts.js";
-export { applyCellVerdicts, haltedFindingFromLive } from "./cell-verdicts.js";
+export { applyCellVerdicts, haltedFindingFromLive, mergeReporterFindings } from "./cell-verdicts.js";
 export async function reportPhase(ctx, reconBrief, exploitSummary, opts = {}) {
     const selected = ctx.input.fullBattery ? activeTargets(ctx.input) : [];
     const fbCells = selected.flatMap((t) => BATTERY_CATEGORIES.map((c) => ({ t, c })));
@@ -121,7 +121,12 @@ export async function reportPhase(ctx, reconBrief, exploitSummary, opts = {}) {
     else {
         reportMd = await agentLoop(ctx, "reporter", "report", publisherPrompt(promptCtx(ctx)), `Write the client report now.\n\nAuthorization: ${ctx.verificationProof}\n\nOperation plan: ${JSON.stringify(ctx.plan)}\n\nShared verdicts this engagement — confirmed (${ctx.liveFindings.length}):\n${ctx.liveFindings.map((f) => `- [${f.severity}] ${f.title} (${f.attackId}${f.vulnClass ? `, ${f.vulnClass}` : ""}${f.cellState ? `, cell: ${f.cellState.toUpperCase()}` : ""}${peerVerdictSuffix(f)}): ${f.evidence}`).join("\n") || "(none)"}\nKilled hypotheses (${ctx.killedLive.length}):\n${ctx.killedLive.map((k) => `- ${k.hypothesis} → ${k.killingObservation}`).join("\n") || "(none)"}\n${peerDeferredPromptSection(ctx.peerDeferredLive)}Registry hits consulted: ${ctx.registryHits.length}. Target fingerprint: ${JSON.stringify(ctx.fingerprint)}.\n\n${batteryLine}\n\nRecon brief:\n${reconBrief.slice(0, 4000)}\n\nExploitation summary:\n${exploitSummary.slice(0, 4000)}\n\nProof of exploitation is appended mechanically by the runner from the audit log — do not invent PoC details, marker values, or reproduction steps in your narrative; describe findings only from the evidence given.\n\nEnd the report with a JSON block: \`\`\`json {"findings": [{"id":"F-1","severity":"low","title":"...","attackIds":["T1190"],"evidence":"...","fix":"...","retest":"...","status":"confirmed"}]} \`\`\``, [], 4);
         const parsed = extractJsonBlock(reportMd);
-        findings = Array.isArray(parsed?.findings) ? parsed.findings : [];
+        // H3: the findings set is built from the live record — the reporter
+        // JSON supplies prose only (mergeReporterFindings in cell-verdicts);
+        // unmatched reporter items are dropped and logged, never silently.
+        findings = mergeReporterFindings(ctx.liveFindings, Array.isArray(parsed?.findings) ? parsed.findings : [], (dropped) => {
+            ctx.events.append({ phase: "report", actor: "runner", action: "report_finding_dropped", result: `Reporter finding "${dropped.title}" matches no live finding — excluded from the record.` });
+        });
         for (const f of findings) {
             delete f.producer;
             delete f.peerReview;

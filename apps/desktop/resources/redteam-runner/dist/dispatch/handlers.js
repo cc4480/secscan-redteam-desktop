@@ -7,6 +7,7 @@ import { handleNetTools } from "./net.js";
 import { handleNucleiTools } from "./nuclei.js";
 import { handlePcAgentTools } from "./pc-agent.js";
 import { handleResearchTools } from "./research.js";
+import { handleSkillLoadTools } from "./skill-load.js";
 import { handleSecscanTools } from "./secscan.js";
 import { handleSeclayerTools } from "./seclayer.js";
 import { handleSeclayerDastTool } from "./seclayer-dast.js";
@@ -26,6 +27,7 @@ const HANDLERS = [
     handleSeclayerTools,
     handleSeclayerDastTool,
     handleResearchTools,
+    handleSkillLoadTools,
     handleBookkeepingTools,
 ];
 /**

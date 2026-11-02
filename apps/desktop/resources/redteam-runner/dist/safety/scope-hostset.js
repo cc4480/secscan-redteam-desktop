@@ -52,9 +52,9 @@ export function classifyScopeEntry(asset) {
         return HOSTNAME_LABELS_RE.test(host) ? "wildcard" : "other";
     return HOSTNAME_LABELS_RE.test(host) ? "domain" : "other";
 }
-const HOSTNAME_LABELS_RE = /^(?!-)[a-z0-9-]{1,63}(?:\.[a-z0-9-]{1,63})+$/;
-/** An attested hostname: the HOSTNAME_LABELS_RE label form with no dot required — a bare machine name is one label. */
-const ATTESTED_HOSTNAME_RE = /^(?!-)[a-z0-9-]{1,63}(?:\.[a-z0-9-]{1,63})*$/;
+const HOSTNAME_LABELS_RE = /^(?!-)[a-z0-9_-]{1,63}(?:\.[a-z0-9_-]{1,63})+$/;
+/** An attested hostname: the HOSTNAME_LABELS_RE label form with no dot required — a bare machine name is one label. Labels carry underscores as well as hyphens: real machine names do (`my_host`, the Cho-zen1 class of LAN/Windows hosts), and a name authorization vetted must not drop out of the guard's sets on a character class. */
+const ATTESTED_HOSTNAME_RE = /^(?!-)[a-z0-9_-]{1,63}(?:\.[a-z0-9_-]{1,63})*$/;
 /** A parsed set of domains, IPs and CIDRs, with the Python matching rules. */
 export class HostSet {
     domains = new Set();

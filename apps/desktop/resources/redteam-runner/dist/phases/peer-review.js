@@ -37,7 +37,9 @@
  * HaltError (deliberate stop) rethrows untouched.
  */
 import { describeErrorCause } from "@secscan/redteam-llm-router";
+import { promptCtx } from "../agents.js";
 import { createCharteredComplete } from "../charter-completion.js";
+import { buildFleetPrompt } from "../prompts/fleet-assembly.js";
 import { HaltError } from "../context.js";
 import { extractJsonBlock } from "../util.js";
 import { tokenMeterFor } from "../harness2/trajectory-normalize.js";
@@ -89,7 +91,9 @@ export function parsePeerVerdict(text) {
 }
 function challengeMessages(ctx, lf, checker) {
     const producer = lf.producer ?? "unknown seat (recorded before producer stamps)";
-    const system = `You are the ${checker} seat of an autonomous red-team fleet whose seats check each other's work. ` +
+    // The checker prompt is fleet-assembled for the ARCHITECT seat
+    // (buildFleetPrompt + the verified record), not a hardcoded system.
+    const system = buildFleetPrompt("reporter", `You are the ${checker} seat of an autonomous red-team fleet whose seats check each other's work. ` +
         `For this task you are NOT the producer — you are the PEER REVIEWER of the finding in the record below, ` +
         `and your job is to challenge the claim, not the target: producer and checker are never the same seat, and no finding ` +
         `reaches the report on its producer's say-so alone. Judge ONLY the record below — never invent evidence you were not shown.\n\n` +
@@ -101,7 +105,7 @@ function challengeMessages(ctx, lf, checker) {
         `- upheld: the evidence proves it and the severity is honest.\n` +
         `- downgraded: real, but the claimed severity overstates the demonstrated impact.\n` +
         `- needs-evidence: plausible, but the recorded evidence does not prove it yet — send it back rather than let it print as confirmed.\n` +
-        `- killed: the evidence refutes it or shows the benign explanation. A kill stands unless stronger proof exists.`;
+        `- killed: the evidence refutes it or shows the benign explanation. A kill stands unless stronger proof exists.`, promptCtx(ctx));
     const user = `FINDING UNDER CHALLENGE\n` +
         `Producer seat: ${producer}\n` +
         `Title: ${lf.title}\n` +

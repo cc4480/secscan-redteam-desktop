@@ -21,7 +21,10 @@
  *     §2). A phase whose elicitation fails proceeds without an anchor
  *     and the absence is recorded in the audit trail — the spec's flag,
  *     never a silent skip and never a blocked engagement.
- *   - Every response is classified. An explicit refusal with no tool
+ *   - Every response is classified, with the real artifact flag for
+ *     artifact-producing phases (report/scribe — M6), so a soft
+ *     refusal (cooperative prose, no artifact) runs the §3 chain too.
+ *     An explicit refusal with no tool
  *     calls runs the spec §3 fallback chain (fresh contexts, refusal
  *     hygiene: the refused text is never written into the loop's
  *     messages, notes, or events). Telemetry lands in the engagement
@@ -40,7 +43,7 @@
  * yet, so assembly runs without pseudonymization; the runner's existing
  * PII redaction on tool outputs and evidence still applies.
  */
-import { assembleCharterMessages, assertLocalOnlyRoute, buildPhaseAnchor, CHARTER_MARKER_QUESTIONS, classifyResponse, complete, completeWithCharter, resolveCharterRoute, } from '@secscan/redteam-llm-router';
+import { assembleCharterMessages, assertLocalOnlyRoute, buildPhaseAnchor, CHARTER_MARKER_QUESTIONS, CHARTER_ROLE_AGENT_ROLE, classifyResponse, complete, completeWithCharter, resolveCharterRoute, } from '@secscan/redteam-llm-router';
 import { callWithPolicyContainment, createFallbackRunner } from './policy-containment.js';
 export { condensedReissueMessages } from './policy-containment.js';
 /** Which charter seat each agent role sits in (inverse of CHARTER_ROLE_AGENT_ROLE). */
@@ -75,14 +78,103 @@ export function charterEngagementFor(ctx) {
     engagementCache.set(ctx, engagement);
     return engagement;
 }
+/**
+ * M6: the phases whose chartered calls must produce an artifact — the
+ * report phase (the report document, the Scribe's authored HTML, the
+ * scribe/peer-review verdict JSON). Every createCharteredComplete
+ * caller that serves the report phase passes 'report' (report/phase.ts
+ * via agentLoop, report/scribe.ts, report/scribe-html.ts,
+ * phases/peer-review.ts), so the flag originates here, from the phase
+ * the factory was built for, not from a per-call guess.
+ *
+ * @param phase - the phase a chartered completion serves
+ * @returns true when that phase's calls are artifact-producing tasks
+ */
+export function isArtifactPhase(phase) {
+    return phase === 'report';
+}
+/**
+ * M6: the default artifact check for an artifact phase's response: the
+ * text carries a complete HTML document (Scribe-authored report.html),
+ * a parseable JSON object (a whole-text verdict, or a fenced ```json
+ * block — the report's findings block), or a markdown report heading.
+ * Cooperative prose with none of these is not the artifact.
+ *
+ * @param text - the response text to check
+ * @returns true when the text carries an artifact in a required format
+ */
+export function reportArtifactCheck(text) {
+    const trimmed = text.trim();
+    if (trimmed === '')
+        return false;
+    if (/<!DOCTYPE html/i.test(trimmed) && /<\/html>/i.test(trimmed))
+        return true;
+    const fenced = /```json\s*\n([\s\S]*?)```/.exec(trimmed);
+    for (const candidate of [trimmed, fenced?.[1]?.trim() ?? '']) {
+        if (!candidate.startsWith('{'))
+            continue;
+        try {
+            const parsed = JSON.parse(candidate);
+            if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed))
+                return true;
+        }
+        catch {
+            // Not JSON — fall through to the remaining formats.
+        }
+    }
+    return /^#{1,3}\s+\S/m.test(trimmed);
+}
+/**
+ * M6: the phase-derived artifact check paired with {@link isArtifactPhase}.
+ *
+ * @param phase - the phase a chartered completion serves
+ * @returns the artifact check for artifact phases, or undefined
+ */
+export function artifactCheckForPhase(phase) {
+    return isArtifactPhase(phase) ? reportArtifactCheck : undefined;
+}
 async function elicitAnchor(ctx, phase, role, engagement, seams) {
     const questionList = CHARTER_MARKER_QUESTIONS.map(q => `${q.key}: ${q.question}`).join('\n');
     const prompt = 'Before this phase begins, answer the four charter marker questions from the engagement record. ' +
         `Reply with exactly one line per question, in the form "<key>: <answer>", no other text.\n${questionList}`;
     try {
-        const call = seams.elicitationCall ??
+        const rawCall = seams.elicitationCall ??
             ((eng, r, msgs) => completeWithCharter({ engagement: eng, role: r, messages: msgs }));
-        const res = await call(engagement, role, [{ role: 'user', content: prompt }]);
+        // L1: the elicitation call runs under the same thrown-policy
+        // containment as every other chartered call in this file
+        // (callWithPolicyContainment) — a provider that throws its safety
+        // rejection here is re-issued once condensed with the engagement
+        // record, then routed into the §3 fallback chain, instead of the
+        // rejection landing straight in the catch below as a missing
+        // anchor. Non-policy errors still propagate to that catch, exactly
+        // as before. The fallback runner's elicitAnchor is a no-op: the
+        // anchor is what is being elicited, so it cannot elicit itself.
+        const messages = [{ role: 'user', content: prompt }];
+        const route = resolveCharterRoute(role);
+        const agentRole = CHARTER_ROLE_AGENT_ROLE[role];
+        const runFallback = createFallbackRunner({
+            ctx,
+            phase,
+            role: agentRole,
+            charterRole: role,
+            engagement,
+            messages,
+            resolvedRoute: route,
+            fallbackCall: seams.fallbackCall,
+            elicitAnchor: async () => undefined,
+        });
+        const contained = await callWithPolicyContainment({
+            call: async (_route, msgs) => rawCall(engagement, role, msgs),
+            route,
+            messages,
+            opts: {},
+            engagement,
+            ctx,
+            phase,
+            role: agentRole,
+            runFallback,
+        });
+        const res = contained.result;
         const answers = {};
         for (const line of (res.text ?? '').split('\n')) {
             const m = /^(engagement|scope|objective|artifact):\s*(.+)$/.exec(line.trim());
@@ -214,7 +306,24 @@ export function createCharteredComplete(ctx, phase, seams = {}) {
         // a response that acts is an answer, whatever its prose says.
         if (result.toolCalls && result.toolCalls.length > 0)
             return result;
-        const classified = classifyResponse(result, { artifactTask: false });
+        // M6: thread the REAL artifact flag + check — per-call options win,
+        // otherwise the phase this completion was built for decides
+        // (isArtifactPhase / artifactCheckForPhase). Hardcoding
+        // artifactTask:false here made classifyResponse's soft_refusal
+        // branch dead for every artifact-producing (report/scribe) call.
+        // SEAM (M6, remaining hop, policy-containment.ts — owned by another
+        // builder): createFallbackRunner's FallbackRunnerDeps carries no
+        // artifactTask/artifactCheck and its completeWithFallback call
+        // passes none, so hops INSIDE the §3 chain still classify without
+        // the artifact check. Forwarding these two values there is the
+        // exact remaining hop; the gate here now enters the chain on a
+        // soft refusal regardless.
+        const artifactTask = opts.artifactTask ?? isArtifactPhase(phase);
+        const artifactCheck = opts.artifactCheck ?? (artifactTask ? artifactCheckForPhase(phase) : undefined);
+        const classified = classifyResponse(result, {
+            artifactTask,
+            ...(artifactCheck ? { artifactCheck } : {}),
+        });
         if (classified.refusalClass === 'ok')
             return result;
         ctx.events.append({

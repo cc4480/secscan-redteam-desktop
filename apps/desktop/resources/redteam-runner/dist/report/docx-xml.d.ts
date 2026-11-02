@@ -3,8 +3,10 @@
  * paragraph/run builders, and the static package parts (content types,
  * relationships, styles). Text is data only — every caller-supplied
  * string passes through xesc, so target-derived text can never break
- * out of a text node. The styles are the document's own minimal set
- * (Title / Heading1-3 / Normal); Word renders them natively.
+ * out of a text node. The styles are the document's own set (Title /
+ * Heading1-3 / Normal / BrandLine), carrying the SecScan house brand:
+ * the logo palette (diamond CF2B4D, crosshair 38BDF8, interior
+ * 0B1120) and the display face on the title and headings.
  */
 /** Escape a string for an XML text node (quotes included, so the same
  * helper is safe for attribute values too). */
@@ -13,6 +15,8 @@ export interface RunSeg {
     text: string;
     bold?: boolean;
     italic?: boolean;
+    /** OOXML hex colour (no '#'), e.g. 'CF2B4D'. */
+    color?: string;
 }
 /** One paragraph. `style` names a styles.xml paragraph style. */
 export declare function para(segs: RunSeg[] | string, style?: string): string;

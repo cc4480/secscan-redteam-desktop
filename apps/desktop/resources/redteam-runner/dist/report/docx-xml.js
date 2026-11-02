@@ -3,8 +3,10 @@
  * paragraph/run builders, and the static package parts (content types,
  * relationships, styles). Text is data only — every caller-supplied
  * string passes through xesc, so target-derived text can never break
- * out of a text node. The styles are the document's own minimal set
- * (Title / Heading1-3 / Normal); Word renders them natively.
+ * out of a text node. The styles are the document's own set (Title /
+ * Heading1-3 / Normal / BrandLine), carrying the SecScan house brand:
+ * the logo palette (diamond CF2B4D, crosshair 38BDF8, interior
+ * 0B1120) and the display face on the title and headings.
  */
 const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 /** Escape a string for an XML text node (quotes included, so the same
@@ -18,8 +20,8 @@ export function xesc(s) {
         .replace(/'/g, '&apos;');
 }
 function run(seg) {
-    const rpr = seg.bold || seg.italic
-        ? `<w:rPr>${seg.bold ? '<w:b/>' : ''}${seg.italic ? '<w:i/>' : ''}</w:rPr>`
+    const rpr = seg.bold || seg.italic || seg.color
+        ? `<w:rPr>${seg.bold ? '<w:b/>' : ''}${seg.italic ? '<w:i/>' : ''}${seg.color ? `<w:color w:val="${seg.color}"/>` : ''}</w:rPr>`
         : '';
     return `<w:r>${rpr}<w:t xml:space="preserve">${xesc(seg.text)}</w:t></w:r>`;
 }
@@ -70,11 +72,17 @@ export const DOC_RELS_XML = '<?xml version="1.0" encoding="UTF-8" standalone="ye
     '<Relationship Id="rId1" ' +
     'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" ' +
     'Target="styles.xml"/></Relationships>';
-function styleDef(id, name, sizeHalfPts, bold, outline) {
+function styleDef(id, name, sizeHalfPts, bold, outline, opts = {}) {
     const outlineEl = outline !== undefined ? `<w:outlineLvl w:val="${outline}"/>` : '';
+    const shadeEl = opts.shade ? `<w:shd w:val="clear" w:color="auto" w:fill="${opts.shade}"/>` : '';
+    const ruleEl = opts.rule
+        ? `<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="4" w:color="${opts.rule}"/></w:pBdr>`
+        : '';
+    const fontEl = opts.font ? `<w:rFonts w:ascii="${opts.font}" w:hAnsi="${opts.font}"/>` : '';
+    const colorEl = opts.color ? `<w:color w:val="${opts.color}"/>` : '';
     return (`<w:style w:type="paragraph" w:styleId="${id}"><w:name w:val="${name}"/>` +
-        `<w:pPr><w:spacing w:before="120" w:after="80"/>${outlineEl}</w:pPr>` +
-        `<w:rPr><w:sz w:val="${sizeHalfPts}"/>${bold ? '<w:b/>' : ''}</w:rPr></w:style>`);
+        `<w:pPr><w:spacing w:before="120" w:after="80"/>${outlineEl}${shadeEl}${ruleEl}</w:pPr>` +
+        `<w:rPr>${fontEl}<w:sz w:val="${sizeHalfPts}"/>${bold ? '<w:b/>' : ''}${colorEl}</w:rPr></w:style>`);
 }
 export const STYLES_XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
     `<w:styles xmlns:w="${W_NS}">` +
@@ -83,9 +91,14 @@ export const STYLES_XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"
     '</w:rPr></w:rPrDefault></w:docDefaults>' +
     '<w:style w:type="paragraph" w:default="1" w:styleId="Normal">' +
     '<w:name w:val="Normal"/><w:pPr><w:spacing w:after="80"/></w:pPr></w:style>' +
-    styleDef('Title', 'Title', 56, true) +
-    styleDef('Heading1', 'heading 1', 32, true, 0) +
-    styleDef('Heading2', 'heading 2', 26, true, 1) +
-    styleDef('Heading3', 'heading 3', 24, true, 2) +
+    // House brand (the logo palette): the Title sits on the interior-ink
+    // band in near-white with a diamond-red rule; Heading1 is diamond red
+    // over a crosshair-blue rule; Heading2/3 are interior ink. Body text
+    // keeps the docDefaults face — the title and headings carry the brand.
+    styleDef('Title', 'Title', 56, true, undefined, { color: 'FAFAFA', font: 'Space Grotesk', shade: '0B1120', rule: 'CF2B4D' }) +
+    styleDef('Heading1', 'heading 1', 32, true, 0, { color: 'CF2B4D', font: 'Space Grotesk', rule: '38BDF8' }) +
+    styleDef('Heading2', 'heading 2', 26, true, 1, { color: '0B1120', font: 'Space Grotesk' }) +
+    styleDef('Heading3', 'heading 3', 24, true, 2, { color: '0B1120', font: 'Space Grotesk' }) +
+    styleDef('BrandLine', 'BrandLine', 20, true, undefined, { font: 'JetBrains Mono' }) +
     '</w:styles>';
 //# sourceMappingURL=docx-xml.js.map

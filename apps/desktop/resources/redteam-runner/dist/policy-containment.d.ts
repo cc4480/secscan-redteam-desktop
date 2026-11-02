@@ -28,15 +28,19 @@ import { type EngagementPhase } from './types.js';
  * (first instruction + latest context, both truncated) in place of the
  * full prior context — the raw batch dump is what was rejected, and
  * resending it unchanged would be rejected again. The record block is
- * rendered locally in the fleet §2 shape from the charter engagement
- * fields: the runner does not yet depend on the fleet-skills package,
- * so its buildEngagementInjection cannot be imported here.
+ * the standard fleet injection itself — buildEngagementInjection over
+ * the context's verified record, the same sanitized block the normal
+ * assembly path renders (targets, proof with its verification stamp,
+ * RoE, session rule) — never a hand-rendered subset: a thin or
+ * unsanitized copy would hand the recovered call a weaker record than
+ * the refused one had, and a field an attacker can echo could spoof
+ * the block's structure.
  *
  * @param messages - the rejected call's (chartered) messages
- * @param engagement - the charter engagement record for this run
+ * @param ctx - the engagement context (the verified record's source)
  * @returns the condensed message list for the single re-issue
  */
-export declare function condensedReissueMessages(messages: ChatMessage[], engagement: CharterEngagement): ChatMessage[];
+export declare function condensedReissueMessages(messages: ChatMessage[], ctx: Ctx): ChatMessage[];
 /** The call context {@link createFallbackRunner} feeds the §3 chain from. */
 export interface FallbackRunnerDeps {
     /** The engagement context (audit trail). */

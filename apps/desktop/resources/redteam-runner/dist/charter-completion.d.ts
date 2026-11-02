@@ -21,7 +21,10 @@
  *     §2). A phase whose elicitation fails proceeds without an anchor
  *     and the absence is recorded in the audit trail — the spec's flag,
  *     never a silent skip and never a blocked engagement.
- *   - Every response is classified. An explicit refusal with no tool
+ *   - Every response is classified, with the real artifact flag for
+ *     artifact-producing phases (report/scribe — M6), so a soft
+ *     refusal (cooperative prose, no artifact) runs the §3 chain too.
+ *     An explicit refusal with no tool
  *     calls runs the spec §3 fallback chain (fresh contexts, refusal
  *     hygiene: the refused text is never written into the loop's
  *     messages, notes, or events). Telemetry lands in the engagement
@@ -63,7 +66,55 @@ export interface CharteredCallOptions {
     /** Structured-output constraint for this call (Q-STRUCT A1 seam).
      * Absent = unconstrained, exactly the historical behavior. */
     responseFormat?: ResponseFormat;
+    /**
+     * M6: true when this call must produce an artifact (soft-refusal
+     * detection applies in classifyResponse). Absent = derived from the
+     * completion's phase via {@link isArtifactPhase} — artifact-producing
+     * phases (report/scribe) are artifact tasks, all other phases are
+     * not. An explicit value wins over the phase default, so a side call
+     * inside an artifact phase (reflection, repair) can opt out.
+     */
+    artifactTask?: boolean;
+    /**
+     * M6: caller-supplied artifact check for an artifact task — true when
+     * the response text IS the artifact in the required format. Absent =
+     * {@link artifactCheckForPhase} for artifact phases; without any
+     * check, classifyResponse still catches prose-substitute soft
+     * refusals on artifact tasks.
+     */
+    artifactCheck?: (text: string) => boolean;
 }
+/**
+ * M6: the phases whose chartered calls must produce an artifact — the
+ * report phase (the report document, the Scribe's authored HTML, the
+ * scribe/peer-review verdict JSON). Every createCharteredComplete
+ * caller that serves the report phase passes 'report' (report/phase.ts
+ * via agentLoop, report/scribe.ts, report/scribe-html.ts,
+ * phases/peer-review.ts), so the flag originates here, from the phase
+ * the factory was built for, not from a per-call guess.
+ *
+ * @param phase - the phase a chartered completion serves
+ * @returns true when that phase's calls are artifact-producing tasks
+ */
+export declare function isArtifactPhase(phase: EngagementPhase): boolean;
+/**
+ * M6: the default artifact check for an artifact phase's response: the
+ * text carries a complete HTML document (Scribe-authored report.html),
+ * a parseable JSON object (a whole-text verdict, or a fenced ```json
+ * block — the report's findings block), or a markdown report heading.
+ * Cooperative prose with none of these is not the artifact.
+ *
+ * @param text - the response text to check
+ * @returns true when the text carries an artifact in a required format
+ */
+export declare function reportArtifactCheck(text: string): boolean;
+/**
+ * M6: the phase-derived artifact check paired with {@link isArtifactPhase}.
+ *
+ * @param phase - the phase a chartered completion serves
+ * @returns the artifact check for artifact phases, or undefined
+ */
+export declare function artifactCheckForPhase(phase: EngagementPhase): ((text: string) => boolean) | undefined;
 /** Injectable provider seam for tests; production uses the router registry. */
 export interface CharteredCallSeams {
     /** Raw provider call for one resolved route. */

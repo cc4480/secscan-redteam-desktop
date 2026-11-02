@@ -11,6 +11,7 @@ import { withBridgeTools } from "../dispatch/bridge-gate.js";
 import { taskPrompt } from "../prompts.js";
 import { techniqueAllowed } from "../gate.js";
 import { completeGraphSubtask, failGraphSubtask, graphSubtaskFor, startGraphSubtask, } from "../workgraph/wiring.js";
+import { requestCoderArtifact } from "../exploit-cell/coder.js";
 /**
  * "Spawn a subagent": execute one discrete task as a bounded foundation loop
  * with a task-scoped specialist prompt. Fresh context, cyber task definition.
@@ -37,9 +38,40 @@ export async function runTask(ctx, task) {
         attackId: task.attackId,
         result: `[${task.kind}] ${task.brief.slice(0, 200)}${task.category ? ` (${task.category})` : ""}`,
     });
+    // Fleet audit M1: a task that declares a custom-code need gets its
+    // artifact from the coder (TANK) seat BEFORE the specialist loop starts;
+    // the artifact rides into the loop's task prompt and the exploiter uses
+    // it verbatim instead of generating code inline. A coder failure never
+    // kills the task — it is logged and the task runs as it did before the
+    // seat was wired (the pre-M1 behavior is the fallback, not a stub).
+    let coderArtifact;
+    if (task.codeNeed) {
+        try {
+            const artifact = await requestCoderArtifact(ctx, {
+                brief: task.brief,
+                codeNeed: task.codeNeed,
+                attackId: task.attackId,
+                category: task.category,
+                batteryItem: task.batteryItem,
+            });
+            coderArtifact = artifact.text;
+        }
+        catch (err) {
+            ctx.events.append({
+                phase: "exploit",
+                actor: "runner",
+                action: "coder_artifact_failed",
+                target: task.id,
+                attackId: task.attackId,
+                result: `Coder (TANK) artifact request failed for declared need "${task.codeNeed.slice(0, 200)}": ${err.message} — task proceeds without a coder artifact.`,
+            });
+        }
+    }
     let summary;
     try {
-        summary = await agentLoop(ctx, role, "exploit", taskPrompt(promptCtx(ctx), task), "Execute the task now.", tools, task.maxTurns);
+        summary = await agentLoop(ctx, role, "exploit", taskPrompt(promptCtx(ctx), task), coderArtifact
+            ? `Execute the task now.\n\nCODER ARTIFACT (built by TANK, the coder seat, for this task's declared custom-code need: ${task.codeNeed}) — use this artifact verbatim as the task's payload/script; do not regenerate it inline:\n${coderArtifact}`
+            : "Execute the task now.", tools, task.maxTurns);
     }
     catch (err) {
         if (graphSub)
@@ -65,6 +97,7 @@ export async function runTask(ctx, task) {
     return {
         task,
         summary,
+        ...(coderArtifact ? { coderArtifact } : {}),
         probesBefore,
         probesAfter: ctx.probesUsed,
         findingsBefore,
@@ -159,7 +192,14 @@ export function validateTasks(ctx, raw, cap) {
         // invites the reader to think something failed when nothing did.
         const rawItem = typeof r["batteryItem"] === "string" ? r["batteryItem"].trim() : "";
         const batteryItem = kind === "probe" && rawItem ? rawItem.slice(0, 40) : undefined;
-        tasks.push({ id: `task-${++taskCounter}`, kind, brief, attackId, category, batteryItem, maxTurns });
+        // A codeNeed only means something on a probe task, for the batteryItem
+        // reason above: it declares code the EXECUTING task must generate (a
+        // payload, script, or encoder the coder seat builds). A recon task
+        // never crafts payloads, so a codeNeed on one is dropped here rather
+        // than spending a coder call on a task that cannot consume it.
+        const rawNeed = typeof r["codeNeed"] === "string" ? r["codeNeed"].trim() : "";
+        const codeNeed = kind === "probe" && rawNeed ? rawNeed.slice(0, 300) : undefined;
+        tasks.push({ id: `task-${++taskCounter}`, kind, brief, attackId, category, batteryItem, codeNeed, maxTurns });
     }
     return tasks;
 }

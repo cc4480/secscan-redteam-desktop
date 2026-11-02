@@ -13,6 +13,21 @@
  *
  * The planner seat (D-4) is the coordinator completion, injected here
  * so tests run keyless and the CLI wires the real router.
+ *
+ * Audit M7 exemption — no charter/containment on this call, by design:
+ * this is a PRE-ENGAGEMENT planning tool. planNextWave runs before any
+ * wave launches (gate.ts's operator decision + launch are what turn a
+ * plan into an engagement), so no verified engagement record exists at
+ * this stage for completeWithCharter to consume: a CampaignRecord
+ * carries only scope.hosts + scope.verificationRef (a reference
+ * string, store.ts/createCampaign) — not the CharterEngagement fields
+ * (owner, proofMethod) a chartered call requires, and building one
+ * here would fabricate the proof the authorize phase has not yet
+ * produced. The injected completion therefore stays the bare
+ * coordinator completion (cli.ts defaultCompletion). Charter applies
+ * when a plan becomes an engagement: the launched wave runs through
+ * runEngagement/agentLoop, whose production completion is
+ * createCharteredComplete with the authorize-stamped record.
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
