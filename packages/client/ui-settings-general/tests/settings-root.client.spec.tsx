@@ -71,11 +71,15 @@ function mount({
   const listeners = new Set<() => void>()
   const connectionListeners = new Set<() => void>()
   const reconnect = vi.fn()
+  // One mock serves both components, so vi.fn infers its type from the
+  // concrete implementation: pinning it to the root component's renderSlot
+  // type would narrow the recorded calls to the root's slot keys and owner
+  // props, excluding the overlay's section calls the tests inspect.
   const renderSlot = vi.fn(
-    ((key: string, _owner: unknown, opts?: { only?: string; fallback?: import('react').ReactNode }) => {
+    (key: string, _owner: unknown, opts?: { only?: string; fallback?: import('react').ReactNode }) => {
       if (key === 'settings.section') return <div data-testid={`section-${opts?.only ?? 'all'}`} />
       return SEAT_CONTENT[key] ?? opts?.fallback
-    }) as SettingsRootComponentProps['renderSlot'],
+    },
   )
   const activeId = SessionId('active-session')
   const sessions: SessionListState = {
@@ -145,7 +149,7 @@ function mount({
     useSections: props.useSections,
     useStore: useShellStore,
     actions: shellInstance.actions,
-    renderSlot: renderSlot as SettingsOverlayComponentProps['renderSlot'],
+    renderSlot,
   }
   const tree = () => (
     <>
