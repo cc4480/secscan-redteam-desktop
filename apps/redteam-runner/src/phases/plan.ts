@@ -3,6 +3,7 @@
  */
 import { type Ctx } from "../context.js";
 import { type PlanStep } from "../types.js";
+import { COMMAND_TOOLS } from "../tools.js";
 import { agentLoop, promptCtx } from "../agents.js";
 import { coordinatorPrompt } from "../prompts.js";
 import { extractJsonBlock } from "../util.js";
@@ -25,10 +26,15 @@ export async function planPhase(ctx: Ctx, critique?: string): Promise<void> {
     coordinatorPrompt(promptCtx(ctx)),
     `Authorization is proven for ${ctx.domain} (${ctx.verificationProof}). Produce the operation plan as JSON now: { "adversaryProfile": "...", "steps": [{ "phase": "recon|exploit", "attackId": "Txxxx", "description": "...", "stealthNote": "..." }] }.` +
       (critique ? `\n\nCOMMANDER REDIRECT on the previous plan: ${critique}. Revise the plan accordingly.` : ""),
-    [],
+    COMMAND_TOOLS,
     4,
     // Q-STRUCT A3: same adoption as directive — the plan text is parsed as
     // JSON below, so the loop runs under object mode.
+    // Universal access (operator's order 2026-11-01): the plan loop offers
+    // the same full catalog as the coordinator's other steering loops
+    // (directive, sign-off) — this call site was the one coordinator loop
+    // still passing an empty tool set, so the planner could not consult
+    // the registry, variants, or research tools while planning.
     { responseFormat: { type: "json_object" } },
   );
   const parsed = extractJsonBlock(text) as { adversaryProfile?: string; steps?: PlanStep[] } | null;

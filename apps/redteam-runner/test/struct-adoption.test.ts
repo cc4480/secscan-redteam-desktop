@@ -21,6 +21,7 @@ import {
   validateResponseFormat,
   type ChatMessage,
   type ChatResult,
+  type JsonSchemaTool,
   type ResponseFormat,
 } from '@secscan/redteam-llm-router'
 import { createCharteredComplete, type CharteredCallOptions } from '../src/charter-completion.js'
@@ -36,6 +37,7 @@ import { EventLog } from '../src/events.js'
 import { agentLoop } from '../src/agents.js'
 import { coordinatorDirective } from '../src/phases/directive.js'
 import { planPhase } from '../src/phases/plan.js'
+import { COMMAND_TOOLS } from '../src/tools.js'
 import type { Ctx } from '../src/context.js'
 import type { PlanStep } from '../src/types.js'
 
@@ -164,7 +166,7 @@ describe('A3 — agentLoop forwards the opt; directive + plan adopt json_object'
   })
   afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
-  type CallOpts = { responseFormat?: ResponseFormat }
+  type CallOpts = { responseFormat?: ResponseFormat; tools?: JsonSchemaTool[] }
 
   /** A loop-ready fake Ctx (reflector-test shape) whose completion seam
    * records the options of every call and replies with fixed text. */
@@ -242,5 +244,19 @@ describe('A3 — agentLoop forwards the opt; directive + plan adopt json_object'
     assert.equal(ctx.plan?.adversaryProfile, 'fixture-profile')
     assert.ok(captured.length >= 1)
     for (const opts of captured) assert.deepEqual(opts.responseFormat, { type: 'json_object' })
+  })
+
+  it('planPhase offers the coordinator the full tool catalog', async () => {
+    const captured: CallOpts[] = []
+    const ctx = makeCtx(captured, JSON.stringify({ adversaryProfile: 'fixture-profile', steps: [] }))
+    await planPhase(ctx)
+    assert.equal(ctx.plan?.adversaryProfile, 'fixture-profile')
+    assert.ok(captured.length >= 1)
+    // Universal access: the plan loop's completion calls carry the same
+    // catalog the directive and sign-off loops carry (COMMAND_TOOLS is
+    // the FULL_TOOLS union under its coordinator name — tools/compose.ts).
+    // Before the fix this call site passed an empty tool set.
+    for (const opts of captured) assert.deepEqual(opts.tools, COMMAND_TOOLS)
+    assert.ok(COMMAND_TOOLS.length > 0)
   })
 })
