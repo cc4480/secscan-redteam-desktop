@@ -54,6 +54,29 @@ export declare class HostSet {
         skipped: string[];
     };
     /**
+     * Build a set from the AUTHORIZE phase's attested entries (the
+     * verified record): raw scope entries whose hosts already passed
+     * authorization one host at a time (gate.ts checkScopeAuthorization,
+     * over hosts extracted from the same entries). Placement starts from
+     * the same classification as {@link HostSet.fromEntries}; an entry
+     * classification cannot place but that is a valid bare hostname —
+     * one dotless label, the form a machine's own name takes (a Windows
+     * workstation, a LAN host) — is then placed as a domain through the
+     * same normaliser, the way fromMapping's hosts key places non-IP
+     * entries. Attested entries are authorization output, not scope-file
+     * lines: the dot the file classification requires would drop the
+     * exact hosts authorize vetted, leaving the allow set empty for
+     * every local-host engagement. Entries that are neither classifiable
+     * nor valid hostnames stay skipped and reported.
+     *
+     * @param entries - The attested entries from the engagement record.
+     * @returns The populated set plus the entries that could not be placed.
+     */
+    static fromAttestedEntries(entries: readonly string[]): {
+        set: HostSet;
+        skipped: string[];
+    };
+    /**
      * Normalise one entry to a bare hostname (Python `_normalise_host`):
      * strip scheme, path, port, wildcard prefix and surrounding dots.
      *

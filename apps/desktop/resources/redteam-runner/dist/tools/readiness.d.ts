@@ -71,7 +71,8 @@ export declare function arsenalIndexItem(env: NodeJS.ProcessEnv): ReadinessItem;
  * rendered ONLY when some pool entry is dead or benched — a healthy or
  * empty pool omits the item entirely rather than taking a green line.
  * The detail names each affected key by fingerprint (never key material):
- * dead keys with their recorded reason, benched (key, model) pairs with
+ * dead keys with their recorded reason plus, when the pool recorded them,
+ * the killing response's HTTP status/code and the death time; benched (key, model) pairs with
  * the time until they are eligible again, or "no automatic return" for
  * permanent (entitlement) benches. Benches that have already lapsed by
  * render time are skipped. Pure over the snapshots so tests feed it

@@ -303,7 +303,8 @@ function formatBenchRemaining(remainingMs) {
  * rendered ONLY when some pool entry is dead or benched — a healthy or
  * empty pool omits the item entirely rather than taking a green line.
  * The detail names each affected key by fingerprint (never key material):
- * dead keys with their recorded reason, benched (key, model) pairs with
+ * dead keys with their recorded reason plus, when the pool recorded them,
+ * the killing response's HTTP status/code and the death time; benched (key, model) pairs with
  * the time until they are eligible again, or "no automatic return" for
  * permanent (entitlement) benches. Benches that have already lapsed by
  * render time are skipped. Pure over the snapshots so tests feed it
@@ -314,7 +315,17 @@ export function credentialPoolItem(snapshots, nowMs) {
     for (const snap of snapshots) {
         for (const entry of snap.entries) {
             if (entry.dead) {
-                segments.push(`${snap.providerId}: key …${entry.fingerprint} dead${entry.deadReason !== undefined ? ` (${entry.deadReason})` : ''}`);
+                // Death evidence when the pool recorded it (FIX-DEADKEY): what the
+                // provider answered and when the death was recorded, so the remedy
+                // (re-seat the key) is checkable against the provider account.
+                const said = [];
+                if (entry.deadStatus !== undefined)
+                    said.push(`HTTP ${entry.deadStatus}`);
+                if (entry.deadCode !== undefined)
+                    said.push(entry.deadCode);
+                segments.push(`${snap.providerId}: key …${entry.fingerprint} dead${entry.deadReason !== undefined ? ` (${entry.deadReason})` : ''}` +
+                    (said.length > 0 ? ` — provider answered ${said.join(' ')}` : '') +
+                    (entry.deadAtMs !== undefined ? ` at ${new Date(entry.deadAtMs).toISOString()}` : ''));
             }
             for (const bench of entry.benchedModels) {
                 if (bench.untilMs === null) {

@@ -287,8 +287,50 @@ export function assertScribeInPayload(payloadRoot) {
   } else if (!readFileSync(runPath, 'utf8').includes('scribeGate')) {
     missing.push('phases/run.js (no scribeGate call)')
   }
+  // The report phase file is the Scribe's other invocation surface: it calls
+  // `resolveReportHtml` from `report/scribe-html.js` to produce report.html.
+  // A payload whose report phase lost that wiring ships a report the Scribe
+  // never authored or reviewed.
+  const reportPhasePath = join(dist, 'report', 'phase.js')
+  if (!existsSync(reportPhasePath)) {
+    missing.push('report/phase.js')
+  } else if (!readFileSync(reportPhasePath, 'utf8').includes('resolveReportHtml')) {
+    missing.push('report/phase.js (no Scribe invocation: resolveReportHtml call from scribe-html.js)')
+  }
   if (missing.length > 0) {
     throw new Error(`vendor-redteam-runner: the payload at ${payloadRoot} is missing the Scribe (${missing.join(', ')}); the desktop application executes this payload, so shipping it would run engagements with no publisher sign-off`)
+  }
+}
+
+/** Payload modules that must carry the attested-scope fix (FIX-SCOPE, dd7e084a). */
+const SCOPE_FIX_PAYLOAD_FILES = ['safety/scope-hostset.js', 'safety/scope-record.js']
+
+/**
+ * Fail the vendoring run when the assembled payload lacks the attested-scope fix.
+ *
+ * FIX-SCOPE (dd7e084a) added `HostSet.fromAttestedEntries` so attested bare
+ * hostnames are placed in the verified-record allow set. A payload assembled
+ * from a source snapshot that predates that fix still calls
+ * `HostSet.fromEntries` in `dist/safety/scope-record.js` — the 2026-11-02
+ * revendor 1a5bc954 predates dd7e084a — so desktop-launched engagements
+ * scope-starve on attested bare hostnames and nothing fails. Asserting
+ * `fromAttestedEntries` in both compiled safety modules keeps that
+ * stale-payload class from shipping again silently.
+ * @param {string} payloadRoot - The vendored payload root to inspect.
+ */
+export function assertScopeFixInPayload(payloadRoot) {
+  const dist = join(payloadRoot, 'dist')
+  const missing = []
+  for (const file of SCOPE_FIX_PAYLOAD_FILES) {
+    const path = join(dist, ...file.split('/'))
+    if (!existsSync(path)) {
+      missing.push(file)
+    } else if (!readFileSync(path, 'utf8').includes('fromAttestedEntries')) {
+      missing.push(`${file} (no fromAttestedEntries)`)
+    }
+  }
+  if (missing.length > 0) {
+    throw new Error(`vendor-redteam-runner: the payload at ${payloadRoot} is missing the attested-scope fix FIX-SCOPE (${missing.join(', ')}); the desktop application executes this payload, so shipping it would scope-starve engagements on attested bare hostnames`)
   }
 }
 
@@ -492,6 +534,7 @@ function vendorRedteamRunner(options) {
   }
   writeFileSync(join(destination, 'provenance.json'), `${JSON.stringify(provenance, undefined, 2)}\n`)
   assertScribeInPayload(destination)
+  assertScopeFixInPayload(destination)
   return { version: manifest.version, packages: provenance.packages }
 }
 

@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "package": "@secscan/redteam-runner",
   "version": "0.1.7-rc.7",
-  "source": "/home/hatch/workspace/secscan-redteam-desktop/apps/redteam-runner",
+  "source": "/home/hatch/workspace/fleet-fixes2-2026-11-02/sliceA/apps/redteam-runner",
   "lockfile": {
-    "source": "/home/hatch/workspace/secscan-redteam-desktop/pnpm-lock.yaml",
-    "sha256": "72f5cfe52b19731f302272612643282b558369e32a374691fcb146dece52e472"
+    "source": "/home/hatch/workspace/fleet-fixes2-2026-11-02/sliceA/pnpm-lock.yaml",
+    "sha256": "3db97613f122257626041bac2f633f32d89e3310cfe5303d5b9f69a1931c207a"
   },
   "packages": [
     {
