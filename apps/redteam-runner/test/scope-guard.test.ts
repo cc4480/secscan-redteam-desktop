@@ -513,6 +513,54 @@ describe("verified record — attested bare hostnames (the desktop local-host pa
     const listed = ScopeGuard.fromVerifiedRecord({ verifiedScope: ["127.0.0.1"] });
     assert.equal(listed.checkHost("127.0.0.1").allowed, true, "a literally listed local host stays allowed");
   });
+
+  it("L8: an attested bare hostname matches exactly only — a subdomain of it is a different, unattested host", () => {
+    const { set, skipped } = HostSet.fromAttestedEntries(["Cho-zen1"]);
+    assert.deepEqual(skipped, []);
+    assert.ok(set.exactHosts.has("cho-zen1"), "the bare host is flagged exact-only at placement");
+    assert.equal(set.contains("x.cho-zen1").member, false);
+    assert.equal(set.contains("x.cho-zen1").reason, "host not listed");
+    assert.equal(set.contains("deep.x.cho-zen1").member, false);
+
+    const g = ScopeGuard.fromVerifiedRecord({ verifiedScope: ["Cho-zen1"] });
+    const v = g.checkHost("x.cho-zen1");
+    assert.equal(v.allowed, false, "x.cho-zen1 was never attested");
+    assert.equal(v.kind, "allow");
+    assert.match(v.reason, /host not listed/);
+    assert.equal(g.checkHost("cho-zen1").allowed, true, "the attested host itself stays allowed");
+  });
+
+  it("L8: the attested bare host still allows itself in the dd7e084a normalisation forms", () => {
+    // Case forms of the attested entry and of the checked host.
+    for (const entry of ["Cho-zen1", "CHO-ZEN1", "cho-zen1"]) {
+      const { set } = HostSet.fromAttestedEntries([entry]);
+      assert.equal(set.contains("Cho-zen1").member, true, entry);
+      assert.equal(set.contains("cho-zen1").member, true, entry);
+      assert.equal(set.contains("cho-zen1.").member, true, `${entry} (trailing root dot)`);
+      assert.equal(set.contains("x.cho-zen1").member, false, entry);
+    }
+    // Scheme / port / path forms of the attested entry place the same exact host.
+    for (const entry of ["https://Cho-zen1:8443/path", "Cho-zen1:3389", "http://cho-zen1/"]) {
+      const { set, skipped } = HostSet.fromAttestedEntries([entry]);
+      assert.deepEqual(skipped, [], entry);
+      assert.equal(set.contains("cho-zen1").member, true, entry);
+      assert.equal(set.contains("x.cho-zen1").member, false, entry);
+    }
+  });
+
+  it("L8: an explicitly declared domain still allows its subdomains (attested dotted entries and ROE entries alike)", () => {
+    const attested = HostSet.fromAttestedEntries(["acme.com"]).set;
+    assert.equal(attested.exactHosts.has("acme.com"), false, "a dotted attested domain is not exact-only");
+    assert.equal(attested.contains("acme.com").member, true);
+    assert.equal(attested.contains("api.acme.com").member, true);
+    assert.equal(attested.contains("deep.api.acme.com").member, true);
+
+    const declared = HostSet.fromEntries(["acme.com"]).set;
+    assert.equal(declared.contains("api.acme.com").member, true);
+
+    const g = ScopeGuard.fromVerifiedRecord({ verifiedScope: ["acme.com"] });
+    assert.equal(g.checkHost("api.acme.com").allowed, true);
+  });
 });
 
 describe("verified record — attested underscore hostnames (L9)", () => {
@@ -616,6 +664,67 @@ describe("authorize phase — stamps the verified record the guard derives from"
     const guard = scopeGuardFor(ctx);
     assert.equal(guard.checkHost("api.example.com").allowed, true, "the attested host stays in scope");
     assert.equal(guard.checkHost("mutated.example.org").allowed, false, "the unattested host stays out of scope");
+  });
+
+  it("L7: ROE entries authorize never checked are absent from the stamped verifiedScope, verified entries present", async () => {
+    // ctx.hosts is the checked set (run.ts builds it with scopeHosts
+    // over the ROE; checkScopeAuthorization runs over exactly it). The
+    // ROE below carries two entries that never became checked hosts:
+    // an unparseable product name scopeHosts drops outright, and a
+    // well-formed host that is not in the checked list. Neither was
+    // verified, so neither may be stamped as attested.
+    const ctx = {
+      domain: "example.com",
+      hosts: ["example.com", "api.example.com"],
+      input: {
+        mode: "red",
+        objective: "stamp only checked entries",
+        operatorName: "Test Operator",
+        roe: {
+          scope: ["example.com", "api.example.com", "Acme iOS app", "never-checked.example.org"],
+          outOfScope: [] as string[],
+        },
+      },
+      config: { testMode: false, verifyViaService: false, mcpEndpoint: "", mcpToken: "", localSandbox: false },
+      deps: {},
+      events: {
+        append: () => undefined,
+        updateState: () => undefined,
+      },
+    } as unknown as Ctx;
+
+    const verdict = await authorizePhase(ctx);
+    assert.equal(verdict.allowed, true);
+    assert.deepEqual(ctx.verifiedScope, ["example.com", "api.example.com"]);
+    assert.ok(!ctx.verifiedScope?.includes("Acme iOS app"), "the unparseable entry is not stamped");
+    assert.ok(!ctx.verifiedScope?.includes("never-checked.example.org"), "the unchecked host is not stamped");
+
+    const guard = scopeGuardFor(ctx);
+    assert.equal(guard.checkHost("api.example.com").allowed, true, "a verified entry stays in scope");
+    assert.equal(guard.checkHost("never-checked.example.org").allowed, false, "the unchecked host does not enter the guard");
+  });
+
+  it("L7: kept entries stay in their raw ROE form (case preserved) when their host was checked", async () => {
+    const ctx = {
+      domain: "cho-zen1",
+      hosts: ["cho-zen1"],
+      input: {
+        mode: "red",
+        objective: "raw form preservation",
+        operatorName: "Test Operator",
+        roe: { scope: ["Cho-zen1"], outOfScope: [] as string[] },
+      },
+      config: { testMode: false, verifyViaService: false, mcpEndpoint: "", mcpToken: "", localSandbox: false },
+      deps: {},
+      events: {
+        append: () => undefined,
+        updateState: () => undefined,
+      },
+    } as unknown as Ctx;
+
+    const verdict = await authorizePhase(ctx);
+    assert.equal(verdict.allowed, true);
+    assert.deepEqual(ctx.verifiedScope, ["Cho-zen1"]);
   });
 
 });

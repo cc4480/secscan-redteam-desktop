@@ -3,6 +3,8 @@
  * rules of zimzilla/scope.py's HostSet: a hostname matches a listed
  * domain exactly or as a subdomain of it; an IP matches a listed IP
  * exactly or any CIDR that contains it (address family must match).
+ * One runner-side narrowing: a bare hostname attested through
+ * HostSet.fromAttestedEntries matches exactly only (see exactHosts).
  * Membership is polarity-neutral — the caller decides what a match
  * means for its list, which is what stops the allow and deny lists from
  * silently inverting each other. Loopback/localhost is infrastructure,
@@ -65,6 +67,18 @@ const ATTESTED_HOSTNAME_RE = /^(?!-)[a-z0-9_-]{1,63}(?:\.[a-z0-9_-]{1,63})*$/;
 /** A parsed set of domains, IPs and CIDRs, with the Python matching rules. */
 export class HostSet {
   readonly domains: Set<string> = new Set();
+  /**
+   * Domains that match EXACTLY only — never as a parent of a subdomain.
+   * Populated only by {@link HostSet.fromAttestedEntries} for attested
+   * BARE hostnames (one dotless label, e.g. a machine name): attesting
+   * `cho-zen1` attests that machine, not every `x.cho-zen1` beneath it.
+   * Such hosts also stay in {@link HostSet.domains} (their placement set,
+   * as dd7e084a established); this set is the kind flag {@link HostSet.contains}
+   * consults to withhold subdomain matching from them. Entries placed as
+   * domains by any other path (declared ROE/file domains, wildcards,
+   * dotted attested entries) are absent here and keep subdomain matching.
+   */
+  readonly exactHosts: Set<string> = new Set();
   readonly ips: Set<string> = new Set();
   readonly cidrs: ParsedNetwork[] = [];
 
@@ -168,6 +182,14 @@ export class HostSet {
    * every local-host engagement. Entries that are neither classifiable
    * nor valid hostnames stay skipped and reported.
    *
+   * A placed BARE hostname (no dot) is also recorded in
+   * {@link HostSet.exactHosts}: it was attested as one machine's name,
+   * so it matches exactly only — `x.<host>` is a different host the
+   * attestation never named, and subdomain matching for it would widen
+   * the attestation. A dotted entry placed by this fallback keeps plain
+   * domain placement (subdomain matching), as do all entries
+   * {@link HostSet.fromEntries} classified as domains.
+   *
    * @param entries - The attested entries from the engagement record.
    * @returns The populated set plus the entries that could not be placed.
    */
@@ -176,8 +198,10 @@ export class HostSet {
     const unplaced: string[] = [];
     for (const raw of skipped) {
       const host = HostSet.normaliseHost(raw);
-      if (host && !IPV4_RE.test(host) && ATTESTED_HOSTNAME_RE.test(host)) set.domains.add(host);
-      else unplaced.push(raw);
+      if (host && !IPV4_RE.test(host) && ATTESTED_HOSTNAME_RE.test(host)) {
+        set.domains.add(host);
+        if (!host.includes(".")) set.exactHosts.add(host);
+      } else unplaced.push(raw);
     }
     return { set, skipped: unplaced };
   }
@@ -214,7 +238,8 @@ export class HostSet {
    * Membership test, polarity-neutral (Python `HostSet.contains`): the
    * caller decides what a match means for its list. Loopback/localhost is
    * never a member of any set. Hostnames match exactly or as a subdomain
-   * of a listed domain; IPs match exactly or by CIDR containment.
+   * of a listed domain — except attested bare hostnames (exactHosts),
+   * which match exactly only; IPs match exactly or by CIDR containment.
    *
    * @param host - The host or IP to test (case-insensitive; trailing root
    *   dot and IPv6 brackets are stripped).
@@ -236,6 +261,10 @@ export class HostSet {
 
     if (this.domains.has(h)) return { member: true, reason: "listed domain" };
     for (const dom of this.domains) {
+      // An attested bare hostname (exactHosts) is one machine, not a
+      // domain suffix: it already matched exactly above, and a
+      // subdomain of it is a different, unattested host.
+      if (this.exactHosts.has(dom)) continue;
       if (h === dom || h.endsWith(`.${dom}`)) return { member: true, reason: `subdomain of ${dom}` };
     }
     return { member: false, reason: "host not listed" };
