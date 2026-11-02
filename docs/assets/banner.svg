@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 340" role="img" aria-label="SecScan RedTeam">
+  <title>SecScan RedTeam — autonomous, ownership-verified red-team agents</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1A050B"/>
+      <stop offset="0.55" stop-color="#0D0710"/>
+      <stop offset="1" stop-color="#07070C"/>
+    </linearGradient>
+    <linearGradient id="rt-red" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F43F5E"/>
+      <stop offset="1" stop-color="#BE123C"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.16" cy="0.5" r="0.55">
+      <stop offset="0" stop-color="#E11D48" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#E11D48" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="340" fill="url(#bg)"/>
+  <rect width="1280" height="340" fill="url(#glow)"/>
+  <!-- faint grid -->
+  <g stroke="#F43F5E" stroke-opacity="0.07" stroke-width="1">
+    <path d="M0 68 H1280 M0 136 H1280 M0 204 H1280 M0 272 H1280"/>
+    <path d="M256 0 V340 M512 0 V340 M768 0 V340 M1024 0 V340"/>
+  </g>
+  <!-- the diamond mark -->
+  <g transform="translate(88 55)">
+    <path d="M115 5 L209 29 V109 L115 215 L21 109 V29 Z" fill="url(#rt-red)"/>
+    <path d="M115 40 L180 56 V102 L115 180 L50 102 V56 Z" fill="#0B0F1A"/>
+    <g stroke="#38BDF8" stroke-width="8" fill="none">
+      <circle cx="115" cy="110" r="26"/>
+      <path d="M115 66 V92 M115 128 V154 M71 110 H97 M133 110 H159"/>
+    </g>
+    <circle cx="115" cy="110" r="7" fill="#38BDF8"/>
+  </g>
+  <!-- wordmark -->
+  <text x="360" y="148" font-family="Montserrat, 'Segoe UI', Arial, sans-serif" font-size="76" font-weight="700" letter-spacing="1">
+    <tspan fill="#F8FAFC">SecScan</tspan><tspan fill="#F43F5E"> RedTeam</tspan>
+  </text>
+  <rect x="364" y="172" width="560" height="4" fill="url(#rt-red)"/>
+  <text x="364" y="222" font-family="Montserrat, 'Segoe UI', Arial, sans-serif" font-size="27" font-weight="500" fill="#CBD5E1">Autonomous red-team agents — ownership-verified, proof-gated.</text>
+  <text x="364" y="262" font-family="Montserrat, 'Segoe UI', Arial, sans-serif" font-size="21" font-weight="400" fill="#8A94A6">A fleet of AI agents that plans, exploits, and proves — graded on evidence, not claims.</text>
+  <text x="364" y="306" font-family="Montserrat, 'Segoe UI', Arial, sans-serif" font-size="18" font-weight="600" letter-spacing="2" fill="#F43F5E">POWERED BY MUSE SPARK · META MODEL API</text>
+</svg>
