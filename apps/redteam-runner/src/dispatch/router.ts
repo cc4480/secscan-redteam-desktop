@@ -169,6 +169,47 @@ export async function dispatchTool(ctx: Ctx, role: ActorRole, phase: EngagementP
   // post-hooks — all audited individually. A denial sends nothing.
   const gate = await preDispatchGate(ctx, phase, call, host);
   if (gate.denial) return gate.denial;
+  // The pre-execute hook may rewrite the arguments, and the REWRITTEN call is the
+  // one that executes (gate.call, below). Tier, scope, duplicate, lockout and
+  // variant checks above all keyed on the original call, so a rewrite could
+  // smuggle an out-of-scope url or a credential attempt past every one of them.
+  // Re-run the perimeter checks on the call that will actually go out.
+  const rewrittenArgs = JSON.stringify(gate.call.arguments ?? {});
+  const originalArgs = JSON.stringify(call.arguments ?? {});
+  const rewrittenHost = toolTargetHost(gate.call);
+  if (rewrittenArgs !== originalArgs || rewrittenHost !== host) {
+    const rewriteScope = checkScopeGate(ctx, phase, gate.call, rewrittenHost);
+    if (rewriteScope) {
+      ctx.events.append({
+        phase,
+        actor: 'runner',
+        action: 'hook_rewrite_refused',
+        target: rewrittenHost ?? host,
+        result:
+          `A pre-execute hook rewrote ${call.name}'s arguments into a target the scope gate refuses; `
+          + `the call was NOT executed over the rewritten form. ${rewriteScope.result ?? ''}`.trim(),
+      });
+      return rewriteScope;
+    }
+    // A rewrite can also turn a benign call into a credential attempt, which the
+    // interlock above classified from the original arguments.
+    const rewrittenCls = classifyCredentialAttempt(gate.call);
+    const effectiveHost = rewrittenHost ?? host;
+    if (rewrittenCls.kind !== 'none' && effectiveHost && (lockoutCls === undefined || lockoutCls.kind === 'none')) {
+      const rewriteVerdict = lockoutGuardFor(ctx).check(effectiveHost, rewrittenCls, gate.call.name);
+      if (!rewriteVerdict.allowed) {
+        ctx.events.append({
+          phase,
+          actor: 'runner',
+          action: 'hook_rewrite_refused',
+          target: effectiveHost,
+          result: `A pre-execute hook rewrote ${call.name} into a credential attempt the lockout interlock refuses; the call was NOT executed. ${rewriteVerdict.refusal ?? ''}`.trim(),
+        });
+        return { result: rewriteVerdict.refusal!, target: effectiveHost };
+      }
+    }
+  }
+
   // Per-call dispatch deadline (dispatch/timeout.ts): the controller is
   // armed BEFORE the handler chain runs and its signal is passed down to
   // the executing handlers, so at the budget the abort reaches the
