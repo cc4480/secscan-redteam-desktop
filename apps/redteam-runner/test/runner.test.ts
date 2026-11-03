@@ -5,9 +5,10 @@
  */
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, rmSync, mkdtempSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { strFromU8, unzipSync } from "fflate";
 import {
   checkAuthorization,
   inBlackout,
@@ -19,6 +20,7 @@ import { readEvents, readState } from "../src/events.js";
 import { validateProbeTarget, isPrivateOrLoopbackHost, WebProber } from "../src/prober.js";
 import { resolveExcludedTechniques, defaultExcludedForMode, ALWAYS_EXCLUDED } from "../src/attack.js";
 import { runEngagement, resolveConfig } from "../src/phases.js";
+import type { ReportModel } from "../src/report/deliverables.js";
 import type { EngagementInput } from "../src/types.js";
 
 const noVerify = async () => false;
@@ -259,6 +261,47 @@ describe("runEngagement gating (dry-run agents, fake gate)", () => {
     // tail-after-seq works (console polling)
     const tail = readEvents(engDir, events[0]!.seq);
     assert.equal(tail.length, events.length - 1);
+  });
+
+  it("a dry-run completed close stamps artifactUnsigned dry-run in state, report.json and the package zip — exactly one stamp, no signoff (S6-H2b)", async () => {
+    const res = await runEngagement(input("red"), opts(yesVerify));
+    assert.equal(res.status, "complete");
+    assert.equal(res.deliverableFailed, undefined);
+    const engDir = join(dir, res.engagementId);
+    const state = readState(engDir);
+    assert.equal(state?.status, "complete");
+    assert.equal(state?.artifactSignoff, null, "a dry run carries no signoff in state");
+    assert.equal(state?.artifactUnsigned?.reason, "dry-run");
+    assert.deepEqual(state?.artifactUnsigned?.defects, []);
+    assert.equal(state?.artifactUnsigned?.cycles, 0);
+    assert.ok(state?.artifactUnsigned?.at && !Number.isNaN(Date.parse(state.artifactUnsigned.at)), "the stamp carries a timestamp");
+    const model = JSON.parse(readFileSync(join(engDir, "report.json"), "utf8")) as ReportModel;
+    assert.equal(model.artifactSignoff, null);
+    assert.deepEqual(model.artifactUnsigned, state?.artifactUnsigned, "report.json carries the same dry-run stamp as state");
+    const zip = unzipSync(readFileSync(join(engDir, "report-package.zip")));
+    const packagedEntry = zip["report.json"];
+    assert.ok(packagedEntry, "the package zip carries report.json");
+    const packaged = JSON.parse(strFromU8(packagedEntry)) as ReportModel;
+    assert.equal(packaged.artifactSignoff, null);
+    assert.deepEqual(packaged.artifactUnsigned, state?.artifactUnsigned, "the zip's report.json carries the dry-run stamp");
+    const events = readEvents(engDir);
+    assert.equal(events.filter((e) => e.action === "artifact_unsigned").length, 1, "exactly one unsigned stamp event");
+    assert.ok(!events.some((e) => e.action === "artifact_signed"), "no signature event on a dry run");
+    const gateOutcome = events.find((e) => e.action === "scribe_gate_outcome");
+    assert.ok(gateOutcome?.result.includes("shipped unsigned (dry-run) after 0"), "the gate outcome event names the dry-run stamp");
+  });
+
+  it("a blocked dry-run close is never gated: no Scribe stamp in state or report.json (guard, passes on base)", async () => {
+    const res = await runEngagement(input("red"), opts(noVerify));
+    assert.equal(res.status, "blocked");
+    const engDir = join(dir, res.engagementId);
+    const state = readState(engDir);
+    assert.equal(state?.artifactSignoff ?? null, null);
+    assert.equal(state?.artifactUnsigned ?? null, null);
+    const model = JSON.parse(readFileSync(join(engDir, "report.json"), "utf8")) as ReportModel;
+    assert.equal("artifactSignoff" in model, false, "a blocked close gains no signoff key");
+    assert.equal("artifactUnsigned" in model, false, "a blocked close gains no unsigned key");
+    assert.ok(!readEvents(engDir).some((e) => e.action === "scribe_gate_outcome"), "the gate never ran on a blocked close");
   });
 
   it("completes on the engagement record's attestation when no verifier is injected (the in-house default)", async () => {

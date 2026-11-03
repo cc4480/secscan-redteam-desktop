@@ -2,7 +2,7 @@
  * SCRIBE GATE — the publisher seat's close-out review (Carlos's order,
  * 2026-11-01; spec: scribe-artifact-owner-spec-2026-11-01.md).
  *
- * At a completed close (never halted/blocked/dry-run — those keep the
+ * At a completed close (never halted/blocked — those keep the
  * mechanical close), the Scribe re-reads its own finished deliverable
  * set against the report model and returns a structured verdict:
  *
@@ -19,6 +19,10 @@
  *              unavailability reason) in state + report.json, in the
  *              same honesty class as `deliverableFailed` — it never
  *              reads as approved when it was not.
+ *  - dry-run  → no review runs (a dry run has no agents to review
+ *              with), but the close is still a completed close, so the
+ *              set ships UNSIGNED with reason `dry-run` — exactly one
+ *              stamp, as the deliverables contract requires.
  *
  * The gate never blocks the close and never fabricates a verdict: a
  * thrown provider error (after the chartered seam's own containment) or
@@ -168,8 +172,9 @@ function stampUnsigned(ctx: Ctx, unsigned: ArtifactUnsigned, cause: string): voi
 /**
  * The Scribe gate: review the closing deliverable set, sign it, or
  * reject-and-rewrite within the cycle budget, else ship it unsigned.
- * Runs only at a completed close; dry runs return immediately, and
- * halted/blocked ends never reach it (their close stays mechanical).
+ * Runs only at a completed close; a dry run stamps the set UNSIGNED
+ * (reason `dry-run`, no review) and returns, and halted/blocked ends
+ * never reach it (their close stays mechanical).
  *
  * @param ctx - the engagement context, after the report phase
  * @param opts - test seam: the regeneration step (defaults to
@@ -180,7 +185,15 @@ export async function scribeGate(
   ctx: Ctx,
   opts: { regenerate?: (dir: string) => void } = {},
 ): Promise<ScribeGateOutcome> {
-  if (ctx.config.dryRunAgents) return { signed: false, cycles: 0, reason: 'dry-run' }
+  if (ctx.config.dryRunAgents) {
+    // S6-H2b: a dry run closes as "complete", and the deliverables
+    // contract stamps exactly one of signoff/unsigned on a completed
+    // close — so the dry-run branch stamps the unsigned record through
+    // the same stamp the other unsigned paths use (state + report.json
+    // + the package zip re-fire), instead of returning stamp-free.
+    stampUnsigned(ctx, { reason: 'dry-run', defects: [], cycles: 0, at: new Date().toISOString() }, 'a dry run runs no review seat.')
+    return { signed: false, cycles: 0, reason: 'dry-run' }
+  }
   const dir = ctx.events.dir
   const maxCycles = scribeMaxCycles()
   const regenerate = opts.regenerate ?? ((d: string): void => { regenerateReport(d) })

@@ -59,8 +59,8 @@ export interface LiveState {
   /** SCRIBE GATE: the publisher seat's sign-off on the closing set,
    * stamped by report/scribe.ts when the set was signed. */
   artifactSignoff?: ArtifactSignoff | null;
-  /** SCRIBE GATE: why the closing set shipped unsigned (defects or the
-   * seat unavailable), stamped by report/scribe.ts; null when signed. */
+  /** SCRIBE GATE: why the closing set shipped unsigned (defects, the
+   * seat unavailable, or a dry run), stamped by report/scribe.ts; null when signed. */
   artifactUnsigned?: ArtifactUnsigned | null;
 }
 
@@ -90,7 +90,7 @@ export interface ArtifactSignoff {
  * signature — the same honesty class as deliverableFailed: the set must
  * never read as approved when it was not. */
 export interface ArtifactUnsigned {
-  reason: "defects" | "scribe_unavailable";
+  reason: "defects" | "scribe_unavailable" | "dry-run";
   /** The final cycle's defect list (empty when the seat never answered). */
   defects: ScribeDefect[];
   /** Review cycles spent before the set shipped unsigned. */
