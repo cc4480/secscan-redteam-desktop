@@ -41,7 +41,7 @@ import { readHostInventory } from "./host-inventory.js";
 import { renderEngagementReportHtml, type ActivityInput, type CoverageInput, type EngagementReportInput } from "./html/render.js";
 import { buildFindingMeta, stripFindingsJson } from "./html/wire.js";
 import { emitDeliverables, emitFindingsSheet } from "./finding-refs.js";
-import { buildReportModel, finalizeDeliverables, type DeliverablesOutcome, type ReportModel } from "./deliverables.js";
+import { buildReportModel, finalizeDeliverables, restampRecordedSignoff, type DeliverablesOutcome, type ReportModel } from "./deliverables.js";
 
 /** The report-phase marker where runner-computed sections begin in report.md; everything before it is the narrative the phase handed the HTML renderer. */
 const NARRATIVE_CUT = "\n\n---\n\n## Battery coverage (runner-computed)";
@@ -290,5 +290,8 @@ export function regenerateReport(dir: string, opts: { deadEnd?: boolean } = {}):
     ...(model.status === "halted" ? { haltedReason: model.reason ?? "engagement halted" } : {}),
     ...(model.status === "blocked" ? { blockedReason: model.reason } : {}),
   }, mdSource);
-  return finalizeDeliverables(ctx);
+  const outcome = finalizeDeliverables(ctx);
+  // S6-H2c: the fresh model emitDeliverables just wrote carries no Scribe stamp — carry the stamp recorded in state forward into report.json + the package zip, so the regenerated set agrees with state.json.
+  restampRecordedSignoff(ctx, state);
+  return outcome;
 }
