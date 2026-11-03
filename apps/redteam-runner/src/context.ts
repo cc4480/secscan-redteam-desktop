@@ -28,6 +28,7 @@ import { type SearchProvider } from './research/provider.js'
 import { type PolicyRules } from './policy/rules.js'
 import { type ScopeGuard } from './safety/scope-guard.js'
 import { type HookRegistry } from './hooks/index.js'
+import { type SignOffTransition } from './phases/exploit-one.js'
 
 export interface RunnerDeps {
   verify?: (domain: string, cfg: { endpoint: string; token: string }) => Promise<boolean>
@@ -267,8 +268,18 @@ export interface Ctx {
    */
   peerKilledLive: LiveFinding[]
   peerDeferredLive: LiveFinding[]
-  /** Coordinator re-recon redirections used this engagement (max 2). */
-  redirects: number
+  /**
+   * Coordinator sign-off redirects used, per phase gate (S2-H7): each
+   * transition (plan→recon / recon→exploit / exploit→report) spends from
+   * its OWN budget of 2, so one gate's redirects never starve another
+   * gate's first redirect.
+   */
+  redirects: Record<SignOffTransition, number>
+  /**
+   * Mechanical wall redirects used by the exploit agent loop (agents.ts),
+   * on their own budget of 2 — never shared with the sign-off gates.
+   */
+  wallRedirects: number
   /** Consecutive denied/cooled-down/OPSEC-signaled probes — wall detection. */
   deniedStreak: number
   /** The reporter's 2–3 sentence unified operation narrative (console header). */

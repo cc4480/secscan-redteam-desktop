@@ -436,9 +436,9 @@ export async function agentLoop(
         role: 'user',
         content: `REFLECTION (${reflection.count}/${reflection.cap}) — verdict: ${reflection.verdict}: ${reflection.steering}`,
       })
-    } else if (phase === 'exploit' && ctx.deniedStreak >= 4 && ctx.redirects < 2) {
+    } else if (phase === 'exploit' && ctx.deniedStreak >= 4 && ctx.wallRedirects < 2) {
       ctx.deniedStreak = 0
-      ctx.redirects++
+      ctx.wallRedirects++
       const intel = await commanderRedirect(
         ctx,
         'The exploiter hit a wall: 4+ consecutive probes denied, cooled-down, or OPSEC-signaled with no successful observation.',
@@ -497,12 +497,17 @@ export /**
  * (mechanical wall detection) or when the coordinator redirects the
  * recon→exploit handoff. Writes to the shared target map as it goes.
  */
-async function commanderRedirect(ctx: Ctx, reason: string): Promise<string> {
+async function commanderRedirect(ctx: Ctx, reason: string, redirectCount?: number): Promise<string> {
+  // The count shown is the budget the caller just spent from: the wall
+  // counter for a mechanical wall redirect (the default — the wall path
+  // is this function's other caller), or the sign-off gate's own count
+  // when the coordinator's gate redirect ordered the re-recon (S2-H7).
+  const count = redirectCount ?? ctx.wallRedirects
   ctx.events.append({
     phase: 'exploit',
     actor: 'coordinator',
     action: 'redirect_rerecon',
-    result: `Commander redirect (${ctx.redirects}/2): ${reason}`,
+    result: `Commander redirect (${count}/2): ${reason}`,
   })
   const mapLines = ctx.targetMap.map(t => `${t.method} ${t.area}${t.authState ? ` [${t.authState}]` : ''}`).join('; ')
   const intel = await agentLoop(
@@ -520,7 +525,7 @@ async function commanderRedirect(ctx: Ctx, reason: string): Promise<string> {
   )
   ctx.events.append({ phase: 'recon', actor: 'recon', action: 'rerecon_brief', result: intel.slice(0, 800) })
   return (
-    `COMMANDER REDIRECT — re-recon complete (redirect ${ctx.redirects}/2 used). New angles:\n${intel.slice(0, 1200)}\n` +
+    `COMMANDER REDIRECT — re-recon complete (redirect ${count}/2 used). New angles:\n${intel.slice(0, 1200)}\n` +
     `The shared target map now has ${ctx.targetMap.length} entries (see [SHARED STATE]). Form fresh hypotheses from the new angles — do not re-probe cooled-down vectors.`
   )
 }

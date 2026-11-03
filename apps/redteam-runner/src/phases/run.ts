@@ -184,7 +184,8 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
     killedLive: [],
     peerKilledLive: [],
     peerDeferredLive: [],
-    redirects: 0,
+    redirects: { "plan→recon": 0, "recon→exploit": 0, "exploit→report": 0 },
+    wallRedirects: 0,
     deniedStreak: 0,
   };
 

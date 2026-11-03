@@ -35,7 +35,7 @@ export async function coordinatorSignOff(
       `\n\n## SIGN-OFF DUTY — current task\nYou are signing off the phase transition: ${transition}.\n` +
       `Review the material below. Your reply must start with EXACTLY one of:\n` +
       `- \`SIGN-OFF: <one-line summary of what is approved>\` — the operation proceeds.\n` +
-      `- \`REDIRECT: <what must change and which specialist does it>\` — at most 2 redirects per engagement (used: ${ctx.redirects}).\n` +
+      `- \`REDIRECT: <what must change and which specialist does it>\` — at most 2 redirects per gate (used: ${ctx.redirects[transition]} at ${transition}).\n` +
       `Confirm role discipline in one line per specialist, or correct them.`,
     `Transition awaiting sign-off: ${transition}\n\n${payload}`,
     COMMAND_TOOLS,
@@ -43,14 +43,15 @@ export async function coordinatorSignOff(
   );
   ctx.events.append({ phase: "plan", actor: "coordinator", action: "signoff_review", result: `${transition}: ${text.slice(0, 400)}` });
   if (/^\s*REDIRECT\s*:/im.test(text)) {
-    if (ctx.redirects >= 2) {
-      throw new HaltError(`coordinator withheld sign-off for ${transition} after 2 redirects — engagement halted`);
+    const used = ctx.redirects[transition];
+    if (used >= 2) {
+      throw new HaltError(`coordinator withheld sign-off for ${transition} after ${used} redirects — engagement halted`);
     }
     const reason = (text.match(/^\s*REDIRECT\s*:\s*([\s\S]*)/im)?.[1] ?? "commander ordered redirect").trim().slice(0, 500);
-    ctx.redirects++;
+    ctx.redirects[transition] = used + 1;
     ctx.events.append({ phase: "plan", actor: "coordinator", action: "signoff_redirect", result: `${transition}: ${reason}` });
     if (transition === "recon→exploit") {
-      await commanderRedirect(ctx, `Sign-off redirect for ${transition}: ${reason}`);
+      await commanderRedirect(ctx, `Sign-off redirect for ${transition}: ${reason}`, ctx.redirects[transition]);
     } else if (transition === "exploit→report") {
       await focusedExploit(ctx, reason);
     } else {
