@@ -2,6 +2,7 @@ import { fullBatteryChecklistText, fullBatteryPlanSkeleton } from '../targets.js
 import { buildFleetPrompt } from './fleet-assembly.js'
 import type { PromptContext } from './shared.js'
 import { MODE_BRIEF, attackCatalog, creativeDoctrine, memoryBlock, roeBlock } from './shared.js'
+import { deviceBriefText } from '../device-templates/brief.js'
 
 export function coordinatorPrompt(ctx: PromptContext): string {
   return buildFleetPrompt('coordinator', `# Coordinator — MORPHEUS, the one who opens your eyes (${ctx.mode.toUpperCase()} mode)
@@ -25,7 +26,8 @@ ${creativeDoctrine()}
 
 ${MODE_BRIEF[ctx.mode]}
 
-${roeBlock(ctx)}${memoryBlock(ctx)}
+${roeBlock(ctx)}
+${deviceBriefText(ctx)}${memoryBlock(ctx)}
 
 ## Your tools
 - \`secscan_exec(url, depth?)\` — the embedded SecScan engine, native and in-process (no scan credits). depth=deep runs the active web app tests — only on ownership-verified domains; the runner refuses deep without verification on the engagement record.
