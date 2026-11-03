@@ -46,12 +46,8 @@
 import {
   assembleCharterMessages,
   assertLocalOnlyRoute,
-  buildPhaseAnchor,
-  CHARTER_MARKER_QUESTIONS,
-  CHARTER_ROLE_AGENT_ROLE,
   classifyResponse,
   complete,
-  completeWithCharter,
   resolveCharterRoute,
   type AgentRole,
   type CharterEngagement,
@@ -63,11 +59,14 @@ import {
   type ResponseFormat,
   type RoleRoute,
 } from '@secscan/redteam-llm-router'
+import { anchorFor } from './charter-anchor.js'
+import { artifactCheckForPhase, isArtifactPhase } from './charter-artifacts.js'
 import { type Ctx } from './context.js'
 import { callWithPolicyContainment, createFallbackRunner } from './policy-containment.js'
 import { type EngagementPhase } from './types.js'
 
 export { condensedReissueMessages } from './policy-containment.js'
+export { artifactCheckForPhase, isArtifactPhase, reportArtifactCheck } from './charter-artifacts.js'
 
 /** Which charter seat each agent role sits in (inverse of CHARTER_ROLE_AGENT_ROLE). */
 const AGENT_TO_CHARTER: Readonly<Record<AgentRole, CharterRole>> = {
@@ -79,7 +78,6 @@ const AGENT_TO_CHARTER: Readonly<Record<AgentRole, CharterRole>> = {
 }
 
 const engagementCache = new WeakMap<Ctx, CharterEngagement>()
-const anchorCache = new WeakMap<Ctx, Map<string, Promise<string | undefined>>>()
 
 /**
  * The charter engagement record for one run, filled from what the runner
@@ -131,59 +129,6 @@ export interface CharteredCallOptions {
   artifactCheck?: (text: string) => boolean
 }
 
-/**
- * M6: the phases whose chartered calls must produce an artifact — the
- * report phase (the report document, the Scribe's authored HTML, the
- * scribe/peer-review verdict JSON). Every createCharteredComplete
- * caller that serves the report phase passes 'report' (report/phase.ts
- * via agentLoop, report/scribe.ts, report/scribe-html.ts,
- * phases/peer-review.ts), so the flag originates here, from the phase
- * the factory was built for, not from a per-call guess.
- *
- * @param phase - the phase a chartered completion serves
- * @returns true when that phase's calls are artifact-producing tasks
- */
-export function isArtifactPhase(phase: EngagementPhase): boolean {
-  return phase === 'report'
-}
-
-/**
- * M6: the default artifact check for an artifact phase's response: the
- * text carries a complete HTML document (Scribe-authored report.html),
- * a parseable JSON object (a whole-text verdict, or a fenced ```json
- * block — the report's findings block), or a markdown report heading.
- * Cooperative prose with none of these is not the artifact.
- *
- * @param text - the response text to check
- * @returns true when the text carries an artifact in a required format
- */
-export function reportArtifactCheck(text: string): boolean {
-  const trimmed = text.trim()
-  if (trimmed === '') return false
-  if (/<!DOCTYPE html/i.test(trimmed) && /<\/html>/i.test(trimmed)) return true
-  const fenced = /```json\s*\n([\s\S]*?)```/.exec(trimmed)
-  for (const candidate of [trimmed, fenced?.[1]?.trim() ?? '']) {
-    if (!candidate.startsWith('{')) continue
-    try {
-      const parsed: unknown = JSON.parse(candidate)
-      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) return true
-    } catch {
-      // Not JSON — fall through to the remaining formats.
-    }
-  }
-  return /^#{1,3}\s+\S/m.test(trimmed)
-}
-
-/**
- * M6: the phase-derived artifact check paired with {@link isArtifactPhase}.
- *
- * @param phase - the phase a chartered completion serves
- * @returns the artifact check for artifact phases, or undefined
- */
-export function artifactCheckForPhase(phase: EngagementPhase): ((text: string) => boolean) | undefined {
-  return isArtifactPhase(phase) ? reportArtifactCheck : undefined
-}
-
 /** Injectable provider seam for tests; production uses the router registry. */
 export interface CharteredCallSeams {
   /** Raw provider call for one resolved route. */
@@ -195,101 +140,6 @@ export interface CharteredCallSeams {
 }
 
 type CompleteForRole = (role: AgentRole, messages: ChatMessage[], opts?: CharteredCallOptions) => Promise<ChatResult>
-
-async function elicitAnchor(
-  ctx: Ctx,
-  phase: EngagementPhase,
-  role: CharterRole,
-  engagement: CharterEngagement,
-  seams: CharteredCallSeams,
-): Promise<string | undefined> {
-  const questionList = CHARTER_MARKER_QUESTIONS.map(q => `${q.key}: ${q.question}`).join('\n')
-  const prompt =
-    'Before this phase begins, answer the four charter marker questions from the engagement record. ' +
-    `Reply with exactly one line per question, in the form "<key>: <answer>", no other text.\n${questionList}`
-  try {
-    const rawCall =
-      seams.elicitationCall ??
-      ((eng: CharterEngagement, r: CharterRole, msgs: ChatMessage[]) =>
-        completeWithCharter({ engagement: eng, role: r, messages: msgs }))
-    // L1: the elicitation call runs under the same thrown-policy
-    // containment as every other chartered call in this file
-    // (callWithPolicyContainment) — a provider that throws its safety
-    // rejection here is re-issued once condensed with the engagement
-    // record, then routed into the §3 fallback chain, instead of the
-    // rejection landing straight in the catch below as a missing
-    // anchor. Non-policy errors still propagate to that catch, exactly
-    // as before. The fallback runner's elicitAnchor is a no-op: the
-    // anchor is what is being elicited, so it cannot elicit itself.
-    const messages: ChatMessage[] = [{ role: 'user', content: prompt }]
-    const route = resolveCharterRoute(role)
-    const agentRole = CHARTER_ROLE_AGENT_ROLE[role]
-    const runFallback = createFallbackRunner({
-      ctx,
-      phase,
-      role: agentRole,
-      charterRole: role,
-      engagement,
-      messages,
-      resolvedRoute: route,
-      fallbackCall: seams.fallbackCall,
-      elicitAnchor: async () => undefined,
-    })
-    const contained = await callWithPolicyContainment({
-      call: async (_route: RoleRoute, msgs: ChatMessage[]) => rawCall(engagement, role, msgs),
-      route,
-      messages,
-      opts: {},
-      engagement,
-      ctx,
-      phase,
-      role: agentRole,
-      runFallback,
-    })
-    const res = contained.result
-    const answers: Record<string, string> = {}
-    for (const line of (res.text ?? '').split('\n')) {
-      const m = /^(engagement|scope|objective|artifact):\s*(.+)$/.exec(line.trim())
-      if (m) answers[m[1]] = m[2].trim()
-    }
-    const anchor = buildPhaseAnchor(answers as Parameters<typeof buildPhaseAnchor>[0])
-    ctx.events.append({
-      phase,
-      actor: 'runner',
-      action: 'phase_anchor',
-      result: `Phase anchor elicited for ${phase} (${role}): ${anchor.split('\n').join(' | ').slice(0, 300)}`,
-    })
-    return anchor
-  } catch (err) {
-    ctx.events.append({
-      phase,
-      actor: 'runner',
-      action: 'phase_anchor_missing',
-      result: `Phase ${phase} starts without a recorded anchor (spec flag): ${(err as Error).message}`,
-    })
-    return undefined
-  }
-}
-
-function anchorFor(
-  ctx: Ctx,
-  phase: EngagementPhase,
-  role: CharterRole,
-  engagement: CharterEngagement,
-  seams: CharteredCallSeams,
-): Promise<string | undefined> {
-  let byPhase = anchorCache.get(ctx)
-  if (!byPhase) {
-    byPhase = new Map()
-    anchorCache.set(ctx, byPhase)
-  }
-  let pending = byPhase.get(phase)
-  if (!pending) {
-    pending = elicitAnchor(ctx, phase, role, engagement, seams)
-    byPhase.set(phase, pending)
-  }
-  return pending
-}
 
 /**
  * First line of the filled charter, as assembled by the router's

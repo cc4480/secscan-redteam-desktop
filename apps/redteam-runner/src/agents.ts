@@ -6,6 +6,7 @@
  * model output, and commanderRedirect / blackout / halt plumbing keeps the
  * loop bounded and safe. HaltError is the loop's stop signal.
  */
+
 import {
   ResilienceError,
   describeErrorCause,
@@ -14,126 +15,36 @@ import {
   type ChatResult,
   type JsonSchemaTool,
   type ResponseFormat,
-  type ToolCallRequest,
 } from '@secscan/redteam-llm-router'
 import { createCharteredComplete } from './charter-completion.js'
 import { TurnIntegrity, type DeliverableSpec, type RoundCaps } from './turn-integrity.js'
 import { Reflector } from './reflector.js'
-import { spillToolResult } from './tool-spill.js'
-import { inBlackout } from './gate.js'
-import { isPrivateOrLoopbackHost } from './prober.js'
-import { reconPrompt, type PromptContext } from './prompts.js'
-import { verifiedRecordFor } from './prompts/fleet-assembly.js'
+import { reconPrompt } from './prompts.js'
 import { redactPii } from './safety/index.js'
 import { tokenMeterFor } from './harness2/trajectory-normalize.js'
-import { stepJournalFor, responseTokens, TOOL_ERROR_PREFIX } from './harness2/steps.js'
+import { stepJournalFor, responseTokens } from './harness2/steps.js'
 import { type EngagementPhase } from './types.js'
 import { HaltError, type Ctx } from './context.js'
-import { sleep } from './util.js'
-import { partitionToolCalls, executeToolGroup } from './dispatch/parallel-batch.js'
-import { dispatchTool } from './dispatch/router.js'
 import { withBridgeTools } from './dispatch/bridge-gate.js'
-import { type DispatchResult } from './dispatch/types.js'
 import { maybeCompactMessages } from './compaction/compact.js'
-import { toolTargetHost } from './dispatch/target-host.js'
-import { sharedStateDigest } from './coverage/cells.js'
-import { memoryStateFor } from './memory/lifecycle.js'
 import { RECON_TOOLS } from './tools.js'
+import { DEFAULT_REPAIR_CAP, budgetExhausted, respectBlackout, safetyHalt } from './agents-budget.js'
+import { createRepairExchange, type RepairBudget } from './agents-repair.js'
+import { runToolBatch } from './agents-toolbatch.js'
+import { promptCtx } from './agents-prompt-ctx.js'
 
-// ---------------------------------------------------------------------------
-// Stop-condition plumbing
-// ---------------------------------------------------------------------------
-
-async function respectBlackout(ctx: Ctx, phase: EngagementPhase): Promise<void> {
-  const w = inBlackout(new Date(), ctx.input.roe.blackoutWindows)
-  if (!w) return
-  ctx.events.append({
-    phase,
-    actor: 'runner',
-    action: 'blackout_pause',
-    result: `Entering blackout window ${w.start}–${w.end}${w.tz ? ` ${w.tz}` : ''}. No traffic until it ends.`,
-  })
-  for (;;) {
-    await sleep(30_000)
-    if (!inBlackout(new Date(), ctx.input.roe.blackoutWindows)) break
-  }
-  ctx.events.append({ phase, actor: 'runner', action: 'blackout_resume', result: 'Blackout window ended. Resuming.' })
-}
-
-/**
- * Q-NOHALT — a SAFETY halt, and the only cap that may still throw.
- *
- * Three consecutive 5xx is evidence of production impact: continuing would
- * keep hitting a service that is already failing, so the run stops
- * deliberately and the report says why. Nothing else in this module halts.
- */
-function safetyHalt(ctx: Ctx): string | null {
-  if (ctx.consecutive5xx >= 3) return 'three consecutive 5xx responses — possible production impact, halting'
-  return null
-}
-
-/**
- * Q-NOHALT — a BUDGET stop, not a halt.
- *
- * The action and duration caps are configured limits, not target conditions.
- * Hitting one means the engagement ran out of its allowance, so the phase
- * closes with the work already done and the battery records what is still
- * pending — the run finishes and reports. Throwing HaltError here used to
- * discard a whole engagement because a clock or a counter expired.
- */
-function budgetExhausted(ctx: Ctx): string | null {
-  if (ctx.actions >= ctx.config.maxActions) return `action cap reached (${ctx.config.maxActions})`
-  if (Date.now() - ctx.startedAt >= ctx.config.maxDurationMs) return 'duration cap reached'
-  return null
-}
+// The public surface of this module is unchanged by the structural split:
+// the stop conditions + repair cap live in agents-budget.ts, the repair
+// exchange in agents-repair.ts, one turn's tool processing in
+// agents-toolbatch.ts, and the phase prompt context in agents-prompt-ctx.ts.
+export { DEFAULT_REPAIR_CAP } from './agents-budget.js'
+export { promptCtx } from './agents-prompt-ctx.js'
 
 // ---------------------------------------------------------------------------
 // The agent loop: REASON → ACT → OBSERVE, bounded
 // ---------------------------------------------------------------------------
 
 export type { DeliverableSpec, RoundCaps } from './turn-integrity.js'
-
-/** Default tool-call repair budget per agentLoop invocation (RC Item 6). */
-export const DEFAULT_REPAIR_CAP = 3
-
-/**
- * The repair steering for one tagged result: the defect, the tool's
- * schema, and the original arguments, per the Item 6 design. The model
- * answers with exactly one corrected call; the name may change only for
- * an unknown-tool defect, and then only to an offered tool.
- */
-function buildRepairPrompt(
-  call: ToolCallRequest,
-  d: DispatchResult,
-  tools: JsonSchemaTool[],
-  spent: number,
-  cap: number,
-): string {
-  const defect = d.repairable ?? ''
-  const unknownTool = defect.startsWith('unknown tool')
-  const lines: string[] = [
-    `TOOL-CALL REPAIR (${spent}/${cap}) — a tool call was refused before it executed because the call itself was malformed. ` +
-      'This is a call-shape defect, not a policy denial: fix the call and it runs again through every gate.',
-    `Tool called: ${call.name}`,
-    `Defect: ${defect}`,
-    `Original arguments: ${JSON.stringify(call.arguments ?? {})}`,
-    `The tool answered: ${d.result}`,
-  ]
-  if (unknownTool) {
-    lines.push('The tool name itself is not one of the offered tools. Answer with the offered tool you actually meant, with corrected arguments.')
-    for (const t of tools) lines.push(`Offered tool ${t.name}: ${t.description} Parameters: ${JSON.stringify(t.parameters)}`)
-  } else {
-    const tool = tools.find(t => t.name === call.name)
-    if (tool) lines.push(`Schema for ${tool.name}: ${tool.description} Parameters: ${JSON.stringify(tool.parameters)}`)
-    lines.push(`Keep the tool name (${call.name}) — only the arguments may change.`)
-  }
-  lines.push(
-    'Change nothing beyond what the defect requires: same target, same intent. ' +
-      'Scope, tier, duplicate, and safety gates all re-run on the corrected call, and a corrected call that trips them is refused for good. ' +
-      'Reply with exactly one corrected tool call.',
-  )
-  return lines.join('\n')
-}
 
 export async function agentLoop(
   ctx: Ctx,
@@ -205,75 +116,14 @@ export async function agentLoop(
     tokenMeterFor(ctx).record(res.usage)
     return res.text
   }
-  // Tool-call repair (RC Item 6): a dispatch result tagged `repairable`
-  // (a call-shape defect from the handlers' closed list — never a policy
-  // denial) earns its call ONE bounded repair exchange before tallies:
-  // a side-channel completion that sees the original call and its result
-  // first (API validity), then the steering (defect + schema + original
-  // arguments). The corrected call re-runs through dispatchTool — all
-  // gates — and on success the corrected result is the effective result
-  // the bookkeeping below carries. Every attempt is a `tool_repair`
-  // event (model-visible ⟺ logged). The budget is per loop invocation;
-  // a repair answer with no tool call closes repair for the rest of the
-  // loop — the model, asked to correct its call, declined to.
-  const repairCap = opts.repairCap ?? DEFAULT_REPAIR_CAP
-  let repairsSpent = 0
-  let repairClosed = false
-  const attemptRepair = async (call: ToolCallRequest, d: DispatchResult): Promise<DispatchResult> => {
-    repairsSpent++
-    const defect = d.repairable ?? ''
-    const unknownTool = defect.startsWith('unknown tool')
-    const logRepair = (outcome: string, detail: string): void => {
-      ctx.events.append({
-        phase,
-        actor: 'runner',
-        action: 'tool_repair',
-        target: d.target,
-        result: `tool_repair (${repairsSpent}/${repairCap}) outcome=${outcome} — ${detail}`,
-      })
-    }
-    let res: ChatResult
-    try {
-      res = await complete(role, [
-        { role: 'system', content: system },
-        { role: 'assistant', content: '(tool calls)', toolCalls: [call] },
-        { role: 'tool', toolCallId: call.id, content: d.result },
-        { role: 'user', content: buildRepairPrompt(call, d, tools, repairsSpent, repairCap) },
-      ], { tools })
-    } catch (err) {
-      logRepair('error', `the repair completion failed: ${(err as Error).message}. Original result stands.`)
-      return d
-    }
-    tokenMeterFor(ctx).record(res.usage)
-    const fix = res.toolCalls && res.toolCalls.length > 0 ? res.toolCalls[0] : undefined
-    if (!fix) {
-      repairClosed = true
-      logRepair(
-        'no-correction',
-        `the repair exchange for ${call.name} returned no tool call (defect: ${defect}); repair is closed for this loop. Original result stands.`,
-      )
-      return d
-    }
-    if (!unknownTool && fix.name !== call.name) {
-      logRepair(
-        'failed',
-        `the corrected call names ${fix.name}, not ${call.name} — the tool name may change only for an unknown-tool defect (this defect: ${defect}). Original result stands.`,
-      )
-      return d
-    }
-    if (unknownTool && tools.length > 0 && !tools.some(t => t.name === fix.name)) {
-      logRepair('failed', `the corrected call names ${fix.name}, which is not one of the offered tools. Original result stands.`)
-      return d
-    }
-    steps.tool(fix.name, JSON.stringify(fix.arguments ?? {}))
-    const corrected = await dispatchTool(ctx, role, phase, fix)
-    if (corrected.repairable === undefined && !/^(DENIED|HALTED)/i.test(corrected.result)) {
-      logRepair('repaired', `${call.name} defect: ${defect}; corrected call ${fix.name} re-dispatched and executed: ${corrected.result.slice(0, 300)}`)
-      return corrected
-    }
-    logRepair('failed', `corrected call ${fix.name} was refused: ${corrected.result.slice(0, 300)}. Original result stands.`)
-    return d
-  }
+  // Tool-call repair (RC Item 6) lives in agents-repair.ts: a `repairable`
+  // dispatch result earns ONE bounded repair exchange before tallies, the
+  // corrected call re-runs through dispatchTool — all gates — and the budget
+  // is per loop invocation. The state object below is what the batch reads
+  // and what attemptRepair mutates.
+  const repair: RepairBudget = { cap: opts.repairCap ?? DEFAULT_REPAIR_CAP, spent: 0, closed: false }
+  const attemptRepair = createRepairExchange({ ctx, role, phase, system, tools, complete, steps, budget: repair })
+
   for (let turn = 0; turn < integrity.effectiveMaxTurns; turn++) {
     await respectBlackout(ctx, phase)
     // Q-NOHALT: only a safety condition halts. A spent budget closes the loop
@@ -365,133 +215,26 @@ export async function agentLoop(
       ctx.events.append({ phase, actor: 'runner', action: 'phase_nudge', result: followUp.slice(0, 300) })
       continue
     }
-    // The assistant message MUST carry the tool_calls it made: the tool
-    // results pushed below are only valid in the API's eyes when preceded by
-    // an assistant message containing these calls (ids must match).
-    messages.push({ role: 'assistant', content: res.text || '(tool calls)', toolCalls: res.toolCalls })
-    // A2: independent target-traffic calls in one response execute in
-    // parallel groups (dispatch/parallel-batch.ts). Bookkeeping below
-    // still runs per call in the original order, so observations, the
-    // event log, and the shared-state digest read as they did when the
-    // calls ran one at a time — the digest is computed after its group
-    // completes, so it reflects the group's full state.
-    // Batch tallies for the reflector: what this turn's tool calls did,
-    // counted in the same per-result pass that feeds the wall streak.
-    let batchCalls = 0
-    let batchSuccesses = 0
-    let batchDenied = 0
-    for (const group of partitionToolCalls(res.toolCalls, c => toolTargetHost(c), phase === 'recon')) {
-      // H2-P1 section-5: the full tool-call arguments, then the full result as
-      // the observation (redaction happens inside the journal writer).
-      for (const call of group.calls) steps.tool(call.name, JSON.stringify(call.arguments ?? {}))
-      const settled = await executeToolGroup(ctx, role, phase, group)
-      for (const s of settled) {
-        const call = s.call
-        if (s.error) {
-          steps.observation(call.name, `${TOOL_ERROR_PREFIX}${s.error.message}`)
-          throw s.error
-        }
-        let d = s.d
-        // Tool-call repair (RC Item 6): a tagged result earns one repair
-        // exchange BEFORE tallies/integrity; the effective result is what
-        // the observation, the event log, and the tallies carry.
-        if (d.repairable !== undefined && repairCap > 0 && !repairClosed && repairsSpent < repairCap) {
-          d = await attemptRepair(call, d)
-        }
-        steps.observation(call.name, d.result)
-        // v0.13.0 safety case: PII is redacted from tool outputs BEFORE they
-        // reach the audit log or the agent context. The agents reason about
-        // vulnerability shapes, not other people's personal data.
-        const safeResult = redactPii(d.result)
-        ctx.events.append({
-          phase,
-          actor: role,
-          action: call.name,
-          attackId: d.attackId,
-          target: d.target,
-          result: safeResult.slice(0, 800),
-          opsec: d.opsec,
-        })
-        // Output spill (tool-spill.ts): a result past the observation
-        // ceiling is written in full to the engagement's spill dir and the
-        // model gets head + omission notice + tail, readable back via
-        // read_spill — the ceiling never silently destroys content.
-        const spill = spillToolResult({
-          dir: ctx.events.dir,
-          tool: call.name,
-          attackId: d.attackId,
-          target: d.target,
-          text: safeResult,
-        })
-        if (spill.record) {
-          ctx.events.append({
-            phase,
-            actor: role,
-            action: 'tool_output_spilled',
-            attackId: d.attackId,
-            target: d.target,
-            result: `${call.name}: ${spill.record.chars} chars → ${spill.record.file} (sha256 ${spill.record.sha256.slice(0, 12)})`,
-          })
-        } else if (spill.failed) {
-          ctx.events.append({
-            phase,
-            actor: role,
-            action: 'tool_output_spill_failed',
-            attackId: d.attackId,
-            target: d.target,
-            result: `${call.name}: spill failed (${spill.failed}); observation truncated at the 4000-char ceiling`,
-          })
-        }
-        messages.push({
-          role: 'tool',
-          toolCallId: call.id,
-          // Every observation carries the current shared state — no agent ever
-          // works from a stale or private picture (Megazord protocol).
-          content: spill.content + '\n' + sharedStateDigest(ctx, phase),
-        })
-        // Wall detection: consecutive blocked/cooled-down/OPSEC-signaled probes
-        // with no successful observation. The coordinator redirects to re-recon.
-        const blocked = /^(DENIED|probe failed)/i.test(d.result) || /OPSEC SIGNAL|cooling down/i.test(d.result)
-        // Soft-cap progress verdict: one non-blocked, successful result means
-        // the round advanced the work; a round of nothing but those is stuck.
-        integrity.noteToolResult(!blocked && d.ok !== false)
-        batchCalls++
-        if (blocked) batchDenied++
-        else if (d.ok !== false) batchSuccesses++
-        ctx.deniedStreak = blocked ? ctx.deniedStreak + 1 : 0
-        const capAfter = safetyHalt(ctx)
-        if (capAfter) {
-          ctx.events.append({ phase, actor: 'runner', action: 'halt', result: `Halted: ${capAfter}.` })
-          throw new HaltError(capAfter)
-        }
-        // Q-NOHALT: a spent budget does NOT abort the batch mid-flight — the
-        // remaining calls in this batch were already dispatched and their work
-        // is real (item verdicts, recorded observations). The loop-top check
-        // stops the next turn, so nothing is lost and nothing overruns.
-      }
-    }
-    // Reflect before redirecting (reflector.ts): a stuck batch first
-    // earns a bounded reflection; the wall redirect is considered only
-    // when no reflection was spent on this batch — never both at once.
-    const reflection = await reflector.maybeReflect(
+
+    // Process this turn's tool calls (agents-toolbatch.ts): parallel groups,
+    // per-result bookkeeping, the repair exchange, observation spill, wall
+    // detection, then reflection or the commander redirect — same order as
+    // before the split.
+    await runToolBatch({
+      ctx,
       role,
-      { calls: batchCalls, successes: batchSuccesses, denied: batchDenied, deniedStreak: ctx.deniedStreak },
+      phase,
+      messages,
+      integrity,
+      steps,
+      reflector,
+      text: res.text,
+      toolCalls: res.toolCalls,
+      repair,
+      attemptRepair,
       askReflection,
-    )
-    if (reflection) {
-      messages.push({
-        role: 'user',
-        content: `REFLECTION (${reflection.count}/${reflection.cap}) — verdict: ${reflection.verdict}: ${reflection.steering}`,
-      })
-    } else if (phase === 'exploit' && ctx.deniedStreak >= 4 && ctx.redirects < 2) {
-      ctx.deniedStreak = 0
-      ctx.redirects++
-      const intel = await commanderRedirect(
-        ctx,
-        'The exploiter hit a wall: 4+ consecutive probes denied, cooled-down, or OPSEC-signaled with no successful observation.',
-      )
-      messages.push({ role: 'user', content: intel })
-    }
+      commanderRedirect,
+    })
   }
   // Announce a hard-cap stop and state the deliverable's fate, if any —
   // a turn never ends at a limit, or without its deliverable, silently.
@@ -502,42 +245,6 @@ export async function agentLoop(
 // ---------------------------------------------------------------------------
 // Phases
 // ---------------------------------------------------------------------------
-
-export function promptCtx(ctx: Ctx): PromptContext {
-  return {
-    mode: ctx.input.mode,
-    objective: ctx.input.objective,
-    target: ctx.input.target,
-    scopeHosts: ctx.hosts,
-    roe: ctx.input.roe,
-    fullBattery: ctx.input.fullBattery,
-    targets: ctx.input.targets,
-    // Only actually relax discipline when the target is genuinely
-    // loopback/private — matches the gate's invariant exactly. Leaving
-    // --local-sandbox on does nothing against a real domain.
-    localSandbox: ctx.config.localSandbox && ctx.hosts.every(h => isPrivateOrLoopbackHost(h)),
-    // TEST MODE: posture flag for the role prompts (roeBlock states it).
-    testMode: ctx.config.testMode,
-    // Q-MEMTIER (§7.1): the recall start pack, when memory was opened
-    // and the pack assembled (post-authorize). It reaches the system
-    // prompts through memoryBlock and is journaled with them.
-    memoryBrief: memoryStateFor(ctx)?.startPack?.text,
-    // Phase 2 W3: the fleet prompt-assembly input, built from the
-    // AUTHORIZE phase's stamped verification record when authorize has
-    // stamped one. Production runs are gated in runEngagement: it calls
-    // verifiedRecordFor immediately after a successful authorize and
-    // fails loud there, so a live engagement never reaches promptCtx
-    // without its record. Direct phase calls on hand-built contexts
-    // (unit fixtures) carry no record and render the historical seat
-    // text. The runner has no CHARTER / ENGAGEMENT knob files, so the
-    // knob sources stay unset and the fleet package's defaults govern.
-    ...(ctx.verificationProof && ctx.verifiedAt
-      ? { fleet: { record: verifiedRecordFor(ctx) } }
-      : {}),
-  }
-}
-
-
 
 export /**
  * Commander-ordered focused re-recon. Used when the exploiter hits a wall

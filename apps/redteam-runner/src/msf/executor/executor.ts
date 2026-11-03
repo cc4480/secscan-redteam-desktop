@@ -33,7 +33,6 @@ import {
   isMsfSessionPayload,
 } from '../policy.js'
 import { MsfSessionManager } from '../sessions.js'
-import { filterAndRank, suggestModules, type SuggestInput } from '../suggest.js'
 import { authedClient } from './auth.js'
 import {
   closeSession as closeMsfSession,
@@ -43,40 +42,14 @@ import {
   type SessionCommandArgs,
 } from './session-ops.js'
 import { credentialDump as runCredentialDump, type CredentialDumpArgs } from './credential-dump.js'
+import { MSF_TIMEOUT_MS } from './executor-types.js'
+import type { MsfDeps, MsfResult } from './executor-types.js'
+import { msfSearch, msfSuggest, type MsfSearchArgs, type MsfSuggestArgs } from './executor-query.js'
 
-export interface MsfDeps {
-  /** Injectable transport (default: HTTPS to the operator's msfrpcd). */
-  request?: MsfRequestFn
-  env?: NodeJS.ProcessEnv
-  /** Override msfrpcd endpoint (tests). */
-  endpoint?: { host: string; port: number; useTls: boolean }
-  /**
-   * TEST MODE (REDTEAM_TEST_MODE): module/payload policy and the canary
-   * destructive check are bypassed. Set from the resolved runner config
-   * in phases/run.ts; the bypass is recorded by dispatch (dispatch/msf.ts)
-   * per call. Default false.
-   */
-  testMode?: boolean
-}
-
-export interface MsfResult {
-  ok: boolean
-  transport: 'msf'
-  host: string
-  /** Redacted one-line summary for audit logs and events. */
-  summary: string
-  /** Redacted, capped output. */
-  output: string
-  ms: number
-  /** Set when the safety core refused before contacting msfrpcd. */
-  refused?: string
-  /** Set when a Meterpreter-payload run opened a session (W8): the runner-issued handle + daemon id. */
-  session?: { handle: string; daemonId: string }
-  /** Set by the credential-dump path: sealed evidence reference — counts/types/ref only, never raw material. */
-  evidence?: { path: string; sha256: string; records: number; types: string[] }
-}
-
-export const MSF_TIMEOUT_MS = 120_000 // exploits get longer than 30s host-exec
+// The public shapes live in executor-types.ts (file-budget split); re-exported
+// here so the msf barrel and every importer keep the same surface.
+export { MSF_TIMEOUT_MS } from './executor-types.js'
+export type { MsfDeps, MsfResult } from './executor-types.js'
 
 export class MsfExecutor {
   readonly deps: { request?: MsfRequestFn; env: NodeJS.ProcessEnv; endpoint?: { host: string; port: number; useTls: boolean } }
@@ -110,115 +83,20 @@ export class MsfExecutor {
   /**
    * Search the module database (recon-safe: no module runs).
    * `query` uses msf search syntax; when omitted, `cve`/`service` build it.
+   * The body lives in executor-query.ts (file-budget split).
    */
-  async search(args: {
-    host: string
-    scopeHosts: string[]
-    query?: string
-    cve?: string
-    service?: string
-    platform?: string
-    signal?: AbortSignal
-  }): Promise<MsfResult> {
-    const started = Date.now()
-    const pre = this.preflight(args.host, args.scopeHosts)
-    if ('refused' in pre) return this.refusedResult(args.host, pre.refused)
-    const input: SuggestInput = { service: args.service, cve: args.cve, platform: args.platform }
-    try {
-      const { client, secrets } = await authedClient(this.deps, MSF_TIMEOUT_MS, args.signal)
-      const modules = args.query
-        ? filterAndRank(await client.searchModules(args.query))
-        : await suggestModules(client, input)
-      const runnable = modules.filter(m => !m.dropped)
-      const lines = runnable
-        .slice(0, 15)
-        .map(m => `${m.fullname} [rank:${m.rank || 'n/a'}] — ${(m.description || '').slice(0, 140)}`)
-      const dropped = modules.filter(m => m.dropped).length
-      return {
-        ok: true,
-        transport: 'msf',
-        host: args.host,
-        summary: redactSecrets(
-          `msf search vs ${args.host}: ${runnable.length} runnable module(s)` +
-            (dropped > 0 ? `, ${dropped} refused by policy` : ''),
-          secrets,
-        ),
-        output: redactSecrets(capOutput(lines.join('\n') || '(no modules matched)'), secrets),
-        ms: Date.now() - started,
-      }
-    } catch (err) {
-      return {
-        ok: false,
-        transport: 'msf',
-        host: args.host,
-        summary: `msf search failed: ${(err as Error).message}`,
-        output: '',
-        ms: Date.now() - started,
-      }
-    }
+  async search(args: MsfSearchArgs): Promise<MsfResult> {
+    return msfSearch(this, args)
   }
 
   /**
    * Recon → module mapping: detected service/version → ranked candidate
    * modules. The candidates go to the COORDINATOR for approval — this tool
    * never fires an exploit. That approval is the recon→exploit sign-off
-   * the coordinator already owns.
+   * the coordinator already owns. The body lives in executor-query.ts.
    */
-  async suggest(args: {
-    host: string
-    scopeHosts: string[]
-    service?: string
-    version?: string
-    cve?: string
-    platform?: string
-    signal?: AbortSignal
-  }): Promise<MsfResult> {
-    const started = Date.now()
-    const pre = this.preflight(args.host, args.scopeHosts)
-    if ('refused' in pre) return this.refusedResult(args.host, pre.refused)
-    try {
-      const { client, secrets } = await authedClient(this.deps, MSF_TIMEOUT_MS, args.signal)
-      const ranked = await suggestModules(client, {
-        service: args.service,
-        version: args.version,
-        cve: args.cve,
-        platform: args.platform,
-      })
-      const runnable = ranked.filter(m => !m.dropped)
-      const lines = runnable.map(
-        m => `${m.fullname} [rank:${m.rank || 'n/a'}] — ${(m.description || '').slice(0, 140)}`,
-      )
-      const dropped = ranked.filter(m => m.dropped)
-      const droppedLines = dropped.map(m => `${m.fullname} — REFUSED: ${m.dropped}`)
-      return {
-        ok: true,
-        transport: 'msf',
-        host: args.host,
-        summary: redactSecrets(
-          `msf suggest vs ${args.host} (service=${args.service ?? '?'}, version=${args.version ?? '?'}): ` +
-            `${runnable.length} candidate(s) for coordinator approval` +
-            (dropped.length > 0 ? `, ${dropped.length} refused by policy` : ''),
-          secrets,
-        ),
-        output: redactSecrets(
-          capOutput(
-            [...lines, ...(droppedLines.length > 0 ? ['', '--- refused by policy ---', ...droppedLines] : [])].join('\n') ||
-              '(no candidate modules)',
-          ),
-          secrets,
-        ),
-        ms: Date.now() - started,
-      }
-    } catch (err) {
-      return {
-        ok: false,
-        transport: 'msf',
-        host: args.host,
-        summary: `msf suggest failed: ${(err as Error).message}`,
-        output: '',
-        ms: Date.now() - started,
-      }
-    }
+  async suggest(args: MsfSuggestArgs): Promise<MsfResult> {
+    return msfSuggest(this, args)
   }
 
   /**
