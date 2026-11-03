@@ -38,10 +38,18 @@ export function handleFeed(store: UiStore, req: IncomingMessage, res: ServerResp
 
   let closed = false;
   let idlePolls = 0;
-  req.on("close", () => {
+  // Declared BEFORE push() can run. The first push used to execute while `timer`
+  // was still in its temporal dead zone, so a slow client (res.write returns false
+  // on a full buffer) or a terminal state on the first tick threw a ReferenceError
+  // out of the route; with no uncaughtException handler in the console, that ended
+  // the process. Every exit path now goes through stop().
+  let timer: NodeJS.Timeout | undefined;
+  const stop = (): void => {
     closed = true;
-    clearInterval(timer);
-  });
+    if (timer !== undefined) clearInterval(timer);
+  };
+
+  req.on("close", stop);
 
   const push = (): void => {
     if (closed) return;
@@ -49,16 +57,14 @@ export function handleFeed(store: UiStore, req: IncomingMessage, res: ServerResp
     for (const ev of events) {
       after = ev.seq;
       if (!sseWrite(res, "event", ev)) {
-        closed = true;
-        clearInterval(timer);
+        stop();
         return;
       }
     }
     const state = readState(dir);
     if (state) {
       if (!sseWrite(res, "state", state)) {
-        closed = true;
-        clearInterval(timer);
+        stop();
         return;
       }
       if (TERMINAL.has(state.status)) {
@@ -66,7 +72,7 @@ export function handleFeed(store: UiStore, req: IncomingMessage, res: ServerResp
         // Terminal + quiet: close the stream so the dashboard settles.
         if (idlePolls >= 3 && events.length === 0) {
           sseWrite(res, "done", { status: state.status });
-          clearInterval(timer);
+          stop();
           res.end();
           return;
         }
@@ -79,5 +85,5 @@ export function handleFeed(store: UiStore, req: IncomingMessage, res: ServerResp
   // Heartbeat comment keeps intermediaries from timing out the stream.
   res.write(": ping\n\n");
   push();
-  const timer = setInterval(push, 1000);
-}
+  // Only start the interval if the first push did not already settle the stream.
+  if (!closed) timer = setInterval(push, 1000);}
