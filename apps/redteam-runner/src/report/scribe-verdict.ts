@@ -3,28 +3,28 @@
  * under the 300-line budget. Pure: the verdict shape, the cycle knob, and the
  * answer parser. Nothing here touches the model or the engagement state.
  */
-import { resolveKnobs } from "@secscan/redteam-fleet-skills";
-import type { ScribeDefect } from "../events.js";
-import { extractJsonBlock } from "../util.js";
+import { resolveKnobs } from '@secscan/redteam-fleet-skills'
+import type { ScribeDefect } from '../events.js'
+import { extractJsonBlock } from '../util.js'
 
-export type { ScribeDefect } from "../events.js";
+export type { ScribeDefect } from '../events.js'
 
 /** The Scribe's structured review verdict. */
 export interface ScribeVerdict {
-  verdict: "sign" | "reject";
-  defects: ScribeDefect[];
+  verdict: 'sign' | 'reject'
+  defects: ScribeDefect[]
 }
 
 /** The gate's outcome, for the caller's record. */
 export interface ScribeGateOutcome {
-  signed: boolean;
+  signed: boolean
   /** Review cycles spent (0 when the gate did not run). */
-  cycles: number;
+  cycles: number
   /** Why the set shipped unsigned, when it did. */
-  reason?: "defects" | "scribe_unavailable" | "dry-run";
+  reason?: 'defects' | 'scribe_unavailable' | 'dry-run'
 }
 
-const DEFECT_CLASSES: readonly string[] = ["accuracy", "completeness", "craft"];
+const DEFECT_CLASSES: readonly string[] = ['accuracy', 'completeness', 'craft']
 
 /**
  * The Scribe's reject/rewrite budget: the SCRIBE_MAX_CYCLES fleet knob
@@ -35,8 +35,8 @@ const DEFECT_CLASSES: readonly string[] = ["accuracy", "completeness", "craft"];
  * @returns the maximum review cycles per completed close, at least 1
  */
 export function scribeMaxCycles(): number {
-  const raw = Number.parseInt(resolveKnobs().values["SCRIBE_MAX_CYCLES"] ?? "2", 10);
-  return Number.isFinite(raw) && raw >= 1 ? raw : 2;
+  const raw = Number.parseInt(resolveKnobs().values['SCRIBE_MAX_CYCLES'] ?? '2', 10)
+  return Number.isFinite(raw) && raw >= 1 ? raw : 2
 }
 
 /**
@@ -49,19 +49,19 @@ export function scribeMaxCycles(): number {
  * @returns the parsed verdict, or null when off-shape
  */
 export function parseScribeVerdict(text: string): ScribeVerdict | null {
-  const parsed = extractJsonBlock(text) as { verdict?: unknown; defects?: unknown } | null;
-  if (!parsed || (parsed.verdict !== "sign" && parsed.verdict !== "reject")) return null;
-  if (parsed.verdict === "sign") return { verdict: "sign", defects: [] };
-  const defects: ScribeDefect[] = [];
+  const parsed = extractJsonBlock(text) as { verdict?: unknown; defects?: unknown } | null
+  if (!parsed || (parsed.verdict !== 'sign' && parsed.verdict !== 'reject')) return null
+  if (parsed.verdict === 'sign') return { verdict: 'sign', defects: [] }
+  const defects: ScribeDefect[] = []
   for (const raw of Array.isArray(parsed.defects) ? parsed.defects : []) {
-    const d = raw as Partial<ScribeDefect> | null;
-    if (!d || typeof d.file !== "string" || typeof d.detail !== "string" || typeof d.fix !== "string") continue;
+    const d = raw as Partial<ScribeDefect> | null
+    if (!d || typeof d.file !== 'string' || typeof d.detail !== 'string' || typeof d.fix !== 'string') continue
     defects.push({
       file: d.file.slice(0, 100),
-      class: DEFECT_CLASSES.includes(d.class ?? "") ? (d.class as ScribeDefect["class"]) : "accuracy",
+      class: DEFECT_CLASSES.includes(d.class ?? '') ? (d.class as ScribeDefect['class']) : 'accuracy',
       detail: d.detail.slice(0, 500),
       fix: d.fix.slice(0, 500),
-    });
+    })
   }
-  return defects.length > 0 ? { verdict: "reject", defects } : null;
+  return defects.length > 0 ? { verdict: 'reject', defects } : null
 }

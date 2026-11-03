@@ -5,53 +5,53 @@
  * query.ts. (Module doc comment preserved on the registry.ts barrel.)
  */
 
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
-import { MemoryError } from "../memory/errors.js";
-import { emptyRegistry, type ConfirmedFinding, type KilledHypothesis, type TargetFingerprint, type VulnerabilityRegistry } from "./types.js";
-export * from "./types.js";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
+import { MemoryError } from '../memory/errors.js'
+import { emptyRegistry, type ConfirmedFinding, type KilledHypothesis, type TargetFingerprint, type VulnerabilityRegistry } from './types.js'
+export * from './types.js'
 
 
 function nextId(prefix: string, existing: number): string {
-  return `${prefix}-${String(existing + 1).padStart(4, "0")}`;
+  return `${prefix}-${String(existing + 1).padStart(4, '0')}`
 }
 
 export function recordConfirmed(
   reg: VulnerabilityRegistry,
-  entry: Omit<ConfirmedFinding, "id" | "kind" | "date"> & { date?: string },
+  entry: Omit<ConfirmedFinding, 'id' | 'kind' | 'date'> & { date?: string },
 ): ConfirmedFinding {
   const full: ConfirmedFinding = {
-    kind: "confirmed",
-    id: nextId("vuln", reg.confirmed.length),
+    kind: 'confirmed',
+    id: nextId('vuln', reg.confirmed.length),
     date: entry.date ?? new Date().toISOString(),
     ...entry,
-  };
-  reg.confirmed.push(full);
-  return full;
+  }
+  reg.confirmed.push(full)
+  return full
 }
 
 export function recordKilled(
   reg: VulnerabilityRegistry,
-  entry: Omit<KilledHypothesis, "id" | "kind" | "date"> & { date?: string },
+  entry: Omit<KilledHypothesis, 'id' | 'kind' | 'date'> & { date?: string },
 ): KilledHypothesis {
   const full: KilledHypothesis = {
-    kind: "killed",
-    id: nextId("killed", reg.killed.length),
+    kind: 'killed',
+    id: nextId('killed', reg.killed.length),
     date: entry.date ?? new Date().toISOString(),
     ...entry,
-  };
-  reg.killed.push(full);
-  return full;
+  }
+  reg.killed.push(full)
+  return full
 }
 
 
 export function loadRegistryFile(path: string): VulnerabilityRegistry | null {
   try {
-    const raw = JSON.parse(readFileSync(path, "utf8")) as VulnerabilityRegistry;
-    if (raw && raw.version === 1 && Array.isArray(raw.confirmed) && Array.isArray(raw.killed)) return raw;
-    return null;
+    const raw = JSON.parse(readFileSync(path, 'utf8')) as VulnerabilityRegistry
+    if (raw && raw.version === 1 && Array.isArray(raw.confirmed) && Array.isArray(raw.killed)) return raw
+    return null
   } catch {
-    return null;
+    return null
   }
 }
 
@@ -62,24 +62,24 @@ export function loadRegistryFile(path: string): VulnerabilityRegistry | null {
  * below refuses to overwrite, so the write path must never produce one.
  */
 function writeRegistryFile(path: string, reg: VulnerabilityRegistry): void {
-  const tmp = `${path}.tmp-${process.pid}-${Date.now().toString(36)}`;
+  const tmp = `${path}.tmp-${process.pid}-${Date.now().toString(36)}`
   try {
-    writeFileSync(tmp, JSON.stringify(reg, null, 2));
+    writeFileSync(tmp, JSON.stringify(reg, null, 2))
     try {
-      renameSync(tmp, path);
+      renameSync(tmp, path)
     } catch {
-      rmSync(path, { force: true });
-      renameSync(tmp, path);
+      rmSync(path, { force: true })
+      renameSync(tmp, path)
     }
   } finally {
-    if (existsSync(tmp)) rmSync(tmp, { force: true });
+    if (existsSync(tmp)) rmSync(tmp, { force: true })
   }
 }
 
 /** Persist the registry (creates parent dirs). Called after every verdict write-through and at engagement end. */
 export function saveRegistryFile(path: string, reg: VulnerabilityRegistry): void {
-  mkdirSync(dirname(path), { recursive: true });
-  writeRegistryFile(path, reg);
+  mkdirSync(dirname(path), { recursive: true })
+  writeRegistryFile(path, reg)
 }
 
 /**
@@ -97,8 +97,8 @@ export function saveRegistryFile(path: string, reg: VulnerabilityRegistry): void
  * migration trigger documented on the registry barrel.
  */
 export function transactRegistryFile<T>(path: string, fn: (reg: VulnerabilityRegistry) => T): T {
-  mkdirSync(dirname(path), { recursive: true });
-  const loaded = loadRegistryFile(path);
+  mkdirSync(dirname(path), { recursive: true })
+  const loaded = loadRegistryFile(path)
   // Same guard as engagement start (run.ts, Q-MEMTIER §8 row 1), on the
   // write path: loadRegistryFile returns null for an absent file AND for
   // a corrupt or wrong-version one, and only the absent case may start
@@ -107,14 +107,14 @@ export function transactRegistryFile<T>(path: string, fn: (reg: VulnerabilityReg
   // transaction's entries — fail loud instead, leaving the file intact.
   if (loaded === null && existsSync(path)) {
     throw new MemoryError(
-      "REGISTRY_UNREADABLE",
+      'REGISTRY_UNREADABLE',
       `findings registry at ${path} exists but could not be loaded (corrupt or wrong version) — refusing to overwrite it`,
-    );
+    )
   }
-  const reg = loaded ?? emptyRegistry();
-  const out = fn(reg);
-  writeRegistryFile(path, reg);
-  return out;
+  const reg = loaded ?? emptyRegistry()
+  const out = fn(reg)
+  writeRegistryFile(path, reg)
+  return out
 }
 
 // ---------------------------------------------------------------------------
@@ -124,70 +124,70 @@ export function transactRegistryFile<T>(path: string, fn: (reg: VulnerabilityReg
 // ---------------------------------------------------------------------------
 
 const SEED_FP: TargetFingerprint = {
-  host: "secscan.us",
-  stack: ["react-spa", "cloudflare-edge", "bearer-rest-api"],
-  appType: "security-scanner-saas",
-  notes: "1.27MB JS bundle; /api/v1 bearer API + /api/* web namespace; SPA shell; Cloudflare edge",
-};
+  host: 'secscan.us',
+  stack: ['react-spa', 'cloudflare-edge', 'bearer-rest-api'],
+  appType: 'security-scanner-saas',
+  notes: '1.27MB JS bundle; /api/v1 bearer API + /api/* web namespace; SPA shell; Cloudflare edge',
+}
 
-const SEED_DATE = "2026-10-01T12:45:00.000Z";
-const SEED_ENG = "secscan-us-2026-10-01";
+const SEED_DATE = '2026-10-01T12:45:00.000Z'
+const SEED_ENG = 'secscan-us-2026-10-01'
 
 export function seedRegistry(): VulnerabilityRegistry {
-  const reg = emptyRegistry();
-  const killed: Array<Omit<KilledHypothesis, "id" | "kind" | "date">> = [
+  const reg = emptyRegistry()
+  const killed: Array<Omit<KilledHypothesis, 'id' | 'kind' | 'date'>> = [
     {
       engagementId: SEED_ENG,
       target: SEED_FP,
-      hypothesis: "Unauthenticated REST endpoints expose scan data (IDOR/status oracle)",
+      hypothesis: 'Unauthenticated REST endpoints expose scan data (IDOR/status oracle)',
       killingObservation:
-        "Unauth GET /api/v1/scans, /scans/{id}, /scans/{id}/report, /me → ALL uniform 401, byte-identical bodies. Only /api/v1/openapi.json is public (by design). No oracle.",
-      attackId: "T1190",
-      vulnClass: "IDOR / broken object-level authorization",
+        'Unauth GET /api/v1/scans, /scans/{id}, /scans/{id}/report, /me → ALL uniform 401, byte-identical bodies. Only /api/v1/openapi.json is public (by design). No oracle.',
+      attackId: 'T1190',
+      vulnClass: 'IDOR / broken object-level authorization',
     },
     {
       engagementId: SEED_ENG,
       target: SEED_FP,
-      hypothesis: "Web-app /api/* namespace (from JS bundle) has ungated routes",
+      hypothesis: 'Web-app /api/* namespace (from JS bundle) has ungated routes',
       killingObservation:
-        "/api/auth/user → 200 {\"user\":null} (correct anonymous); /api/account/tokens, /domain-verifications, /scans, /monitor/subscriptions, /billing/status → uniform 401. Properly gated.",
-      attackId: "T1190",
-      vulnClass: "missing authorization",
+        '/api/auth/user → 200 {"user":null} (correct anonymous); /api/account/tokens, /domain-verifications, /scans, /monitor/subscriptions, /billing/status → uniform 401. Properly gated.',
+      attackId: 'T1190',
+      vulnClass: 'missing authorization',
     },
     {
       engagementId: SEED_ENG,
       target: SEED_FP,
-      hypothesis: "Direct /report/1 and /share/test URLs leak scan data",
+      hypothesis: 'Direct /report/1 and /share/test URLs leak scan data',
       killingObservation:
-        "Both return the generic ~9KB SPA shell (marketing copy only); zero scan IDs, grades, or tokens. Data loads via authenticated API. Cross-account object test deferred (needs 2nd account).",
-      attackId: "T1190",
-      vulnClass: "IDOR via direct URL",
+        'Both return the generic ~9KB SPA shell (marketing copy only); zero scan IDs, grades, or tokens. Data loads via authenticated API. Cross-account object test deferred (needs 2nd account).',
+      attackId: 'T1190',
+      vulnClass: 'IDOR via direct URL',
     },
     {
       engagementId: SEED_ENG,
       target: SEED_FP,
-      hypothesis: "Host-header injection influences password-reset links (X-Forwarded-Host)",
+      hypothesis: 'Host-header injection influences password-reset links (X-Forwarded-Host)',
       killingObservation:
         "GET /forgot-password with X-Forwarded-Host: evil-attacker.example → 200, zero reflections. Bare 'Host: evil.example' rejected at the edge (connection refused).",
-      attackId: "T1190",
-      vulnClass: "host-header injection",
+      attackId: 'T1190',
+      vulnClass: 'host-header injection',
     },
     {
       engagementId: SEED_ENG,
       target: SEED_FP,
-      hypothesis: "A live WebSocket/EventSource channel exists to attack",
+      hypothesis: 'A live WebSocket/EventSource channel exists to attack',
       killingObservation:
-        "Zero WebSocket/EventSource/socket.io references in the full 1.27MB bundle. No channel exists; permissive CSP ws:/wss: is config-only.",
-      vulnClass: "websocket hijacking",
+        'Zero WebSocket/EventSource/socket.io references in the full 1.27MB bundle. No channel exists; permissive CSP ws:/wss: is config-only.',
+      vulnClass: 'websocket hijacking',
     },
     {
       engagementId: SEED_ENG,
       target: SEED_FP,
-      hypothesis: "robots.txt / sitemap hide undocumented routes",
+      hypothesis: 'robots.txt / sitemap hide undocumented routes',
       killingObservation:
-        "5,984B robots.txt fully explained: 16 AI-bot user-agent groups repeating the Disallow list. sitemap.xml lists public pages only. No hidden route strings.",
-      attackId: "T1595.003",
-      vulnClass: "hidden endpoint discovery",
+        '5,984B robots.txt fully explained: 16 AI-bot user-agent groups repeating the Disallow list. sitemap.xml lists public pages only. No hidden route strings.',
+      attackId: 'T1595.003',
+      vulnClass: 'hidden endpoint discovery',
     },
     {
       engagementId: SEED_ENG,
@@ -195,78 +195,78 @@ export function seedRegistry(): VulnerabilityRegistry {
       hypothesis: "Reflected input + style-src 'unsafe-inline' = live CSS/HTML injection",
       killingObservation:
         "4 canary probes (/?q=<style>oast7x</style>, /?search=\"><style>oast7x, /?name=';background:url(oast7x), /scan?url=oast7x) → all 200, ZERO reflections. Killed as a live vector; directive stays a latent LOW.",
-      attackId: "T1190",
-      vulnClass: "CSS injection",
+      attackId: 'T1190',
+      vulnClass: 'CSS injection',
     },
     {
       engagementId: SEED_ENG,
       target: SEED_FP,
-      hypothesis: "www.secscan.us hostname confusion / reflection",
-      killingObservation: "GET https://www.secscan.us/ → clean 301 to https://secscan.us/, no hostname reflection.",
-      vulnClass: "host confusion",
+      hypothesis: 'www.secscan.us hostname confusion / reflection',
+      killingObservation: 'GET https://www.secscan.us/ → clean 301 to https://secscan.us/, no hostname reflection.',
+      vulnClass: 'host confusion',
     },
     {
       engagementId: SEED_ENG,
       target: SEED_FP,
-      hypothesis: "Weak TLS posture (obsolete versions, bad chain)",
+      hypothesis: 'Weak TLS posture (obsolete versions, bad chain)',
       killingObservation:
         "Live-edge handshake: TLS 1.3 / AES-256-GCM / ECDSA P-256, chain verifies. Modern and valid. (An early direct-connect 'TLS 1.3 fails' reading was discarded as a VM resolver artifact.)",
-      attackId: "T1590.002",
-      vulnClass: "TLS misconfiguration",
+      attackId: 'T1590.002',
+      vulnClass: 'TLS misconfiguration',
     },
     {
       engagementId: SEED_ENG,
       target: SEED_FP,
-      hypothesis: "MCP scope gate bypass via percent-encoded path traversal (/api/mcp/%2e%2e/v1/scans)",
+      hypothesis: 'MCP scope gate bypass via percent-encoded path traversal (/api/mcp/%2e%2e/v1/scans)',
       killingObservation:
-        "Traversal → 404 {\"error\":\"Not found\"} vs control /api/v1/scans → 401. Traversal normalized before the scope check; gate holds. Positive control for scope enforcement.",
-      attackId: "T1190",
-      vulnClass: "scope-confusion / path traversal",
+        'Traversal → 404 {"error":"Not found"} vs control /api/v1/scans → 401. Traversal normalized before the scope check; gate holds. Positive control for scope enforcement.',
+      attackId: 'T1190',
+      vulnClass: 'scope-confusion / path traversal',
     },
-  ];
-  for (const k of killed) recordKilled(reg, { ...k, date: SEED_DATE });
+  ]
+  for (const k of killed) recordKilled(reg, { ...k, date: SEED_DATE })
 
-  const confirmed: Array<Omit<ConfirmedFinding, "id" | "kind" | "date">> = [
+  const confirmed: Array<Omit<ConfirmedFinding, 'id' | 'kind' | 'date'>> = [
     {
       engagementId: SEED_ENG,
       target: SEED_FP,
-      vulnClass: "CSP weak directive (latent XSS enabler)",
-      technique: "CSS/HTML injection probing with canary markers",
-      attackId: "T1190",
-      owasp: "WSTG-CONF",
-      payloadPattern: "?q=<style>oast7x</style> (+3 reflection-context variants); 0 reflections observed",
-      evidenceRef: "engagements/evidence/aggressive-battery-2026-10-01.md (P7)",
-      severity: "low",
+      vulnClass: 'CSP weak directive (latent XSS enabler)',
+      technique: 'CSS/HTML injection probing with canary markers',
+      attackId: 'T1190',
+      owasp: 'WSTG-CONF',
+      payloadPattern: '?q=<style>oast7x</style> (+3 reflection-context variants); 0 reflections observed',
+      evidenceRef: 'engagements/evidence/aggressive-battery-2026-10-01.md (P7)',
+      severity: 'low',
     },
     {
       engagementId: SEED_ENG,
       target: SEED_FP,
-      vulnClass: "DNSSEC not enabled",
-      technique: "DNS posture review via DNS-over-HTTPS",
-      attackId: "T1590.002",
-      payloadPattern: "DoH DS + DNSKEY queries → NOERROR, no records, AD=false",
-      evidenceRef: "engagements/evidence/aggressive-battery-2026-10-01.md (P9)",
-      severity: "info",
+      vulnClass: 'DNSSEC not enabled',
+      technique: 'DNS posture review via DNS-over-HTTPS',
+      attackId: 'T1590.002',
+      payloadPattern: 'DoH DS + DNSKEY queries → NOERROR, no records, AD=false',
+      evidenceRef: 'engagements/evidence/aggressive-battery-2026-10-01.md (P9)',
+      severity: 'info',
     },
     {
       engagementId: SEED_ENG,
       target: SEED_FP,
-      vulnClass: "Obsolete TLS protocol support (1.0/1.1)",
-      technique: "SSL Labs assessment + handshake review",
-      payloadPattern: "SSL Labs grade B, capped on TLS 1.0/1.1 (BEAST on TLS 1.0 CBC); live handshakes negotiate TLS 1.3 cleanly",
-      evidenceRef: "engagements/evidence/scan-e78f4581-report.txt",
-      severity: "info",
+      vulnClass: 'Obsolete TLS protocol support (1.0/1.1)',
+      technique: 'SSL Labs assessment + handshake review',
+      payloadPattern: 'SSL Labs grade B, capped on TLS 1.0/1.1 (BEAST on TLS 1.0 CBC); live handshakes negotiate TLS 1.3 cleanly',
+      evidenceRef: 'engagements/evidence/scan-e78f4581-report.txt',
+      severity: 'info',
     },
     {
       engagementId: SEED_ENG,
       target: SEED_FP,
-      vulnClass: "robots.txt disclosure (comment admits past misconfiguration)",
-      technique: "Robots/sitemap review",
+      vulnClass: 'robots.txt disclosure (comment admits past misconfiguration)',
+      technique: 'Robots/sitemap review',
       payloadPattern: "5,984B robots.txt; comment references past AI-crawler access to dashboards/other users' reports (since fixed)",
-      evidenceRef: "engagements/evidence/aggressive-battery-2026-10-01.md (P6)",
-      severity: "info",
+      evidenceRef: 'engagements/evidence/aggressive-battery-2026-10-01.md (P6)',
+      severity: 'info',
     },
-  ];
-  for (const c of confirmed) recordConfirmed(reg, { ...c, date: SEED_DATE });
-  return reg;
+  ]
+  for (const c of confirmed) recordConfirmed(reg, { ...c, date: SEED_DATE })
+  return reg
 }

@@ -11,17 +11,17 @@
  * it does not mint proof.
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { MemoryError } from "./errors.js";
-import { archiveDirName } from "./paths.js";
-import type { MemoryPaths } from "./paths.js";
-import { sealDiff, validateDiff, validateUnit, verifyDiffHash } from "./schema.js";
-import { requireOperator, trustDisagrees } from "./apply-rules.js";
-import { assertScopeBinding } from "./scope.js";
-import { openMemoryStore } from "./store.js";
-import { atomicWriteText } from "./views.js";
-import type { MemoryApprovalRecord, MemoryApplyReceipt, MemoryDiff } from "./types.js";
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { MemoryError } from './errors.js'
+import { archiveDirName } from './paths.js'
+import type { MemoryPaths } from './paths.js'
+import { sealDiff, validateDiff, validateUnit, verifyDiffHash } from './schema.js'
+import { requireOperator, trustDisagrees } from './apply-rules.js'
+import { assertScopeBinding } from './scope.js'
+import { openMemoryStore } from './store.js'
+import { atomicWriteText } from './views.js'
+import type { MemoryApprovalRecord, MemoryApplyReceipt, MemoryDiff } from './types.js'
 
 /**
  * Read and verify a diff from `proposals/`. Missing, malformed, or
@@ -32,36 +32,36 @@ import type { MemoryApprovalRecord, MemoryApplyReceipt, MemoryDiff } from "./typ
  * @returns The verified diff.
  */
 export function readDiff(paths: MemoryPaths, diffId: string): MemoryDiff {
-  const path = join(paths.proposalsDir, `${diffId}.json`);
+  const path = join(paths.proposalsDir, `${diffId}.json`)
   if (!existsSync(path)) {
-    throw new MemoryError("SCHEMA_INVALID", `memory diff not found: ${diffId} (${path})`);
+    throw new MemoryError('SCHEMA_INVALID', `memory diff not found: ${diffId} (${path})`)
   }
-  let parsed: unknown;
+  let parsed: unknown
   try {
-    parsed = JSON.parse(readFileSync(path, "utf8"));
+    parsed = JSON.parse(readFileSync(path, 'utf8'))
   } catch (err) {
-    throw new MemoryError("SCHEMA_INVALID", `memory diff ${diffId} is unparseable`, { cause: err });
+    throw new MemoryError('SCHEMA_INVALID', `memory diff ${diffId} is unparseable`, { cause: err })
   }
-  const diff = validateDiff(parsed, `diff ${diffId}`);
+  const diff = validateDiff(parsed, `diff ${diffId}`)
   if (!verifyDiffHash(diff)) {
     throw new MemoryError(
-      "SCHEMA_INVALID",
+      'SCHEMA_INVALID',
       `memory diff ${diffId}: sha256 does not match its content — the diff was altered after sealing; refusing`,
-    );
+    )
   }
-  return diff;
+  return diff
 }
 
 /** Rewrite a diff after a status flip (reject/apply), resealed, in proposals/ and the archive copy. */
 function rewriteDiff(paths: MemoryPaths, diff: MemoryDiff): MemoryDiff {
-  const { sha256: _sha256, ...rest } = diff;
-  const resealed = sealDiff(rest);
-  const bytes = `${JSON.stringify(resealed, null, 2)}\n`;
-  atomicWriteText(join(paths.proposalsDir, `${diff.diffId}.json`), bytes);
-  const seqPart = diff.diffId.slice(diff.engagementId.length + 1);
-  const archiveCopy = join(paths.archivesDir, diff.engagementId, archiveDirName(Number(seqPart)), "memory_diff.json");
-  if (existsSync(archiveCopy)) atomicWriteText(archiveCopy, bytes);
-  return resealed;
+  const { sha256: _sha256, ...rest } = diff
+  const resealed = sealDiff(rest)
+  const bytes = `${JSON.stringify(resealed, null, 2)}\n`
+  atomicWriteText(join(paths.proposalsDir, `${diff.diffId}.json`), bytes)
+  const seqPart = diff.diffId.slice(diff.engagementId.length + 1)
+  const archiveCopy = join(paths.archivesDir, diff.engagementId, archiveDirName(Number(seqPart)), 'memory_diff.json')
+  if (existsSync(archiveCopy)) atomicWriteText(archiveCopy, bytes)
+  return resealed
 }
 
 /**
@@ -79,26 +79,26 @@ export function approveDiff(
   diffId: string,
   options: { operator: string; opIds?: string[]; note?: string; nowIso: string },
 ): MemoryApprovalRecord {
-  const approver = requireOperator(options.operator);
-  const diff = readDiff(paths, diffId);
-  const proposedIds = diff.proposed.map((op) => op.opId);
-  const opIds = options.opIds ?? proposedIds;
+  const approver = requireOperator(options.operator)
+  const diff = readDiff(paths, diffId)
+  const proposedIds = diff.proposed.map(op => op.opId)
+  const opIds = options.opIds ?? proposedIds
   for (const opId of opIds) {
     if (!proposedIds.includes(opId)) {
-      throw new MemoryError("SCHEMA_INVALID", `approval names op ${opId}, which is not a proposed op of diff ${diffId}`);
+      throw new MemoryError('SCHEMA_INVALID', `approval names op ${opId}, which is not a proposed op of diff ${diffId}`)
     }
   }
   const record: MemoryApprovalRecord = {
     diffId,
     diffSha256: diff.sha256,
-    decision: "approve",
+    decision: 'approve',
     approver,
     approvedAt: options.nowIso,
     opIds,
     ...(options.note ? { note: options.note } : {}),
-  };
-  atomicWriteText(join(paths.proposalsDir, `${diffId}.approval.json`), `${JSON.stringify(record, null, 2)}\n`);
-  return record;
+  }
+  atomicWriteText(join(paths.proposalsDir, `${diffId}.approval.json`), `${JSON.stringify(record, null, 2)}\n`)
+  return record
 }
 
 /**
@@ -115,37 +115,37 @@ export function rejectDiff(
   diffId: string,
   options: { operator: string; note?: string; nowIso: string },
 ): MemoryApprovalRecord {
-  const approver = requireOperator(options.operator);
-  const diff = readDiff(paths, diffId);
+  const approver = requireOperator(options.operator)
+  const diff = readDiff(paths, diffId)
   const record: MemoryApprovalRecord = {
     diffId,
     diffSha256: diff.sha256,
-    decision: "reject",
+    decision: 'reject',
     approver,
     approvedAt: options.nowIso,
     opIds: [],
     ...(options.note ? { note: options.note } : {}),
-  };
-  atomicWriteText(join(paths.proposalsDir, `${diffId}.approval.json`), `${JSON.stringify(record, null, 2)}\n`);
-  rewriteDiff(paths, { ...diff, status: "rejected" });
-  return record;
+  }
+  atomicWriteText(join(paths.proposalsDir, `${diffId}.approval.json`), `${JSON.stringify(record, null, 2)}\n`)
+  rewriteDiff(paths, { ...diff, status: 'rejected' })
+  return record
 }
 
 function readApproval(paths: MemoryPaths, diffId: string): MemoryApprovalRecord {
-  const path = join(paths.proposalsDir, `${diffId}.approval.json`);
+  const path = join(paths.proposalsDir, `${diffId}.approval.json`)
   if (!existsSync(path)) {
-    throw new MemoryError("SCHEMA_INVALID", `no approval record for diff ${diffId} — apply refuses without one`);
+    throw new MemoryError('SCHEMA_INVALID', `no approval record for diff ${diffId} — apply refuses without one`)
   }
-  let record: MemoryApprovalRecord;
+  let record: MemoryApprovalRecord
   try {
-    record = JSON.parse(readFileSync(path, "utf8")) as MemoryApprovalRecord;
+    record = JSON.parse(readFileSync(path, 'utf8')) as MemoryApprovalRecord
   } catch (err) {
-    throw new MemoryError("SCHEMA_INVALID", `approval record for diff ${diffId} is unparseable`, { cause: err });
+    throw new MemoryError('SCHEMA_INVALID', `approval record for diff ${diffId} is unparseable`, { cause: err })
   }
-  if (record.decision !== "approve") {
-    throw new MemoryError("SCHEMA_INVALID", `diff ${diffId} was rejected by ${record.approver} — apply refuses`);
+  if (record.decision !== 'approve') {
+    throw new MemoryError('SCHEMA_INVALID', `diff ${diffId} was rejected by ${record.approver} — apply refuses`)
   }
-  return record;
+  return record
 }
 
 /**
@@ -160,128 +160,128 @@ function readApproval(paths: MemoryPaths, diffId: string): MemoryApprovalRecord 
  * @returns The apply receipt (also written to `proposals/<diffId>.apply.json`).
  */
 export function applyDiff(paths: MemoryPaths, diffId: string, nowIso: string): MemoryApplyReceipt {
-  const diff = readDiff(paths, diffId);
-  const approval = readApproval(paths, diffId);
+  const diff = readDiff(paths, diffId)
+  const approval = readApproval(paths, diffId)
   if (approval.diffSha256 !== diff.sha256) {
     throw new MemoryError(
-      "SCHEMA_INVALID",
+      'SCHEMA_INVALID',
       `approval for diff ${diffId} binds sha256 ${approval.diffSha256}, but the diff now hashes to ${diff.sha256} — refusing`,
-    );
+    )
   }
-  const store = openMemoryStore(paths);
-  const receipt: MemoryApplyReceipt = { diffId, applied: [], skipped: [], approver: approval.approver, appliedAt: nowIso };
-  const selected = diff.proposed.filter((op) => approval.opIds.includes(op.opId));
+  const store = openMemoryStore(paths)
+  const receipt: MemoryApplyReceipt = { diffId, applied: [], skipped: [], approver: approval.approver, appliedAt: nowIso }
+  const selected = diff.proposed.filter(op => approval.opIds.includes(op.opId))
   store.withLock(() => {
     for (const op of selected) {
       const skip = (reason: string): void => {
-        receipt.skipped.push({ opId: op.opId, reason });
-      };
-      if (op.type === "retire") {
-        const current = store.getUnit(op.unitId);
+        receipt.skipped.push({ opId: op.opId, reason })
+      }
+      if (op.type === 'retire') {
+        const current = store.getUnit(op.unitId)
         if (!current || current.version !== op.baseVersion || current.hash !== op.baseHash) {
-          skip("STALE_BASE");
-          continue;
+          skip('STALE_BASE')
+          continue
         }
         store.appendStatus({
           unitId: op.unitId,
           version: op.baseVersion,
-          status: "retired",
+          status: 'retired',
           at: nowIso,
           by: approval.approver,
           reason: op.reason,
           diffId,
-        });
-        receipt.applied.push({ opId: op.opId, unitId: op.unitId, version: op.baseVersion, beforeHash: current.hash, afterHash: current.hash });
-        continue;
+        })
+        receipt.applied.push({ opId: op.opId, unitId: op.unitId, version: op.baseVersion, beforeHash: current.hash, afterHash: current.hash })
+        continue
       }
       // create / supersede / merge all carry a full unit.
       try {
-        validateUnit(op.unit, `apply ${op.opId}`);
-        assertScopeBinding(op.unit);
+        validateUnit(op.unit, `apply ${op.opId}`)
+        assertScopeBinding(op.unit)
       } catch (err) {
-        skip(err instanceof MemoryError ? err.code : "SCHEMA_INVALID");
-        continue;
+        skip(err instanceof MemoryError ? err.code : 'SCHEMA_INVALID')
+        continue
       }
-      let overclaim = false;
+      let overclaim = false
       try {
-        overclaim = trustDisagrees(op);
+        overclaim = trustDisagrees(op)
       } catch {
-        overclaim = true; // deriveTrust itself threw TRUST_OVERCLAIM
+        overclaim = true // deriveTrust itself threw TRUST_OVERCLAIM
       }
       if (overclaim) {
-        skip("TRUST_OVERCLAIM");
-        continue;
+        skip('TRUST_OVERCLAIM')
+        continue
       }
-      if (op.type === "create") {
+      if (op.type === 'create') {
         if (store.hasUnit(op.unit.unitId)) {
-          skip("DUPLICATE_NO_CHANGE");
-          continue;
+          skip('DUPLICATE_NO_CHANGE')
+          continue
         }
-        store.appendUnitVersion(op.unit, { status: "active", by: approval.approver, reason: "APPROVED_DIFF_APPLY", diffId, at: nowIso });
-        receipt.applied.push({ opId: op.opId, unitId: op.unit.unitId, version: op.unit.version, afterHash: op.unit.hash });
-      } else if (op.type === "supersede") {
-        const current = store.getUnit(op.unitId);
+        store.appendUnitVersion(op.unit, { status: 'active', by: approval.approver, reason: 'APPROVED_DIFF_APPLY', diffId, at: nowIso })
+        receipt.applied.push({ opId: op.opId, unitId: op.unit.unitId, version: op.unit.version, afterHash: op.unit.hash })
+      } else if (op.type === 'supersede') {
+        const current = store.getUnit(op.unitId)
         if (!current || current.version !== op.baseVersion || current.hash !== op.baseHash) {
-          skip("STALE_BASE");
-          continue;
+          skip('STALE_BASE')
+          continue
         }
         if (op.unit.version !== op.baseVersion + 1) {
-          skip("SCHEMA_INVALID");
-          continue;
+          skip('SCHEMA_INVALID')
+          continue
         }
         store.appendStatus({
           unitId: op.unitId,
           version: op.baseVersion,
-          status: "superseded",
+          status: 'superseded',
           at: nowIso,
           by: approval.approver,
-          reason: "APPLIED_SUPERSEDE",
+          reason: 'APPLIED_SUPERSEDE',
           diffId,
           successorUnitId: op.unitId,
-        });
-        store.appendUnitVersion(op.unit, { status: "active", by: approval.approver, reason: "APPROVED_DIFF_APPLY", diffId, at: nowIso });
+        })
+        store.appendUnitVersion(op.unit, { status: 'active', by: approval.approver, reason: 'APPROVED_DIFF_APPLY', diffId, at: nowIso })
         receipt.applied.push({
           opId: op.opId,
           unitId: op.unitId,
           version: op.unit.version,
           beforeHash: op.baseHash,
           afterHash: op.unit.hash,
-        });
+        })
       } else {
         // merge
-        if (op.sourceUnitIds.some((id) => !store.hasUnit(id))) {
-          skip("STALE_BASE");
-          continue;
+        if (op.sourceUnitIds.some(id => !store.hasUnit(id))) {
+          skip('STALE_BASE')
+          continue
         }
         if (store.hasUnit(op.unit.unitId)) {
-          skip("DUPLICATE_NO_CHANGE");
-          continue;
+          skip('DUPLICATE_NO_CHANGE')
+          continue
         }
         for (const sourceId of op.sourceUnitIds) {
-          const source = store.getUnit(sourceId)!;
+          const source = store.getUnit(sourceId)!
           store.appendStatus({
             unitId: sourceId,
             version: source.version,
-            status: "superseded",
+            status: 'superseded',
             at: nowIso,
             by: approval.approver,
-            reason: "APPLIED_MERGE",
+            reason: 'APPLIED_MERGE',
             diffId,
             successorUnitId: op.unit.unitId,
-          });
+          })
         }
-        store.appendUnitVersion(op.unit, { status: "active", by: approval.approver, reason: "APPROVED_DIFF_APPLY", diffId, at: nowIso });
-        receipt.applied.push({ opId: op.opId, unitId: op.unit.unitId, version: op.unit.version, afterHash: op.unit.hash });
+        store.appendUnitVersion(op.unit, { status: 'active', by: approval.approver, reason: 'APPROVED_DIFF_APPLY', diffId, at: nowIso })
+        receipt.applied.push({ opId: op.opId, unitId: op.unit.unitId, version: op.unit.version, afterHash: op.unit.hash })
       }
     }
-  });
-  atomicWriteText(join(paths.proposalsDir, `${diffId}.apply.json`), `${JSON.stringify(receipt, null, 2)}\n`);
+  })
+  atomicWriteText(join(paths.proposalsDir, `${diffId}.apply.json`), `${JSON.stringify(receipt, null, 2)}\n`)
   const status =
     receipt.applied.length === selected.length && selected.length > 0
-      ? "applied"
+      ? 'applied'
       : receipt.applied.length > 0
-        ? "partially-applied"
-        : diff.status;
-  if (status !== diff.status) rewriteDiff(paths, { ...diff, status });
-  return receipt;
+        ? 'partially-applied'
+        : diff.status
+  if (status !== diff.status) rewriteDiff(paths, { ...diff, status })
+  return receipt
 }

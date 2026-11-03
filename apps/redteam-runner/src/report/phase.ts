@@ -7,42 +7,42 @@
  * runner-computed sections (proof bundles, item reconciliation,
  * integrations). Artifact writers: ./safety.ts, ./compliance.ts, ./proof.ts.
  */
-import { writeFileSync } from "node:fs";
-import { groupNotApplicable, renderNotApplicable } from "./grouping.js";
-import { join } from "node:path";
-import { publisherPrompt } from "../prompts.js";
-import { type Finding } from "../types.js";
-import { BATTERY_CATEGORIES } from "../battery.js";
-import { TARGET_PROFILES, activeTargets, targetCellStatus } from "../targets.js";
-import { ledgerSummary, serializeLedger } from "../coverage/items.js";
-import { type Ctx } from "../context.js";
-import { agentLoop, promptCtx } from "../agents.js";
-import { extractJsonBlock } from "../util.js";
-import { batteryStatusLine } from "../coverage/cells.js";
-import { PocBundle } from "../proof/index.js";
-import { resolveOperatorName } from "../accountability/index.js";
-import { countVariants, variantCountLine, variantProgressSuffix } from "../variants/index.js";
-import { nucleiCountLine } from "../nuclei/index.js";
-import { buildProofSection } from "./proof.js";
-import { buildIntegrationsSection } from "./integrations.js";
-import { buildActivitySection } from "./activity.js";
-import { readEvents } from "../events.js";
-import { writeSafetyArtifacts } from "./safety.js";
-import { writeComplianceArtifacts } from "./compliance.js";
-import { extractNarrative } from "./narrative.js";
-import { buildEngagementMeta, type ReportMeta } from "./html.js";
-import { type EngagementReportInput } from "./html/render.js";
-import { resolveReportHtml } from "./scribe-html.js";
-import { buildEngagementReportInput, buildFindingMeta } from "./html/wire.js";
-import { emitDeliverables, stampFindingRefs } from "./finding-refs.js";
-import { buildDetailInput, recordReportMeta } from "./predecessor.js";
-import { type DetailInput } from "./detail.js";
-import { buildGradeSection, gradeFindings } from "./grading.js";
-import { applyCellVerdicts, haltedFindingFromLive, mergeReporterFindings } from "./cell-verdicts.js";
-import { incompleteEndHeader } from "./incomplete-end.js";
-import { peerDeferredPromptSection, peerVerdictSuffix, stampPeerVerdicts } from "./peer-verdicts.js";
+import { writeFileSync } from 'node:fs'
+import { groupNotApplicable, renderNotApplicable } from './grouping.js'
+import { join } from 'node:path'
+import { publisherPrompt } from '../prompts.js'
+import { type Finding } from '../types.js'
+import { BATTERY_CATEGORIES } from '../battery.js'
+import { TARGET_PROFILES, activeTargets, targetCellStatus } from '../targets.js'
+import { ledgerSummary, serializeLedger } from '../coverage/items.js'
+import { type Ctx } from '../context.js'
+import { agentLoop, promptCtx } from '../agents.js'
+import { extractJsonBlock } from '../util.js'
+import { batteryStatusLine } from '../coverage/cells.js'
+import { PocBundle } from '../proof/index.js'
+import { resolveOperatorName } from '../accountability/index.js'
+import { countVariants, variantCountLine, variantProgressSuffix } from '../variants/index.js'
+import { nucleiCountLine } from '../nuclei/index.js'
+import { buildProofSection } from './proof.js'
+import { buildIntegrationsSection } from './integrations.js'
+import { buildActivitySection } from './activity.js'
+import { readEvents } from '../events.js'
+import { writeSafetyArtifacts } from './safety.js'
+import { writeComplianceArtifacts } from './compliance.js'
+import { extractNarrative } from './narrative.js'
+import { buildEngagementMeta, type ReportMeta } from './html.js'
+import { type EngagementReportInput } from './html/render.js'
+import { resolveReportHtml } from './scribe-html.js'
+import { buildEngagementReportInput, buildFindingMeta } from './html/wire.js'
+import { emitDeliverables, stampFindingRefs } from './finding-refs.js'
+import { buildDetailInput, recordReportMeta } from './predecessor.js'
+import { type DetailInput } from './detail.js'
+import { buildGradeSection, gradeFindings } from './grading.js'
+import { applyCellVerdicts, haltedFindingFromLive, mergeReporterFindings } from './cell-verdicts.js'
+import { incompleteEndHeader } from './incomplete-end.js'
+import { peerDeferredPromptSection, peerVerdictSuffix, stampPeerVerdicts } from './peer-verdicts.js'
 
-export { applyCellVerdicts, haltedFindingFromLive, mergeReporterFindings } from "./cell-verdicts.js";
+export { applyCellVerdicts, haltedFindingFromLive, mergeReporterFindings } from './cell-verdicts.js'
 
 export async function reportPhase(
   ctx: Ctx,
@@ -50,161 +50,161 @@ export async function reportPhase(
   exploitSummary: string,
   opts: { haltedReason?: string; blockedReason?: string } = {},
 ): Promise<Finding[]> {
-  const selected = ctx.input.fullBattery ? activeTargets(ctx.input) : [];
-  const fbCells = selected.flatMap((t) => BATTERY_CATEGORIES.map((c) => ({ t, c })));
-  const fbStatus = fbCells.map(({ t, c }) => ({ t, c, s: targetCellStatus(TARGET_PROFILES[t], c, ctx.targetCoverage.get(t)) }));
-  const fbDone = fbStatus.filter((x) => x.s === "done");
-  const fbBlocked = fbStatus.filter((x) => x.s === "blocked");
-  const fbMissing = fbStatus.filter((x) => x.s === "missing");
+  const selected = ctx.input.fullBattery ? activeTargets(ctx.input) : []
+  const fbCells = selected.flatMap(t => BATTERY_CATEGORIES.map(c => ({ t, c })))
+  const fbStatus = fbCells.map(({ t, c }) => ({ t, c, s: targetCellStatus(TARGET_PROFILES[t], c, ctx.targetCoverage.get(t)) }))
+  const fbDone = fbStatus.filter(x => x.s === 'done')
+  const fbBlocked = fbStatus.filter(x => x.s === 'blocked')
+  const fbMissing = fbStatus.filter(x => x.s === 'missing')
   // Individual battery items carrying a `needs` prerequisite (v0.10.0: the
   // only ones left are WS-064 [kerberos ticket material], WS-065 [human
   // operator], LX-041 [privileged test client]). They execute when the
   // prerequisite is met; the report names the prerequisite so the operator
   // knows exactly what to supply. Nothing is plan-only anymore.
-  const fbPlanOnly = selected.flatMap((t) =>
-    TARGET_PROFILES[t].battery.filter((b) => !!b.needs).map((b) => `${t}:${b.id} [needs: ${b.needs}]`),
-  );
+  const fbPlanOnly = selected.flatMap(t =>
+    TARGET_PROFILES[t].battery.filter(b => !!b.needs).map(b => `${t}:${b.id} [needs: ${b.needs}]`),
+  )
   // v0.18.0 per-item verdicts: the battery may not report complete while any
   // selected item lacks a defensible disposition. Blocked/na items never
   // force extra rounds — they are reported honestly, exactly like cells.
-  const lsum = ledgerSummary(ctx.itemLedger);
+  const lsum = ledgerSummary(ctx.itemLedger)
   const pendingKeys = [...ctx.itemLedger.values()]
-    .filter((v) => v.disposition === "pending")
-    .map((v) => v.key);
+    .filter(v => v.disposition === 'pending')
+    .map(v => v.key)
   const nonCleanItems = [...ctx.itemLedger.values()].filter(
-    (v) => v.disposition !== "executed-clean" && v.disposition !== "pending",
-  );
+    v => v.disposition !== 'executed-clean' && v.disposition !== 'pending',
+  )
   try {
     writeFileSync(
-      join(ctx.events.dir, "item-verdicts.json"),
+      join(ctx.events.dir, 'item-verdicts.json'),
       JSON.stringify(serializeLedger(ctx.itemLedger), null, 2),
-    );
+    )
   } catch {
     /* the ledger lives in memory too — a write failure must never break the report */
   }
   ctx.events.append({
-    phase: "report",
-    actor: "runner",
-    action: pendingKeys.length > 0 ? "battery_incomplete_items" : "battery_complete_items",
+    phase: 'report',
+    actor: 'runner',
+    action: pendingKeys.length > 0 ? 'battery_incomplete_items' : 'battery_complete_items',
     result:
       `Item reconciliation: ${lsum.total} items — ${lsum.confirmed} confirmed, ${lsum.executedClean} executed-clean, ` +
       `${lsum.killed} killed, ${lsum.blocked} blocked, ${lsum.na} na, ${lsum.pending} pending.` +
-      (pendingKeys.length > 0 ? ` NOT COMPLETE: ${pendingKeys.length} items still pending a verdict.` : ""),
-  });
-  const covered = BATTERY_CATEGORIES.filter((c) => ctx.coverage.has(c));
+      (pendingKeys.length > 0 ? ` NOT COMPLETE: ${pendingKeys.length} items still pending a verdict.` : ''),
+  })
+  const covered = BATTERY_CATEGORIES.filter(c => ctx.coverage.has(c))
   const batteryLine = ctx.input.fullBattery
     ? `Battery coverage (FULL BATTERY — 3 categories × ${selected.length} targets): ${fbDone.length}/${fbCells.length} cells probed ` +
       `(${batteryStatusLine(ctx)}, ${ctx.probesUsed} probes total). ` +
       (fbBlocked.length > 0
-        ? `BLOCKED (prerequisite not met — planned, not probed; see Honest limits): ${fbBlocked.map(({ t, c }) => `${t}:${c}`).join(", ")}. `
-        : "") +
+        ? `BLOCKED (prerequisite not met — planned, not probed; see Honest limits): ${fbBlocked.map(({ t, c }) => `${t}:${c}`).join(', ')}. `
+        : '') +
       (fbPlanOnly.length > 0
-        ? `Items with prerequisites (execute when met — see Honest limits): ${fbPlanOnly.join(", ")}. `
-        : "") +
+        ? `Items with prerequisites (execute when met — see Honest limits): ${fbPlanOnly.join(', ')}. `
+        : '') +
       (fbMissing.length > 0 || pendingKeys.length > 0
         ? `NOT COVERED: ${[
-            ...fbMissing.map(({ t, c }) => `${t}:${c}`),
-            ...(pendingKeys.length > 0
-              ? [
-                  `${pendingKeys.length} battery items pending a verdict ` +
-                    `(${pendingKeys.slice(0, 25).join(", ")}${pendingKeys.length > 25 ? "…" : ""})`,
-                ]
-              : []),
-          ].join("; ")} — list these under Honest limits.`
+          ...fbMissing.map(({ t, c }) => `${t}:${c}`),
+          ...(pendingKeys.length > 0
+            ? [
+              `${pendingKeys.length} battery items pending a verdict ` +
+                    `(${pendingKeys.slice(0, 25).join(', ')}${pendingKeys.length > 25 ? '…' : ''})`,
+            ]
+            : []),
+        ].join('; ')} — list these under Honest limits.`
         : `Full battery complete: all ${fbCells.length} cells probed or honestly blocked; all ${lsum.total} battery items carry a verdict.`)
     : `Battery coverage: ${covered.length}/3 categories probed ` +
-      `(${covered.map((c) => `${c}:${ctx.coverage.has(c) ? "yes" : "no"}`).join(", ")}, ${ctx.probesUsed} probes total). ` +
-      (covered.length < 3 ? `NOT COVERED: ${BATTERY_CATEGORIES.filter((c) => !ctx.coverage.has(c)).join(", ")} — list these under Honest limits.` : "Full battery complete.");
-  let reportMd: string;
-  let findings: Finding[];
+      `(${covered.map(c => `${c}:${ctx.coverage.has(c) ? 'yes' : 'no'}`).join(', ')}, ${ctx.probesUsed} probes total). ` +
+      (covered.length < 3 ? `NOT COVERED: ${BATTERY_CATEGORIES.filter(c => !ctx.coverage.has(c)).join(', ')} — list these under Honest limits.` : 'Full battery complete.')
+  let reportMd: string
+  let findings: Finding[]
   if (opts.haltedReason || opts.blockedReason) {
     // Never call the seat LLM here — it could re-hit the same cap and lose the
     // accountability record exactly when it matters most.
-    reportMd = incompleteEndHeader(ctx, opts.haltedReason ?? opts.blockedReason ?? "incomplete", Boolean(opts.blockedReason));
-    findings = ctx.liveFindings.map((lf, i) => haltedFindingFromLive(lf, i));
-    stampPeerVerdicts(findings, ctx);
+    reportMd = incompleteEndHeader(ctx, opts.haltedReason ?? opts.blockedReason ?? 'incomplete', Boolean(opts.blockedReason))
+    findings = ctx.liveFindings.map((lf, i) => haltedFindingFromLive(lf, i))
+    stampPeerVerdicts(findings, ctx)
   } else if (ctx.config.dryRunAgents) {
-    reportMd = `# Engagement report (dry-run)\n\nTarget: ${ctx.input.target}\nMode: ${ctx.input.mode}\n`;
-    findings = [];
+    reportMd = `# Engagement report (dry-run)\n\nTarget: ${ctx.input.target}\nMode: ${ctx.input.mode}\n`
+    findings = []
   } else {
     reportMd = await agentLoop(
       ctx,
-      "reporter",
-      "report",
+      'reporter',
+      'report',
       publisherPrompt(promptCtx(ctx)),
-      `Write the client report now.\n\nAuthorization: ${ctx.verificationProof}\n\nOperation plan: ${JSON.stringify(ctx.plan)}\n\nShared verdicts this engagement — confirmed (${ctx.liveFindings.length}):\n${ctx.liveFindings.map((f) => `- [${f.severity}] ${f.title} (${f.attackId}${f.vulnClass ? `, ${f.vulnClass}` : ""}${f.cellState ? `, cell: ${f.cellState.toUpperCase()}` : ""}${peerVerdictSuffix(f)}): ${f.evidence}`).join("\n") || "(none)"}\nKilled hypotheses (${ctx.killedLive.length}):\n${ctx.killedLive.map((k) => `- ${k.hypothesis} → ${k.killingObservation}`).join("\n") || "(none)"}\n${peerDeferredPromptSection(ctx.peerDeferredLive)}Registry hits consulted: ${ctx.registryHits.length}. Target fingerprint: ${JSON.stringify(ctx.fingerprint)}.\n\n${batteryLine}\n\nRecon brief:\n${reconBrief.slice(0, 4000)}\n\nExploitation summary:\n${exploitSummary.slice(0, 4000)}\n\nProof of exploitation is appended mechanically by the runner from the audit log — do not invent PoC details, marker values, or reproduction steps in your narrative; describe findings only from the evidence given.\n\nEnd the report with a JSON block: \`\`\`json {"findings": [{"id":"F-1","severity":"low","title":"...","attackIds":["T1190"],"evidence":"...","fix":"...","retest":"...","status":"confirmed"}]} \`\`\``,
+      `Write the client report now.\n\nAuthorization: ${ctx.verificationProof}\n\nOperation plan: ${JSON.stringify(ctx.plan)}\n\nShared verdicts this engagement — confirmed (${ctx.liveFindings.length}):\n${ctx.liveFindings.map(f => `- [${f.severity}] ${f.title} (${f.attackId}${f.vulnClass ? `, ${f.vulnClass}` : ''}${f.cellState ? `, cell: ${f.cellState.toUpperCase()}` : ''}${peerVerdictSuffix(f)}): ${f.evidence}`).join('\n') || '(none)'}\nKilled hypotheses (${ctx.killedLive.length}):\n${ctx.killedLive.map(k => `- ${k.hypothesis} → ${k.killingObservation}`).join('\n') || '(none)'}\n${peerDeferredPromptSection(ctx.peerDeferredLive)}Registry hits consulted: ${ctx.registryHits.length}. Target fingerprint: ${JSON.stringify(ctx.fingerprint)}.\n\n${batteryLine}\n\nRecon brief:\n${reconBrief.slice(0, 4000)}\n\nExploitation summary:\n${exploitSummary.slice(0, 4000)}\n\nProof of exploitation is appended mechanically by the runner from the audit log — do not invent PoC details, marker values, or reproduction steps in your narrative; describe findings only from the evidence given.\n\nEnd the report with a JSON block: \`\`\`json {"findings": [{"id":"F-1","severity":"low","title":"...","attackIds":["T1190"],"evidence":"...","fix":"...","retest":"...","status":"confirmed"}]} \`\`\``,
       [],
       4,
-    );
-    const parsed = extractJsonBlock(reportMd) as { findings?: Finding[] } | null;
+    )
+    const parsed = extractJsonBlock(reportMd) as { findings?: Finding[] } | null
     // H3: the findings set is built from the live record — the reporter
     // JSON supplies prose only (mergeReporterFindings in cell-verdicts);
     // unmatched reporter items are dropped and logged, never silently.
     findings = mergeReporterFindings(ctx.liveFindings, Array.isArray(parsed?.findings) ? parsed.findings : [], (dropped) => {
-      ctx.events.append({ phase: "report", actor: "runner", action: "report_finding_dropped", result: `Reporter finding "${dropped.title}" matches no live finding — excluded from the record.` });
-    });
-    for (const f of findings) { delete f.producer; delete f.peerReview; } // attribution is runner-stamped by the joins below, never model-set
+      ctx.events.append({ phase: 'report', actor: 'runner', action: 'report_finding_dropped', result: `Reporter finding "${dropped.title}" matches no live finding — excluded from the record.` })
+    })
+    for (const f of findings) { delete f.producer; delete f.peerReview } // attribution is runner-stamped by the joins below, never model-set
     // Q-PROVEN: join the parsed findings back to the live findings so the
     // cell verdict reaches the report (before the accountable stamp below).
-    applyCellVerdicts(findings, ctx.liveFindings);
-    stampPeerVerdicts(findings, ctx);
+    applyCellVerdicts(findings, ctx.liveFindings)
+    stampPeerVerdicts(findings, ctx)
   }
   // v0.17.0 accountability: every finding records the named human
   // accountable for it. Stamped mechanically by the runner at report time —
   // the reporter agent cannot set or change it.
   {
-    const accountable = resolveOperatorName(ctx.input.operatorName, process.env) ?? "(operator name not supplied — set REDTEAM_OPERATOR)";
-    for (const f of findings) f.accountableOperator = accountable;
+    const accountable = resolveOperatorName(ctx.input.operatorName, process.env) ?? '(operator name not supplied — set REDTEAM_OPERATOR)'
+    for (const f of findings) f.accountableOperator = accountable
   }
-  stampFindingRefs(findings, ctx.liveFindings);
+  stampFindingRefs(findings, ctx.liveFindings)
   // The unified operation narrative ("Megazord"): the Scribe writes it first as plain paragraphs; the runner extracts it.
-  const narrative = extractNarrative(reportMd);
+  const narrative = extractNarrative(reportMd)
   if (narrative) {
-    ctx.operationNarrative = narrative;
-    ctx.events.updateState({ operationNarrative: narrative });
+    ctx.operationNarrative = narrative
+    ctx.events.updateState({ operationNarrative: narrative })
   }
   // Snapshot for the HTML executive-summary slot: the narrative before appends.
-  const narrativeSource = reportMd;
+  const narrativeSource = reportMd
   // Runner-computed facts are appended deterministically — never trusted to the model.
-  reportMd += `\n\n---\n\n## Battery coverage (runner-computed)\n\n${batteryLine}\n`;
+  reportMd += `\n\n---\n\n## Battery coverage (runner-computed)\n\n${batteryLine}\n`
   // The engagement grade: the embedded Seclayer anchored scoring engine
   // is the runner's one grading voice (report/grading.ts) — deterministic,
   // computed here from the final confirmed findings, never the model's — and never issued for a halted/blocked end (N/A, as the HTML cover renders).
   {
-    const posture = gradeFindings(findings);
-    reportMd += `\n---\n\n${opts.haltedReason || opts.blockedReason ? `## Security grade — SecScan (anchored scoring)\n\n**Grade N/A** — engagement ${opts.blockedReason ? "blocked" : "halted"}; no grade is issued for an incomplete engagement.\n` : buildGradeSection(findings)}`;
+    const posture = gradeFindings(findings)
+    reportMd += `\n---\n\n${opts.haltedReason || opts.blockedReason ? `## Security grade — SecScan (anchored scoring)\n\n**Grade N/A** — engagement ${opts.blockedReason ? 'blocked' : 'halted'}; no grade is issued for an incomplete engagement.\n` : buildGradeSection(findings)}`
     ctx.events.append({
-      phase: "report",
-      actor: "runner",
-      action: "report_grade",
-      result: opts.haltedReason || opts.blockedReason ? `Security grade N/A — engagement ${opts.blockedReason ? "blocked" : "halted"}; no grade issued for an incomplete engagement.` : `Security grade ${posture.grade} (${posture.score}/100, ${posture.postureRating}) over ${posture.activeCount} confirmed finding(s) — Seclayer anchored scoring.`,
-    });
+      phase: 'report',
+      actor: 'runner',
+      action: 'report_grade',
+      result: opts.haltedReason || opts.blockedReason ? `Security grade N/A — engagement ${opts.blockedReason ? 'blocked' : 'halted'}; no grade issued for an incomplete engagement.` : `Security grade ${posture.grade} (${posture.score}/100, ${posture.postureRating}) over ${posture.activeCount} confirmed finding(s) — Seclayer anchored scoring.`,
+    })
   }
   // v0.21.0 nuclei: honest counting — template executions are variant-level
   // checks, printed whenever nuclei ran (not only full-battery), reported
   // separately from intents, never merged.
-  const ncAny = nucleiCountLine(ctx.nuclei);
-  if (ncAny) reportMd += `\n${ncAny}\n`;
-  const pocBundleMap = new Map<string, PocBundle>();
-  const proofData = buildProofSection(ctx, findings, pocBundleMap);
-  reportMd += proofData.markdown;
+  const ncAny = nucleiCountLine(ctx.nuclei)
+  if (ncAny) reportMd += `\n${ncAny}\n`
+  const pocBundleMap = new Map<string, PocBundle>()
+  const proofData = buildProofSection(ctx, findings, pocBundleMap)
+  reportMd += proofData.markdown
   // v0.18.0 per-item verdicts: the item reconciliation section — every
   // battery item's disposition, derived from the ledger (audit log +
   // verdict tools), never hand-waved. Full ledger: item-verdicts.json.
-  const itemsMark = reportMd.length;
+  const itemsMark = reportMd.length
   if (ctx.input.fullBattery && ctx.itemLedger.size > 0) {
-    reportMd += `\n---\n\n## Item reconciliation (runner-computed)\n\n`;
+    reportMd += '\n---\n\n## Item reconciliation (runner-computed)\n\n'
     reportMd +=
-      `Every battery item carries exactly one verdict this engagement. ` +
-      `The battery counts complete only when no item is pending.\n\n`;
+      'Every battery item carries exactly one verdict this engagement. ' +
+      'The battery counts complete only when no item is pending.\n\n'
     reportMd +=
       `**${lsum.total} items:** ${lsum.confirmed} confirmed · ${lsum.executedClean} executed-clean · ` +
-      `${lsum.killed} killed · ${lsum.blocked} blocked · ${lsum.na} not-applicable · ${lsum.pending} pending.\n\n`;
+      `${lsum.killed} killed · ${lsum.blocked} blocked · ${lsum.na} not-applicable · ${lsum.pending} pending.\n\n`
     // v0.20.0 variants: honest counting — intents vs executions, two
     // numbers, never merged into one inflated figure.
-    const vc = countVariants(ctx.itemLedger);
+    const vc = countVariants(ctx.itemLedger)
     if (vc.itemsWithVariants > 0) {
-      reportMd += `${variantCountLine(vc)}\n\n`;
+      reportMd += `${variantCountLine(vc)}\n\n`
     }
     if (nonCleanItems.length > 0) {
       // Not-applicable items are grouped by target and reason; everything else
@@ -212,29 +212,29 @@ export async function reportPhase(
       // with one family-level reason each, and listing them one per line buried
       // the actual findings under 338 repetitions of the same sentence. The full
       // ids remain in item-verdicts.json — see report/grouping.ts.
-      const naItems = nonCleanItems.filter((v) => v.disposition === "na");
-      const otherItems = nonCleanItems.filter((v) => v.disposition !== "na");
+      const naItems = nonCleanItems.filter(v => v.disposition === 'na')
+      const otherItems = nonCleanItems.filter(v => v.disposition !== 'na')
       for (const v of otherItems) {
-        reportMd += `- **${v.key}** [${v.disposition}]${variantProgressSuffix(v)} ${v.name}${v.reason ? ` — ${v.reason}` : ""}\n`;
+        reportMd += `- **${v.key}** [${v.disposition}]${variantProgressSuffix(v)} ${v.name}${v.reason ? ` — ${v.reason}` : ''}\n`
       }
-      if (naItems.length > 0) reportMd += `\n${renderNotApplicable(groupNotApplicable(naItems))}\n`;
-      reportMd += `\n`;
+      if (naItems.length > 0) reportMd += `\n${renderNotApplicable(groupNotApplicable(naItems))}\n`
+      reportMd += '\n'
     }
     if (pendingKeys.length > 0) {
       reportMd +=
         `**Battery NOT complete:** ${pendingKeys.length} items still pending a verdict ` +
-        `(${pendingKeys.slice(0, 50).join(", ")}${pendingKeys.length > 50 ? "…" : ""}). ` +
-        `See Honest limits.\n`;
+        `(${pendingKeys.slice(0, 50).join(', ')}${pendingKeys.length > 50 ? '…' : ''}). ` +
+        'See Honest limits.\n'
     }
   }
-  const reportEvents = readEvents(ctx.events.dir, 0, 100000);
-  reportMd += buildActivitySection(reportEvents);
-  const integrationsMd = await buildIntegrationsSection(ctx, findings, pocBundleMap);
-  reportMd += integrationsMd;
+  const reportEvents = readEvents(ctx.events.dir, 0, 100000)
+  reportMd += buildActivitySection(reportEvents)
+  const integrationsMd = await buildIntegrationsSection(ctx, findings, pocBundleMap)
+  reportMd += integrationsMd
   // report.md + findings.csv are written after the HTML input exists
   // (below): both render from the ONE report document when it built;
   // the legacy assembly above is the fallback when it could not.
-  let reportInput: EngagementReportInput | undefined;
+  let reportInput: EngagementReportInput | undefined
   try {
     const totals = {
       total: lsum.total,
@@ -244,30 +244,30 @@ export async function reportPhase(
       blocked: lsum.blocked,
       na: lsum.na,
       pending: lsum.pending,
-    };
-    const cells = fbStatus.map(({ t, c, s }) => ({ target: t, category: c, state: s }));
+    }
+    const cells = fbStatus.map(({ t, c, s }) => ({ target: t, category: c, state: s }))
     // Q-REPORT-DETAIL: record the posture of record, resolve the
     // predecessor, assemble the detail input (additive — see catch).
-    let detailInput: DetailInput | undefined;
-    let baselineMeta: ReportMeta["baseline"];
+    let detailInput: DetailInput | undefined
+    let baselineMeta: ReportMeta['baseline']
     try {
-      recordReportMeta(ctx, opts.haltedReason || opts.blockedReason ? null : gradeFindings(findings));
+      recordReportMeta(ctx, opts.haltedReason || opts.blockedReason ? null : gradeFindings(findings))
       const assembled = buildDetailInput({
         ctx, findings, bundles: pocBundleMap, totals, cells,
         findingMeta: buildFindingMeta(pocBundleMap, findings),
         planOnly: fbPlanOnly, events: reportEvents,
-      });
-      detailInput = assembled.input;
-      baselineMeta = assembled.baselineMeta;
+      })
+      detailInput = assembled.input
+      baselineMeta = assembled.baselineMeta
     } catch (err) {
-      ctx.events.append({ phase: "report", actor: "runner", action: "report_detail_failed", result: `Detail derivations skipped (HTML unaffected): ${(err as Error).message}` });
+      ctx.events.append({ phase: 'report', actor: 'runner', action: 'report_detail_failed', result: `Detail derivations skipped (HTML unaffected): ${(err as Error).message}` })
     }
-    const meta = buildEngagementMeta(ctx, findings, totals);
-    if (baselineMeta) meta.baseline = baselineMeta;
+    const meta = buildEngagementMeta(ctx, findings, totals)
+    if (baselineMeta) meta.baseline = baselineMeta
     reportInput = buildEngagementReportInput({
       ctx,
       meta,
-      title: "Penetration Test Report",
+      title: 'Penetration Test Report',
       findings,
       narrativeMd: narrativeSource,
       bundles: pocBundleMap,
@@ -279,18 +279,18 @@ export async function reportPhase(
       haltedReason: opts.haltedReason,
       blockedReason: opts.blockedReason,
       detailInput,
-    });
-    writeFileSync(join(ctx.events.dir, "report.html"), await resolveReportHtml(ctx, reportInput));
-    ctx.events.append({ phase: "report", actor: "runner", action: "report_html_written", result: "HTML report written alongside report.md." });
+    })
+    writeFileSync(join(ctx.events.dir, 'report.html'), await resolveReportHtml(ctx, reportInput))
+    ctx.events.append({ phase: 'report', actor: 'runner', action: 'report_html_written', result: 'HTML report written alongside report.md.' })
   } catch (err) {
-    ctx.events.append({ phase: "report", actor: "runner", action: "report_html_failed", result: `HTML report generation failed (report.md unaffected): ${(err as Error).message}` });
+    ctx.events.append({ phase: 'report', actor: 'runner', action: 'report_html_failed', result: `HTML report generation failed (report.md unaffected): ${(err as Error).message}` })
   }
   // Q-RP-2 + Q-RP-5 + Q-DELIVERABLES-AUTOFIRE + Q-REPORT-TEMPLATES: closing set — md/csv from the document, DOCX, twins, zip.
   emitDeliverables(ctx, reportInput, { findings, totals: lsum, cells: fbStatus, haltedReason: opts.haltedReason, blockedReason: opts.blockedReason },
-    { legacyMd: reportMd, findings, bundles: pocBundleMap, annexes: { batteryLine, nucleiLine: ncAny || undefined, itemsMd: reportMd.slice(itemsMark), proofMd: proofData.markdown, integrationsMd } });
-  ctx.events.append({ phase: "report", actor: "reporter", action: "report_written", result: `Report written (${findings.length} findings parsed).` });
-  const safetyManifest = writeSafetyArtifacts(ctx);
-  writeComplianceArtifacts(ctx, findings, batteryLine, safetyManifest);
-  ctx.events.updateState({ findings });
-  return findings;
+    { legacyMd: reportMd, findings, bundles: pocBundleMap, annexes: { batteryLine, nucleiLine: ncAny || undefined, itemsMd: reportMd.slice(itemsMark), proofMd: proofData.markdown, integrationsMd } })
+  ctx.events.append({ phase: 'report', actor: 'reporter', action: 'report_written', result: `Report written (${findings.length} findings parsed).` })
+  const safetyManifest = writeSafetyArtifacts(ctx)
+  writeComplianceArtifacts(ctx, findings, batteryLine, safetyManifest)
+  ctx.events.updateState({ findings })
+  return findings
 }

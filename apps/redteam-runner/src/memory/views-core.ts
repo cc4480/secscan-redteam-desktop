@@ -3,29 +3,29 @@
  * 300-line budget: the generator version/budgets, the atomic write, the
  * views index, and the unit view hash. Pure filesystem + hashing; no store.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { MemoryError } from "./errors.js";
-import { hashRecord } from "./schema.js";
-import type { MemoryPaths } from "./paths.js";
-import type { DirectoryFreshness, MemoryUnit } from "./types.js";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { MemoryError } from './errors.js'
+import { hashRecord } from './schema.js'
+import type { MemoryPaths } from './paths.js'
+import type { DirectoryFreshness, MemoryUnit } from './types.js'
 
-export const VIEW_GENERATOR_VERSION = "deterministic-v1";
-export const L0_BUDGET = 256;
-export const L1_BUDGET = 4000;
+export const VIEW_GENERATOR_VERSION = 'deterministic-v1'
+export const L0_BUDGET = 256
+export const L1_BUDGET = 4000
 
 /** Write a tmp file then rename (unlink-then-rename fallback on Windows) — the trajectory-write.ts pattern. */
 export function atomicWriteText(path: string, body: string): void {
-  const tmp = `${path}.tmp-${process.pid}-${Date.now().toString(36)}`;
+  const tmp = `${path}.tmp-${process.pid}-${Date.now().toString(36)}`
   try {
-    writeFileSync(tmp, body);
+    writeFileSync(tmp, body)
     try {
-      renameSync(tmp, path);
+      renameSync(tmp, path)
     } catch {
-      rmSync(path, { force: true });
-      renameSync(tmp, path);
+      rmSync(path, { force: true })
+      renameSync(tmp, path)
     }
   } finally {
-    if (existsSync(tmp)) rmSync(tmp, { force: true });
+    if (existsSync(tmp)) rmSync(tmp, { force: true })
   }
 }
 
@@ -35,13 +35,13 @@ export function atomicWriteText(path: string, body: string): void {
 
 /** The `views.json` file: directory freshness entries by directory key. */
 export interface ViewsIndexFile {
-  version: 1;
-  dirs: Record<string, DirectoryFreshness>;
+  version: 1
+  dirs: Record<string, DirectoryFreshness>
 }
 
 /** An empty freshness index (a freshly bootstrapped store). */
 export function emptyViewsIndex(): ViewsIndexFile {
-  return { version: 1, dirs: {} };
+  return { version: 1, dirs: {} }
 }
 
 /**
@@ -53,22 +53,22 @@ export function emptyViewsIndex(): ViewsIndexFile {
  * @returns The parsed index.
  */
 export function readViewsIndex(paths: MemoryPaths): ViewsIndexFile {
-  if (!existsSync(paths.viewsIndexPath)) return emptyViewsIndex();
+  if (!existsSync(paths.viewsIndexPath)) return emptyViewsIndex()
   try {
-    const raw = JSON.parse(readFileSync(paths.viewsIndexPath, "utf8")) as ViewsIndexFile;
-    if (!raw || raw.version !== 1 || typeof raw.dirs !== "object" || raw.dirs === null) {
-      throw new Error("views.json is not a version-1 index");
+    const raw = JSON.parse(readFileSync(paths.viewsIndexPath, 'utf8')) as ViewsIndexFile
+    if (!raw || raw.version !== 1 || typeof raw.dirs !== 'object' || raw.dirs === null) {
+      throw new Error('views.json is not a version-1 index')
     }
-    return raw;
+    return raw
   } catch (err) {
-    throw new MemoryError("STORE_INDEX_MISMATCH", `${paths.viewsIndexPath}: unreadable views index`, { cause: err });
+    throw new MemoryError('STORE_INDEX_MISMATCH', `${paths.viewsIndexPath}: unreadable views index`, { cause: err })
   }
 }
 
 /** Persist the freshness index atomically. */
 export function writeViewsIndex(paths: MemoryPaths, index: ViewsIndexFile): void {
-  mkdirSync(paths.root, { recursive: true });
-  atomicWriteText(paths.viewsIndexPath, `${JSON.stringify(index, null, 2)}\n`);
+  mkdirSync(paths.root, { recursive: true })
+  atomicWriteText(paths.viewsIndexPath, `${JSON.stringify(index, null, 2)}\n`)
 }
 
 // ---------------------------------------------------------------------------
@@ -83,16 +83,16 @@ export function writeViewsIndex(paths: MemoryPaths, index: ViewsIndexFile): void
  * @param unit - The unit (any views/hash values are ignored).
  * @returns The source hash for view generation.
  */
-export function unitViewSourceHash(unit: Omit<MemoryUnit, "hash">): string {
-  const { views: _views, ...rest } = unit;
-  return hashRecord(rest);
+export function unitViewSourceHash(unit: Omit<MemoryUnit, 'hash'>): string {
+  const { views: _views, ...rest } = unit
+  return hashRecord(rest)
 }
 
 export function truncateAtWord(text: string, budget: number): string {
-  if (text.length <= budget) return text;
-  const cut = text.slice(0, budget - 1);
-  const lastSpace = cut.lastIndexOf(" ");
-  return `${lastSpace > 0 ? cut.slice(0, lastSpace) : cut}…`;
+  if (text.length <= budget) return text
+  const cut = text.slice(0, budget - 1)
+  const lastSpace = cut.lastIndexOf(' ')
+  return `${lastSpace > 0 ? cut.slice(0, lastSpace) : cut}…`
 }
 
 /**
