@@ -99,7 +99,14 @@ export async function callArsenalTool(
       upstream.end(body)
     })
   } catch (error) {
-    return failure(502, 'console-unavailable', `runner console unreachable: ${(error as Error).message}`)
+    // Same reasoning as the proxy: a refusal means nothing is serving the address,
+    // which is usually an operator-supplied REDTEAM_MCP_URL, not an app defect.
+    const message = (error as Error).message
+    const detail = /ECONNREFUSED|EHOSTUNREACH|ENOTFOUND|ETIMEDOUT/i.test(message)
+      ? `${message} — nothing is listening there. Start that console, or clear `
+        + 'REDTEAM_MCP_URL so the desktop app starts its own.'
+      : message
+    return failure(502, 'console-unavailable', `runner console unreachable: ${detail}`)
   }
   let rpc: RpcResponse
   try {

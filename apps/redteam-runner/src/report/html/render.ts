@@ -18,6 +18,7 @@ import { type PocBundle, type NegativeProof } from '../../proof/index.js'
 import { renderMarkdown } from '../../ui/markdown.js'
 import { type ReportMeta } from '../html.js'
 import { renderHtmlDocument } from "./shell.js"
+import { isCoverageComplete } from "../completeness.js"
 import { severityChips } from './gauge.js'
 import { findingCard, negativeProofCard, type FindingMeta } from './cards.js'
 import { buildReportDocument, type ReportTierGroup } from '../document.js'
@@ -166,7 +167,12 @@ export function renderEngagementReportHtml(o: EngagementReportInput): string {
   )
 
   parts.push('<h2 class="sec-title">Findings</h2>')
-  if (activeCount === 0 && !halted && !blocked) parts.push(allClearSection())
+  // The all-clear banner asserts there is nothing to find. That is only true when
+  // the battery actually concluded: with pending verdicts the correct statement is
+  // that the assessment is incomplete, which the coverage section already says.
+  if (activeCount === 0 && !halted && !blocked && isCoverageComplete(o.coverage.totals)) {
+    parts.push(allClearSection())
+  }
   for (const g of doc.tierGroups) parts.push(tierGroupHtml(o, g))
 
   parts.push(fixPromptSection(o.meta.target, o.findings, o.bundles))

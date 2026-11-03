@@ -78,6 +78,10 @@ export function parseSkillFrontmatter(text: string): SkillFrontmatter {
     const line = lines[i] ?? ''
     if (line.trim() === '') continue
     const match = /^([A-Za-z0-9_-]+):\s?(.*)$/.exec(line)
+    // YAML block sequences (`tags:` then `- value`) and indented continuations are
+    // valid frontmatter. They carry nothing the index uses, so skip them rather
+    // than reject a whole skill pack over a `tags:` list.
+    if (/^\s*-/.test(line) || /^\s+\S/.test(line)) continue
     if (!match) {
       fail(`malformed frontmatter line ${i + 1}: ${line}`)
     } else {

@@ -142,12 +142,27 @@ function fleetAssets(): FleetAssets {
     souls.set(name, read(join('prompts', 'souls', `${name}.md`)))
   }
   const metas: SkillMeta[] = discoverSkills([join(root, 'skills')])
+  // Only the bodies a seat can actually bind are read. The catalogue is large
+  // (the installed cybersecurity set), and a seat binds its own SKILLS_BY_ROLE
+  // plus the black-team mask — so loading every body here cost one file read
+  // per shipped skill at every engagement start and used none of them.
+  const needed = new Set<string>([
+    ...Object.values(SKILLS_BY_ROLE).flat(),
+    'blackteam-adversary-emulation',
+  ])
   const skillBodies = new Map<string, string>()
-  for (const meta of metas) skillBodies.set(meta.name, loadSkillBody(meta))
+  for (const meta of metas) {
+    if (needed.has(meta.name)) skillBodies.set(meta.name, loadSkillBody(meta))
+  }
   assetsCache = {
     master: read(join('prompts', 'master.md')),
     souls,
-    skillIndex: skillIndexBlock(metas),
+    // Only what a seat can bind. Every seat prompt carries this index, so the whole
+    // installed catalogue (~461 KB across 827 skills) would ride along in EVERY
+    // prompt and buy nothing - a seat uses its own SKILLS_BY_ROLE bodies. The wider
+    // catalogue stays loadable by name through load_skill; a search affordance is the
+    // honest way to surface it.
+    skillIndex: skillIndexBlock(metas.filter(meta => needed.has(meta.name))),
     skillBodies,
   }
   return assetsCache

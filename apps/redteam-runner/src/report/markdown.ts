@@ -1,3 +1,4 @@
+import { isCoverageComplete } from "./completeness.js";
 /**
  * report.md — the markdown rendering of the ONE authoritative report
  * document (report/document.ts). It mirrors the HTML flagship's
@@ -137,7 +138,14 @@ function findingMd(doc: ReportDocument, f: Finding): string {
 function findingsMd(doc: ReportDocument): string {
   const parts = ['## Findings']
   const tc = doc.tierCounts
-  if (tc.proven + tc.confirmed + tc.deferred === 0 && !doc.haltedReason && !doc.blockedReason) {
+  // Same rule as the HTML all-clear panel: "Zero Vulnerabilities Outstanding" is a
+  // claim about the assessment, not about the finding list. A pending battery has not
+  // assessed everything, so it says so instead.
+  if (
+    tc.proven + tc.confirmed + tc.deferred === 0
+    && !doc.haltedReason && !doc.blockedReason
+    && isCoverageComplete(doc.coverage.totals)
+  ) {
     parts.push(
       '',
       '### Zero Vulnerabilities Outstanding',

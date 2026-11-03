@@ -99,7 +99,16 @@ export function proxyToConsole(
   })
   upstream.on('error', (error) => {
     if (!res.headersSent && !res.writableEnded) {
-      sendShareJsonError(res, 502, 'console-unavailable', `runner console unreachable: ${error.message}`)
+      // Name the console and the likely cause. "ECONNREFUSED 127.0.0.1:8787" alone
+      // reads like a bug in the app; in practice it means nothing is serving that
+      // address — often because an operator-supplied REDTEAM_MCP_URL suppressed the
+      // bundled console (the desktop app starts its own only when that is unset).
+      const where = url.origin
+      const detail = /ECONNREFUSED|EHOSTUNREACH|ENOTFOUND|ETIMEDOUT/i.test(error.message)
+        ? `nothing is listening at ${where}. Start that console, or clear REDTEAM_MCP_URL `
+          + 'so the desktop app starts its own.'
+        : `${error.message} (${where})`
+      sendShareJsonError(res, 502, 'console-unavailable', `runner console unreachable: ${detail}`)
     } else {
       res.destroy()
     }

@@ -40,6 +40,7 @@ import { type DetailInput } from './detail.js'
 import { buildGradeSection, gradeFindings } from './grading.js'
 import { applyCellVerdicts, haltedFindingFromLive, mergeReporterFindings } from './cell-verdicts.js'
 import { incompleteEndHeader } from './incomplete-end.js'
+import { isCoverageComplete } from "./completeness.js";
 import { peerDeferredPromptSection, peerVerdictSuffix, stampPeerVerdicts } from './peer-verdicts.js'
 
 export { applyCellVerdicts, haltedFindingFromLive, mergeReporterFindings } from './cell-verdicts.js'
@@ -167,12 +168,24 @@ export async function reportPhase(
   const narrativeSource = reportMd
   // Runner-computed facts are appended deterministically — never trusted to the model.
   reportMd += `\n\n---\n\n## Battery coverage (runner-computed)\n\n${batteryLine}\n`
-  // The engagement grade: the embedded Seclayer anchored scoring engine
+  // The one completeness predicate (report/completeness.ts) decides whether a
+  // grade may issue at all. A battery with pending verdicts has not concluded,
+  // so a letter grade over it would state more than the run supports — the
+  // defect this predicate was written for and, until now, was not wired into.
+  const coverageTotals = {
+    total: lsum.total,
+    confirmed: lsum.confirmed,
+    executedClean: lsum.executedClean,
+    killed: lsum.killed,
+    blocked: lsum.blocked,
+    na: lsum.na,
+    pending: lsum.pending,
+  }  // The engagement grade: the embedded Seclayer anchored scoring engine
   // is the runner's one grading voice (report/grading.ts) — deterministic,
   // computed here from the final confirmed findings, never the model's — and never issued for a halted/blocked end (N/A, as the HTML cover renders).
   {
     const posture = gradeFindings(findings)
-    reportMd += `\n---\n\n${opts.haltedReason || opts.blockedReason ? `## Security grade — SecScan (anchored scoring)\n\n**Grade N/A** — engagement ${opts.blockedReason ? 'blocked' : 'halted'}; no grade is issued for an incomplete engagement.\n` : buildGradeSection(findings)}`
+    reportMd += `\n---\n\n${(opts.haltedReason || opts.blockedReason || !isCoverageComplete(coverageTotals)) ? `## Security grade — SecScan (anchored scoring)\n\n**Grade N/A** — engagement ${opts.blockedReason ? 'blocked' : 'halted'}; no grade is issued for an incomplete engagement.\n` : buildGradeSection(findings)}`
     ctx.events.append({
       phase: 'report',
       actor: 'runner',
