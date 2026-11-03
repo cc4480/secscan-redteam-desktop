@@ -251,7 +251,7 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
     const deadReason = deadCredentialHaltReason(poolSnapshots(), roleModelPolicy().coordinator.provider);
     if (deadReason !== undefined) throw new HaltError(deadReason);
     await planPhase(ctx);
-    await coordinatorSignOff(ctx, "plan→recon", `Operation plan:\n${JSON.stringify(ctx.plan, null, 1)}`);
+    await coordinatorSignOff(ctx, "plan→recon", () => `Operation plan:\n${JSON.stringify(ctx.plan, null, 1)}`);
     void fireSlack(ctx, { kind: "phase", phase: "recon" });
     brief = await reconPhase(ctx);
     // Q-MEMTIER moment 3 (§7.1): the refresh pack — after recon, with
@@ -260,7 +260,7 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
     await coordinatorSignOff(
       ctx,
       "recon→exploit",
-      `Recon brief:\n${brief.slice(0, 3000)}\n\nShared target map (${ctx.targetMap.length} entries):\n${ctx.targetMap.map((t) => `- ${t.method} ${t.area}${t.authState ? ` [${t.authState}]` : ""}${t.attackId ? ` ${t.attackId}` : ""}`).join("\n") || "(empty)"}\nRegistry hits consulted: ${ctx.registryHits.length}. Fingerprint: ${JSON.stringify(ctx.fingerprint)}\nMemory refresh: ${refreshPack.survivors.length} units surfaced (${[...new Set(refreshPack.survivors.map((s) => s.tier))].join(", ") || "none"}), receipt ${refreshPack.receiptId}`,
+      () => `Recon brief:\n${brief.slice(0, 3000)}\n\nShared target map (${ctx.targetMap.length} entries):\n${ctx.targetMap.map((t) => `- ${t.method} ${t.area}${t.authState ? ` [${t.authState}]` : ""}${t.attackId ? ` ${t.attackId}` : ""}`).join("\n") || "(empty)"}\nRegistry hits consulted: ${ctx.registryHits.length}. Fingerprint: ${JSON.stringify(ctx.fingerprint)}\nMemory refresh: ${refreshPack.survivors.length} units surfaced (${[...new Set(refreshPack.survivors.map((s) => s.tier))].join(", ") || "none"}), receipt ${refreshPack.receiptId}`,
     );
     summary = await exploitPhase(ctx, brief);
     // Q-FLEET-XCHECK: the reviewer pass — every finding is challenged
@@ -272,7 +272,7 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
     await coordinatorSignOff(
       ctx,
       "exploit→report",
-      `Exploitation summary:\n${summary.slice(0, 3000)}\n\nVerdicts — confirmed: ${ctx.liveFindings.length}, killed: ${ctx.killedLive.length}.\nBattery: ${["logic", "functionality", "validation"].map((c) => `${c}:${ctx.coverage.has(c as BatteryCategory) ? "yes" : "no"}`).join(", ")}.`,
+      () => `Exploitation summary:\n${summary.slice(0, 3000)}\n\nVerdicts — confirmed: ${ctx.liveFindings.length}, killed: ${ctx.killedLive.length}.\nBattery: ${["logic", "functionality", "validation"].map((c) => `${c}:${ctx.coverage.has(c as BatteryCategory) ? "yes" : "no"}`).join(", ")}.`,
     );
     const findings = await reportPhase(ctx, brief, summary);
     void fireSlack(ctx, { kind: "phase", phase: "report" });

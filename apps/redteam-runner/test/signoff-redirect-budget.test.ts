@@ -142,7 +142,7 @@ describe('coordinatorSignOff — per-gate redirect budgets (S2-H7)', () => {
     const redirects = { ...noRedirects(), 'recon→exploit': 2 }
     const ctx = makeCtx(dir, completeForRole, redirects)
 
-    await coordinatorSignOff(ctx, 'exploit→report', 'exploit summary payload')
+    await coordinatorSignOff(ctx, 'exploit→report', () => 'exploit summary payload')
 
     assert.equal(ctx.redirects['exploit→report'], 1, "the gate spent from its OWN budget")
     assert.equal(ctx.redirects['recon→exploit'], 2, "the other gate's count is untouched")
@@ -163,7 +163,7 @@ describe('coordinatorSignOff — per-gate redirect budgets (S2-H7)', () => {
     const ctx = makeCtx(dir, completeForRole, redirects)
 
     await assert.rejects(
-      coordinatorSignOff(ctx, 'exploit→report', 'exploit summary payload'),
+      coordinatorSignOff(ctx, 'exploit→report', () => 'exploit summary payload'),
       (err: unknown) => {
         assert.ok(err instanceof HaltError, 'the gate halts with HaltError')
         assert.match(err.message, /exploit→report/, 'the halt names the gate')
@@ -182,7 +182,7 @@ describe('coordinatorSignOff — per-gate redirect budgets (S2-H7)', () => {
     const ctx = makeCtx(dir, completeForRole, noRedirects())
 
     await assert.rejects(
-      coordinatorSignOff(ctx, 'exploit→report', 'exploit summary payload'),
+      coordinatorSignOff(ctx, 'exploit→report', () => 'exploit summary payload'),
       (err: unknown) => err instanceof HaltError && /exploit→report/.test(err.message) && /after 2 redirects/.test(err.message),
     )
     assert.equal(ctx.redirects['exploit→report'], 2, 'the gate stopped at its own budget of 2')

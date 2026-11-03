@@ -20,13 +20,19 @@ const MAX_INCOMPLETE_ROUNDS = 3;
 export async function coordinatorSignOff(
   ctx: Ctx,
   transition: SignOffTransition,
-  payload: string,
+  payload: () => string,
   incompleteRounds = 0,
 ): Promise<void> {
   if (ctx.config.dryRunAgents) {
     ctx.events.append({ phase: "plan", actor: "coordinator", action: "signoff", result: `${transition} auto-approved (dry-run).` });
     return;
   }
+  // The payload is a factory, invoked at the top of EVERY review pass
+  // (S2-H6): after a REDIRECT's corrective work — or a battery gate round —
+  // this function recurses, and the re-review must be built from live ctx
+  // state at that moment (current target map, counts, fingerprint), not
+  // from the string the first review judged.
+  const payloadText = payload();
   const text = await agentLoop(
     ctx,
     "coordinator",
@@ -37,7 +43,7 @@ export async function coordinatorSignOff(
       `- \`SIGN-OFF: <one-line summary of what is approved>\` — the operation proceeds.\n` +
       `- \`REDIRECT: <what must change and which specialist does it>\` — at most 2 redirects per gate (used: ${ctx.redirects[transition]} at ${transition}).\n` +
       `Confirm role discipline in one line per specialist, or correct them.`,
-    `Transition awaiting sign-off: ${transition}\n\n${payload}`,
+    `Transition awaiting sign-off: ${transition}\n\n${payloadText}`,
     COMMAND_TOOLS,
     3,
   );
