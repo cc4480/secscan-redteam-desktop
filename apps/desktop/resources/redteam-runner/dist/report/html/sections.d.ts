@@ -28,22 +28,8 @@ export interface CoverInput {
  * the left, the score block on the right) in Seclayer's tokens. A halted
  * engagement renders the N/A gauge and states why it halted. */
 export declare function coverSection(o: CoverInput): string;
-/** The SecScan RedTeam brand mark (the app icon's diamond and
- * crosshair), inlined so the standalone report file carries the brand
- * with no external asset. Artwork: apps/desktop/resources/icon.svg. */
-export declare const BRAND_MARK_SVG: string;
-/** One fleet seat's line on the report's team section. `summary` is
- * the seat's contribution to this engagement; absent renders the
- * role alone. */
-export interface TeamMember {
-    agent: string;
-    seat: string;
-    role: string;
-    summary?: string;
-}
-/** The engagement team: every fleet seat that ran, its role, and its
- * contribution — rendered after the posture banner. */
-export declare function teamSection(team: TeamMember[]): string;
+export { BRAND_MARK_SVG, teamSection } from './brand.js';
+export type { TeamMember } from './brand.js';
 /** The halt banner: why the engagement stopped, in place of a grade. */
 export declare function haltBanner(reason: string): string;
 /** The blocked banner: authorization denied before any testing ran —

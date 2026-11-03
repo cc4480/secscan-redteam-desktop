@@ -137,7 +137,13 @@ export const config = {
     // Opt-in and HARD-disabled in production — the ownership gate exists so the
     // platform can't be used as an anonymous attack proxy, so it can never be
     // bypassed on a real deployment regardless of this env var. Pair with
-    // SCAN_DEV_ALLOW_HOSTS to also let the SSRF guard reach a loopback target.
+    // SCAN_DEV_ALLOW_HOSTS to also let THIS Seclayer server's SSRF guard
+    // (seclayer/server/ssrf.ts) reach a loopback target — that variable
+    // governs only that guard, is hard-off in production, and is NOT an
+    // engagement/runner unlock: the runner's prober and the SecScan engine's
+    // target guard never read it (engagement-path private/loopback targets
+    // are allowed only via the attested scope record from authorize — see
+    // the SCAN_DEV_ALLOW_HOSTS scope note in seclayer/server/ssrf.ts).
     devSkipDomainVerification: process.env.NODE_ENV !== 'production' && process.env.DEV_SKIP_DOMAIN_VERIFICATION === 'true',
     // Dev-only: drop the rate limits so a load test can measure real scan
     // capacity. The limits are IP-keyed as well as user-keyed, so a harness

@@ -86,7 +86,7 @@ export function buildReportDetail(input) {
             ? { baselineLabel: `${input.baseline.engagementId} · ${input.baseline.startedAt}` } : {}),
         riskAreas,
         deferredCount: deferred.length,
-        impact: buildImpact(actionable, areaOf),
+        impact: buildImpact(actionable, areaOf, input.coverage.totals),
         findingImpacts: buildFindingImpacts(actionable, areaOf),
         priority: {
             actions: priorityOrder(actionable).map(toEntry),

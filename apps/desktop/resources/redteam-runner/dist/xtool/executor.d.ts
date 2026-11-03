@@ -55,7 +55,7 @@ export declare function parseFfufJsonl(stdout: string, target: string): XFinding
 /** gobuster's `-q` output is one path per line. */
 export declare function parseGobusterText(stdout: string, target: string): XFinding[];
 export declare function runXTool(spec: XToolSpec, opts: {
-    action: "probe" | "run";
+    action: 'probe' | 'run';
     target: string;
     profileId: string;
     wordlist?: string;

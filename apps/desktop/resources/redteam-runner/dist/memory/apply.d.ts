@@ -10,8 +10,8 @@
  * `TRUST_OVERCLAIM` even if approved. Approval authorizes persistence;
  * it does not mint proof.
  */
-import type { MemoryPaths } from "./paths.js";
-import type { MemoryApprovalRecord, MemoryApplyReceipt, MemoryDiff } from "./types.js";
+import type { MemoryPaths } from './paths.js';
+import type { MemoryApprovalRecord, MemoryApplyReceipt, MemoryDiff } from './types.js';
 /**
  * Read and verify a diff from `proposals/`. Missing, malformed, or
  * hash-mismatched diffs are refusals (§7.3) — nothing is written.

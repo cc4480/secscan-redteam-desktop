@@ -13,8 +13,8 @@
  * consent dialog; a denial or dialog timeout surfaces here as a distinct
  * `bridge-denied` error, never as a hang or a fake success.
  */
-import { type BridgeConfigOverrides } from "./config.js";
-import { type BridgeClient } from "./types.js";
+import { type BridgeConfigOverrides } from './config.js';
+import { type BridgeClient } from './types.js';
 /** Options for {@link createBridgeClient}: config overrides plus a transport seam for tests. */
 export interface BridgeClientOptions extends BridgeConfigOverrides {
     /** Environment to resolve config from; defaults to process.env. */

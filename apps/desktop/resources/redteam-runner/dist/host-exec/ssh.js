@@ -15,41 +15,41 @@
  * for onward authentication — that is analysis-only by design, documented
  * at both the transport and executor layers.
  */
-import { Client } from "ssh2";
-import { readFileSync } from "node:fs";
-import { HOST_EXEC_TIMEOUT_MS, HOST_OUTPUT_CAP, capOutput } from "./common.js";
+import { Client } from 'ssh2';
+import { readFileSync } from 'node:fs';
+import { HOST_EXEC_TIMEOUT_MS, HOST_OUTPUT_CAP, capOutput } from './common.js';
 /**
  * Resolve the local SSH agent socket for the forwarding audit.
  * Fails fast with an actionable error when no agent is available —
  * the audit cannot run without a socket to forward.
  */
 export function resolveAgentSocketPath(env = process.env) {
-    const sock = env["REDTEAM_SSH_AGENT_SOCKET"] ?? env["SSH_AUTH_SOCK"];
+    const sock = env['REDTEAM_SSH_AGENT_SOCKET'] ?? env['SSH_AUTH_SOCK'];
     if (sock && sock.trim())
         return sock.trim();
-    throw new Error("[ssh] agent forwarding audit needs a local SSH agent socket: set REDTEAM_SSH_AGENT_SOCKET " +
-        "(or SSH_AUTH_SOCK) to the agent socket path. The audit is read-only — the socket is " +
-        "observed on the target and never used for onward authentication.");
+    throw new Error('[ssh] agent forwarding audit needs a local SSH agent socket: set REDTEAM_SSH_AGENT_SOCKET ' +
+        '(or SSH_AUTH_SOCK) to the agent socket path. The audit is read-only — the socket is ' +
+        'observed on the target and never used for onward authentication.');
 }
 /**
  * FIXED audit commands (battery LX-018/LX-019). Not agent-supplied — the
  * executor runs exactly these strings, and they still pass through the
  * destructive-command denylist as a mechanical backstop.
  */
-export const SSH_AGENT_AUDIT_SOCKET_CHECK = `printf 'SOCK=%s\\n' "$SSH_AUTH_SOCK"; ` +
-    `if [ -S "$SSH_AUTH_SOCK" ]; then echo SOCK_PRESENT; ls -l "$SSH_AUTH_SOCK"; ` +
-    `stat -c 'owner=%U group=%G mode=%a' "$SSH_AUTH_SOCK" 2>/dev/null; else echo SOCK_ABSENT; fi`;
+export const SSH_AGENT_AUDIT_SOCKET_CHECK = 'printf \'SOCK=%s\\n\' "$SSH_AUTH_SOCK"; ' +
+    'if [ -S "$SSH_AUTH_SOCK" ]; then echo SOCK_PRESENT; ls -l "$SSH_AUTH_SOCK"; ' +
+    'stat -c \'owner=%U group=%G mode=%a\' "$SSH_AUTH_SOCK" 2>/dev/null; else echo SOCK_ABSENT; fi';
 /**
  * ANALYSIS ONLY: reports who could reach the forwarded socket. The socket
  * itself is never used for onward auth — this command only reads `id`,
  * `ls`, and `stat` output.
  */
-export const SSH_AGENT_AUDIT_ABUSE_PATH = `id; ls -l "$SSH_AUTH_SOCK"; stat -c '%U %G %a' "$SSH_AUTH_SOCK"`;
+export const SSH_AGENT_AUDIT_ABUSE_PATH = 'id; ls -l "$SSH_AUTH_SOCK"; stat -c \'%U %G %a\' "$SSH_AUTH_SOCK"';
 function resolveKey(creds) {
     if (!creds.privateKey)
         return undefined;
-    if (creds.privateKey.startsWith("__KEY_PATH__:")) {
-        return readFileSync(creds.privateKey.slice("__KEY_PATH__:".length), "utf8");
+    if (creds.privateKey.startsWith('__KEY_PATH__:')) {
+        return readFileSync(creds.privateKey.slice('__KEY_PATH__:'.length), 'utf8');
     }
     return creds.privateKey;
 }
@@ -67,7 +67,7 @@ export function createSshTransport() {
             lastArgs.port === args.port &&
             lastArgs.creds.username === args.creds.username &&
             !!lastArgs.agentForward === !!args.agentForward &&
-            (lastArgs.agentSocketPath ?? "") === (args.agentSocketPath ?? "")) {
+            (lastArgs.agentSocketPath ?? '') === (args.agentSocketPath ?? '')) {
             resolve(client);
             return;
         }
@@ -76,13 +76,13 @@ export function createSshTransport() {
             c.destroy();
             reject(new Error(`[ssh] connect timeout to ${args.host}`));
         }, args.timeoutMs ?? HOST_EXEC_TIMEOUT_MS);
-        c.on("ready", () => {
+        c.on('ready', () => {
             clearTimeout(timer);
             client = c;
             lastArgs = args;
             resolve(c);
         });
-        c.on("error", (err) => {
+        c.on('error', (err) => {
             clearTimeout(timer);
             reject(new Error(`[ssh] ${err.message}`));
         });
@@ -105,13 +105,13 @@ export function createSshTransport() {
     return {
         async exec(args) {
             if (args.signal?.aborted)
-                throw new Error("[ssh] aborted by call signal before exec");
+                throw new Error('[ssh] aborted by call signal before exec');
             const c = await ensureConnected(args);
             const timeoutMs = args.timeoutMs ?? HOST_EXEC_TIMEOUT_MS;
             const started = Date.now();
             return new Promise((resolve, reject) => {
-                let stdout = "";
-                let stderr = "";
+                let stdout = '';
+                let stderr = '';
                 let settled = false;
                 const done = (fn) => {
                     if (!settled) {
@@ -120,6 +120,13 @@ export function createSshTransport() {
                     }
                 };
                 const timer = setTimeout(() => {
+                    try {
+                        c.destroy();
+                    }
+                    catch { /* already gone */ }
+                    try { /* stream may not be defined yet */ }
+                    catch { /* noop */ }
+                    client = null;
                     done(() => reject(new Error(`[ssh] command timed out after ${timeoutMs}ms`)));
                 }, timeoutMs);
                 const onAbort = () => {
@@ -131,28 +138,28 @@ export function createSshTransport() {
                         /* already gone */
                     }
                     client = null;
-                    done(() => reject(new Error("[ssh] aborted by call signal — session destroyed")));
+                    done(() => reject(new Error('[ssh] aborted by call signal — session destroyed')));
                 };
-                args.signal?.addEventListener("abort", onAbort, { once: true });
+                args.signal?.addEventListener('abort', onAbort, { once: true });
                 c.exec(args.command.slice(0, 4000), (err, stream) => {
                     if (err) {
                         clearTimeout(timer);
-                        args.signal?.removeEventListener("abort", onAbort);
+                        args.signal?.removeEventListener('abort', onAbort);
                         done(() => reject(new Error(`[ssh] exec failed: ${err.message}`)));
                         return;
                     }
-                    stream.on("close", (code) => {
+                    stream.on('close', (code) => {
                         clearTimeout(timer);
-                        args.signal?.removeEventListener("abort", onAbort);
+                        args.signal?.removeEventListener('abort', onAbort);
                         done(() => resolve({
                             stdout: capOutput(stdout, HOST_OUTPUT_CAP),
                             stderr: capOutput(stderr, HOST_OUTPUT_CAP),
-                            code: typeof code === "number" ? code : -1,
+                            code: typeof code === 'number' ? code : -1,
                             ms: Date.now() - started,
                         }));
                     });
-                    stream.on("data", (d) => {
-                        stdout += d.toString("utf8");
+                    stream.on('data', (d) => {
+                        stdout += d.toString('utf8');
                         if (stdout.length > HOST_OUTPUT_CAP * 2) {
                             // Backpressure guard: stop a runaway command flooding the channel.
                             try {
@@ -163,8 +170,8 @@ export function createSshTransport() {
                             }
                         }
                     });
-                    stream.stderr.on("data", (d) => {
-                        stderr += d.toString("utf8");
+                    stream.stderr.on('data', (d) => {
+                        stderr += d.toString('utf8');
                     });
                 });
             });

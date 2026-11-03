@@ -10,20 +10,20 @@
  * All methods throw MsfTransportError / MsfAuthError on failure; callers
  * translate those into DENIED/failed results with redacted messages.
  */
-import { msfCall } from "./protocol.js";
-import { MSFRPC_SETUP_INSTRUCTIONS } from "./policy.js";
+import { msfCall } from './protocol.js';
+import { MSFRPC_SETUP_INSTRUCTIONS } from './policy.js';
 export class MsfAuthError extends Error {
     constructor(message) {
         super(message);
-        this.name = "MsfAuthError";
+        this.name = 'MsfAuthError';
     }
 }
 const CONSOLE_POLL_MS = 750;
 function asRecord(v) {
-    return typeof v === "object" && v !== null && !Array.isArray(v) ? v : {};
+    return typeof v === 'object' && v !== null && !Array.isArray(v) ? v : {};
 }
 function asString(v) {
-    return typeof v === "string" ? v : "";
+    return typeof v === 'string' ? v : '';
 }
 export class MsfClient {
     request;
@@ -33,17 +33,17 @@ export class MsfClient {
     }
     /** Authenticate. Throws MsfAuthError (with setup instructions) on failure. */
     async login(user, pass) {
-        const res = asRecord(await msfCall(this.request, "auth.login", null, [user, pass]));
-        if (res["result"] === "success" && typeof res["token"] === "string") {
-            this.token = res["token"];
+        const res = asRecord(await msfCall(this.request, 'auth.login', null, [user, pass]));
+        if (res['result'] === 'success' && typeof res['token'] === 'string') {
+            this.token = res['token'];
             return;
         }
-        throw new MsfAuthError(`[msf] msfrpcd authentication failed for user ${JSON.stringify(user)} — check ${"REDTEAM_MSFRPC_USER"}/${"REDTEAM_MSFRPC_PASS"}.\n${MSFRPC_SETUP_INSTRUCTIONS}`);
+        throw new MsfAuthError(`[msf] msfrpcd authentication failed for user ${JSON.stringify(user)} — check ${'REDTEAM_MSFRPC_USER'}/${'REDTEAM_MSFRPC_PASS'}.\n${MSFRPC_SETUP_INSTRUCTIONS}`);
     }
     /** Raw msfrpc result — a map for most methods, an array for module.search. */
     async callAny(method, args) {
         if (!this.token)
-            throw new MsfAuthError("[msf] not authenticated — call login() first");
+            throw new MsfAuthError('[msf] not authenticated — call login() first');
         return msfCall(this.request, method, this.token, args);
     }
     async call(method, args) {
@@ -57,32 +57,32 @@ export class MsfClient {
      * nothing, so accept either shape — a real daemon sends the array.
      */
     async searchModules(query) {
-        const res = await this.callAny("module.search", [query]);
-        const list = Array.isArray(res) ? res : asRecord(res)["modules"];
+        const res = await this.callAny('module.search', [query]);
+        const list = Array.isArray(res) ? res : asRecord(res)['modules'];
         if (!Array.isArray(list))
             return [];
         return list.map((m) => {
             const r = asRecord(m);
             return {
-                type: asString(r["type"]),
-                name: asString(r["name"]),
-                fullname: asString(r["fullname"]) || asString(r["name"]),
-                rank: asString(r["rank"]),
-                description: asString(r["description"]),
-                disclosureDate: typeof r["disclosure_date"] === "string" ? r["disclosure_date"] : undefined,
+                type: asString(r['type']),
+                name: asString(r['name']),
+                fullname: asString(r['fullname']) || asString(r['name']),
+                rank: asString(r['rank']),
+                description: asString(r['description']),
+                disclosureDate: typeof r['disclosure_date'] === 'string' ? r['disclosure_date'] : undefined,
             };
         });
     }
     /** Current sessions (id → info). The executor diffs this list around a run: an unregistered newcomer is stopped by hygiene; a Meterpreter run's session is registered from it. */
     async sessionList() {
-        const res = await this.call("session.list", []);
+        const res = await this.call('session.list', []);
         const out = {};
         for (const [k, v] of Object.entries(res))
             out[k] = asRecord(v);
         return out;
     }
     async sessionStop(id) {
-        await this.call("session.stop", [id]);
+        await this.call('session.stop', [id]);
     }
     /**
      * Write to a live Meterpreter session's command channel (W8 session
@@ -90,12 +90,12 @@ export class MsfClient {
      * sessions it registered from a validated exploit run.
      */
     async sessionMeterpreterWrite(id, data) {
-        await this.call("session.meterpreter_write", [id, data]);
+        await this.call('session.meterpreter_write', [id, data]);
     }
     /** Drain a Meterpreter session's pending output. Returns "" when idle. */
     async sessionMeterpreterRead(id) {
-        const res = await this.call("session.meterpreter_read", [id]);
-        return asString(res["data"]);
+        const res = await this.call('session.meterpreter_read', [id]);
+        return asString(res['data']);
     }
     /**
      * Run a module in a throwaway console and capture its output.
@@ -109,23 +109,23 @@ export class MsfClient {
      * running module: destroying the console kills whatever it was doing.
      */
     async runModuleConsole(args) {
-        const created = await this.call("console.create", []);
-        const cid = asString(created["id"]);
+        const created = await this.call('console.create', []);
+        const cid = asString(created['id']);
         if (!cid)
-            throw new Error("[msf] console.create returned no console id");
-        let output = "";
+            throw new Error('[msf] console.create returned no console id');
+        let output = '';
         let aborted = false;
         // Every value written to the console becomes part of a newline-delimited
         // command stream, so a single CR/LF in an agent-supplied module name or
         // option value would inject an extra console command. Strip them so the
         // stream stays one-command-per-line no matter what the caller passed.
-        const clean = (s) => s.replace(/[\r\n]+/g, " ").trim();
+        const clean = (s) => s.replace(/[\r\n;`$|&]+/g, ' ').trim();
         const write = async (data) => {
-            await this.call("console.write", [cid, data]);
+            await this.call('console.write', [cid, data]);
         };
         const destroy = async () => {
             try {
-                await this.call("console.destroy", [cid]);
+                await this.call('console.destroy', [cid]);
             }
             catch {
                 /* best effort — the console may already be gone */
@@ -137,7 +137,7 @@ export class MsfClient {
             const onAbort = () => {
                 aborted = true;
             };
-            args.signal?.addEventListener("abort", onAbort, { once: true });
+            args.signal?.addEventListener('abort', onAbort, { once: true });
             try {
                 await write(`use ${args.moduleType}/${clean(args.fullname)}\n`);
                 for (const [k, v] of Object.entries(args.options)) {
@@ -147,7 +147,7 @@ export class MsfClient {
                     await write(`set PAYLOAD ${clean(args.payload)}\n`);
                 if (args.cmd)
                     await write(`set CMD ${clean(args.cmd)}\n`);
-                await write(`run\n`);
+                await write('run\n');
                 const deadline = Date.now() + args.timeoutMs;
                 // Race each poll against the abort signal: a hanging console.read
                 // must not delay the abort. The dangling read promise is
@@ -156,11 +156,11 @@ export class MsfClient {
                     if (args.signal?.aborted)
                         resolve(null);
                     else
-                        args.signal?.addEventListener("abort", () => resolve(null), { once: true });
+                        args.signal?.addEventListener('abort', () => resolve(null), { once: true });
                 });
                 for (;;) {
                     const raced = await Promise.race([
-                        this.call("console.read", [cid]).then((r) => ({ read: r })),
+                        this.call('console.read', [cid]).then(r => ({ read: r })),
                         abortedPromise.then(() => ({ read: null })),
                     ]);
                     if (raced.read === null) {
@@ -168,19 +168,19 @@ export class MsfClient {
                         break;
                     }
                     const read = raced.read;
-                    output += asString(read["data"]);
-                    const busy = read["busy"] === true;
+                    output += asString(read['data']);
+                    const busy = read['busy'] === true;
                     if (!busy)
                         break;
                     if (Date.now() >= deadline)
                         break;
-                    await new Promise((r) => setTimeout(r, CONSOLE_POLL_MS));
+                    await new Promise(r => setTimeout(r, CONSOLE_POLL_MS));
                 }
                 const completed = !aborted && Date.now() < deadline;
                 return { output, completed, timedOut: !completed && !aborted, aborted };
             }
             finally {
-                args.signal?.removeEventListener("abort", onAbort);
+                args.signal?.removeEventListener('abort', onAbort);
             }
         }
         finally {

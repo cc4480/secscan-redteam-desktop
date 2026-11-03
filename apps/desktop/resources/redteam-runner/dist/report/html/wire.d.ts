@@ -13,7 +13,8 @@ import { type NegativeProof, type PocBundle } from '../../proof/index.js';
 import { type DetailInput } from '../detail.js';
 import { type ReportMeta } from '../html.js';
 import { type CoverageInput, type EngagementReportInput, type FindingMeta } from './render.js';
-import { type TeamMember } from './sections.js';
+import { FLEET_TEAM } from './fleet.js';
+export { FLEET_TEAM };
 /** Structured proof data the proof section computes alongside its
  * markdown (no-bundle reasons per finding + negative proofs). */
 export interface ProofData {
@@ -67,9 +68,5 @@ export declare function applyFindingRefs(findings: Finding[], liveFindings: read
  * applyFindingRefs merge into the same map, so the reference chips and
  * findings.csv read one model. */
 export declare function buildFindingMeta(bundles: ReadonlyMap<string, PocBundle>, findings?: readonly Finding[]): Map<string, FindingMeta>;
-/** The fleet roster as the report's team section states it: every
- * seat, its role on the engagement. Summaries stay with the record —
- * the wire carries the standing roles only. */
-export declare const FLEET_TEAM: TeamMember[];
 /** Assemble the renderer's structured input from the phase's records. */
 export declare function buildEngagementReportInput(deps: WireDeps): EngagementReportInput;

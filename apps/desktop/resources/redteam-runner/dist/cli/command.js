@@ -24,6 +24,31 @@ export function printCommandHelp() {
     console.log(commandHelp());
 }
 /**
+ * Build the EngagementInput for a NON-local command invocation (S2-H2):
+ * the command's tier and phase list ride into the input alongside the
+ * resolved target families, so the engagement that runs is the one the
+ * registry defines — /nmap at tier 0 over recon+report, /metasploit at
+ * tier 2 — not the environment default tier over the full pipeline.
+ * Before this builder existed the CLI assembled the input inline and
+ * dropped both fields.
+ * @param invocation - parsed command invocation.
+ * @param target - the --target host/URL the operator named.
+ * @param mode - engagement mode from the CLI (red|black).
+ * @param roe - rules of engagement from the CLI scope flags.
+ * @returns the engagement input for runEngagement.
+ */
+export function buildCommandEngagementInput(invocation, target, mode, roe) {
+    return {
+        target,
+        mode,
+        objective: `${invocation.command.summary} (${invocation.command.name})`,
+        roe,
+        targets: [...invocation.targets],
+        tier: invocation.command.tier,
+        phases: [...invocation.command.phases],
+    };
+}
+/**
  * Run the `command` subcommand.
  * @returns exit code (0 ok, 2 usage, 3 bad invocation, 1 run failure).
  */
@@ -105,13 +130,11 @@ export async function runCommandCli() {
         scope: scopes.length > 0 ? scopes : [target],
         ...(outOfScope.length > 0 ? { outOfScope } : {}),
     };
-    const input = {
-        target,
-        mode,
-        objective: `${parsed.command.summary} (${parsed.command.name})`,
-        roe,
-        targets: [...parsed.targets],
-    };
+    // S2-H2: the input is built by the workflows builder so the command's
+    // tier and phase list ride into the engagement (this inline literal
+    // used to drop both, and every sibling ran the default tier's full
+    // pipeline).
+    const input = buildCommandEngagementInput(parsed, target, mode, roe);
     const result = await runEngagement(input);
     if (flag("--json"))
         console.log(JSON.stringify({ command: parsed.command.name, engagementId: result.engagementId, status: result.status, findings: result.findings.length, reportPath: result.reportPath }, null, 2));

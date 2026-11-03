@@ -18,32 +18,10 @@
  * (one version spawn per binary, one 1s TCP connect for the RPC daemon).
  */
 import { type XToolId } from '../xtool/registry.js';
-import { type PoolSnapshot } from '@secscan/redteam-llm-router';
-export type ReadinessState = 'ready' | 'missing' | 'unreachable' | 'not-configured' | 'paused';
-export interface ReadinessItem {
-    /** Stable identifier used by the UI / tests. */
-    id: string;
-    /** Human label. */
-    label: string;
-    state: ReadinessState;
-    /** What was found, when relevant (path, version, endpoint). */
-    detail?: string;
-    /** What to do when the state is not `ready`. */
-    fix?: string;
-    /** Required items block an engagement; optional ones only degrade it. */
-    required: boolean;
-}
-export interface ReadinessReport {
-    /** True when every required item is ready. */
-    ok: boolean;
-    items: ReadinessItem[];
-    /** Short human summary, e.g. "3 of 9 ready — 2 required missing". */
-    summary: string;
-}
-/** One version probe. Returns the first output line, or undefined when not runnable. */
-export declare function probeBinary(bin: string, args: readonly string[]): string | undefined;
-/** TCP reachability for the Metasploit RPC daemon (1s, no target traffic). */
-export declare function probeTcp(host: string, port: number, timeoutMs?: number): Promise<boolean>;
+import { type ReadinessItem, type ReadinessReport } from './readiness-items.js';
+export { credentialPoolItem, formatReadiness } from './readiness-format.js';
+export type { ReadinessItem, ReadinessReport, ReadinessState } from './readiness-items.js';
+export { probeBinary, probeTcp } from './readiness-items.js';
 /**
  * Build the full readiness report.
  *
@@ -66,19 +44,4 @@ export declare function readinessReport(env?: NodeJS.ProcessEnv): Promise<Readin
  * `env` + the index file, so tests point it at fixture homes.
  */
 export declare function arsenalIndexItem(env: NodeJS.ProcessEnv): ReadinessItem;
-/**
- * The `llm_credential_pool` readiness item (pool-persistence spec §1.6):
- * rendered ONLY when some pool entry is dead or benched — a healthy or
- * empty pool omits the item entirely rather than taking a green line.
- * The detail names each affected key by fingerprint (never key material):
- * dead keys with their recorded reason plus, when the pool recorded them,
- * the killing response's HTTP status/code and the death time; benched (key, model) pairs with
- * the time until they are eligible again, or "no automatic return" for
- * permanent (entitlement) benches. Benches that have already lapsed by
- * render time are skipped. Pure over the snapshots so tests feed it
- * fixtures; the report builder passes the router's live poolSnapshots().
- */
-export declare function credentialPoolItem(snapshots: PoolSnapshot[], nowMs: number): ReadinessItem | undefined;
-/** Render a report as a plain-text table for the CLI. */
-export declare function formatReadiness(report: ReadinessReport): string;
 export type { XToolId };

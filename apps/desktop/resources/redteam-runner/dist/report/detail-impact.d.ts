@@ -8,12 +8,18 @@
  * like every other derivation.
  */
 import type { DetailFindingInput } from './detail.js';
+import { type CoverageTotals } from './completeness.js';
 export interface ImpactBand {
     level: 'critical' | 'high' | 'medium' | 'low' | 'none';
     text: string;
 }
-/** §5 — the impact band selects the first matching fixed statement. */
-export declare function buildImpact(actionable: DetailFindingInput[], areaOf: Map<string, string>): ImpactBand;
+/** §5 — the impact band selects the first matching fixed statement.
+ *
+ * The zero-finding band is coverage-aware (completeness.ts): "no material
+ * business risk" may only be said of a battery that actually concluded. An
+ * engagement that halted with items unverdicted says so instead — otherwise
+ * the report asserts safety from items nobody tested. */
+export declare function buildImpact(actionable: DetailFindingInput[], areaOf: Map<string, string>, coverage: CoverageTotals): ImpactBand;
 /** Q-RP-4 — one Impact statement per finding of record (PROVEN +
  * CONFIRMED; the caller passes exactly the actionable set). DEFERRED
  * findings get none — verification is outstanding, so no consequence

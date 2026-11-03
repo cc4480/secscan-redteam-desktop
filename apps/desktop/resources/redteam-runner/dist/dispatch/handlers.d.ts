@@ -21,4 +21,4 @@ import type { DispatchResult } from "./types.js";
  * @returns the first claiming handler's result; an unknown-tool denial
  * (tagged repairable, per RC Item 6) when no handler claims the call.
  */
-export declare function dispatchToolInner(ctx: Ctx, role: ActorRole, phase: EngagementPhase, call: ToolCallRequest): Promise<DispatchResult>;
+export declare function dispatchToolInner(ctx: Ctx, role: ActorRole, phase: EngagementPhase, call: ToolCallRequest, signal?: AbortSignal): Promise<DispatchResult>;

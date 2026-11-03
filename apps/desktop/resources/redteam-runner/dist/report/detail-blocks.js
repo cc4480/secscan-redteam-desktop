@@ -8,6 +8,7 @@
  * same way the wiring split into predecessor.ts + detail-sections.ts).
  */
 import { ANCHOR_CLAUSE, ARM_UNIVERSE, ENGINE_ARM, PILLARS, SEVERITY_RANK, TIER_RANK, armOf, compareIds, isActionable, normalizeLabel, plural, req, signed, } from './detail-tables.js';
+import { gradeAnchorClause, postureClause } from './completeness.js';
 const zeroSeverities = () => ({
     critical: 0, high: 0, medium: 0, low: 0, info: 0,
 });
@@ -131,12 +132,13 @@ export function buildBreakdown(input, riskAreas, diff, countsOnly) {
     const lines = [];
     const n = riskAreas.reduce((sum, a) => sum + a.findings.length, 0);
     lines.push(`Automated ${input.mode} assessment of ${input.target}: ${n} active ${plural(n, 'finding', 'findings')} ` +
-        `across ${riskAreas.length} ${plural(riskAreas.length, 'area', 'areas')}; overall posture ${input.posture.postureRating}.`);
+        `across ${riskAreas.length} ${plural(riskAreas.length, 'area', 'areas')}; ` +
+        `${postureClause(input.posture.postureRating, input.coverage.totals)}.`);
     const worst = input.worstConfirmed ?? null;
     const anchor = worst ? ANCHOR_CLAUSE[worst.severity] : undefined;
     lines.push(anchor && worst
         ? `The grade is anchored by ${worst.id} (${worst.severity} · ${worst.title}) — ${anchor}.`
-        : 'No single finding anchors the grade; it follows the confirmed set.');
+        : gradeAnchorClause(input.coverage.totals));
     const by = input.findingsBySeverity;
     const tc = input.tierCounts;
     lines.push(`${by.critical} critical · ${by.high} high · ${by.medium} medium · ${by.low} low · ${by.info} info — ` +

@@ -6,20 +6,26 @@
  * validation, trust derivation, and sealing happen in commit.ts /
  * store.ts, and an extractor never proposes a tier.
  */
-import type { UnitDraft } from "./store.js";
-import type { MemoryScope } from "./types.js";
-import type { LiveFinding } from "../context.js";
-import type { ExperienceRecord } from "../harness2/experience-record.js";
-import type { RegistryEntry } from "../registry.js";
+import type { UnitDraft } from './store.js';
+import type { MemoryScope } from './types.js';
+import type { LiveFinding } from '../context.js';
+import type { RegistryEntry } from '../registry.js';
+export { projectExperience, projectTrajectory } from './extract-projections.js';
+export type { ExperienceProjectionInput, TrajectoryProjectionInput } from './extract-projections.js';
 /** One extractor output: a draft unit plus the lane it belongs in. */
 export interface MemoryProposal {
     /** "auto" = mechanical projection of a proof-bearing record; "proposed" = awaits a named operator (§7.3). */
-    lane: "auto" | "proposed";
+    lane: 'auto' | 'proposed';
     /** The producing projector's name (the diff's per-projector skip accounting, §8 row 12). */
     projector: string;
     draft: UnitDraft;
 }
 export declare const EXTRACTOR_VERSIONS: Record<string, string>;
+export declare function extractor(name: string, input: unknown): {
+    name: string;
+    version: string;
+    inputHash: string;
+};
 export interface RegistryProjectionInput {
     engagementId: string;
     /** The engagement's derived scope (its originEngagementIds seed each unit's). */
@@ -41,50 +47,6 @@ export interface RegistryProjectionInput {
  * @returns One auto-lane proposal per entry.
  */
 export declare function projectRegistryEntries(input: RegistryProjectionInput): MemoryProposal[];
-export interface TrajectoryProjectionInput {
-    engagementId: string;
-    targetClass: string;
-    outcome: string;
-    /** The run's failure mode; absent or "none" for a clean run. */
-    failureMode?: string;
-    haltReason?: string;
-    steps?: number;
-    confirmedCount: number;
-    killedCount: number;
-    nowIso: string;
-}
-/**
- * Project the run's outcome to at most one `trajectory-lesson` unit,
- * class-scoped by the caller's `deriveTargetClass` result. A pure
- * failure-mode record (failure mode + mechanical counts) is a direct
- * projection and rides the auto lane; an outcome lesson is an
- * interpretation and waits for an operator (§7.2). Claim and body carry
- * no host-specific values — the class scope binding (§4.2) forbids them;
- * the target class itself lives in the scope fields only.
- *
- * @param input - The run's outcome facts.
- * @returns Zero or one proposal.
- */
-export declare function projectTrajectory(input: TrajectoryProjectionInput): MemoryProposal[];
-export interface ExperienceProjectionInput {
-    /** Parsed EXPERIENCE.md records (the parser's skipped count rides the commit input, not the drafts). */
-    records: readonly ExperienceRecord[];
-    /** URI of the EXPERIENCE.md file the records came from. */
-    fileUri: string;
-    nowIso: string;
-}
-/**
- * Project adopted (status `active`) EXPERIENCE.md records that have no
- * unit yet to `experience-lesson` units, class-scoped by the record's
- * target class. Proposed lane: a lesson is an interpretation until a
- * named operator approves it (§7.2). Reverted/superseded records are not
- * projected in v1; the commit records each as a DELETE_NOT_SUPPORTED_V1
- * skip in the diff (v1 has no delete op — see commit.ts).
- *
- * @param input - The parsed records and their file URI.
- * @returns One proposed-lane proposal per active record.
- */
-export declare function projectExperience(input: ExperienceProjectionInput): MemoryProposal[];
 export interface TargetDerivedClaimInput {
     /** What the target asserted (page text, response string, banner, doc). */
     text: string;

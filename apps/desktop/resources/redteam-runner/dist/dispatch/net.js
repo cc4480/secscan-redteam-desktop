@@ -68,7 +68,7 @@ function numArg(args, key) {
  * @param args - the call arguments.
  * @returns the result, or null when the call is not net_exec.
  */
-export async function handleNetTools(ctx, role, phase, call, args) {
+export async function handleNetTools(ctx, role, phase, call, args, _seam, dispatchSignal) {
     if (call.name !== "net_exec")
         return null;
     const attackId = optStr(args["attackId"])?.toUpperCase();
@@ -136,7 +136,7 @@ export async function handleNetTools(ctx, role, phase, call, args) {
     }
     ctx.probesUsed++;
     noteCategoryCoverage(ctx, category, targetProfile);
-    const ctrl = new AbortController();
+    const ctrl = { signal: dispatchSignal ?? new AbortController().signal };
     try {
         if (action === "socket_open") {
             const port = numArg(args, "port");

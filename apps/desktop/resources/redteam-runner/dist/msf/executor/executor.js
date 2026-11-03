@@ -22,14 +22,14 @@
  *
  * The request function is injectable so tests run against a fake msfrpcd.
  */
-import { capOutput, checkDestructive, redactSecrets, validateHostTarget } from "../../host-exec/common.js";
-import { MsfAuthError } from "../client.js";
-import { buildMarkerCommand, checkMsfModule, checkMsfPayload, isMsfSessionPayload, } from "../policy.js";
-import { MsfSessionManager } from "../sessions.js";
-import { filterAndRank, suggestModules } from "../suggest.js";
-import { authedClient } from "./auth.js";
-import { closeSession as closeMsfSession, finishSessionRun, sessionCommand as runSessionCommand, } from "./session-ops.js";
-import { credentialDump as runCredentialDump } from "./credential-dump.js";
+import { capOutput, checkDestructive, redactSecrets, validateHostTarget } from '../../host-exec/common.js';
+import { MsfAuthError } from '../client.js';
+import { buildMarkerCommand, checkMsfModule, checkMsfPayload, isMsfSessionPayload, } from '../policy.js';
+import { MsfSessionManager } from '../sessions.js';
+import { filterAndRank, suggestModules } from '../suggest.js';
+import { authedClient } from './auth.js';
+import { closeSession as closeMsfSession, finishSessionRun, sessionCommand as runSessionCommand, } from './session-ops.js';
+import { credentialDump as runCredentialDump } from './credential-dump.js';
 export const MSF_TIMEOUT_MS = 120_000; // exploits get longer than 30s host-exec
 export class MsfExecutor {
     deps;
@@ -44,10 +44,10 @@ export class MsfExecutor {
     refusedResult(host, refused, secrets = []) {
         return {
             ok: false,
-            transport: "msf",
+            transport: 'msf',
             host,
             summary: redactSecrets(`REFUSED: ${refused}`, secrets),
-            output: "",
+            output: '',
             ms: 0,
             refused: redactSecrets(refused, secrets),
         };
@@ -65,7 +65,7 @@ export class MsfExecutor {
     async search(args) {
         const started = Date.now();
         const pre = this.preflight(args.host, args.scopeHosts);
-        if ("refused" in pre)
+        if ('refused' in pre)
             return this.refusedResult(args.host, pre.refused);
         const input = { service: args.service, cve: args.cve, platform: args.platform };
         try {
@@ -73,28 +73,28 @@ export class MsfExecutor {
             const modules = args.query
                 ? filterAndRank(await client.searchModules(args.query))
                 : await suggestModules(client, input);
-            const runnable = modules.filter((m) => !m.dropped);
+            const runnable = modules.filter(m => !m.dropped);
             const lines = runnable
                 .slice(0, 15)
-                .map((m) => `${m.fullname} [rank:${m.rank || "n/a"}] — ${(m.description || "").slice(0, 140)}`);
-            const dropped = modules.filter((m) => m.dropped).length;
+                .map(m => `${m.fullname} [rank:${m.rank || 'n/a'}] — ${(m.description || '').slice(0, 140)}`);
+            const dropped = modules.filter(m => m.dropped).length;
             return {
                 ok: true,
-                transport: "msf",
+                transport: 'msf',
                 host: args.host,
                 summary: redactSecrets(`msf search vs ${args.host}: ${runnable.length} runnable module(s)` +
-                    (dropped > 0 ? `, ${dropped} refused by policy` : ""), secrets),
-                output: redactSecrets(capOutput(lines.join("\n") || "(no modules matched)"), secrets),
+                    (dropped > 0 ? `, ${dropped} refused by policy` : ''), secrets),
+                output: redactSecrets(capOutput(lines.join('\n') || '(no modules matched)'), secrets),
                 ms: Date.now() - started,
             };
         }
         catch (err) {
             return {
                 ok: false,
-                transport: "msf",
+                transport: 'msf',
                 host: args.host,
                 summary: `msf search failed: ${err.message}`,
-                output: "",
+                output: '',
                 ms: Date.now() - started,
             };
         }
@@ -108,7 +108,7 @@ export class MsfExecutor {
     async suggest(args) {
         const started = Date.now();
         const pre = this.preflight(args.host, args.scopeHosts);
-        if ("refused" in pre)
+        if ('refused' in pre)
             return this.refusedResult(args.host, pre.refused);
         try {
             const { client, secrets } = await authedClient(this.deps, MSF_TIMEOUT_MS, args.signal);
@@ -118,29 +118,29 @@ export class MsfExecutor {
                 cve: args.cve,
                 platform: args.platform,
             });
-            const runnable = ranked.filter((m) => !m.dropped);
-            const lines = runnable.map((m) => `${m.fullname} [rank:${m.rank || "n/a"}] — ${(m.description || "").slice(0, 140)}`);
-            const dropped = ranked.filter((m) => m.dropped);
-            const droppedLines = dropped.map((m) => `${m.fullname} — REFUSED: ${m.dropped}`);
+            const runnable = ranked.filter(m => !m.dropped);
+            const lines = runnable.map(m => `${m.fullname} [rank:${m.rank || 'n/a'}] — ${(m.description || '').slice(0, 140)}`);
+            const dropped = ranked.filter(m => m.dropped);
+            const droppedLines = dropped.map(m => `${m.fullname} — REFUSED: ${m.dropped}`);
             return {
                 ok: true,
-                transport: "msf",
+                transport: 'msf',
                 host: args.host,
-                summary: redactSecrets(`msf suggest vs ${args.host} (service=${args.service ?? "?"}, version=${args.version ?? "?"}): ` +
+                summary: redactSecrets(`msf suggest vs ${args.host} (service=${args.service ?? '?'}, version=${args.version ?? '?'}): ` +
                     `${runnable.length} candidate(s) for coordinator approval` +
-                    (dropped.length > 0 ? `, ${dropped.length} refused by policy` : ""), secrets),
-                output: redactSecrets(capOutput([...lines, ...(droppedLines.length > 0 ? ["", "--- refused by policy ---", ...droppedLines] : [])].join("\n") ||
-                    "(no candidate modules)"), secrets),
+                    (dropped.length > 0 ? `, ${dropped.length} refused by policy` : ''), secrets),
+                output: redactSecrets(capOutput([...lines, ...(droppedLines.length > 0 ? ['', '--- refused by policy ---', ...droppedLines] : [])].join('\n') ||
+                    '(no candidate modules)'), secrets),
                 ms: Date.now() - started,
             };
         }
         catch (err) {
             return {
                 ok: false,
-                transport: "msf",
+                transport: 'msf',
                 host: args.host,
                 summary: `msf suggest failed: ${err.message}`,
-                output: "",
+                output: '',
                 ms: Date.now() - started,
             };
         }
@@ -157,7 +157,7 @@ export class MsfExecutor {
     async run(args) {
         const started = Date.now();
         const pre = this.preflight(args.host, args.scopeHosts);
-        if ("refused" in pre)
+        if ('refused' in pre)
             return this.refusedResult(args.host, pre.refused);
         // Policy first — before credentials, before any packet to msfrpcd.
         // TEST MODE: module/payload policy and the canary destructive check
@@ -166,7 +166,7 @@ export class MsfExecutor {
         const deniedModule = checkMsfModule(args.module, args.moduleType, { testMode: this.testMode });
         if (deniedModule)
             return this.refusedResult(args.host, deniedModule);
-        const payload = args.payload ?? (args.moduleType === "exploit" ? "cmd/unix/generic" : undefined);
+        const payload = args.payload ?? (args.moduleType === 'exploit' ? 'cmd/unix/generic' : undefined);
         if (payload) {
             const deniedPayload = checkMsfPayload(payload, { testMode: this.testMode });
             if (deniedPayload)
@@ -185,12 +185,18 @@ export class MsfExecutor {
             const before = new Set(Object.keys(await client.sessionList()));
             const timeoutMs = args.timeoutMs ?? MSF_TIMEOUT_MS;
             const options = { ...(args.options ?? {}) };
+            // Strip agent-supplied target selectors; RHOSTS/RHOST always come from
+            // the scope-checked host — never agent-supplied (closes auxiliary bypass).
+            for (const k of Object.keys(options)) {
+                if (/^rhosts?$/i.test(k) || /^targets?$/i.test(k))
+                    delete options[k];
+            }
             // RHOSTS always comes from the scope-checked host — never agent-supplied.
             // Forcing it (rather than only filling it when absent) closes the path
             // where an agent supplies its own RHOSTS and points the module at a host
             // that never passed preflight's validateHostTarget.
-            if (args.moduleType === "exploit")
-                options["RHOSTS"] = args.host;
+            options['RHOSTS'] = args.host;
+            options['RHOST'] = args.host;
             const res = await client.runModuleConsole({
                 moduleType: args.moduleType,
                 fullname: args.module,
@@ -221,37 +227,37 @@ export class MsfExecutor {
             }
             // Session hygiene: validation must not leave sessions behind.
             const after = await client.sessionList().catch(() => ({}));
-            const strays = Object.keys(after).filter((id) => !before.has(id));
+            const strays = Object.keys(after).filter(id => !before.has(id));
             for (const id of strays) {
                 await client.sessionStop(id).catch(() => undefined);
             }
-            const markerHit = res.output.includes(`REDTEAM-MARKER-`);
+            const markerHit = res.output.includes('REDTEAM-MARKER-');
             const verdict = res.aborted
-                ? "ABORTED by call signal (console destroyed)"
+                ? 'ABORTED by call signal (console destroyed)'
                 : res.timedOut
-                    ? "timed out (console destroyed)"
+                    ? 'timed out (console destroyed)'
                     : markerHit
-                        ? "MARKER ECHOED — command execution validated"
-                        : "completed without marker echo";
+                        ? 'MARKER ECHOED — command execution validated'
+                        : 'completed without marker echo';
             return {
                 ok: !res.aborted && !res.timedOut && markerHit,
-                transport: "msf",
+                transport: 'msf',
                 host: args.host,
                 summary: redactSecrets(`msf ${args.moduleType}/${args.module} vs ${args.host}: ${verdict}` +
-                    (strays.length > 0 ? ` — ${strays.length} stray session(s) stopped (hygiene)` : ""), secrets),
+                    (strays.length > 0 ? ` — ${strays.length} stray session(s) stopped (hygiene)` : ''), secrets),
                 output: redactSecrets(capOutput(res.output), secrets),
                 ms: Date.now() - started,
             };
         }
         catch (err) {
             const msg = err.message;
-            const refused = err instanceof MsfAuthError || msg.includes("unreachable") ? msg : `msf run failed: ${msg}`;
+            const refused = err instanceof MsfAuthError || msg.includes('unreachable') ? msg : `msf run failed: ${msg}`;
             return {
                 ok: false,
-                transport: "msf",
+                transport: 'msf',
                 host: args.host,
                 summary: refused.slice(0, 300),
-                output: "",
+                output: '',
                 ms: Date.now() - started,
                 refused: err instanceof MsfAuthError ? refused : undefined,
             };

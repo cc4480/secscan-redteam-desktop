@@ -17,7 +17,7 @@ function strArg(args, key) {
     const v = args[key];
     return typeof v === "string" && v.trim() ? v.trim() : undefined;
 }
-export async function handleNucleiTools(ctx, _role, phase, call, args) {
+export async function handleNucleiTools(ctx, _role, phase, call, args, _seam, dispatchSignal) {
     if (call.name !== "nuclei_exec")
         return null;
     const attackId = strArg(args, "attackId")?.toUpperCase();
@@ -45,7 +45,7 @@ export async function handleNucleiTools(ctx, _role, phase, call, args) {
     const host = String(args["host"] ?? "");
     ctx.probesUsed++;
     noteCategoryCoverage(ctx, category, rawTp);
-    const ctrl = new AbortController();
+    const ctrl = { signal: dispatchSignal ?? new AbortController().signal };
     try {
         if (ctx.input.mode === "black")
             await sleep(Math.random() * 2500); // jitter

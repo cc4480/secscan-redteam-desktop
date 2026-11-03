@@ -100,7 +100,7 @@ export function buildPocBundle(input) {
             'privilege beyond what the steps show, data access or exfiltration — was not attempted ' +
             'and is NOT proven by this bundle. Re-running the steps should reproduce the same ' +
             'observation; any deviation means the target changed.',
-        reverifyCommand: `redteam-runner reverify --bundle poc/${finding.id}.json --scope ${engagement.target} --execute`,
+        reverifyCommand: `redteam-runner reverify --bundle poc/${bundleFileName(finding.id)} --scope ${engagement.target} --execute`,
     };
     return { bundle: stampBundleIntegrity(bundle) };
 }

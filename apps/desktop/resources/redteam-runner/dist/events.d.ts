@@ -11,6 +11,13 @@
 import type { EngagementEvent, EngagementMode, EngagementPhase, EngagementStatus, Finding, OperationPlan } from "./types.js";
 import type { BatteryCategory } from "./battery.js";
 import { type LogRotationConfig } from "./safety/rotation.js";
+/**
+ * Statuses that mean the run is over — the same set ui/store.ts defines
+ * for its live flag and ui/report-tools.ts for regeneration, exported
+ * from here because every record consumer already imports this module
+ * and writeEvent's phase guard below needs it too.
+ */
+export declare const TERMINAL_STATUSES: Set<string>;
 export interface LiveState {
     engagementId: string;
     target: string;
@@ -21,6 +28,12 @@ export interface LiveState {
     verified: boolean;
     verificationTs?: string;
     verificationProof?: string;
+    /** The AUTHORIZE phase's attested scope (authorize.ts
+     * stampVerifiedScope): the raw ROE entries whose hosts passed
+     * authorization, persisted beside the proof so the record itself —
+     * not just the in-memory Ctx — carries what was attested. Absent on
+     * records written before this field existed. */
+    verifiedScope?: string[];
     plan: OperationPlan | null;
     findings: Finding[];
     batteryCoverage?: Record<BatteryCategory, number>;
@@ -40,8 +53,8 @@ export interface LiveState {
     /** SCRIBE GATE: the publisher seat's sign-off on the closing set,
      * stamped by report/scribe.ts when the set was signed. */
     artifactSignoff?: ArtifactSignoff | null;
-    /** SCRIBE GATE: why the closing set shipped unsigned (defects or the
-     * seat unavailable), stamped by report/scribe.ts; null when signed. */
+    /** SCRIBE GATE: why the closing set shipped unsigned (defects, the
+     * seat unavailable, or a dry run), stamped by report/scribe.ts; null when signed. */
     artifactUnsigned?: ArtifactUnsigned | null;
 }
 /** One defect in the Scribe's review of the closing deliverable set. */
@@ -68,7 +81,7 @@ export interface ArtifactSignoff {
  * signature — the same honesty class as deliverableFailed: the set must
  * never read as approved when it was not. */
 export interface ArtifactUnsigned {
-    reason: "defects" | "scribe_unavailable";
+    reason: "defects" | "scribe_unavailable" | "dry-run";
     /** The final cycle's defect list (empty when the seat never answered). */
     defects: ScribeDefect[];
     /** Review cycles spent before the set shipped unsigned. */

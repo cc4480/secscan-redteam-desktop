@@ -61,6 +61,14 @@ export declare function toolEnvNames(tool: ExternalToolId): {
     envBin: string;
     envDir?: string;
 };
+/**
+ * The allowlisted environment for a spawned external tool: system essentials
+ * plus the tool-location vars above, taken from `source`. The runner's full
+ * environment carries the engagement's credentials (MODEL_API_KEY and peers,
+ * per cli.ts); a child gets none of them, while PATH and the REDTEAM_* tool
+ * vars keep binary resolution working exactly as the resolver does it.
+ */
+export declare function toolChildEnv(source?: NodeJS.ProcessEnv): NodeJS.ProcessEnv;
 /** The bundled tools directory, when the supervisor or operator provided one. */
 export declare function toolsDir(env?: NodeJS.ProcessEnv): string | undefined;
 /** Human label for a resolved source, used by readiness and probe output. */

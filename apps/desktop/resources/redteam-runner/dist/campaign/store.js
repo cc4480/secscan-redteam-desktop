@@ -23,7 +23,7 @@
  * wave is NEVER silently counted complete, and its engagementId (what
  * was actually launched) stays on the record.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync, } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync, } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { CampaignSchemaError, isForbiddenKind, isSafeCampaignId, validateCampaignRecord, WAVE_SEVERITIES, } from './schema.js';
 export class CampaignStoreError extends Error {
@@ -143,8 +143,20 @@ export function createCampaign(campaignsDir, input, now = new Date()) {
         throw new CampaignStoreError('campaign caps.maxWaves must be an integer >= 1');
     }
     const file = campaignFile(campaignsDir, input.id);
-    if (existsSync(file)) {
-        throw new CampaignStoreError(`campaign already exists: ${input.id} (creation never overwrites a record)`);
+    // The store is directory-per-campaign, so a fresh campaignsDir has no
+    // `<id>/` yet and the exclusive create below would fail with ENOENT instead
+    // of creating the campaign. Creating the parent is not an overwrite: the
+    // `wx` open still guarantees an existing record is never replaced.
+    mkdirSync(dirname(file), { recursive: true });
+    try {
+        const fd = openSync(file, 'wx');
+        closeSync(fd);
+    }
+    catch (err) {
+        if (err.code === 'EEXIST') {
+            throw new CampaignStoreError(`campaign already exists: ${input.id} (creation never overwrites a record)`);
+        }
+        throw err;
     }
     const ts = iso(now);
     const rec = {
@@ -173,6 +185,7 @@ export function createCampaign(campaignsDir, input, now = new Date()) {
         createdBy: input.createdBy,
         updatedAt: ts,
     };
+    rmSync(file, { force: true });
     saveCampaignFile(file, rec);
     return loadCampaignFile(file);
 }

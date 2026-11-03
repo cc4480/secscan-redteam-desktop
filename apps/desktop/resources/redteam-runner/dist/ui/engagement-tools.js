@@ -37,6 +37,7 @@ import { readEvents } from "../events.js";
 import { verifyDeliverables } from "../report/deliverables.js";
 import { regenerateTool, reportTool } from "./report-tools.js";
 import { currentSeatSpeaker, findingSpeakers } from "./speaker.js";
+import { findSiblingCommand } from "../workflows/commands.js";
 const str = (d) => ({ type: "string", description: d });
 const req = (d) => ({ type: "string", description: d });
 /**
@@ -84,7 +85,7 @@ export function targetHost(cleaned) {
 /**
  * Build the launch request an engagement_launch call hands to the launch
  * handler: cleaned target, red mode unless black was asked for, scope
- * defaulted to the target's host, and a named operator on the record.
+ * defaulted to the target's host, and a named operator on the record; a named sibling command stamps its registry tier/targets/phases (S2-H2).
  *
  * The operator name matters beyond bookkeeping: authorizePhase attests
  * ownership from the engagement record (operatorName ?? client), so a chat
@@ -113,6 +114,15 @@ export function buildLaunchBody(a) {
         scope = [host];
     }
     const body = { target, mode: a["mode"] === "black" ? "black" : "red", objective, scope };
+    // S2-H2: a sibling command names itself in `command`; stamp the body from its registry spec — an unknown name stamps nothing. Explicit tier/targets arguments override.
+    const sibling = typeof a["command"] === "string" ? findSiblingCommand(a["command"]) : undefined;
+    if (sibling)
+        Object.assign(body, { command: sibling.name, tier: sibling.tier, targets: [...sibling.targets], phases: [...sibling.phases] });
+    if (Array.isArray(a["targets"]) && a["targets"].length > 0 && a["targets"].every((s) => typeof s === "string" && s.trim()))
+        body.targets = a["targets"].map((s) => s.trim());
+    if (Array.isArray(a["outOfScope"]) && a["outOfScope"].length > 0 && a["outOfScope"].every((s) => typeof s === "string" && s.trim())) {
+        body.outOfScope = a["outOfScope"].map((s) => s.trim());
+    }
     const operatorName = typeof a["operatorName"] === "string" && a["operatorName"].trim() ? a["operatorName"].trim() : undefined;
     const client = typeof a["client"] === "string" && a["client"].trim() ? a["client"].trim() : undefined;
     if (operatorName)
@@ -158,10 +168,13 @@ const launchTool = {
         properties: {
             target: req("Target as the user gave it: a URL or a bare host"),
             objective: req("The user's ask, in their words"),
+            command: str("The sibling operator command being fulfilled (nmap, deepscan, nuclei, metasploit — pcscan uses engagement_launch_local). Stamps the launch with that command's registry tier, target families, and phases; omit for a plain /scan."),
+            targets: { type: "array", items: { type: "string" }, description: "Target families for the engagement (webapp, windows, linux, cloud, api, ai, secscan, seclayer). Default: the named command's families." },
             mode: { type: "string", enum: ["red", "black"], description: "red = full knowledge (default), black = no prior knowledge" },
             operatorName: str("The user asking, by name — the operator the engagement record attests"),
             client: str("Client name for the report; also attests when no operator is named"),
             scope: { type: "array", items: { type: "string" }, description: "Exact in-scope hosts. Default: the target's host only." },
+            outOfScope: { type: "array", items: { type: "string" }, description: "Exact out-of-scope hosts — never touched, even when inside scope (deny beats allow). Default: none." },
             fullBattery: { type: "boolean", description: "Run the full battery (default true)" },
             tier: { type: "integer", enum: [0, 1, 2], description: "Autonomy tier; production defaults to 1" },
             environment: { type: "string", enum: ["staging", "production"] },
@@ -191,7 +204,8 @@ const launchTool = {
                 mode: built.body.mode,
                 scope: built.body.scope,
                 summary: `Engagement ${id} launched against ${built.body.target} (mode ${built.body.mode}). It runs in this app — ` +
-                    "authorize, recon, exploit, report. Poll engagement_status with this id and narrate each phase change in the thread; " +
+                    (built.body.phases ? `phases ${built.body.phases.join(", ")}${built.body.command ? ` per the /${built.body.command} command` : ""}. ` : "authorize, recon, exploit, report. ") +
+                    "Poll engagement_status with this id and narrate each phase change in the thread; " +
                     "when it completes, call engagement_report and deliver the report here.",
             },
         };
@@ -258,7 +272,7 @@ const statusTool = {
                 ? `Engagement ${id} ended: ${findings} findings over ${s.eventCount} events.${deliverableNote}`
                 : `Engagement ${id} is complete: ${findings} findings over ${s.eventCount} events. Call engagement_report to deliver the report.`
             : s.status === "halted" || s.status === "blocked"
-                ? `Engagement ${id} ${s.status}${s.blockedReason ? `: ${s.blockedReason}` : ""}. ${findings} findings recorded.${deliverableNote}`
+                ? `Engagement ${id} ${s.status}${s.blockedReason ? `: ${s.blockedReason}` : ""}. ${findings} findings recorded.${deliverableNote}${s.deliverableFailed === true ? "" : " Call engagement_report to deliver the report."}`
                 : `Engagement ${id} is ${s.status} — phase: ${s.phase}, ${s.eventCount} events, ${findings} findings so far.`;
         return {
             status: 200,

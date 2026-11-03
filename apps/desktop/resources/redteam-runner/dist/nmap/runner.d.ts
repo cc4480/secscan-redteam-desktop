@@ -1,15 +1,3 @@
-/**
- * Nmap process runner + XML parser (v0.31.0).
- *
- * The spawn function is injected, exactly as in the nuclei bridge, so the
- * parser and the executor are testable without nmap installed and without a
- * network. Nothing here decides policy — it runs an argv it is handed and
- * reports what came back.
- *
- * Output is XML (-oX -) rather than greppable text: nmap's human format is for
- * humans, and a parser over it breaks the first time a service banner contains
- * a word that looks like a column.
- */
 export interface NmapSpawnOpts {
     file: string;
     args: string[];

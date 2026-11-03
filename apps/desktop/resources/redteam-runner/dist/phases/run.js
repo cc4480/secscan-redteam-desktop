@@ -1,57 +1,57 @@
 /**
  * runEngagement entry point + RunOptions (v0.19.0 refactor — extracted from phases.ts).
  */
-import { ApprovalLog, TIER_ENV, defaultTier, describeTier, parseTier, requireNamedOperator, requireTier2ProductionApproval, resolveOperatorName, tier2ProductionConfirmed, writeTierFile } from "../accountability/index.js";
-import { HaltError } from "../context.js";
-import { EventLog } from "../events.js";
-import { HostExecutor } from "../host-exec/index.js";
-import { McpClient } from "../mcp.js";
-import { MsfExecutor } from "../msf/index.js";
-import { NucleiExecutor } from "../nuclei/index.js";
-import { NmapExecutor } from "../nmap/index.js";
-import { CredentialAttemptGuard, TargetRateLimiter, describeEnvironment, parseEnvironment, productionConfirmed, requireGraduation, resolveEffectiveRps, resolveLogRotationConfig, assertDistFresh, attestedHostAllowed } from "../safety/index.js";
-import { loadRegistryFile, saveRegistryFile, seedRegistry } from "../registry.js";
-import { WebProber, allHostsPrivateOrLoopback } from "../prober.js";
-import { activeTargets } from "../targets.js";
-import { buildItemLedger } from "../coverage/items.js";
-import { fireSlack, reportPhase, scribeGate } from "../report.js";
-import { finalizeDeliverables } from "../report/deliverables.js";
-import { inTestWindow, scopeHosts } from "../gate.js";
-import { safeEngagementId } from "../util.js";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
-import { verifiedRecordFor } from "../prompts/fleet-assembly.js";
-import { authorizePhase } from "./authorize.js";
-import { deadCredentialHaltReason } from "./dead-credential.js";
-import { planPhase } from "./plan.js";
-import { reconPhase } from "./recon.js";
-import { exploitPhase } from "./exploit.js";
-import { registerLive, unregisterLive } from "../live.js";
-import { resolveConfig } from "./config.js";
-import { coordinatorSignOff } from "./signoff.js";
-import { peerReviewPhase } from "./peer-review.js";
-import { resolveVariantCap } from "../variants/index.js";
-import { captureEngagementTrajectory } from "../harness2/trajectory.js";
-import { poolSnapshots, roleModelPolicy } from "@secscan/redteam-llm-router";
-import { MemoryError, commitMemoryForRun, deriveEngagementScope, injectExploitMemory, injectStartMemory, openEngagementMemory, } from "../memory/index.js";
+import { ApprovalLog, TIER_ENV, defaultTier, describeTier, parseTier, requireNamedOperator, requireTier2ProductionApproval, resolveOperatorName, tier2ProductionConfirmed, writeTierFile } from '../accountability/index.js';
+import { HaltError } from '../context.js';
+import { EventLog } from '../events.js';
+import { HostExecutor } from '../host-exec/index.js';
+import { McpClient } from '../mcp.js';
+import { MsfExecutor } from '../msf/index.js';
+import { NucleiExecutor } from '../nuclei/index.js';
+import { NmapExecutor } from '../nmap/index.js';
+import { CredentialAttemptGuard, TargetRateLimiter, describeEnvironment, parseEnvironment, productionConfirmed, requireGraduation, resolveEffectiveRps, resolveLogRotationConfig, assertDistFresh, attestedHostAllowed } from '../safety/index.js';
+import { loadRegistryFile, saveRegistryFile, seedRegistry } from '../registry.js';
+import { WebProber, allHostsPrivateOrLoopback } from '../prober.js';
+import { activeTargets } from '../targets.js';
+import { buildItemLedger } from '../coverage/items.js';
+import { fireSlack, reportPhase, scribeGate } from '../report.js';
+import { finalizeDeliverables } from '../report/deliverables.js';
+import { inTestWindow, scopeHosts } from '../gate.js';
+import { safeEngagementId } from '../util.js';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { verifiedRecordFor } from '../prompts/fleet-assembly.js';
+import { authorizePhase } from './authorize.js';
+import { deadCredentialHaltReason } from './dead-credential.js';
+import { planPhase } from './plan.js';
+import { reconPhase } from './recon.js';
+import { exploitPhase } from './exploit.js';
+import { registerLive, unregisterLive } from '../live.js';
+import { resolveConfig } from './config.js';
+import { coordinatorSignOff } from './signoff.js';
+import { peerReviewPhase } from './peer-review.js';
+import { resolveVariantCap } from '../variants/index.js';
+import { captureEngagementTrajectory } from '../harness2/trajectory.js';
+import { poolSnapshots, roleModelPolicy } from '@secscan/redteam-llm-router';
+import { MemoryError, commitMemoryForRun, deriveEngagementScope, injectExploitMemory, injectStartMemory, openEngagementMemory, } from '../memory/index.js';
 export async function runEngagement(input, opts = {}) {
     // Stale compiled dist/ is a silent-safety bug (an old model policy running after a src-only change). Fail fast — before any target touch.
     assertDistFresh();
     const config = resolveConfig(process.env, opts);
     const deps = opts.deps ?? {};
     if (!input.target)
-        throw new Error("[runner] target is required");
-    if (!["red", "black"].includes(input.mode))
+        throw new Error('[runner] target is required');
+    if (!['red', 'black'].includes(input.mode))
         throw new Error(`[runner] mode must be red|black, got ${input.mode}`);
     if (!input.roe?.scope?.length)
-        throw new Error("[runner] ROE scope is required (exact hosts).");
+        throw new Error('[runner] ROE scope is required (exact hosts).');
     if (!config.testMode && !inTestWindow(new Date(), input.roe)) {
-        throw new Error("[runner] current time is outside the ROE test window — refusing to run.");
+        throw new Error('[runner] current time is outside the ROE test window — refusing to run.');
     }
     // v0.13.0 safety case: staging→production graduation is MECHANICAL.
     // Production without explicit operator confirmation refuses to start —
     // fail fast, before the engagement directory is even created.
-    const environment = input.environment ?? parseEnvironment(process.env["REDTEAM_ENV"]);
+    const environment = input.environment ?? parseEnvironment(process.env['REDTEAM_ENV']);
     const prodConfirmed = input.confirmProduction ?? productionConfirmed(process.env);
     if (!config.testMode)
         requireGraduation(environment, prodConfirmed);
@@ -71,7 +71,7 @@ export async function runEngagement(input, opts = {}) {
         requireNamedOperator(environment, operator);
     const hosts = scopeHosts(input.roe);
     if (hosts.length === 0)
-        throw new Error("[runner] ROE scope produced no parseable hosts — refusing to run.");
+        throw new Error('[runner] ROE scope produced no parseable hosts — refusing to run.');
     const engagementId = safeEngagementId(opts.engagementId);
     const dir = join(config.engagementsDir, engagementId);
     // v0.26.0: log rotation — CLI/env overrides, then env defaults. events.jsonl
@@ -84,12 +84,12 @@ export async function runEngagement(input, opts = {}) {
     // v0.17.0 accountability: the append-only approval log. Tier declared and
     // production confirmation are recorded here FIRST — before any agent acts.
     const approvals = new ApprovalLog(dir, engagementId);
-    const operatorLabel = operator ?? "(operator name not supplied — set REDTEAM_OPERATOR)";
-    approvals.append("tier-declared", operatorLabel, `Autonomy ${describeTier(tier)} declared for ${environment} engagement`, undefined, tier);
-    if (environment === "production") {
-        approvals.append("production-confirm", operatorLabel, "Production engagement explicitly confirmed by operator");
+    const operatorLabel = operator ?? '(operator name not supplied — set REDTEAM_OPERATOR)';
+    approvals.append('tier-declared', operatorLabel, `Autonomy ${describeTier(tier)} declared for ${environment} engagement`, undefined, tier);
+    if (environment === 'production') {
+        approvals.append('production-confirm', operatorLabel, 'Production engagement explicitly confirmed by operator');
         if (tier === 2) {
-            approvals.append("tier-escalation", operatorLabel, "Tier 2 (chain) on production explicitly approved by operator", 1, 2);
+            approvals.append('tier-escalation', operatorLabel, 'Tier 2 (chain) on production explicitly approved by operator', 1, 2);
         }
     }
     // v0.24.0: tier.json — the mid-run tier signal. The dispatcher re-reads it
@@ -103,7 +103,7 @@ export async function runEngagement(input, opts = {}) {
     // corrupt or wrong-version — fail loud naming the path, before seeding
     // can overwrite the only copy. (Absent file → seed, unchanged.)
     if (loadedRegistry === null && existsSync(registryPath)) {
-        throw new MemoryError("REGISTRY_UNREADABLE", `findings registry at ${registryPath} exists but could not be loaded (corrupt or wrong version) — refusing to seed over it`);
+        throw new MemoryError('REGISTRY_UNREADABLE', `findings registry at ${registryPath} exists but could not be loaded (corrupt or wrong version) — refusing to seed over it`);
     }
     const registry = loadedRegistry ?? seedRegistry();
     saveRegistryFile(registryPath, registry);
@@ -113,7 +113,7 @@ export async function runEngagement(input, opts = {}) {
         deps,
         events,
         mcp: deps.mcp ?? new McpClient({ endpoint: config.mcpEndpoint, token: config.mcpToken }),
-        prober: deps.prober ?? new WebProber({ scopeHosts: hosts, minDelayMs: config.probeDelayMs, allowPrivateHosts: (config.localSandbox && allHostsPrivateOrLoopback(hosts)) || config.testMode, attestedHost: (host) => attestedHostAllowed(ctx, host) }),
+        prober: deps.prober ?? new WebProber({ scopeHosts: hosts, minDelayMs: config.probeDelayMs, allowPrivateHosts: (config.localSandbox && allHostsPrivateOrLoopback(hosts)) || config.testMode, attestedHost: host => attestedHostAllowed(ctx, host) }),
         hostExecutor: deps.hostExecutor ?? new HostExecutor({ testMode: config.testMode }),
         msfExecutor: deps.msfExecutor ?? new MsfExecutor({ testMode: config.testMode }),
         nucleiExecutor: deps.nucleiExecutor ?? new NucleiExecutor(),
@@ -140,12 +140,13 @@ export async function runEngagement(input, opts = {}) {
         approvals,
         hosts,
         domain: hosts[0],
-        excludedNote: "",
+        excludedNote: '',
         startedAt: Date.now(),
         actions: 0,
         plan: null,
         opsecCooldown: new Set(),
         consecutive5xx: 0,
+        llmDown: false,
         coverage: new Set(),
         targetCoverage: new Map(),
         // v0.18.0 per-item verdicts: every selected battery item opens pending
@@ -156,7 +157,7 @@ export async function runEngagement(input, opts = {}) {
         // v0.20.0 payload-variant expansion: per-item cap resolved mechanically
         // (env default 25 staging / 10 production; --max-variants / REDTEAM_MAX_VARIANTS).
         variantCap: resolveVariantCap(environment, config.maxVariantsPerItem),
-        fingerprint: { host: hosts[0], stack: [], appType: "unknown" },
+        fingerprint: { host: hosts[0], stack: [], appType: 'unknown' },
         registry,
         registryPath,
         registryHits: [],
@@ -165,7 +166,8 @@ export async function runEngagement(input, opts = {}) {
         killedLive: [],
         peerKilledLive: [],
         peerDeferredLive: [],
-        redirects: 0,
+        redirects: { "plan→recon": 0, "recon→exploit": 0, "exploit→report": 0 },
+        wallRedirects: 0,
         deniedStreak: 0,
     };
     // Q-MEMTIER moment 1 (§7.1): open the engagement memory store right
@@ -180,16 +182,47 @@ export async function runEngagement(input, opts = {}) {
     // so a finished engagement reports "not running" rather than serving a stale
     // context whose executors no longer belong to anything.
     registerLive(engagementId, ctx);
-    events.append({ phase: "authorize", actor: "runner", action: "engagement_start", target: input.target, result: `Mode=${input.mode.toUpperCase()} env=${describeEnvironment(environment, prodConfirmed)} tier=${describeTier(tier)} rate_limit=${rps}rps/host objective="${input.objective}" scope=[${hosts.join(", ")}] registry=${registry.confirmed.length} confirmed / ${registry.killed.length} killed entries loaded` });
+    events.append({ phase: 'authorize', actor: 'runner', action: 'engagement_start', target: input.target, result: `Mode=${input.mode.toUpperCase()} env=${describeEnvironment(environment, prodConfirmed)} tier=${describeTier(tier)} rate_limit=${rps}rps/host objective="${input.objective}" scope=[${hosts.join(', ')}] registry=${registry.confirmed.length} confirmed / ${registry.killed.length} killed entries loaded` });
     // v0.15.0: Slack lifecycle — engagement started (best-effort, never blocking).
-    void fireSlack(ctx, { kind: "started" });
+    void fireSlack(ctx, { kind: 'started' });
     // Hoisted so the halt path (catch) can still assemble the report/safety
     // artifacts from whatever work completed before the halt.
-    let brief = "";
-    let summary = "";
+    let brief = '';
+    let summary = '';
     // Hoisted (Q-MEMTIER §2.3): the finally block attaches the memory
     // commit receipt (result.memory) before the return completes.
     let result;
+    /**
+     * Q-NOHALT — the one close used by every non-completion end.
+     *
+     * Writes the mechanical accountability artifacts (safety manifest, item
+     * verdicts, proof bundles, report) from the work already recorded, WITHOUT
+     * re-running the reporter LLM, and verifies the deliverable set. A `halted`
+     * close is reserved for a deliberate safety stop; every other end — provider
+     * outage, refused preflight, internal fault — closes as `blocked`/incomplete
+     * so the scan's record is never discarded.
+     */
+    const closeIncomplete = async (reason, kind) => {
+        events.updateState({ status: kind, phase: kind === 'halted' ? 'halted' : 'report', blockedReason: reason });
+        events.append({
+            phase: kind === 'halted' ? 'halted' : 'report',
+            actor: 'runner',
+            action: kind === 'halted' ? 'engagement_halted' : 'engagement_closed_incomplete',
+            result: reason,
+        });
+        void fireSlack(ctx, { kind: 'halted', reason });
+        let findings = events.snapshot.findings;
+        let reportPath;
+        try {
+            findings = await reportPhase(ctx, brief, summary, kind === 'halted' ? { haltedReason: reason } : { blockedReason: reason });
+            reportPath = join(dir, 'report.md');
+        }
+        catch (reportErr) {
+            events.append({ phase: 'report', actor: 'runner', action: 'incomplete_report_failed', result: `Could not write incomplete-end artifacts: ${reportErr.message}` });
+        }
+        const delivered = finalizeDeliverables(ctx);
+        return { engagementId, status: kind, blockedReason: reason, reportPath, findings, deliverables: delivered.paths, ...(delivered.ok ? {} : { deliverableFailed: true }) };
+    };
     try {
         const verdict = await authorizePhase(ctx);
         if (!verdict.allowed) {
@@ -197,16 +230,16 @@ export async function runEngagement(input, opts = {}) {
             // deliverable set — mechanically (no reporter LLM), the block as the
             // headline and grade N/A — so a refused scan never vanishes silently.
             // Defensive like the halt path: a failure here never masks the block.
-            events.updateState({ status: "blocked", phase: "report", blockedReason: verdict.reason });
+            events.updateState({ status: 'blocked', phase: 'report', blockedReason: verdict.reason });
             let blockedFindings = [];
             try {
                 blockedFindings = await reportPhase(ctx, brief, summary, { blockedReason: verdict.reason });
             }
             catch (reportErr) {
-                events.append({ phase: "report", actor: "runner", action: "blocked_report_failed", result: `Could not write blocked-end artifacts: ${reportErr.message}` });
+                events.append({ phase: 'report', actor: 'runner', action: 'blocked_report_failed', result: `Could not write blocked-end artifacts: ${reportErr.message}` });
             }
             const delivered = finalizeDeliverables(ctx);
-            result = { engagementId, status: "blocked", blockedReason: verdict.reason, reportPath: join(dir, "report.md"), findings: blockedFindings, deliverables: delivered.paths, ...(delivered.ok ? {} : { deliverableFailed: true }) };
+            result = { engagementId, status: 'blocked', blockedReason: verdict.reason, reportPath: join(dir, 'report.md'), findings: blockedFindings, deliverables: delivered.paths, ...(delivered.ok ? {} : { deliverableFailed: true }) };
             return result;
         }
         // Q-MEMTIER moment 2 (§7.1): derive the verified scope and assemble
@@ -226,70 +259,86 @@ export async function runEngagement(input, opts = {}) {
         // cause and the remedy, instead of dying mid-plan behind a generic
         // give-up. Living credentials (or no pool) pass through untouched.
         const deadReason = deadCredentialHaltReason(poolSnapshots(), roleModelPolicy().coordinator.provider);
-        if (deadReason !== undefined)
-            throw new HaltError(deadReason);
+        if (deadReason !== undefined) {
+            // Q-NOHALT: a provider credential the router already pronounced dead is a
+            // precondition failure — not a target finding and not a safety stop. Close
+            // as blocked with the full deliverable set so the operator gets the exact
+            // cause and the remedy instead of a vanished scan.
+            ctx.llmDown = true;
+            ctx.llmDownReason = deadReason;
+            events.append({ phase: 'authorize', actor: 'runner', action: 'provider_unavailable', result: deadReason });
+            return await closeIncomplete(deadReason, 'blocked');
+        }
         await planPhase(ctx);
-        await coordinatorSignOff(ctx, "plan→recon", `Operation plan:\n${JSON.stringify(ctx.plan, null, 1)}`);
+        await coordinatorSignOff(ctx, "plan→recon", () => `Operation plan:\n${JSON.stringify(ctx.plan, null, 1)}`);
         void fireSlack(ctx, { kind: "phase", phase: "recon" });
         brief = await reconPhase(ctx);
-        // Q-MEMTIER moment 3 (§7.1): the refresh pack — after recon, with
-        // the fingerprint set, before the recon→exploit sign-off.
-        const refreshPack = injectExploitMemory(ctx);
-        await coordinatorSignOff(ctx, "recon→exploit", `Recon brief:\n${brief.slice(0, 3000)}\n\nShared target map (${ctx.targetMap.length} entries):\n${ctx.targetMap.map((t) => `- ${t.method} ${t.area}${t.authState ? ` [${t.authState}]` : ""}${t.attackId ? ` ${t.attackId}` : ""}`).join("\n") || "(empty)"}\nRegistry hits consulted: ${ctx.registryHits.length}. Fingerprint: ${JSON.stringify(ctx.fingerprint)}\nMemory refresh: ${refreshPack.survivors.length} units surfaced (${[...new Set(refreshPack.survivors.map((s) => s.tier))].join(", ") || "none"}), receipt ${refreshPack.receiptId}`);
-        summary = await exploitPhase(ctx, brief);
-        // Q-FLEET-XCHECK: the reviewer pass — every finding is challenged
-        // by a different seat than its producer before the report, and
-        // before this sign-off, so the verdict counts below are the
-        // post-challenge counts.
-        await peerReviewPhase(ctx);
-        void fireSlack(ctx, { kind: "phase", phase: "exploit" });
-        await coordinatorSignOff(ctx, "exploit→report", `Exploitation summary:\n${summary.slice(0, 3000)}\n\nVerdicts — confirmed: ${ctx.liveFindings.length}, killed: ${ctx.killedLive.length}.\nBattery: ${["logic", "functionality", "validation"].map((c) => `${c}:${ctx.coverage.has(c) ? "yes" : "no"}`).join(", ")}.`);
+        // S2-H2: a launching command whose phase list excludes "exploit" (a
+        // recon+report sibling such as /nmap) skips the exploit phase, the
+        // peer-review pass, and both exploit-bound sign-off gates — recon
+        // hands straight to the report. Unset phases run the full pipeline.
+        const commandPhases = input.phases;
+        const skipExploit = commandPhases !== undefined && !commandPhases.includes("exploit");
+        if (skipExploit) {
+            events.append({ phase: "recon", actor: "runner", action: "exploit_skipped", result: `Exploit phase skipped: the launching command's phase list is ${commandPhases.join("+")} — recon hands straight to report.` });
+        }
+        else {
+            // Q-MEMTIER moment 3 (§7.1): the refresh pack — after recon, with
+            // the fingerprint set, before the recon→exploit sign-off.
+            const refreshPack = injectExploitMemory(ctx);
+            await coordinatorSignOff(ctx, "recon→exploit", () => `Recon brief:\n${brief.slice(0, 3000)}\n\nShared target map (${ctx.targetMap.length} entries):\n${ctx.targetMap.map((t) => `- ${t.method} ${t.area}${t.authState ? ` [${t.authState}]` : ""}${t.attackId ? ` ${t.attackId}` : ""}`).join("\n") || "(empty)"}\nRegistry hits consulted: ${ctx.registryHits.length}. Fingerprint: ${JSON.stringify(ctx.fingerprint)}\nMemory refresh: ${refreshPack.survivors.length} units surfaced (${[...new Set(refreshPack.survivors.map((s) => s.tier))].join(", ") || "none"}), receipt ${refreshPack.receiptId}`);
+            summary = await exploitPhase(ctx, brief);
+            // Q-NOHALT: a dead provider ends the WORK, not the record — close with the
+            // deliverables instead of letting the remaining phases call it again.
+            // A spent budget is NOT closed here: the run finishes its phases normally
+            // and the report records the battery as incomplete (the engine's existing
+            // convention — see the pending-item and 12-cell coverage tests).
+            if (ctx.llmDown) {
+                return await closeIncomplete(ctx.llmDownReason ?? "fleet provider unavailable", "blocked");
+            }
+            // Q-FLEET-XCHECK: the reviewer pass — every finding is challenged
+            // by a different seat than its producer before the report, and
+            // before this sign-off, so the verdict counts below are the
+            // post-challenge counts.
+            await peerReviewPhase(ctx);
+            void fireSlack(ctx, { kind: "phase", phase: "exploit" });
+            await coordinatorSignOff(ctx, "exploit→report", () => `Exploitation summary:\n${summary.slice(0, 3000)}\n\nVerdicts — confirmed: ${ctx.liveFindings.length}, killed: ${ctx.killedLive.length}.\nBattery: ${["logic", "functionality", "validation"].map((c) => `${c}:${ctx.coverage.has(c) ? "yes" : "no"}`).join(", ")}.`);
+        }
         const findings = await reportPhase(ctx, brief, summary);
         void fireSlack(ctx, { kind: "phase", phase: "report" });
         // SCRIBE GATE, then Q-DELIVERABLES-AUTOFIRE: the publisher seat signs
         // the closing set (or leaves it UNSIGNED — report/scribe.ts); the set
         // is then verified on disk before the completion is recorded.
-        events.updateState({ status: "complete", phase: "done" });
+        events.updateState({ status: 'complete', phase: 'done' });
         const scribeOutcome = await scribeGate(ctx);
         events.append({
-            phase: "report",
-            actor: "runner",
-            action: "scribe_gate_outcome",
+            phase: 'report',
+            actor: 'runner',
+            action: 'scribe_gate_outcome',
             result: scribeOutcome.signed
                 ? `Scribe gate outcome: signed after ${scribeOutcome.cycles} review cycle(s).`
-                : `Scribe gate outcome: shipped unsigned (${scribeOutcome.reason ?? "unspecified"}) after ${scribeOutcome.cycles} review cycle(s).`,
+                : `Scribe gate outcome: shipped unsigned (${scribeOutcome.reason ?? 'unspecified'}) after ${scribeOutcome.cycles} review cycle(s).`,
         });
         const delivered = finalizeDeliverables(ctx);
         if (delivered.ok) {
-            events.append({ phase: "done", actor: "runner", action: "engagement_complete", result: `Complete. ${findings.length} findings.` });
+            events.append({ phase: 'done', actor: 'runner', action: 'engagement_complete', result: `Complete. ${findings.length} findings.` });
         }
-        result = { engagementId, status: "complete", reportPath: join(dir, "report.md"), findings, deliverables: delivered.paths, ...(delivered.ok ? {} : { deliverableFailed: true }) };
+        result = { engagementId, status: 'complete', reportPath: join(dir, 'report.md'), findings, deliverables: delivered.paths, ...(delivered.ok ? {} : { deliverableFailed: true }) };
         return result;
     }
     catch (err) {
-        const reason = err instanceof HaltError ? err.message : `unexpected error: ${err.message}`;
-        events.updateState({ status: "halted", phase: "halted", blockedReason: reason });
-        events.append({ phase: "halted", actor: "runner", action: "engagement_halted", result: reason });
-        void fireSlack(ctx, { kind: "halted", reason });
-        // A halt is exactly when the zero-disruption record matters most (5xx
-        // aborted sign-off). Still emit the mechanical
-        // accountability artifacts — safety manifest, item verdicts, proof
-        // bundles, partial report — WITHOUT re-running the reporter LLM (it could
-        // re-hit the same cap). Defensive: a failure here must never mask the halt.
-        let findings = events.snapshot.findings;
-        let reportPath;
-        try {
-            findings = await reportPhase(ctx, brief, summary, { haltedReason: reason });
-            reportPath = join(dir, "report.md");
+        // Q-NOHALT: only a deliberate safety stop (HaltError) ends a run as halted.
+        // Anything else is an internal fault — it is recorded, and the engagement
+        // still closes with its deliverables instead of being thrown away. A bug in
+        // one derivation must never cost the operator the whole scan.
+        const deliberate = err instanceof HaltError;
+        const reason = deliberate
+            ? err.message
+            : `internal error (recorded; the run still delivered its artifacts): ${err.message}`;
+        if (!deliberate) {
+            events.append({ phase: 'report', actor: 'runner', action: 'internal_error_recovered', result: reason });
         }
-        catch (reportErr) {
-            events.append({ phase: "halted", actor: "runner", action: "halt_report_failed", result: `Could not write halt artifacts: ${reportErr.message}` });
-        }
-        // Q-DELIVERABLES-AUTOFIRE (G5): the halt close also verifies the set —
-        // including when reportPhase itself threw — so the record always
-        // names what was delivered and flags any gap.
-        const delivered = finalizeDeliverables(ctx);
-        result = { engagementId, status: "halted", blockedReason: reason, reportPath, findings, deliverables: delivered.paths, ...(delivered.ok ? {} : { deliverableFailed: true }) };
+        result = await closeIncomplete(reason, deliberate ? 'halted' : 'blocked');
         return result;
     }
     finally {
@@ -301,7 +350,7 @@ export async function runEngagement(input, opts = {}) {
         // Phase-1 archive failure (MemoryArchiveError) replaces the return
         // by design; Phase-2 failures land on the receipt, never throw.
         const memoryReceipt = commitMemoryForRun(ctx, {
-            status: result?.status ?? "halted",
+            status: result?.status ?? 'halted',
             ...(result?.blockedReason ? { haltReason: result.blockedReason } : {}),
         });
         if (memoryReceipt && result)

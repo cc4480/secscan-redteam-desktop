@@ -22,16 +22,10 @@
  * executor.ts, and the phase wiring in wiring.ts.
  */
 import { createHash } from 'node:crypto';
-export const MAX_SUBTASKS_PER_TASK = 15;
-/**
- * Whole-flow node budget: tasks + subtasks across the flow. The refiner
- * grows the graph after every completed subtask, so without a flow-level
- * bound a long engagement's graph (and its persisted workgraph.json)
- * grows without limit. At the budget, creation refuses through the same
- * result channel as the per-task cap and the engagement continues on
- * the work it already has — it degrades, it does not halt.
- */
-export const MAX_TASKS_PER_FLOW = 4096;
+import { MAX_SUBTASKS_PER_TASK, MAX_TASKS_PER_FLOW } from './types.js';
+import { compareReadyTasks } from './ready.js';
+export { MAX_SUBTASKS_PER_TASK, MAX_TASKS_PER_FLOW } from './types.js';
+export { compareReadyTasks } from './ready.js';
 function key(parts) {
     return createHash('sha256').update(parts.join('\n')).digest('hex').slice(0, 12);
 }
@@ -138,22 +132,6 @@ export function findSubtask(flow, subtaskId) {
             return { task, subtask };
     }
     return null;
-}
-/**
- * The one ready-order comparator, exported so both sort sites use it and
- * can never drift: earliest deadline first, no-deadline tasks last, then
- * priority ascending. With no deadlines anywhere it degenerates to
- * exactly the historical priority sort.
- */
-export function compareReadyTasks(a, b) {
-    if (a.deadline !== undefined && b.deadline !== undefined && a.deadline !== b.deadline) {
-        return a.deadline < b.deadline ? -1 : 1;
-    }
-    if (a.deadline !== undefined && b.deadline === undefined)
-        return -1;
-    if (a.deadline === undefined && b.deadline !== undefined)
-        return 1;
-    return a.priority - b.priority;
 }
 /** Tasks whose dependencies are all done/skipped, in ready order. */
 export function nextReady(flow) {

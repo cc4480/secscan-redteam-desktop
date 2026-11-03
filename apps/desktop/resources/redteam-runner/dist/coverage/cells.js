@@ -39,8 +39,12 @@ export function sharedStateDigest(ctx, phase) {
     parts.push(`battery: ${batteryStatusLine(ctx)}`);
     if (ctx.opsecCooldown.size)
         parts.push(`OPSEC cooldowns: ${ctx.opsecCooldown.size}`);
-    if (ctx.redirects)
-        parts.push(`redirects used: ${ctx.redirects}/2`);
+    const gateRedirects = ctx.redirects['plan→recon'] + ctx.redirects['recon→exploit'] + ctx.redirects['exploit→report'];
+    if (gateRedirects) {
+        parts.push(`sign-off redirects used: plan→recon ${ctx.redirects['plan→recon']}/2, recon→exploit ${ctx.redirects['recon→exploit']}/2, exploit→report ${ctx.redirects['exploit→report']}/2`);
+    }
+    if (ctx.wallRedirects)
+        parts.push(`wall redirects used: ${ctx.wallRedirects}/2`);
     // Q-MEMTIER: one line when a recall pack exists (survivor counts by
     // tier + receipt id); memoryDigestLine returns null otherwise. The
     // 1600-char cap below applies to the joined digest as before.

@@ -13,6 +13,13 @@ import { handleSeclayerTools } from "./seclayer.js";
 import { handleSeclayerDastTool } from "./seclayer-dast.js";
 import { handleWebTools } from "./web.js";
 import { handleXTool } from "./xtool.js";
+/* Handler chain note: dispatchToolInner passes the router's per-call
+ * dispatch signal (dispatch/timeout.ts budget) as the SEVENTH argument.
+ * It sits after the sixth slot because two handlers already own that
+ * slot as a test seam (pc-agent's fetch, bridge's client); the chain
+ * passes `undefined` there. Handlers that spawn or execute accept the
+ * signal and pass it to their executor in place of a private controller,
+ * so the dispatch deadline can actually stop the in-flight call. */
 const HANDLERS = [
     handleWebTools,
     handleHostTools,
@@ -39,11 +46,11 @@ const HANDLERS = [
  * @returns the first claiming handler's result; an unknown-tool denial
  * (tagged repairable, per RC Item 6) when no handler claims the call.
  */
-export async function dispatchToolInner(ctx, role, phase, call) {
+export async function dispatchToolInner(ctx, role, phase, call, signal) {
     const args = call.arguments ?? {};
     ctx.actions++;
     for (const h of HANDLERS) {
-        const r = await h(ctx, role, phase, call, args);
+        const r = await h(ctx, role, phase, call, args, undefined, signal);
         if (r)
             return r;
     }

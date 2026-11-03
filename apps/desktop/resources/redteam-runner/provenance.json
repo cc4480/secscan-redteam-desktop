@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "package": "@secscan/redteam-runner",
   "version": "0.1.7-rc.7",
-  "source": "/home/hatch/workspace/pkg-pass2/clone/apps/redteam-runner",
+  "source": "/home/hatch/workspace/comm-flow-fixes-2026-11-02/clone-REVENDOR/apps/redteam-runner",
   "lockfile": {
-    "source": "/home/hatch/workspace/pkg-pass2/clone/pnpm-lock.yaml",
-    "sha256": "3db97613f122257626041bac2f633f32d89e3310cfe5303d5b9f69a1931c207a"
+    "source": "/home/hatch/workspace/comm-flow-fixes-2026-11-02/clone-REVENDOR/pnpm-lock.yaml",
+    "sha256": "d7bce055a4fb3b9762bf4eda8ab31fec7521999b36ad754e22ada13e2ae1a735"
   },
   "packages": [
     {

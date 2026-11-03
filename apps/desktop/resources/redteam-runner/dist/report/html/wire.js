@@ -1,11 +1,13 @@
 import { BATTERY_CATEGORIES } from '../../battery.js';
 import { TARGET_PROFILES, activeTargets } from '../../targets.js';
-import { projectApprovals, projectDanglingCauses, projectToolStats } from '../../events/projections.js';
 import { gradeBanner, gradeFindings } from '../grading.js';
 import { buildReportDetail } from '../detail.js';
 import { buildReportMatter } from '../detail-matter.js';
 import { tierOf } from './cards.js';
 import { readHostInventory } from '../host-inventory.js';
+import { buildActivity } from './activity.js';
+import { FLEET_TEAM } from './fleet.js';
+export { FLEET_TEAM };
 /**
  * Remove the reporter's trailing findings JSON block from the narrative.
  * The block is machine data — the findings render as cards — and leaving
@@ -118,22 +120,6 @@ function buildCoverage(deps) {
         notCovered: BATTERY_CATEGORIES.filter(c => !ctx.coverage.has(c)),
     };
 }
-function buildActivity(events) {
-    const stats = projectToolStats(events);
-    return {
-        eventCount: events.length,
-        rows: stats.slice(0, 40).map(s => ({
-            action: s.action,
-            count: s.count,
-            attackIds: s.attackIds,
-            firstSeq: s.firstSeq,
-            lastSeq: s.lastSeq,
-        })),
-        totalActions: stats.length,
-        decisions: projectApprovals(events).map(e => ({ action: e.action, seq: e.seq })),
-        danglingCauses: projectDanglingCauses(events),
-    };
-}
 /** Q-RP-7 / Q-RP-8: assemble the front/back-matter + strengths
  * derivations from the same records the rest of the input reads — the
  * ROE and verification record off ctx, the coverage/activity inputs
@@ -225,16 +211,6 @@ function deriveSection(deps, section, build) {
         return undefined;
     }
 }
-/** The fleet roster as the report's team section states it: every
- * seat, its role on the engagement. Summaries stay with the record —
- * the wire carries the standing roles only. */
-export const FLEET_TEAM = [
-    { agent: 'Morpheus', seat: 'Lead Coordinator', role: 'Owns the engagement: the plan, the scope and authorisation gates, fleet sequencing, and final adjudication of what counts as proven.' },
-    { agent: 'Operator', seat: 'Reconnaissance', role: 'Maps the target surface — hosts, services, endpoints, and exposure — and keeps the inventory the plan runs against.' },
-    { agent: 'Neo', seat: 'Exploitation', role: 'Executes the authorised attack paths and produces the execution evidence behind every proven finding.' },
-    { agent: 'Architect', seat: 'Attack Design & Toolbuilding', role: 'Designs the attack chains and builds or adapts the tooling the plan requires.' },
-    { agent: 'Reporter', seat: 'Reporting & Deliverables', role: 'Assembles this report and the full deliverable set from the verified engagement record.' },
-];
 /** Assemble the renderer's structured input from the phase's records. */
 export function buildEngagementReportInput(deps) {
     const coverage = buildCoverage(deps);
