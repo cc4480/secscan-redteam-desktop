@@ -23,7 +23,8 @@
  */
 
 import { spawn, type SpawnOptions } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
+import { totalmem } from 'node:os'
 import { join } from 'node:path'
 import type { LlamaServerState } from './llama-api.ts'
 import { allocateLoopbackPort } from './redteam-runner.ts'
@@ -45,6 +46,16 @@ export const LLAMA_PREFERRED_PORT = 0
 
 /** Deadline for `llama-server` to answer its first readiness probe; loading a 27B from disk is slow. */
 export const LLAMA_READY_TIMEOUT_MS = 120_000
+
+/**
+ * Absolute ceiling for one load, regardless of how much progress the child reports.
+ *
+ * The readiness deadline above is an IDLE budget: it is reset every time the server writes
+ * more output, because a model that is still loading is alive, not stuck. This ceiling is
+ * the backstop that stops a genuinely wedged server from holding the app forever. Loading a
+ * 16 GB model from a spinning disk legitimately takes many minutes.
+ */
+export const LLAMA_LOAD_CEILING_MS = 30 * 60_000
 
 /** Deadline for the child to exit after each termination signal. */
 export const LLAMA_EXIT_TIMEOUT_MS = 5_000
@@ -164,8 +175,10 @@ export interface LlamaServerOptions {
   readonly directory?: string
   /** Shortened deadlines, so a test exercises a failure path without waiting out the production budget. */
   readonly timeouts?: {
-    /** Readiness deadline; defaults to {@link LLAMA_READY_TIMEOUT_MS}. */
+    /** Idle readiness budget, reset whenever the child prints more output; defaults to {@link LLAMA_READY_TIMEOUT_MS}. */
     readonly readyMs?: number
+    /** Absolute ceiling for one load, however chatty the child is; defaults to {@link LLAMA_LOAD_CEILING_MS}. */
+    readonly loadMs?: number
     /** Exit deadline per termination signal; defaults to {@link LLAMA_EXIT_TIMEOUT_MS}. */
     readonly exitMs?: number
   }
@@ -282,14 +295,64 @@ function exitDescription(code: number | null, signal: NodeJS.Signals | null): st
   return signal !== null ? `signal ${signal}` : `code ${String(code)}`
 }
 
+/**
+ * The port the child says it bound, read from its own log line.
+ *
+ * llama.cpp prints `listening on http://127.0.0.1:<port>` once (and only once) the weights
+ * are loaded and it is serving. Our HTTP probe normally answers first, but the probe can
+ * fail for reasons the server never sees — a loopback policy, a proxy inherited from the
+ * environment, a firewall prompt on Windows — and then the app killed a perfectly healthy
+ * server after the whole deadline. The server's own announcement is the stronger signal,
+ * and it also catches the case where the port we allocated was taken and llama.cpp bound
+ * something else.
+ * @param output - The child's stdout or stderr.
+ * @returns The bound port, or `undefined` while it is still loading.
+ */
+function announcedPort(output: string): number | undefined {
+  const match = /listening on http:\/\/127\.0\.0\.1:(\d+)/u.exec(output)
+  return match === null ? undefined : Number(match[1])
+}
+
 /** @returns the message of an unknown failure, for a log line that cannot assume an Error. */
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+/** Bytes as the gigabytes an operator thinks in. */
+function gigabytes(bytes: number): string {
+  return `${(bytes / 1024 ** 3).toFixed(1)} GB`
+}
+
+/**
+ * A model bigger than the machine's RAM never finishes loading: llama.cpp maps the weights
+ * and then thrashes, so the readiness deadline expires with a message that says "not ready"
+ * and never once names the real cause. Refusing the start immediately turns a two-minute
+ * mystery into a sentence the operator can act on — pick a smaller quantisation.
+ *
+ * The check is deliberately conservative: weights plus context and runtime overhead mean a
+ * model at 90% of RAM is already unusable, so anything above that line is refused.
+ * @returns why the model cannot be loaded on this machine, or `undefined` when it might fit.
+ */
+function memoryShortfallReason(modelPath: string): string | undefined {
+  let modelBytes: number
+  try {
+    modelBytes = statSync(modelPath).size
+  } catch {
+    // A missing or unreadable file is the spawn's failure to report, not this check's.
+    return undefined
+  }
+  const totalBytes = totalmem()
+  if (modelBytes <= totalBytes * 0.9) return undefined
+  return `the model is ${gigabytes(modelBytes)} but this machine has ${gigabytes(totalBytes)} of RAM, `
+    + 'so it cannot be loaded — llama.cpp would thrash until the deadline expired instead of '
+    + 'finishing. Choose a smaller quantisation or a smaller model.'
+}
+
 /** @returns why the start request cannot be served, or `undefined` when it can. */
 function invalidStartReason(input: LlamaServerStartInput): string | undefined {
   if (input.modelPath.trim() === '') return 'the model path is empty'
+  const shortfall = memoryShortfallReason(input.modelPath)
+  if (shortfall !== undefined) return shortfall
   if (input.mmprojPath !== undefined && input.mmprojPath.trim() === '') {
     return 'the vision projector path is empty'
   }
@@ -587,12 +650,23 @@ export class LlamaServer {
     const fetcher = this.options.fetch ?? fetchLlamaProbe
     const clock = this.options.clock ?? systemClock
     const ceiling = this.options.timeouts?.readyMs ?? LLAMA_READY_TIMEOUT_MS
-    const deadline = clock.now() + ceiling
+    const startedAt = clock.now()
+    // The ceiling is an IDLE budget, not a total one: a server that keeps printing load
+    // progress is alive and working, and killing it was the bug behind "did not become
+    // ready within 120000 ms" on a model that simply takes longer than two minutes.
+    let deadline = startedAt + ceiling
+    const absoluteCeiling = startedAt + (this.options.timeouts?.loadMs ?? LLAMA_LOAD_CEILING_MS)
+    let observedOutput = this.stdoutOutput.length + this.stderrOutput.length
     const endpoint = `http://${LLAMA_SERVER_LOOPBACK}:${String(port)}`
     for (;;) {
       this.assertCurrent(generation)
       if (await probeLlamaServer(port, fetcher)) return
       this.assertCurrent(generation)
+      // The server announcing that it is listening proves it is up even when our probe
+      // cannot reach it. Readiness must not depend on a single observer.
+      if (announcedPort(this.stdoutOutput) !== undefined || announcedPort(this.stderrOutput) !== undefined) {
+        return
+      }
       const spawnError = this.spawnError
       if (spawnError !== undefined) {
         throw this.failFor(
@@ -610,12 +684,26 @@ export class LlamaServer {
           + this.diagnosticSuffix(),
         )
       }
+      const output = this.stdoutOutput.length + this.stderrOutput.length
+      if (output > observedOutput) {
+        // Still loading: restart the idle budget rather than the whole run.
+        observedOutput = output
+        deadline = clock.now() + ceiling
+      }
+      if (clock.now() >= absoluteCeiling) {
+        throw this.failFor(
+          generation,
+          modelId,
+          `desktop llama-server: the local inference server was still loading after `
+          + `${String(clock.now() - startedAt)} ms on ${endpoint}${this.diagnosticSuffix()}`,
+        )
+      }
       if (clock.now() >= deadline) {
         throw this.failFor(
           generation,
           modelId,
-          `desktop llama-server: the local inference server did not become ready on ${endpoint} `
-          + `within ${String(ceiling)} ms${this.diagnosticSuffix()}`,
+          `desktop llama-server: the local inference server stopped making progress on ${endpoint} `
+          + `(${String(ceiling)} ms with no new output)${this.diagnosticSuffix()}`,
         )
       }
       await clock.sleep(READY_POLL_INTERVAL_MS)
@@ -667,11 +755,13 @@ export class LlamaServer {
     }
   }
 
-  /** @returns the child's last output as one readable clause, stderr first. */
+  /** @returns the child's last output as readable lines, stderr first. */
   private diagnosticSuffix(): string {
     const source = this.stderrOutput.trim() === '' ? this.stdoutOutput : this.stderrOutput
     const tail = source.trim().replace(/\s+/gu, ' ').slice(-DIAGNOSTIC_IN_MESSAGE_CHARS)
-    return tail === '' ? '' : `: ${tail}`
+    // On its own lines, labelled: run together after the sentence it read as though the
+    // server's log were part of our error message.
+    return tail === '' ? '' : `\n\nllama-server log (tail):\n${tail}`
   }
 
   /** Release the process exit hook, so a stopped child leaves no listener behind. */

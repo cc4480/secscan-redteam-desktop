@@ -17,7 +17,7 @@ import { type Finding } from '../../types.js'
 import { type PocBundle, type NegativeProof } from '../../proof/index.js'
 import { renderMarkdown } from '../../ui/markdown.js'
 import { type ReportMeta } from '../html.js'
-import { REPORT_CSS } from './style.js'
+import { renderHtmlDocument } from "./shell.js"
 import { severityChips } from './gauge.js'
 import { findingCard, negativeProofCard, type FindingMeta } from './cards.js'
 import { buildReportDocument, type ReportTierGroup } from '../document.js'
@@ -36,7 +36,7 @@ import {
   type CoverageInput,
   type TeamMember,
 } from './sections.js'
-import { TIER_DEFINITION, TIER_LABEL, esc } from './tokens.js'
+import { TIER_DEFINITION, TIER_LABEL } from './tokens.js'
 import type { ReportDetail } from '../detail.js'
 import type { ReportMatter } from '../detail-matter.js'
 import {
@@ -110,14 +110,6 @@ function tierGroupHtml(o: EngagementReportInput, group: ReportTierGroup): string
   )
 }
 
-const COPY_SCRIPT = `<script>
-document.querySelectorAll("[data-copy]").forEach(function (b) {
-  b.addEventListener("click", function () {
-    var el = document.getElementById(b.getAttribute("data-copy"));
-    if (el && navigator.clipboard) { navigator.clipboard.writeText(el.innerText); b.textContent = "Copied"; }
-  });
-});
-</script>`
 
 export function renderEngagementReportHtml(o: EngagementReportInput): string {
   // The sections render from the ONE shared report document
@@ -198,21 +190,6 @@ export function renderEngagementReportHtml(o: EngagementReportInput): string {
   }
   parts.push(footerSection(o.meta))
 
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="generator" content="SecScan RedTeam">
-<meta name="robots" content="noindex,nofollow">
-<title>${esc(o.title)} — ${esc(o.meta.target)}</title>
-<style>${REPORT_CSS}</style>
-</head>
-<body>
-<div class="wrap">
-${parts.join('\n')}
-</div>
-${COPY_SCRIPT}
-</body>
-</html>`
+  return renderHtmlDocument({ title: `${o.title} — ${o.meta.target}`, body: parts.join('\n') })
 }
+
