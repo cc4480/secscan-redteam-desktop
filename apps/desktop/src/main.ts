@@ -61,6 +61,7 @@ import { DesktopRedteamRunner, redteamRunnerResources } from './redteam-runner.t
 import { provisionArsenalIndex } from './arsenal-provisioning.ts'
 import { DesktopMetasploit, findMetasploitHome } from './redteam-msf.ts'
 import { runRunnerReadiness } from './readiness.ts'
+import { probeMcpServers } from './mcp-server-status.ts'
 import { DesktopUpdatePreparationError } from './update-error.ts'
 import { DesktopUpdateSchedule, resolveDesktopUpdateScheduleConfig } from './update-schedule.ts'
 import { desktopUpdateErrorSummary, presentDesktopUpdate } from './update-presentation.ts'
@@ -1135,7 +1136,7 @@ async function main(): Promise<void> {
   }
   let openingWelcome: Promise<void> | undefined
   /** Masked MCP state for the setup window; built from the document and the environment, never from a value. */
-  const welcomeMcpState = (): WelcomeMcpState => ({
+  const welcomeMcpState = (): Omit<WelcomeMcpState, 'servers'> => ({
     required: mcpSetupRequired(process.env, storedMcpCredentials, engagementRunner.consoleEnvironmentNames),
     entryRequired: welcomeAccountEntryRequired,
     endpoint: process.env.REDTEAM_MCP_URL ?? storedMcpCredentials.values.REDTEAM_MCP_URL ?? DEFAULT_REDTEAM_MCP_URL,
@@ -1207,7 +1208,21 @@ async function main(): Promise<void> {
           return { ok: true }
         },
         skip: enterWorkspace,
-        readMcp: async () => welcomeMcpState(),
+        readMcp: async () => {
+          const state = welcomeMcpState()
+          // Per-row status is probed live on every read, from the same effective
+          // values the MCP rows compose from, so a dead, rejected, or tools-less
+          // server is visible on this surface instead of only in the Host log.
+          const servers = await probeMcpServers({
+            secscanToken: process.env.SECSCAN_MCP_TOKEN ?? storedMcpCredentials.values.SECSCAN_MCP_TOKEN,
+            seclayerKey: process.env.SECLAYER_API_KEY ?? storedMcpCredentials.values.SECLAYER_API_KEY,
+            runnerEndpoint: state.endpoint,
+            runnerToken: process.env.REDTEAM_UI_TOKEN ?? storedMcpCredentials.values.REDTEAM_UI_TOKEN,
+            bridgeUrl: process.env.PC_BRIDGE_URL,
+            bridgeTokenFile: process.env.PC_BRIDGE_TOKEN_FILE,
+          })
+          return { ...state, servers }
+        },
         saveMcp: async (input) => {
           const draft = normalizeMcpCredentialDraft(input)
           if (draft === undefined) return { ok: false }

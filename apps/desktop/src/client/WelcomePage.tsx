@@ -4,7 +4,7 @@ import type { FormEvent } from 'react'
 import { StateDot } from '@deepseek-ai/dsh-client-ui-primitives/src/StateDot.tsx'
 import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
 import { formatDesktopMessage } from '../locale.ts'
-import type { ReadinessResult } from '../welcome-api.ts'
+import type { McpServerStatusItem, ReadinessResult } from '../welcome-api.ts'
 import type { WelcomeApi, WelcomeMcpState } from '../welcome-api.ts'
 
 type Page = 'entry' | 'key' | 'account' | 'mcp'
@@ -293,6 +293,17 @@ export function Welcome({ api }: { api: WelcomeReadinessApi }) {
     : waiting ? m.welcomeAuthWaiting : phase === 'expired' ? m.welcomeAuthExpired
       : phase === 'failed' ? m.welcomeAuthFailed : m.welcomeAuthExchanging
   const heading = page === 'entry' ? 'welcome-heading' : page === 'key' ? 'key-title' : page === 'mcp' ? 'mcp-title' : 'auth-status'
+  /** Localized name of one MCP server row's probed state. */
+  const serverStatusText = (server: McpServerStatusItem): string => {
+    switch (server.state) {
+      case 'connected': return m.welcomeMcpStatusConnected
+      case 'failed': return m.welcomeMcpStatusFailed
+      case 'no-tools': return m.welcomeMcpStatusNoTools
+      case 'unkeyed': return m.welcomeMcpStatusUnkeyed
+      case 'unpaired': return m.welcomeMcpStatusUnpaired
+    }
+  }
+
   const fingerprints = mcp === null ? [] : Object.values(mcp.fingerprints)
   const mcpChanged = secscanDraft.trim() !== '' || seclayerDraft.trim() !== ''
     || runnerDraft.trim() !== ''
@@ -341,6 +352,25 @@ export function Welcome({ api }: { api: WelcomeReadinessApi }) {
         <p id="mcp-environment" className="mcp-note" hidden={mcp === null || mcp.fromEnvironment.length === 0}>
           {mcp !== null && mcp.fromEnvironment.length > 0 ? m.welcomeMcpEnvironment : ''}
         </p>
+        <section id="mcp-server-status" className="readiness" aria-live="polite" hidden={mcp === null || mcp.servers.length === 0}>
+          <header className="readiness-heading">
+            <h2 className="readiness-title">{m.welcomeMcpStatusTitle}</h2>
+          </header>
+          <ul className="readiness-list">
+            {(mcp?.servers ?? []).map(server => (
+              <li key={server.id} id={`mcp-server-${server.id}`} className={`readiness-item readiness-item--${server.state}`}>
+                <span className={`readiness-glyph readiness-glyph--${server.state}`} aria-hidden="true" />
+                <span className="visually-hidden">{server.state}</span>
+                <span className="readiness-item-label">{server.label}</span>
+                <span className="readiness-item-detail">{serverStatusText(server)}</span>
+                {server.state === 'connected' && server.toolCount !== undefined
+                  ? <span className="readiness-item-detail">{formatDesktopMessage(m.welcomeMcpStatusTools, { count: String(server.toolCount) })}</span>
+                  : null}
+                {server.detail !== undefined ? <span className="readiness-item-detail">{server.detail}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </section>
         <section className="readiness" aria-live="polite" aria-busy={readinessLoading}>
           <header className="readiness-heading">
             <h2 className="readiness-title">{m.welcomeReadinessTitle}</h2>

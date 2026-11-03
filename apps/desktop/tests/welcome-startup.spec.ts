@@ -142,6 +142,11 @@ vi.mock('../src/welcome-backend.ts', () => ({
     account: { watch: () => () => {}, state: state.accountState },
   }),
 }))
+// The per-server status probe performs real network and child-process work, which this
+// suite's fake timers cannot drive; its behavior is covered by tests/mcp-server-status.spec.ts.
+vi.mock('../src/mcp-server-status.ts', () => ({
+  probeMcpServers: async () => [],
+}))
 vi.mock('node:fs/promises', async importOriginal => ({
   ...await importOriginal<typeof import('node:fs/promises')>(),
   readFile: vi.fn(async () => '{}'),
