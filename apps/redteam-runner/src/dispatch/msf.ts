@@ -15,7 +15,7 @@ import { checkMsfModule, checkMsfPayload } from "../msf/policy.js";
 import { DUMP_KINDS } from "../msf/executor/credential-dump.js";
 import { noteTestModeBypass, testModeOn } from "./test-mode.js";
 
-export async function handleMsfTools(ctx: Ctx, _role: ActorRole, phase: EngagementPhase, call: ToolCallRequest, args: Record<string, unknown>): Promise<DispatchResult | null> {
+export async function handleMsfTools(ctx: Ctx, _role: ActorRole, phase: EngagementPhase, call: ToolCallRequest, args: Record<string, unknown>, _seam?: unknown, dispatchSignal?: AbortSignal): Promise<DispatchResult | null> {
   if (call.name !== "msf_exec") return null;
 if (call.name === "msf_exec") {
   const attackId = typeof args["attackId"] === "string" ? (args["attackId"] as string).toUpperCase() : undefined;
@@ -71,7 +71,7 @@ if (call.name === "msf_exec") {
   const host = String(args["host"] ?? "");
   ctx.probesUsed++;
   noteCategoryCoverage(ctx, category, rawTp as TargetId);
-  const ctrl = new AbortController();
+  const ctrl: { signal: AbortSignal } = { signal: dispatchSignal ?? new AbortController().signal };
   // TEST MODE (operator order): the executor will skip module/payload
   // policy — pre-compute the would-be denials (policy evaluated WITHOUT
   // test mode) so the bypass lands in the engagement log with its labels.

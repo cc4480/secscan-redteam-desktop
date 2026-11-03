@@ -23,7 +23,7 @@ function strArg(args: Record<string, unknown>, key: string): string | undefined 
   return typeof v === "string" && v.trim() ? v.trim() : undefined;
 }
 
-export async function handleNucleiTools(ctx: Ctx, _role: ActorRole, phase: EngagementPhase, call: ToolCallRequest, args: Record<string, unknown>): Promise<DispatchResult | null> {
+export async function handleNucleiTools(ctx: Ctx, _role: ActorRole, phase: EngagementPhase, call: ToolCallRequest, args: Record<string, unknown>, _seam?: unknown, dispatchSignal?: AbortSignal): Promise<DispatchResult | null> {
   if (call.name !== "nuclei_exec") return null;
   const attackId = strArg(args, "attackId")?.toUpperCase();
   const rawCat = (strArg(args, "category") ?? "").toLowerCase();
@@ -50,7 +50,7 @@ export async function handleNucleiTools(ctx: Ctx, _role: ActorRole, phase: Engag
   const host = String(args["host"] ?? "");
   ctx.probesUsed++;
   noteCategoryCoverage(ctx, category, rawTp as TargetId);
-  const ctrl = new AbortController();
+  const ctrl: { signal: AbortSignal } = { signal: dispatchSignal ?? new AbortController().signal };
   try {
     if (ctx.input.mode === "black") await sleep(Math.random() * 2500); // jitter
     const exec = ctx.nucleiExecutor;

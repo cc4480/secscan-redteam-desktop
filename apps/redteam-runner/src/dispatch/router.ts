@@ -12,7 +12,7 @@ import { type ToolCallRequest } from "@secscan/redteam-llm-router";
 import { checkTierAllows, recordExploitStep, readTierFile, TIER_NAMES } from "../accountability/index.js";
 import { classifyCredentialAttempt, classifyAuthOutcome, lockoutGuardFor, type CredentialClassification } from "../safety/index.js";
 import { type DispatchResult } from "./types.js";
-import { TOOL_TIMEOUT } from "./timeout.js";
+import { TOOL_TIMEOUT, armCallTimeout, resolveCallTimeoutMs, toolTimeoutResult } from "./timeout.js";
 import { recordItemAttempt } from "./verdicts.js";
 import { checkVariantCap, recordVariantExecution } from "../variants/index.js";
 import { postDispatchHooks, preDispatchGate } from "./policy-gate.js";
@@ -143,7 +143,33 @@ export async function dispatchTool(ctx: Ctx, role: ActorRole, phase: EngagementP
   // post-hooks — all audited individually. A denial sends nothing.
   const gate = await preDispatchGate(ctx, phase, call, host);
   if (gate.denial) return gate.denial;
-  let d = await dispatchToolInner(ctx, role, phase, gate.call);
+  // Per-call dispatch deadline (dispatch/timeout.ts): the controller is
+  // armed BEFORE the handler chain runs and its signal is passed down to
+  // the executing handlers, so at the budget the abort reaches the
+  // in-flight executor (which kills its child) — and the race below
+  // returns the typed TOOL_TIMEOUT result even if an executor ignores the
+  // signal, so a hung call cannot hold its dispatch slot forever. The
+  // timer is cleared the moment the call settles, so a call that finishes
+  // inside its budget is never aborted late.
+  const budgetMs = resolveCallTimeoutMs();
+  const callCtrl = new AbortController();
+  const clearCallTimer = armCallTimeout(callCtrl, budgetMs);
+  let d: DispatchResult;
+  try {
+    const inner = dispatchToolInner(ctx, role, phase, gate.call, callCtrl.signal);
+    void inner.catch(() => undefined); // a post-deadline rejection is discarded, never unhandled
+    const deadline = new Promise<DispatchResult>((resolve) => {
+      callCtrl.signal.addEventListener("abort", () => resolve(toolTimeoutResult({ toolName: gate.call.name, timeoutMs: budgetMs, ...(host ? { target: host } : {}) })), { once: true });
+    });
+    d = await Promise.race([inner, deadline]);
+    if (callCtrl.signal.aborted && d.errorCode !== TOOL_TIMEOUT) {
+      // The executor settled BECAUSE the deadline aborted it: the result
+      // is the dispatcher's timeout, not the tool's own answer.
+      d = toolTimeoutResult({ toolName: gate.call.name, timeoutMs: budgetMs, ...(host ? { target: host } : {}) });
+    }
+  } finally {
+    clearCallTimer();
+  }
   d = await postDispatchHooks(ctx, phase, gate.call, d, host);
   recordCallOutcome(ctx, role, phase, call, host, d);
   if (host) {

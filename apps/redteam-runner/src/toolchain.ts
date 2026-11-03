@@ -138,6 +138,39 @@ export function toolEnvNames(tool: ExternalToolId): { envBin: string; envDir?: s
   return entry.envDir ? { envBin: entry.envBin, envDir: entry.envDir } : { envBin: entry.envBin };
 }
 
+/** System env names a spawned tool still needs (PATH lookup, Windows system
+ *  paths, home/temp — the PTC runtime's startup allowlist, process.ts shape). */
+const CHILD_SYSTEM_ENV: ReadonlySet<string> = new Set(["PATH", "PATHEXT", "SYSTEMROOT", "WINDIR", "COMSPEC", "HOME", "USERPROFILE", "TEMP", "TMP", "TMPDIR"]);
+
+/** REDTEAM_* vars that only NAME tool locations: the tool table's bin/dir
+ *  vars plus the payload dir, nping, the wordlist and the nuclei templates.
+ *  Every other REDTEAM_* var is runner-only — several carry credential
+ *  material (SSH/SMB/MSFRPC passwords, Kerberos caches) and none may leak
+ *  into a child. Credential-shaped names (*_API_KEY / *_TOKEN / any other
+ *  secret) are excluded by construction: only the names above can pass. */
+const CHILD_TOOL_ENV: ReadonlySet<string> = new Set([
+  TOOLS_DIR_ENV,
+  "REDTEAM_NPING_BIN",
+  "REDTEAM_WORDLIST",
+  "REDTEAM_NUCLEI_TEMPLATES",
+  ...Object.values(TOOLS).flatMap((e) => (e.envDir ? [e.envBin, e.envDir] : [e.envBin])),
+]);
+
+/**
+ * The allowlisted environment for a spawned external tool: system essentials
+ * plus the tool-location vars above, taken from `source`. The runner's full
+ * environment carries the engagement's credentials (MODEL_API_KEY and peers,
+ * per cli.ts); a child gets none of them, while PATH and the REDTEAM_* tool
+ * vars keep binary resolution working exactly as the resolver does it.
+ */
+export function toolChildEnv(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (value !== undefined && (CHILD_TOOL_ENV.has(key) || CHILD_SYSTEM_ENV.has(key.toUpperCase()))) out[key] = value;
+  }
+  return out;
+}
+
 /** The bundled tools directory, when the supervisor or operator provided one. */
 export function toolsDir(env: NodeJS.ProcessEnv = process.env): string | undefined {
   const raw = (env[TOOLS_DIR_ENV] ?? "").trim();

@@ -41,6 +41,8 @@ export async function handleXTool(
   _phase: EngagementPhase,
   call: ToolCallRequest,
   args: Record<string, unknown>,
+  _seam?: unknown,
+  dispatchSignal?: AbortSignal,
 ): Promise<DispatchResult | null> {
   const spec = specForTool(call.name);
   if (!spec) return null;
@@ -120,7 +122,7 @@ export async function handleXTool(
   if (!offline) ctx.probesUsed++;
   noteCategoryCoverage(ctx, category, rawTp ? (rawTp as TargetId) : undefined);
 
-  const ctrl = new AbortController();
+  const ctrl: { signal: AbortSignal } = { signal: dispatchSignal ?? new AbortController().signal };
   try {
     // Resolve through the shared resolver (arg → REDTEAM_WORDLIST → bundled
     // assets → operator override). A missing list is a returned setup message,

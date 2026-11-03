@@ -10,6 +10,7 @@
  * humans, and a parser over it breaks the first time a service banner contains
  * a word that looks like a column.
  */
+import { toolChildEnv } from "../toolchain.js";
 
 export interface NmapSpawnOpts {
   file: string;
@@ -63,7 +64,7 @@ export interface NmapRunResult {
 export const realNmapSpawn: SpawnFn = async (opts) => {
   const { spawn } = await import("node:child_process");
   return new Promise<NmapSpawnResult>((resolve) => {
-    const child = spawn(opts.file, opts.args, { windowsHide: true, env: (() => { const e = { ...process.env }; for (const k of Object.keys(e)) if (/KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|PRIVATE/i.test(k)) delete e[k]; return e; })() });
+    const child = spawn(opts.file, opts.args, { windowsHide: true, env: toolChildEnv() });
     let stdout = "";
     let stderr = "";
     let timedOut = false;

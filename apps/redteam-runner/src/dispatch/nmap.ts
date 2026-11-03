@@ -62,6 +62,8 @@ export async function handleNmapTools(
   _phase: EngagementPhase,
   call: ToolCallRequest,
   args: Record<string, unknown>,
+  _seam?: unknown,
+  dispatchSignal?: AbortSignal,
 ): Promise<DispatchResult | null> {
   if (call.name !== "nmap_exec") return null;
   const attackId = strArg(args, "attackId")?.toUpperCase();
@@ -124,7 +126,7 @@ export async function handleNmapTools(
   ctx.probesUsed++;
   noteCategoryCoverage(ctx, category, rawTp as TargetId);
 
-  const ctrl = new AbortController();
+  const ctrl: { signal: AbortSignal } = { signal: dispatchSignal ?? new AbortController().signal };
   try {
     if (ctx.input.mode === "black") await sleep(Math.random() * 2500); // jitter
     const exec = ctx.nmapExecutor;

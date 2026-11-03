@@ -88,6 +88,8 @@ export async function handleNetTools(
   phase: EngagementPhase,
   call: ToolCallRequest,
   args: Record<string, unknown>,
+  _seam?: unknown,
+  dispatchSignal?: AbortSignal,
 ): Promise<DispatchResult | null> {
   if (call.name !== "net_exec") return null;
   const attackId = optStr(args["attackId"])?.toUpperCase();
@@ -157,7 +159,7 @@ export async function handleNetTools(
   ctx.probesUsed++;
   noteCategoryCoverage(ctx, category, targetProfile);
 
-  const ctrl = new AbortController();
+  const ctrl: { signal: AbortSignal } = { signal: dispatchSignal ?? new AbortController().signal };
   try {
     if (action === "socket_open") {
       const port = numArg(args, "port");
