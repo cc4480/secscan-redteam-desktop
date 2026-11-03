@@ -42,6 +42,18 @@ export async function coordinatorDirective(
     finish?: boolean;
     note?: string;
   } | null;
+  // Q-NOHALT: the agent loop now CLOSES instead of throwing when the fleet
+  // provider is down or the budget is spent, which leaves no directive to
+  // parse. Surface that as an ordinary failure so the honest-close path above
+  // records exactly one directive_failed and the phase keeps its completed
+  // work — an empty directive would read as "the coordinator chose nothing".
+  if (parsed === null && (ctx.llmDown === true || ctx.budgetExhausted === true)) {
+    throw new Error(
+      ctx.llmDown === true
+        ? `fleet provider unavailable before the ${kind} directive was produced: ${ctx.llmDownReason ?? "provider failure"}`
+        : `action/duration budget exhausted before the ${kind} directive was produced`,
+    );
+  }
   const tasks = validateTasks(ctx, Array.isArray(parsed?.tasks) ? parsed!.tasks! : [], cap);
   const finish = parsed?.finish === true;
   const note = typeof parsed?.note === "string" ? parsed.note.slice(0, 300) : text.slice(0, 300);

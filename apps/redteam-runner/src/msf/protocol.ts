@@ -127,7 +127,7 @@ export function createHttpMsfRequest(opts: MsfHttpOptions): MsfRequestFn {
         body: body as unknown as BodyInit,
         signal: ctrl.signal,
         // @ts-expect-error Node fetch extension: msfrpcd default certs are self-signed.
-        rejectUnauthorized: false,
+        rejectUnauthorized: !(opts.host === "127.0.0.1" || opts.host === "localhost" || process.env.MSF_ALLOW_INSECURE === "1"),
       });
       if (!res.ok) {
         throw new Error(`HTTP ${res.status} ${res.statusText}`);

@@ -117,7 +117,7 @@ beforeEach(() => {
 
 afterEach(() => {
   process.chdir(savedCwd);
-  rmSync(base, { recursive: true, force: true });
+  try { rmSync(base, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }); } catch { /* Windows: a live DB handle can pin the temp dir; leaving it is harmless to the assertion */ }
 });
 
 describe("arsenal serving resolution", () => {

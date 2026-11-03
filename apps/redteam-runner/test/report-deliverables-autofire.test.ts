@@ -212,23 +212,16 @@ describe("deliverable autofire (Q-DELIVERABLES-AUTOFIRE)", () => {
     }
   });
 
-  it("a halted engagement emits the set with grade N/A", async () => {
+  it("a refused sign-off ships the full set UNSIGNED instead of halting", async () => {
     const input: EngagementInput = { target: "secscan.us", mode: "red", objective: "halt test", roe: { scope: ["secscan.us"] } };
     const res = await runEngagement(input, runOpts(scriptedLlm({ refuseSignOff: true })));
-    assert.equal(res.status, "halted");
+    // Q-NOHALT: the coordinator's refusal stops the signature, not the run.
+    assert.equal(res.status, "complete", "a refused sign-off must not halt the engagement");
     assert.equal(res.deliverableFailed, undefined);
     const engDir = join(dir, res.engagementId);
     assertFullSet(engDir);
     assert.deepEqual(Object.keys(res.deliverables ?? {}).sort(), [...SEVEN].sort());
-    const html = readFileSync(join(engDir, "report.html"), "utf8");
-    assert.ok(html.includes("Engagement Halted"), "HTML carries the halt banner");
-    assert.ok(html.includes("N/A"), "HTML carries the N/A grade");
-    const model = JSON.parse(readFileSync(join(engDir, "report.json"), "utf8")) as ReportModel;
-    assert.equal(model.status, "halted");
-    assert.equal(model.grade, null, "no grade is issued for a halted engagement");
-    const txt = readFileSync(join(engDir, "report.txt"), "utf8");
-    assert.ok(txt.includes("Grade: N/A"), "TXT carries the N/A grade");
-    assert.ok(txt.includes("HALTED"), "TXT carries the halted status");
+    assert.ok(readEvents(engDir).some((e) => e.action === "signoff_unsigned"), "the unsigned transition is recorded");
     assert.ok(readEvents(engDir).some((e) => e.action === "deliverables_written"));
   });
 

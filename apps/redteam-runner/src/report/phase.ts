@@ -39,6 +39,7 @@ import { buildDetailInput, recordReportMeta } from "./predecessor.js";
 import { type DetailInput } from "./detail.js";
 import { buildGradeSection, gradeFindings } from "./grading.js";
 import { applyCellVerdicts, haltedFindingFromLive, mergeReporterFindings } from "./cell-verdicts.js";
+import { incompleteEndHeader } from "./incomplete-end.js";
 import { peerDeferredPromptSection, peerVerdictSuffix, stampPeerVerdicts } from "./peer-verdicts.js";
 
 export { applyCellVerdicts, haltedFindingFromLive, mergeReporterFindings } from "./cell-verdicts.js";
@@ -117,19 +118,9 @@ export async function reportPhase(
   let reportMd: string;
   let findings: Finding[];
   if (opts.haltedReason || opts.blockedReason) {
-    // Halt path (action/duration cap, aborted sign-off, unexpected error)
-    // and blocked path (authorization denied; Q-DELIVERABLES-AUTOFIRE P3):
-    // NEVER run the seat LLM here — it could
-    // re-hit the same cap and we would lose the accountability record exactly
-    // when it matters most. Build the report mechanically from the audit-log
-    // state; findings are the live set recorded so far.
-    reportMd =
-      `# Engagement report (${opts.blockedReason ? "BLOCKED" : "HALTED"})\n\n` +
-      `Target: ${ctx.input.target}\nMode: ${ctx.input.mode}\n` +
-      `Status: ${opts.blockedReason ? "BLOCKED" : "HALTED"} — ${opts.haltedReason ?? opts.blockedReason}\n` +
-      `Authorization: ${ctx.verificationProof}\n\n` +
-      `This engagement ${opts.blockedReason ? "was blocked at authorization, before any testing" : "halted before the reporter phase"}. The findings, coverage, proof bundles, and safety manifest below are the runner-computed record of ` +
-      `work completed up to the ${opts.blockedReason ? "block" : "halt"} — no reporter-agent narrative was generated.\n`;
+    // Never call the seat LLM here — it could re-hit the same cap and lose the
+    // accountability record exactly when it matters most.
+    reportMd = incompleteEndHeader(ctx, opts.haltedReason ?? opts.blockedReason ?? "incomplete", Boolean(opts.blockedReason));
     findings = ctx.liveFindings.map((lf, i) => haltedFindingFromLive(lf, i));
     stampPeerVerdicts(findings, ctx);
   } else if (ctx.config.dryRunAgents) {

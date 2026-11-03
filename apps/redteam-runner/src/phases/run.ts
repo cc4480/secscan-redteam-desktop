@@ -165,6 +165,7 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
     plan: null,
     opsecCooldown: new Set(),
     consecutive5xx: 0,
+    llmDown: false,
     coverage: new Set(),
     targetCoverage: new Map(),
     // v0.18.0 per-item verdicts: every selected battery item opens pending
@@ -214,6 +215,38 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
   // Hoisted (Q-MEMTIER §2.3): the finally block attaches the memory
   // commit receipt (result.memory) before the return completes.
   let result: EngagementResult | undefined;
+
+  /**
+   * Q-NOHALT — the one close used by every non-completion end.
+   *
+   * Writes the mechanical accountability artifacts (safety manifest, item
+   * verdicts, proof bundles, report) from the work already recorded, WITHOUT
+   * re-running the reporter LLM, and verifies the deliverable set. A `halted`
+   * close is reserved for a deliberate safety stop; every other end — provider
+   * outage, refused preflight, internal fault — closes as `blocked`/incomplete
+   * so the scan's record is never discarded.
+   */
+  const closeIncomplete = async (reason: string, kind: "blocked" | "halted"): Promise<EngagementResult> => {
+    events.updateState({ status: kind, phase: kind === "halted" ? "halted" : "report", blockedReason: reason });
+    events.append({
+      phase: kind === "halted" ? "halted" : "report",
+      actor: "runner",
+      action: kind === "halted" ? "engagement_halted" : "engagement_closed_incomplete",
+      result: reason,
+    });
+    void fireSlack(ctx, { kind: "halted", reason });
+    let findings: Finding[] = events.snapshot.findings;
+    let reportPath: string | undefined;
+    try {
+      findings = await reportPhase(ctx, brief, summary, kind === "halted" ? { haltedReason: reason } : { blockedReason: reason });
+      reportPath = join(dir, "report.md");
+    } catch (reportErr) {
+      events.append({ phase: "report", actor: "runner", action: "incomplete_report_failed", result: `Could not write incomplete-end artifacts: ${(reportErr as Error).message}` });
+    }
+    const delivered = finalizeDeliverables(ctx);
+    return { engagementId, status: kind, blockedReason: reason, reportPath, findings, deliverables: delivered.paths, ...(delivered.ok ? {} : { deliverableFailed: true as const }) };
+  };
+
   try {
     const verdict = await authorizePhase(ctx);
     if (!verdict.allowed) {
@@ -249,7 +282,16 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
     // cause and the remedy, instead of dying mid-plan behind a generic
     // give-up. Living credentials (or no pool) pass through untouched.
     const deadReason = deadCredentialHaltReason(poolSnapshots(), roleModelPolicy().coordinator.provider);
-    if (deadReason !== undefined) throw new HaltError(deadReason);
+    if (deadReason !== undefined) {
+      // Q-NOHALT: a provider credential the router already pronounced dead is a
+      // precondition failure — not a target finding and not a safety stop. Close
+      // as blocked with the full deliverable set so the operator gets the exact
+      // cause and the remedy instead of a vanished scan.
+      ctx.llmDown = true;
+      ctx.llmDownReason = deadReason;
+      events.append({ phase: "authorize", actor: "runner", action: "provider_unavailable", result: deadReason });
+      return await closeIncomplete(deadReason, "blocked");
+    }
     await planPhase(ctx);
     await coordinatorSignOff(ctx, "plan→recon", () => `Operation plan:\n${JSON.stringify(ctx.plan, null, 1)}`);
     void fireSlack(ctx, { kind: "phase", phase: "recon" });
@@ -263,6 +305,14 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
       () => `Recon brief:\n${brief.slice(0, 3000)}\n\nShared target map (${ctx.targetMap.length} entries):\n${ctx.targetMap.map((t) => `- ${t.method} ${t.area}${t.authState ? ` [${t.authState}]` : ""}${t.attackId ? ` ${t.attackId}` : ""}`).join("\n") || "(empty)"}\nRegistry hits consulted: ${ctx.registryHits.length}. Fingerprint: ${JSON.stringify(ctx.fingerprint)}\nMemory refresh: ${refreshPack.survivors.length} units surfaced (${[...new Set(refreshPack.survivors.map((s) => s.tier))].join(", ") || "none"}), receipt ${refreshPack.receiptId}`,
     );
     summary = await exploitPhase(ctx, brief);
+    // Q-NOHALT: a dead provider ends the WORK, not the record — close with the
+    // deliverables instead of letting the remaining phases call it again.
+    // A spent budget is NOT closed here: the run finishes its phases normally
+    // and the report records the battery as incomplete (the engine's existing
+    // convention — see the pending-item and 12-cell coverage tests).
+    if (ctx.llmDown) {
+      return await closeIncomplete(ctx.llmDownReason ?? "fleet provider unavailable", "blocked");
+    }
     // Q-FLEET-XCHECK: the reviewer pass — every finding is challenged
     // by a different seat than its producer before the report, and
     // before this sign-off, so the verdict counts below are the
@@ -296,28 +346,18 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
     result = { engagementId, status: "complete", reportPath: join(dir, "report.md"), findings, deliverables: delivered.paths, ...(delivered.ok ? {} : { deliverableFailed: true as const }) };
     return result;
   } catch (err) {
-    const reason = err instanceof HaltError ? err.message : `unexpected error: ${(err as Error).message}`;
-    events.updateState({ status: "halted", phase: "halted", blockedReason: reason });
-    events.append({ phase: "halted", actor: "runner", action: "engagement_halted", result: reason });
-    void fireSlack(ctx, { kind: "halted", reason });
-    // A halt is exactly when the zero-disruption record matters most (5xx
-    // aborted sign-off). Still emit the mechanical
-    // accountability artifacts — safety manifest, item verdicts, proof
-    // bundles, partial report — WITHOUT re-running the reporter LLM (it could
-    // re-hit the same cap). Defensive: a failure here must never mask the halt.
-    let findings = events.snapshot.findings;
-    let reportPath: string | undefined;
-    try {
-      findings = await reportPhase(ctx, brief, summary, { haltedReason: reason });
-      reportPath = join(dir, "report.md");
-    } catch (reportErr) {
-      events.append({ phase: "halted", actor: "runner", action: "halt_report_failed", result: `Could not write halt artifacts: ${(reportErr as Error).message}` });
+    // Q-NOHALT: only a deliberate safety stop (HaltError) ends a run as halted.
+    // Anything else is an internal fault — it is recorded, and the engagement
+    // still closes with its deliverables instead of being thrown away. A bug in
+    // one derivation must never cost the operator the whole scan.
+    const deliberate = err instanceof HaltError;
+    const reason = deliberate
+      ? (err as Error).message
+      : `internal error (recorded; the run still delivered its artifacts): ${(err as Error).message}`;
+    if (!deliberate) {
+      events.append({ phase: "report", actor: "runner", action: "internal_error_recovered", result: reason });
     }
-    // Q-DELIVERABLES-AUTOFIRE (G5): the halt close also verifies the set —
-    // including when reportPhase itself threw — so the record always
-    // names what was delivered and flags any gap.
-    const delivered = finalizeDeliverables(ctx);
-    result = { engagementId, status: "halted", blockedReason: reason, reportPath, findings, deliverables: delivered.paths, ...(delivered.ok ? {} : { deliverableFailed: true as const }) };
+    result = await closeIncomplete(reason, deliberate ? "halted" : "blocked");
     return result;
   } finally {
     unregisterLive(engagementId);

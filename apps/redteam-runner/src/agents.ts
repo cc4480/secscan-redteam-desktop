@@ -60,10 +60,30 @@ async function respectBlackout(ctx: Ctx, phase: EngagementPhase): Promise<void> 
   ctx.events.append({ phase, actor: 'runner', action: 'blackout_resume', result: 'Blackout window ended. Resuming.' })
 }
 
-function haltedByCaps(ctx: Ctx): string | null {
+/**
+ * Q-NOHALT — a SAFETY halt, and the only cap that may still throw.
+ *
+ * Three consecutive 5xx is evidence of production impact: continuing would
+ * keep hitting a service that is already failing, so the run stops
+ * deliberately and the report says why. Nothing else in this module halts.
+ */
+function safetyHalt(ctx: Ctx): string | null {
+  if (ctx.consecutive5xx >= 3) return 'three consecutive 5xx responses — possible production impact, halting'
+  return null
+}
+
+/**
+ * Q-NOHALT — a BUDGET stop, not a halt.
+ *
+ * The action and duration caps are configured limits, not target conditions.
+ * Hitting one means the engagement ran out of its allowance, so the phase
+ * closes with the work already done and the battery records what is still
+ * pending — the run finishes and reports. Throwing HaltError here used to
+ * discard a whole engagement because a clock or a counter expired.
+ */
+function budgetExhausted(ctx: Ctx): string | null {
   if (ctx.actions >= ctx.config.maxActions) return `action cap reached (${ctx.config.maxActions})`
   if (Date.now() - ctx.startedAt >= ctx.config.maxDurationMs) return 'duration cap reached'
-  if (ctx.consecutive5xx >= 3) return 'three consecutive 5xx responses — possible production impact, halting'
   return null
 }
 
@@ -256,10 +276,18 @@ export async function agentLoop(
   }
   for (let turn = 0; turn < integrity.effectiveMaxTurns; turn++) {
     await respectBlackout(ctx, phase)
-    const cap = haltedByCaps(ctx)
-    if (cap) {
-      ctx.events.append({ phase, actor: 'runner', action: 'halt', result: `Halted: ${cap}.` })
-      throw new HaltError(cap)
+    // Q-NOHALT: only a safety condition halts. A spent budget closes the loop
+    // and lets the phase finish with the work it already has.
+    const safety = safetyHalt(ctx)
+    if (safety) {
+      ctx.events.append({ phase, actor: 'runner', action: 'halt', result: `Halted: ${safety}.` })
+      throw new HaltError(safety)
+    }
+    const spent = budgetExhausted(ctx)
+    if (spent) {
+      ctx.budgetExhausted = true
+      ctx.events.append({ phase, actor: 'runner', action: 'budget_exhausted', result: `Loop closed: ${spent} — keeping completed work; the report records what is still pending.` })
+      break
     }
     if (integrity.checkpoint(turn)) break
     // A3 Deep: compact an over-budget history before it is sent, so the
@@ -284,6 +312,21 @@ export async function agentLoop(
       const cause = describeErrorCause(err)
       if (cause !== undefined) result += ` Cause: ${redactPii(cause)}`
       ctx.events.append({ phase, actor: 'runner', action: 'llm_error', result })
+      if (err instanceof ResilienceError) {
+        // Q-NOHALT: a provider failure is an infrastructure limitation, not a
+        // reason to discard the engagement. Mark the fleet down so no further
+        // seat burns calls on a dead provider, then close this phase with the
+        // work already recorded — the report carries the provider's own words.
+        ctx.llmDown = true
+        ctx.llmDownReason = result
+        ctx.events.append({
+          phase,
+          actor: 'runner',
+          action: 'llm_unavailable',
+          result: 'Fleet provider unavailable — closing this phase with the work already recorded and finishing the report mechanically; the engine never halts for a provider outage.',
+        })
+        break
+      }
       throw err
     }
     // Harness2 P1a: the provider's usage is real; accumulate it per engagement.
@@ -416,11 +459,15 @@ export async function agentLoop(
         if (blocked) batchDenied++
         else if (d.ok !== false) batchSuccesses++
         ctx.deniedStreak = blocked ? ctx.deniedStreak + 1 : 0
-        const capAfter = haltedByCaps(ctx)
+        const capAfter = safetyHalt(ctx)
         if (capAfter) {
           ctx.events.append({ phase, actor: 'runner', action: 'halt', result: `Halted: ${capAfter}.` })
           throw new HaltError(capAfter)
         }
+        // Q-NOHALT: a spent budget does NOT abort the batch mid-flight — the
+        // remaining calls in this batch were already dispatched and their work
+        // is real (item verdicts, recorded observations). The loop-top check
+        // stops the next turn, so nothing is lost and nothing overruns.
       }
     }
     // Reflect before redirecting (reflector.ts): a stuck batch first

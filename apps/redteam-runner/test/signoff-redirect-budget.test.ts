@@ -12,8 +12,14 @@
  *
  * The fix: `ctx.redirects` is a record keyed by transition, each gate with
  * its own budget of 2; the wall redirect spends from its own counter
- * (`ctx.wallRedirects`, budget 2); the halt message and the sign-off
- * prompt report the gate-local count.
+ * (`ctx.wallRedirects`, budget 2); the sign-off prompt reports the
+ * gate-local count.
+ *
+ * Amended by Q-NOHALT (Carlos PC fix session 2026-11-02/03): exhausting a
+ * gate's budget no longer halts the engagement — the transition ships
+ * UNSIGNED (a `signoff_unsigned` event is recorded for the report) and no
+ * corrective work runs. Fail-open on the signature, fail-closed on the
+ * evidence: the battery/completeness gates still refuse hollow work.
  *
  * These tests drive the real coordinatorSignOff and the real agentLoop
  * wall path through the scripted completion seam (the directive-failure /
@@ -29,7 +35,7 @@ import { coordinatorSignOff } from '../src/phases/signoff.js'
 import { agentLoop } from '../src/agents.js'
 import { EventLog, readEvents } from '../src/events.js'
 import type { EngagementEvent } from '../src/types.js'
-import { HaltError, type Ctx } from '../src/context.js'
+import { type Ctx } from '../src/context.js'
 import type { SignOffTransition } from '../src/phases/exploit-one.js'
 
 let dir = ''
@@ -155,38 +161,32 @@ describe('coordinatorSignOff — per-gate redirect budgets (S2-H7)', () => {
     assert.match(signOffSystems[0] ?? '', /used: 0/)
   })
 
-  it('an exhausted gate halts on its own count: the message names that gate and its own 2 redirects, before any corrective work', async () => {
+  it('an exhausted gate ships UNSIGNED on its own count (Q-NOHALT): no halt, no corrective work, the unsigned transition is recorded', async () => {
     const { completeForRole } = signOffScript({
       'exploit→report': ['REDIRECT: zero tasks cannot advance to report'],
     })
     const redirects = { ...noRedirects(), 'exploit→report': 2 }
     const ctx = makeCtx(dir, completeForRole, redirects)
 
-    await assert.rejects(
-      coordinatorSignOff(ctx, 'exploit→report', () => 'exploit summary payload'),
-      (err: unknown) => {
-        assert.ok(err instanceof HaltError, 'the gate halts with HaltError')
-        assert.match(err.message, /exploit→report/, 'the halt names the gate')
-        assert.match(err.message, /after 2 redirects/, "the halt reports that gate's own count")
-        return true
-      },
-    )
-    assert.equal(ctx.redirects['exploit→report'], 2, 'a halted redirect spends nothing further')
+    await coordinatorSignOff(ctx, 'exploit→report', () => 'exploit summary payload')
+
+    assert.equal(ctx.redirects['exploit→report'], 2, 'an unsigned redirect spends nothing further')
     assert.equal(eventsOf('redirect_exploit').length, 0, 'no corrective work runs once the gate budget is spent')
+    assert.equal(eventsOf('signoff_unsigned').length, 1, 'the unsigned transition is recorded for the report')
+    assert.equal(eventsOf('signoff').length, 0, 'no approval is recorded for an unsigned transition')
   })
 
-  it('a fresh gate funds exactly two redirects, then halts on the third', async () => {
+  it('a fresh gate funds exactly two redirects, then ships UNSIGNED on the third', async () => {
     const { completeForRole } = signOffScript({
       'exploit→report': ['REDIRECT: more work needed'],
     })
     const ctx = makeCtx(dir, completeForRole, noRedirects())
 
-    await assert.rejects(
-      coordinatorSignOff(ctx, 'exploit→report', () => 'exploit summary payload'),
-      (err: unknown) => err instanceof HaltError && /exploit→report/.test(err.message) && /after 2 redirects/.test(err.message),
-    )
+    await coordinatorSignOff(ctx, 'exploit→report', () => 'exploit summary payload')
+
     assert.equal(ctx.redirects['exploit→report'], 2, 'the gate stopped at its own budget of 2')
     assert.equal(eventsOf('redirect_exploit').length, 2, 'both funded redirects ran their corrective work')
+    assert.equal(eventsOf('signoff_unsigned').length, 1, 'the third redirect ships the transition unsigned instead of halting')
     assert.equal(ctx.redirects['recon→exploit'], 0, 'no other gate was touched')
   })
 })

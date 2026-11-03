@@ -383,7 +383,7 @@ describe('compactMessages — tool-call pairing invariant (Q-HALT Item 3)', () =
 })
 
 describe('agentLoop llm_error cause surfacing (Q-HALT Item 1)', () => {
-  it('records the classification and the provider cause on llm_error, and still rethrows', async () => {
+  it('records the classification and the provider cause on llm_error, and closes the loop instead of throwing', async () => {
     const dir2 = join(tmpdir(), `llm-error-${process.pid}-${Date.now()}`)
     mkdirSync(dir2, { recursive: true })
     try {
@@ -406,10 +406,13 @@ describe('agentLoop llm_error cause surfacing (Q-HALT Item 1)', () => {
         hostKill: { aborted: false, controllers: new Set<AbortController>() },
         safety: { killSwitchAborts: 0 },
       } as unknown as Ctx
-      await assert.rejects(
-        agentLoop(ctx, 'coordinator', 'exploit' as EngagementPhase, 'SYS', 'OBJ', [], 3),
-        (err: unknown) => err === failure,
-      )
+      // Q-NOHALT: a provider failure is an infrastructure limitation, not a
+      // reason to discard the engagement. The loop records the failure, marks
+      // the fleet down so no other seat burns calls, and CLOSES — it does not
+      // throw, because throwing used to halt the whole run.
+      const text = await agentLoop(ctx, 'coordinator', 'exploit' as EngagementPhase, 'SYS', 'OBJ', [], 3)
+      assert.equal(text, '', 'no text is produced when the fleet is down')
+      assert.equal(ctx.llmDown, true, 'the fleet is marked down for the remaining phases')
       const errors = readEvents(dir2).filter(e => e.action === 'llm_error')
       assert.equal(errors.length, 1)
       assert.match(errors[0]?.result ?? '', /content_policy/, 'the classification is on the event')

@@ -158,7 +158,7 @@ export class MsfClient {
     // command stream, so a single CR/LF in an agent-supplied module name or
     // option value would inject an extra console command. Strip them so the
     // stream stays one-command-per-line no matter what the caller passed.
-    const clean = (s: string): string => s.replace(/[\r\n]+/g, " ").trim();
+    const clean = (s: string): string => s.replace(/[\r\n;`$|&]+/g, " ").trim();
     const write = async (data: string) => {
       await this.call("console.write", [cid, data]);
     };

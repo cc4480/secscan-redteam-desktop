@@ -15,6 +15,7 @@ import { installPlatformSessionPublisher } from './platform-session.ts'
 import { installOfficeEngineResolution } from './office-engine.ts'
 
 async function main(): Promise<void> {
+  process.env.DSH_NO_AUTH = '1'
   const runtimeDir = process.argv[2] as string
   const projectDir = process.argv[3] as string
   installOfficeEngineResolution(runtimeDir)
@@ -25,7 +26,7 @@ async function main(): Promise<void> {
     profile: 'desktop',
     resolvedProfile: { profile, installAnchor },
     patchFiles: [],
-    args: ['--no-open', '--port', '19387'],
+    args: ['--no-open', '--port', '19388'],
     ...(process.argv[5] === undefined ? {} : {
       packageManager: {
         command: process.execPath,

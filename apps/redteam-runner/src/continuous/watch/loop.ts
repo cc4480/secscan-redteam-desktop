@@ -29,11 +29,10 @@ export async function watchLoop(
     }
     const waitMs = Math.max(60_000, intervalHours * 3600_000);
     await new Promise<void>((resolve) => {
-      const t = setTimeout(resolve, waitMs);
-      signal?.addEventListener("abort", () => {
-        clearTimeout(t);
-        resolve();
-      }, { once: true });
+      let t: ReturnType<typeof setTimeout>;
+      const onAbort = () => { clearTimeout(t); resolve(); };
+      t = setTimeout(() => { signal?.removeEventListener("abort", onAbort); resolve(); }, waitMs);
+      signal?.addEventListener("abort", onAbort, { once: true });
     });
   }
 }

@@ -571,7 +571,10 @@ describe("full-battery coverage mechanics", () => {
       report.includes("Full battery complete: all 12 cells probed or honestly blocked; all 418 battery items carry a verdict."),
       "completion line with item reconciliation",
     );
-    assert.ok(!report.includes("NOT COVERED"), "no missing cells or pending items");
+    // "NOT COVERED" also labels pillars that own no arm (DAST/API/Red Team),
+    // which says nothing about battery cells. The cell-level marker is the
+    // colon form emitted under Honest limits, so assert on that.
+    assert.ok(!report.includes("NOT COVERED:"), "no missing cells");
     assert.ok(!report.includes("BLOCKED (prerequisite"), "no fully-blocked cells in v0.10.0");
     assert.ok(
       report.includes("Items with prerequisites (execute when met — see Honest limits)"),
@@ -625,7 +628,7 @@ describe("halted engagement still ships accountability artifacts", () => {
     return textOnly("noop");
   };
 
-  it("a capped halt writes report.md + safety manifest + item verdicts (not just events.jsonl)", async () => {
+  it("a capped run closes INCOMPLETE (not halted) and still writes report.md + safety manifest + item verdicts", async () => {
     const input: EngagementInput = {
       target: "secscan.us",
       mode: "red",
@@ -640,12 +643,13 @@ describe("halted engagement still ships accountability artifacts", () => {
       deps: { verify: async () => true, completeForRole: haltLlm as never, prober: fakeProber },
     });
 
-    assert.equal(res.status, "halted", "engagement halted");
-    assert.match(res.blockedReason ?? "", /action cap/, "halted on the action cap");
+    // Q-NOHALT: a spent budget no longer throws. The run finishes its phases
+    // and the report records the incomplete battery; the artifacts still ship.
+    assert.equal(res.status, "complete", "a spent budget closes the loop, not the engagement");
 
-    // The whole point: the accountability artifacts must exist despite the halt.
+    // The whole point: the accountability artifacts must exist regardless.
     const report = readFileSync(join(dir, res.engagementId, "report.md"), "utf8");
-    assert.match(report, /HALTED/, "report marks the halt");
+    assert.match(report, /battery items pending a verdict|NOT COVERED/, "the incomplete battery is recorded, not hidden");
     assert.match(report, /## Safety|zero[- ]disruption|Battery coverage/i, "runner-computed sections present");
 
     const manifest = JSON.parse(readFileSync(join(dir, res.engagementId, "safety-manifest.json"), "utf8"));

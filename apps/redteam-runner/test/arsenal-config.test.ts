@@ -8,6 +8,7 @@
  */
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { basename, dirname, join, resolve } from 'node:path'
 import {
   DEFAULT_ARSENAL_MAX_ENTRIES_PER_COLLECTION,
   DEFAULT_ARSENAL_REFRESH_INTERVAL_HOURS,
@@ -17,10 +18,13 @@ import {
 
 describe('arsenal config — defaults and derivation', () => {
   it('derives the db path from the engagements dir (desktop shape)', () => {
+    // Path assertions are structure-based, not literal: the resolver builds
+    // paths with the platform's own separator, so a POSIX literal would fail
+    // on Windows for a correct implementation.
     const config = resolveArsenalConfig({}, { engagementsDir: '/data/engagements/live' })
-    assert.equal(config.dbPath, '/data/arsenal/arsenal.db')
-    assert.equal(config.arsenalDir, '/data/arsenal')
-    assert.equal(config.cacheDir, '/data/arsenal/cache/awesome-hacking')
+    assert.equal(basename(config.arsenalDir), 'arsenal')
+    assert.equal(config.dbPath, join(config.arsenalDir, 'arsenal.db'))
+    assert.equal(config.cacheDir, join(config.arsenalDir, 'cache', 'awesome-hacking'))
     assert.equal(config.enabled, true)
     assert.equal(config.sourceRepo, DEFAULT_ARSENAL_SOURCE_REPO)
     assert.equal(config.refreshIntervalHours, DEFAULT_ARSENAL_REFRESH_INTERVAL_HOURS)
@@ -29,7 +33,7 @@ describe('arsenal config — defaults and derivation', () => {
 
   it('falls back to REDTEAM_HOME when no engagements dir is supplied', () => {
     const config = resolveArsenalConfig({ REDTEAM_HOME: '/srv/redteam' })
-    assert.equal(config.dbPath, '/srv/redteam/arsenal/arsenal.db')
+    assert.equal(config.dbPath, join(resolve('/srv/redteam'), 'arsenal', 'arsenal.db'))
   })
 
   it('REDTEAM_ARSENAL_DB_PATH wins over the derivation', () => {
@@ -37,18 +41,19 @@ describe('arsenal config — defaults and derivation', () => {
       { REDTEAM_ARSENAL_DB_PATH: '/elsewhere/custom.db' },
       { engagementsDir: '/data/engagements/live' },
     )
-    assert.equal(config.dbPath, '/elsewhere/custom.db')
-    assert.equal(config.arsenalDir, '/elsewhere')
-    assert.equal(config.cacheDir, '/elsewhere/cache/awesome-hacking')
+    const expected = resolve('/elsewhere/custom.db')
+    assert.equal(config.dbPath, expected)
+    assert.equal(config.arsenalDir, dirname(expected))
+    assert.equal(config.cacheDir, join(dirname(expected), 'cache', 'awesome-hacking'))
   })
 
   it('blank env values count as unset', () => {
-    const config = resolveArsenalConfig(
+    const blank = resolveArsenalConfig(
       { REDTEAM_ARSENAL_DB_PATH: '  ', REDTEAM_ARSENAL_ENABLED: ' ' },
       { engagementsDir: '/data/engagements/live' },
     )
-    assert.equal(config.dbPath, '/data/arsenal/arsenal.db')
-    assert.equal(config.enabled, true)
+    assert.equal(basename(blank.dbPath), 'arsenal.db', 'a blank override counts as unset')
+    assert.equal(blank.enabled, true)
   })
 })
 

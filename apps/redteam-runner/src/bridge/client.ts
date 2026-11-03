@@ -109,12 +109,16 @@ export function createBridgeClient(options: BridgeClientOptions = {}): BridgeCli
         signal: ctrl.signal,
       });
     } catch (error) {
+      clearTimeout(timer);
       const message = error instanceof Error ? error.message : String(error);
       throw new BridgeError("unavailable", `[bridge] cannot reach the bridge at ${config.endpoint}: ${message}`);
+    }
+    let text: string;
+    try {
+      text = await res.text();
     } finally {
       clearTimeout(timer);
     }
-    const text = await res.text();
     const issued = res.headers.get("mcp-session-id") ?? undefined;
     if (res.status === 401 || res.status === 403) {
       throw new BridgeError("bridge-error", `[bridge] HTTP ${String(res.status)}: token rejected (revoked or wrong file?).`);
@@ -173,16 +177,31 @@ export function createBridgeClient(options: BridgeClientOptions = {}): BridgeCli
   /** One tools/* request on the cached session. */
   async function rpcCall(method: string, params: Record<string, unknown>): Promise<unknown> {
     const token = requireToken();
-    const sessionId = await handshake(token, config.callTimeoutMs);
-    const reply = await post(
-      { jsonrpc: "2.0", id: `bridge-${method}`, method, params },
-      token,
-      config.callTimeoutMs,
-      sessionId,
-    );
-    const errorMessage = rpcErrorMessage(reply.parsed);
-    if (errorMessage !== undefined) throw classifyErrorText(errorMessage);
-    return asRecord(reply.parsed)?.["result"];
+    try {
+      const sessionId = await handshake(token, config.callTimeoutMs);
+      const reply = await post(
+        { jsonrpc: "2.0", id: `bridge-${method}`, method, params },
+        token,
+        config.callTimeoutMs,
+        sessionId,
+      );
+      const errorMessage = rpcErrorMessage(reply.parsed);
+      if (errorMessage !== undefined) throw classifyErrorText(errorMessage);
+      return asRecord(reply.parsed)?.["result"];
+    } catch (err) {
+      // Clear stale session and retry once with a fresh handshake.
+      session = undefined;
+      const sessionId = await handshake(token, config.callTimeoutMs);
+      const reply = await post(
+        { jsonrpc: "2.0", id: `bridge-${method}`, method, params },
+        token,
+        config.callTimeoutMs,
+        sessionId,
+      );
+      const errorMessage = rpcErrorMessage(reply.parsed);
+      if (errorMessage !== undefined) throw classifyErrorText(errorMessage);
+      return asRecord(reply.parsed)?.["result"];
+    }
   }
 
   return {
