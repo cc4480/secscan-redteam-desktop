@@ -8,7 +8,7 @@
 import { join } from "node:path";
 import { type Captured, type ToolDef } from "./mcp-tools.js";
 import { engagementDir } from "./store.js";
-import { readEvents, readState } from "../events.js";
+import { readEvents, readState, TERMINAL_STATUSES } from "../events.js";
 import type { Finding } from "../types.js";
 import { findingSpeakers, reportAuthorSpeaker, type SpeakerStamp } from "./speaker.js";
 import { DELIVERABLE_FILES, deliverableToolFields, verifyDeliverables } from "../report/deliverables.js";
@@ -96,6 +96,10 @@ export const reportTool: ToolDef = {
       body: {
         id,
         ready: true,
+        // S2-H10: a halted run's mechanical report is also ready:true —
+        // carry the recorded status so a consumer keying on ready can
+        // tell a halt/blocked report from a finished one.
+        ...(st ? { status: st.status } : {}),
         reportPath: join(dir, "report.md"),
         ...deliverableToolFields(dir),
         ...(speaker ? { speaker } : {}),
@@ -107,9 +111,9 @@ export const reportTool: ToolDef = {
   },
 };
 
-/** Recorded ends regeneration may run on — a live run owns its own
- * report phase and must never be re-fired underneath it. */
-const TERMINAL_STATUSES = new Set(["complete", "halted", "blocked"]);
+/** Recorded ends regeneration may run on are TERMINAL_STATUSES (shared
+ * from events.ts) — a live run owns its own report phase and must never
+ * be re-fired underneath it. */
 
 /** engagement_regenerate_report — re-fire report generation for a
  * recorded engagement end whose deliverable set is incomplete. */
