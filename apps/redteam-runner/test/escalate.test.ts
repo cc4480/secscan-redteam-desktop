@@ -22,6 +22,7 @@ import {
 import { readTierFile, writeTierFile } from "../src/accountability/tierfile.js";
 import { checkTierAllows, type AutonomyTier, type TierState } from "../src/accountability/tiers.js";
 import { refreshTierFromDisk } from "../src/dispatch/router.js";
+import { ApprovalLog } from "../src/accountability/index.js";
 import { EventLog, readEvents } from "../src/events.js";
 import { UiStore } from "../src/ui/store.js";
 import { handleEscalate } from "../src/ui/routes/actions.js";
@@ -202,7 +203,12 @@ describe("dispatcher pickup (refreshTierFromDisk)", () => {
       operator: "op",
       reason: "host access approved",
     });
-    refreshTierFromDisk({ events: log, tier } as never, "recon");
+    // The dispatcher always carries the engagement approval log; an upward tier
+    // change is refused without a matching entry, so the stub must supply it.
+    refreshTierFromDisk(
+      { events: log, tier, approvals: new ApprovalLog(dir, "eng-pickup-1") } as never,
+      "recon",
+    );
     assert.equal(tier.current, 1, "tier adopted from tier.json");
     assert.equal(checkTierAllows(tier, "ssh_exec", {}, undefined), undefined, "no longer denied");
     const events = readEvents(dir);
@@ -217,11 +223,21 @@ describe("dispatcher pickup (refreshTierFromDisk)", () => {
     const dir = cannedEngagement("eng-quiet-1", 1, "staging");
     const log = EventLog.open(dir);
     const tier: TierState = { current: 1, declared: 1, chainSteps: new Map() };
-    refreshTierFromDisk({ events: log, tier } as never, "recon");
+    // The dispatcher always carries the engagement approval log; an upward tier
+    // change is refused without a matching entry, so the stub must supply it.
+    refreshTierFromDisk(
+      { events: log, tier, approvals: new ApprovalLog(dir, "eng-pickup-1") } as never,
+      "recon",
+    );
     assert.equal(tier.current, 1);
     assert.equal(readEvents(dir).filter((e) => e.action === "tier_changed").length, 0, "no audit noise");
     writeFileSync(join(dir, "tier.json"), "{not json");
-    refreshTierFromDisk({ events: log, tier } as never, "recon");
+    // The dispatcher always carries the engagement approval log; an upward tier
+    // change is refused without a matching entry, so the stub must supply it.
+    refreshTierFromDisk(
+      { events: log, tier, approvals: new ApprovalLog(dir, "eng-pickup-1") } as never,
+      "recon",
+    );
     assert.equal(tier.current, 1, "corrupt tier.json means no change, not a crash");
   });
 });
