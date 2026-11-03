@@ -130,13 +130,17 @@ export interface WelcomeOperations {
    */
   readMcp(): Promise<WelcomeMcpState>
   /**
-   * Store MCP credentials and restart the Host so the MCP rows see them.
+   * Store MCP credentials and restart the Host so the MCP rows see them. A draft
+   * that supplies a runner token or a console endpoint also restarts the bundled
+   * console supervisor, so the redefined values are the ones in effect when this
+   * resolves rather than only at the next launch.
    * @param input - raw field values; an empty string keeps the stored entry.
    * @returns whether the values are stored and the Host restarted with them.
    */
   saveMcp(input: McpCredentialDraftInput): Promise<WelcomeSaveResult>
   /**
-   * Delete the stored MCP credentials, which revokes them on the next Host start.
+   * Delete the stored MCP credentials and restart the Host without them; a
+   * running bundled console restarts as well, under a fresh supervisor token.
    * @returns whether no credential document remains.
    */
   clearMcp(): Promise<WelcomeSaveResult>
