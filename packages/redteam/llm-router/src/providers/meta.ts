@@ -78,7 +78,10 @@ export class MetaProvider implements LlmProvider {
   }
 
   private apiKeyOrNull(): string | null {
-    return process.env[META_API_KEY_ENV] ?? process.env[META_API_KEY_FALLBACK_ENV] ?? null
+    const primary = process.env[META_API_KEY_ENV]?.trim()
+    if (primary) return primary
+    const fallback = process.env[META_API_KEY_FALLBACK_ENV]?.trim()
+    return fallback ? fallback : null
   }
 
   private apiKey(options?: CompleteOptions): string {
