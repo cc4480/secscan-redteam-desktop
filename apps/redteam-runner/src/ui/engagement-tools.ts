@@ -265,7 +265,7 @@ const statusTool: ToolDef = {
           ? `Engagement ${id} ended: ${findings} findings over ${s.eventCount} events.${deliverableNote}`
           : `Engagement ${id} is complete: ${findings} findings over ${s.eventCount} events. Call engagement_report to deliver the report.`
         : s.status === "halted" || s.status === "blocked"
-          ? `Engagement ${id} ${s.status}${s.blockedReason ? `: ${s.blockedReason}` : ""}. ${findings} findings recorded.${deliverableNote}`
+          ? `Engagement ${id} ${s.status}${s.blockedReason ? `: ${s.blockedReason}` : ""}. ${findings} findings recorded.${deliverableNote}${s.deliverableFailed === true ? "" : " Call engagement_report to deliver the report."}`
           : `Engagement ${id} is ${s.status} — phase: ${s.phase}, ${s.eventCount} events, ${findings} findings so far.`;
     return {
       status: 200,

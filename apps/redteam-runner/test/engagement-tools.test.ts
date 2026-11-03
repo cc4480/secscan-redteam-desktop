@@ -160,6 +160,52 @@ describe("engagement_status", () => {
     assert.match(String(b["summary"]), /complete: 2 findings over 42 events/);
   });
 
+  it("prompts report delivery on a halted end whose deliverables did not fail (S6-H4a)", async () => {
+    cannedState("eng-2026-10-28-h4a1", "halted", true, { blockedReason: "coordinator withheld sign-off" });
+    const out = await tool("engagement_status").run(store, { id: "eng-2026-10-28-h4a1" });
+    assert.equal(out.status, 200);
+    const b = out.body as Record<string, unknown>;
+    assert.equal(b["status"], "halted");
+    assert.equal(
+      b["summary"],
+      "Engagement eng-2026-10-28-h4a1 halted: coordinator withheld sign-off. 2 findings recorded. Call engagement_report to deliver the report.",
+    );
+  });
+
+  it("prompts report delivery on a blocked end whose deliverables did not fail (S6-H4a)", async () => {
+    cannedState("eng-2026-10-28-h4a2", "blocked", true, { blockedReason: "ownership not verified" });
+    const out = await tool("engagement_status").run(store, { id: "eng-2026-10-28-h4a2" });
+    assert.equal(out.status, 200);
+    const b = out.body as Record<string, unknown>;
+    assert.equal(b["status"], "blocked");
+    assert.equal(
+      b["summary"],
+      "Engagement eng-2026-10-28-h4a2 blocked: ownership not verified. 2 findings recorded. Call engagement_report to deliver the report.",
+    );
+  });
+
+  it("keeps the regenerate pointer and no delivery prompt on a deliverable-failed halted end (S6-H4a guard)", async () => {
+    cannedState("eng-2026-10-28-h4a3", "halted", true, { blockedReason: "router exploded", deliverableFailed: true });
+    const out = await tool("engagement_status").run(store, { id: "eng-2026-10-28-h4a3" });
+    assert.equal(out.status, 200);
+    const b = out.body as Record<string, unknown>;
+    assert.equal(b["deliverableFailed"], true);
+    assert.match(String(b["summary"]), /Deliverable set INCOMPLETE — missing: /);
+    assert.match(String(b["summary"]), /Call engagement_regenerate_report to re-fire report generation\./);
+    assert.ok(!String(b["summary"]).includes("Call engagement_report to deliver the report."));
+  });
+
+  it("keeps the complete summary byte-identical (S6-H4a guard)", async () => {
+    cannedState("eng-2026-10-28-h4a4", "complete", true);
+    const out = await tool("engagement_status").run(store, { id: "eng-2026-10-28-h4a4" });
+    assert.equal(out.status, 200);
+    const b = out.body as Record<string, unknown>;
+    assert.equal(
+      b["summary"],
+      "Engagement eng-2026-10-28-h4a4 is complete: 2 findings over 42 events. Call engagement_report to deliver the report.",
+    );
+  });
+
   it("surfaces the halt reason for a run that died before writing state", async () => {
     store.register({
       id: "eng-2026-10-28-bbbb",
