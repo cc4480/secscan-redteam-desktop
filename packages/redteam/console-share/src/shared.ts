@@ -97,6 +97,21 @@ export function deliverableFileRoute(id: string, file: DeliverableFileName): str
   return `${CONSOLE_SHARE_PREFIX_ROUTE}/api/engagements/${encodeURIComponent(id)}/deliverables/${encodeURIComponent(file)}`
 }
 
+/**
+ * Browser-relative share route for the in-thread display of a
+ * deliverable: the deliverable route plus the `display=inline` marker
+ * the runner console's deliverable route answers — for report.html
+ * only — with an inline disposition under its display CSP (S6-H4b).
+ * Only ever used as a sandboxed frame's `src`; the download path keeps
+ * addressing {@link deliverableFileRoute} and never carries the marker.
+ * @param id - the engagement id.
+ * @param file - the deliverable file name.
+ * @returns the document-relative display route for the file.
+ */
+export function deliverableDisplayRoute(id: string, file: DeliverableFileName): string {
+  return `${deliverableFileRoute(id, file)}?display=inline`
+}
+
 /** Error payload every share route answers with on a refused or failed call. */
 export interface ConsoleShareErrorPayload {
   /** Stable machine-readable failure code. */

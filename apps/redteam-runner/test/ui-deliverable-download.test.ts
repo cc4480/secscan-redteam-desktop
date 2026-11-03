@@ -18,7 +18,11 @@ import { DELIVERABLE_FILES } from "../src/report/deliverables.js";
 
 const ID = "eng-2026-11-01-fixture1";
 const FIXTURE: Record<string, Buffer> = {
-  "report.html": Buffer.from("<!doctype html><title>fixture report</title>\n", "utf8"),
+  // Script-bearing on purpose (S6-H4b): a Scribe-authored report.html can
+  // carry inline script and handlers; both routes serve those bytes
+  // unchanged — the display path inerts them by response context, never
+  // by rewriting the file.
+  "report.html": Buffer.from("<!doctype html><title>fixture report</title><body onload=\"document.title='x'\"><script>document.title = 'fixture'</script>\n", "utf8"),
   "report.md": Buffer.from("# Fixture report\n\nOne finding.\n", "utf8"),
   "report.json": Buffer.from('{\n  "kind": "secscan-redteam-report"\n}\n', "utf8"),
   "report.txt": Buffer.from("Fixture report — plain text.\n", "utf8"),
@@ -93,6 +97,51 @@ describe("deliverable download route", () => {
 
   it("stays behind the console token", async () => {
     const res = await fetch(`${base}/api/engagements/${ID}/deliverables/report.md`);
+    assert.equal(res.status, 401);
+  });
+});
+
+describe("deliverable display route (S6-H4b)", () => {
+  const DISPLAY_CSP = "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'self'; sandbox";
+  const displayUrl = (file: string, marker = "display=inline"): string =>
+    `${base}/api/engagements/${ID}/deliverables/${file}?${marker}`;
+
+  it("serves a marked report.html inline under the display CSP, script-bearing bytes unchanged", async () => {
+    const res = await fetch(displayUrl("report.html"), { headers: auth() });
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("content-disposition"), 'inline; filename="report.html"');
+    assert.equal(res.headers.get("content-type"), "text/html; charset=utf-8");
+    assert.equal(res.headers.get("content-security-policy"), DISPLAY_CSP);
+    assert.equal(res.headers.get("x-content-type-options"), "nosniff");
+    assert.equal(res.headers.get("cache-control"), "no-store");
+    const bytes = Buffer.from(await res.arrayBuffer());
+    assert.equal(sha256(bytes), sha256(FIXTURE["report.html"]!));
+  });
+
+  it("keeps the marker inert for other files and for other marker values", async () => {
+    const md = await fetch(displayUrl("report.md"), { headers: auth() });
+    assert.equal(md.status, 200);
+    assert.equal(md.headers.get("content-disposition"), 'attachment; filename="report.md"');
+    assert.equal(md.headers.get("content-security-policy"), null);
+    for (const marker of ["display=block", "display=INLINE", "display=inline2", "xdisplay=inline"]) {
+      const res = await fetch(displayUrl("report.html", marker), { headers: auth() });
+      assert.equal(res.headers.get("content-disposition"), 'attachment; filename="report.html"', marker);
+      assert.equal(res.headers.get("content-security-policy"), null, marker);
+    }
+  });
+
+  it("answers HEAD on the marked route with the inline headers and no body", async () => {
+    const res = await fetch(displayUrl("report.html"), { method: "HEAD", headers: auth() });
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("content-disposition"), 'inline; filename="report.html"');
+    assert.equal(res.headers.get("content-security-policy"), DISPLAY_CSP);
+    assert.equal(res.headers.get("x-content-type-options"), "nosniff");
+    assert.equal(res.headers.get("content-length"), String(FIXTURE["report.html"]!.length));
+    assert.equal(await res.text(), "");
+  });
+
+  it("keeps the marked route behind the console token", async () => {
+    const res = await fetch(displayUrl("report.html"));
     assert.equal(res.status, 401);
   });
 });

@@ -131,7 +131,7 @@ async function route(store: UiStore, token: string, req: IncomingMessage, res: S
       return handleEscalate(store, res, decodeURIComponent(seg[2]!), body)
     }
     if (seg[1] === 'engagements' && seg[2] && seg[3] === 'deliverables' && seg[4] && (method === 'GET' || method === 'HEAD') && seg.length === 5) {
-      return handleDeliverable(store, req, res, decodeURIComponent(seg[2]!), decodeURIComponent(seg[4]!))
+      return handleDeliverable(store, req, res, decodeURIComponent(seg[2]!), decodeURIComponent(seg[4]!), url.searchParams)
     }
     if (seg[1] === 'engagements' && seg[2] && seg[3] === 'findings' && method === 'GET' && seg.length === 4) {
       return handleFindings(store, res, decodeURIComponent(seg[2]!))

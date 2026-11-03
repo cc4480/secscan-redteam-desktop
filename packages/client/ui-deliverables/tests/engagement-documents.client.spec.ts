@@ -195,6 +195,47 @@ describe('EngagementReportRow', () => {
     await waitFor(() => { expect(actions.download).toHaveBeenCalledWith('report.html') })
   }, 20000)
 
+  it('offers Preview only on the report.html row; the sandboxed frame mounts on the gesture, not at render (S6-H4b)', () => {
+    const actions: EngagementDocumentActions = {
+      download: vi.fn(async () => true),
+      copy: vi.fn(async () => MD_CONTENT),
+    }
+    const view = settledRow(actions, resultBody())
+    const htmlRow = view.container.querySelector('[data-document="report.html"]')
+    expect(htmlRow?.querySelector('iframe')).toBeNull()
+    for (const row of view.container.querySelectorAll('[data-document]')) {
+      const names = [...row.querySelectorAll('button')].map(button => button.getAttribute('aria-label') ?? '')
+      if (row.getAttribute('data-document') === 'report.html') {
+        expect(names).toContain('Preview report.html')
+      } else {
+        expect(names.some(name => name.startsWith('Preview'))).toBe(false)
+      }
+    }
+    fireEvent.click(view.getByRole('button', { name: 'Preview report.html' }))
+    const frame = htmlRow?.querySelector('iframe')
+    expect(frame?.getAttribute('src')).toBe(
+      `redteam-console/api/engagements/${ID}/deliverables/report.html?display=inline`,
+    )
+    expect(frame?.getAttribute('sandbox')).toBe('')
+    fireEvent.click(view.getByRole('button', { name: 'Hide preview of report.html' }))
+    expect(htmlRow?.querySelector('iframe')).toBeNull()
+  })
+
+  it('offers no Preview on a gap report.html row (S6-H4b)', () => {
+    const actions: EngagementDocumentActions = {
+      download: vi.fn(async () => true),
+      copy: vi.fn(async () => MD_CONTENT),
+    }
+    const view = settledRow(actions, resultBody({
+      reportHtmlPath: undefined,
+      deliverableGap: 'report.md is missing from the engagement directory — the deliverable set is incomplete (missing: report.html); see the run\'s deliverable_failed record.',
+    }))
+    const gap = view.container.querySelector('[data-document="report.html"]')
+    expect(gap?.hasAttribute('data-gap')).toBe(true)
+    expect(gap?.querySelectorAll('button')).toHaveLength(0)
+    expect(view.container.querySelector('iframe')).toBeNull()
+  })
+
   it('renders a Signed row for a signed report and an Unsigned row for an unsigned one (S6-H2a)', () => {
     const actions: EngagementDocumentActions = {
       download: vi.fn(async () => true),
