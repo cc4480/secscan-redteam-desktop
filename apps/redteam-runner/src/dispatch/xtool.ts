@@ -109,8 +109,12 @@ export async function handleXTool(
     }
   }
 
-  if (action === "probe" && !binPresent(spec, process.env)) {
-    return { result: `UNAVAILABLE: ${spec.setup.join("\n")}`, attackId, target: "(no target — probe)" };
+  if ((action === "probe" || action === "run") && !binPresent(spec, process.env)) {
+    return {
+      result: `UNAVAILABLE: ${spec.setup.join("\n")}`,
+      attackId,
+      target: action === "probe" ? "(no target — probe)" : host,
+    };
   }
 
   if (!offline) ctx.probesUsed++;

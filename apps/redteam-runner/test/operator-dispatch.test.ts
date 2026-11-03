@@ -133,15 +133,25 @@ describe("operator dispatch (no engagementId)", () => {
   it("executes nmap_exec scan with zero engagements live", async () => {
     const { counters, dispatcher } = makeDispatcher("OPERATOR-CTX");
     installOperatorDispatcher(dispatcher);
-    const out = await EXEC_TOOLS_BY_NAME.get("nmap_exec")!.run({
-      action: "scan",
-      targetProfile: "linux",
-      host: "127.0.0.1",
-      profile: "quick",
-    });
-    assert.equal(counters.nmap, 1);
-    assert.match(out, /nmap scan complete/);
-    assert.match(out, /80\/tcp open/);
+    // The dispatch scan path presence-gates the resolved nmap binary
+    // (S4-H2); this test's subject is engagement-less execution, so name a
+    // binary that exists (the test runner's own node) and restore the env.
+    const savedBin = process.env["REDTEAM_NMAP_BIN"];
+    process.env["REDTEAM_NMAP_BIN"] = process.execPath;
+    try {
+      const out = await EXEC_TOOLS_BY_NAME.get("nmap_exec")!.run({
+        action: "scan",
+        targetProfile: "linux",
+        host: "127.0.0.1",
+        profile: "quick",
+      });
+      assert.equal(counters.nmap, 1);
+      assert.match(out, /nmap scan complete/);
+      assert.match(out, /80\/tcp open/);
+    } finally {
+      if (savedBin === undefined) delete process.env["REDTEAM_NMAP_BIN"];
+      else process.env["REDTEAM_NMAP_BIN"] = savedBin;
+    }
   });
 
   it("executes with the ESTOP sentinel present (operator path never reads it)", async () => {
