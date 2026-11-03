@@ -14,6 +14,7 @@ import {
   type DeviceTemplate,
   type ScanPhase,
 } from './catalog.js'
+import { DEVICE_RULES } from './roe.js'
 
 export interface Violation {
   rule: string
@@ -80,5 +81,18 @@ export function validateDeviceTemplates(
     }
   }
 
+  // Every device class carries its own rules of engagement, and those rules must
+  // leave the work possible: a template whose rules forbade exploitation would ship
+  // a scanner too timid to prove anything on that device.
+  for (const id of DEVICE_ORDER) {
+    const rules = DEVICE_RULES[id]
+    if (!rules) {
+      violations.push({ rule: 'missing-device-rules', detail: `device "${id}" has no rules of engagement` })
+      continue
+    }
+    if (rules.aggression.length === 0 || rules.proof.length === 0 || rules.limits.length === 0) {
+      violations.push({ rule: 'incomplete-device-rules', detail: `device "${id}" must state aggression, proof and limits` })
+    }
+  }
   return violations
 }

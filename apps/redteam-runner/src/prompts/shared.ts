@@ -104,7 +104,23 @@ export function roeBlock(ctx: PromptContext): string {
         'exhaustion is STILL never allowed, sandbox or not — that stays off regardless of mode.',
     )
   } else {
-    lines.push('- Non-destructive always: no data writes/deletes, no DoS, no resource exhaustion, no credential stuffing, no pivoting outside scoped hosts. Web targets only — no phishing, social engineering, or physical.')
+    // Inside the perimeter the rules bound WHERE and WHAT, never how hard you push.
+    // The previous text banned every state change outright, which forbade proving most
+    // real exploits (a privilege escalation you never escalated, a double-spend you never
+    // spent, a stored payload you never stored) — and it said "web targets only" while the
+    // device templates ship windows/linux host families.
+    lines.push(
+      "- Inside the authorised scope, aggression is total: exploit, escalate, chain, and change state when that is what proving the flaw requires. Prefer reversible, canary-marked changes, clean up what you created, and record exactly what you changed.",
+    )
+    lines.push(
+      "- Never: denial of service or resource exhaustion (the target must be left standing); any action on a host outside the scope above; phishing, social engineering, or physical access; third-party breach credential lists.",
+    )
+    lines.push(
+      "- Irreversible or destructive change is the one thing that needs the operator first: delete nothing, do not lock, disable or modify the client's real accounts, and do not alter their configuration. Demonstrate the reach, stop at the proof, and state in the report what you did not attempt and why.",
+    )
+    lines.push(
+      "- Credential attacks are in scope when the engagement needs them, bounded by the runner's lockout interlock and rate limits — the point of those limits is to keep the client's accounts usable, not to stop you trying.",
+    )
   }
   return lines.join('\n')
 }
