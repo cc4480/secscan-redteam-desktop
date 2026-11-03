@@ -77,24 +77,30 @@ export function toolTargetHost(call: ToolCallRequest): string | undefined {
   // being refused.
   if (XTOOL_TOOL_NAMES.has(call.name) && args["action"] !== "run") return undefined;
   if (call.name === "john_exec") return undefined;
-  const direct = typeof args["host"] === "string" ? (args["host"] as string).trim().toLowerCase() : "";
+  // Resolve from `url` FIRST. The handler acts on `url` for http_probe,
+  // burst_probe, secscan_exec and seclayer_*, so taking the target from
+  // `host` let a caller pass an in-scope host to satisfy the gate while the
+  // real request went to an out-of-scope url. The gate must key on the host
+  // that will actually be contacted.
+  const rawUrl = typeof args["url"] === "string" ? (args["url"] as string).trim() : ""
+  if (rawUrl) {
+    try {
+      return new URL(rawUrl).hostname.toLowerCase()
+    } catch {
+      // A url that cannot be parsed has no host to check; fall through to
+      // `host` rather than silently reporting "no target traffic".
+    }
+  }
+  const direct = typeof args["host"] === "string" ? (args["host"] as string).trim().toLowerCase() : ""
   if (direct) {
     // URL-taking tools (sqlmap/ffuf/gobuster/nikto) take the target in `host`
     // as a full URL. Key on the hostname so varying the path/query/scheme cannot
     // mint a fresh rate-limit bucket (and defeat auto-halt) for the same host.
     try {
-      return new URL(direct).hostname.toLowerCase();
+      return new URL(direct).hostname.toLowerCase()
     } catch {
-      return direct;
+      return direct
     }
   }
-  const url = typeof args["url"] === "string" ? (args["url"] as string) : "";
-  if (url) {
-    try {
-      return new URL(url).hostname.toLowerCase();
-    } catch {
-      return undefined;
-    }
-  }
-  return undefined;
+  return undefined
 }
