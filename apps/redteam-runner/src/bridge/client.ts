@@ -84,6 +84,20 @@ interface RpcReply {
  * @param options - config overrides and seams.
  * @returns the client.
  */
+/**
+ * A failure that proves the request never reached the tool, so retrying is safe.
+ * A consent denial, an auth rejection, a timeout, or a reply that failed to parse
+ * AFTER the server executed are all unsafe to retry: the bridge already did the
+ * work, or it deliberately refused it.
+ */
+export function isStaleSessionFailure(err: unknown): boolean {
+  if (!(err instanceof BridgeError)) return false
+  // Only a bridge-error can be a stale session; unavailable means no token and
+  // bridge-denied means a human declined, neither of which a retry may override.
+  if (err.code !== 'bridge-error') return false
+  return /unknown session|no such session|invalid session|session (?:not found|expired|invalid)/i.test(err.message)
+}
+
 export function createBridgeClient(options: BridgeClientOptions = {}): BridgeClient {
   const config: BridgeConfig = resolveBridgeConfig(options.env, options)
   const fetchImpl: typeof fetch = options.fetchImpl ?? globalThis.fetch
@@ -174,6 +188,8 @@ export function createBridgeClient(options: BridgeClientOptions = {}): BridgeCli
     return token
   }
 
+
+
   /** One tools/* request on the cached session. */
   async function rpcCall(method: string, params: Record<string, unknown>): Promise<unknown> {
     const token = requireToken()
@@ -189,7 +205,13 @@ export function createBridgeClient(options: BridgeClientOptions = {}): BridgeCli
       if (errorMessage !== undefined) throw classifyErrorText(errorMessage)
       return asRecord(reply.parsed)?.['result']
     } catch (err) {
-      // Clear stale session and retry once with a fresh handshake.
+      // Retry ONLY when the failure proves the request never reached the tool.
+      // The blind retry used to re-send after any error, including a granted-then-
+      // denied consent, a 401/403, and a reply that failed to parse after the
+      // server executed the call - so shell_pwsh/delete_file/exec could run twice
+      // and a declined approval was re-requested.
+      if (!isStaleSessionFailure(err)) throw err;
+      // Clear the stale session and retry once with a fresh handshake.
       session = undefined
       const sessionId = await handshake(token, config.callTimeoutMs)
       const reply = await post(

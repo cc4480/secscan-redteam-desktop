@@ -15,7 +15,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
-import { createBridgeClient } from "../src/bridge/client.js";
+import { createBridgeClient, isStaleSessionFailure } from "../src/bridge/client.js";
 import { snapshotBridgeRegistry } from "../src/bridge/registry.js";
 import { BridgeError, type BridgeClient } from "../src/bridge/types.js";
 
@@ -225,3 +225,28 @@ describe("bridge client — unavailable states", () => {
     });
   });
 });
+
+describe('retry policy — only a proven stale session may be retried', () => {
+  it('a consent denial is never retried', () => {
+    assert.equal(isStaleSessionFailure(new BridgeError('bridge-denied', '[bridge] denied by local approval')), false)
+  })
+
+  it('an unpaired bridge is never retried', () => {
+    assert.equal(isStaleSessionFailure(new BridgeError('unavailable', '[bridge] no paired token')), false)
+  })
+
+  it('a stale-session error is the one retryable case', () => {
+    assert.equal(isStaleSessionFailure(new BridgeError('bridge-error', '[bridge] unknown session abc')), true)
+    assert.equal(isStaleSessionFailure(new BridgeError('bridge-error', '[bridge] session expired')), true)
+  })
+
+  it('an ordinary tool error is not retried', () => {
+    // This is the dangerous one: a reply that failed to parse after the server
+    // already executed. shell_pwsh/delete_file/exec must not run twice.
+    assert.equal(isStaleSessionFailure(new BridgeError('bridge-error', '[bridge] unexpected end of JSON input')), false)
+  })
+
+  it('a non-bridge failure is not retried', () => {
+    assert.equal(isStaleSessionFailure(new Error('socket hang up')), false)
+  })
+})
