@@ -49,6 +49,8 @@ export interface TaskResult {
   findingsAfter: number;
   killedBefore: number;
   killedAfter: number;
+  /** "shared" when these numbers are the parallel chunk delta, not this task own work. */
+  attribution?: "exact" | "shared";
 }
 
 /**
@@ -154,16 +156,23 @@ export async function runTask(ctx: Ctx, task: TaskDef): Promise<TaskResult> {
 /**
  * Fan-out with a concurrency cap: red fans out independent tasks in parallel,
  * black runs strictly one at a time (stealth). HaltError always propagates.
- */
-export async function runBatch(ctx: Ctx, tasks: TaskDef[], cap: number): Promise<TaskResult[]> {
+ *
+ * Parallel tasks share `ctx`, so each task before/after snapshot overlaps its
+ * siblings work: task A "findings after" already includes what task B found.
+ * Reporting those raw projections attributed every sibling probes and findings
+ * to each task, and those numbers are what the coordinator re-plans from. A chunk
+ * delta is therefore reconciled here and attributed ONCE - to the first task - with
+ * the rest zeroed and every result marked `shared`, so nothing double-counts.
+ */export async function runBatch(ctx: Ctx, tasks: TaskDef[], cap: number): Promise<TaskResult[]> {
   const results: TaskResult[] = [];
   for (let i = 0; i < tasks.length; i += cap) {
     const chunk = tasks.slice(i, i + cap);
     const settled = await Promise.allSettled(chunk.map((t) => runTask(ctx, t)));
+    const fulfilled: TaskResult[] = [];
     for (let j = 0; j < settled.length; j++) {
       const s = settled[j]!;
       if (s.status === "fulfilled") {
-        results.push(s.value);
+        fulfilled.push(s.value);
       } else {
         if (s.reason instanceof HaltError) throw s.reason;
         ctx.events.append({
@@ -175,8 +184,41 @@ export async function runBatch(ctx: Ctx, tasks: TaskDef[], cap: number): Promise
         });
       }
     }
+    if (fulfilled.length > 1) reconcileChunkDeltas(fulfilled);
+    results.push(...fulfilled);
   }
   return results;
+}
+
+/**
+ * Attribute a parallel chunk true delta once instead of once per task.
+ * @param fulfilled - The chunk results; mutated in place.
+ */
+export function reconcileChunkDeltas(fulfilled: TaskResult[]): void {
+  const probesBase = Math.min(...fulfilled.map((r) => r.probesBefore));
+  const findingsBase = Math.min(...fulfilled.map((r) => r.findingsBefore));
+  const killedBase = Math.min(...fulfilled.map((r) => r.killedBefore));
+  const probesEnd = Math.max(...fulfilled.map((r) => r.probesAfter));
+  const findingsEnd = Math.max(...fulfilled.map((r) => r.findingsAfter));
+  const killedEnd = Math.max(...fulfilled.map((r) => r.killedAfter));
+  fulfilled.forEach((r, index) => {
+    // Marked shared even for the task that carries the number: it is the chunk
+    // delta, not a measurement of that one task own work.
+    r.attribution = "shared";
+    if (index === 0) {
+      r.probesBefore = probesBase;
+      r.probesAfter = probesEnd;
+      r.findingsBefore = findingsBase;
+      r.findingsAfter = findingsEnd;
+      r.killedBefore = killedBase;
+      r.killedAfter = killedEnd;
+      return;
+    }
+    // Siblings report no delta of their own - the chunk was already attributed.
+    r.probesBefore = r.probesAfter;
+    r.findingsBefore = r.findingsAfter;
+    r.killedBefore = r.killedAfter;
+  });
 }
 
 let taskCounter = 0;
