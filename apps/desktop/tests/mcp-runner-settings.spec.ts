@@ -2,12 +2,10 @@ vi.mock('../src/web-document.ts', () => ({ authenticateWebHost: async () => 'tes
 /** MCP settings saves that redefine the runner must reach the running supervisor (S5-H7b). */
 
 import { afterEach, expect, it, vi } from 'vitest'
-import { join } from 'node:path'
 import type { BrowserWindowConstructorOptions } from 'electron'
 import type { DesktopLocale } from '../src/locale.ts'
 import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
 import type { WelcomeOperations } from '../src/welcome-api.ts'
-import { DESKTOP_IPC } from '../src/ipc.ts'
 
 const state = vi.hoisted(() => ({
   appListeners: new Map<string, (...args: unknown[]) => void>(),
