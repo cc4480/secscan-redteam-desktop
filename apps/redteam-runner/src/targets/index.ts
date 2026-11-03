@@ -38,7 +38,6 @@
  * pretending a test ran when its setup was missing.
  */
 
-import type { ItemVerdict } from "../coverage/items.js";
 import type { BatteryCategory } from "../battery.js";
 import { BATTERY_CATEGORIES, CATEGORY_LABELS } from "../battery.js";
 import type { TargetBatteryItem, TargetId, TargetKind, TargetProfile } from "./types.js";
@@ -135,32 +134,11 @@ export function targetCellBlocked(profile: TargetProfile, category: BatteryCateg
 export type CellStatus = "done" | "blocked" | "missing";
 
 /** Cell status for one target × category. */
-/**
- * Cell status for one target x category.
- *
- * A cell is `done` only when every item in it carries a settled disposition in
- * the ledger. It used to answer `done` when a single probe had been tagged with
- * the category, so three requests could claim a 144-item battery had been probed.
- * The category set stays as a hint for contexts with no ledger (tests, previews);
- * whenever a ledger is supplied it decides.
- */
 export function targetCellStatus(
   profile: TargetProfile,
   category: BatteryCategory,
   probed: Set<BatteryCategory> | undefined,
-  ledger?: Map<string, ItemVerdict>,
 ): CellStatus {
-  if (ledger) {
-    const items = targetItemsFor(profile, category);
-    const settled = new Set(
-      [...ledger.values()]
-        .filter((v) => v.target === profile.id && v.disposition !== "pending")
-        .map((v) => v.itemId),
-    );
-    if (items.length > 0 && items.every((b) => settled.has(b.id))) return "done";
-    if (targetCellBlocked(profile, category)) return "blocked";
-    return "missing";
-  }
   if (probed?.has(category)) return "done";
   if (targetCellBlocked(profile, category)) return "blocked";
   return "missing";

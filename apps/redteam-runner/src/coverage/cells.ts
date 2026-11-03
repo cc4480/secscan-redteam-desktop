@@ -23,7 +23,7 @@ export function batteryStatusLine(ctx: Ctx): string {
       .map(
         t =>
           `${t}: ${BATTERY_CATEGORIES.map((c) => {
-            const s = targetCellStatus(TARGET_PROFILES[t], c, ctx.targetCoverage.get(t), ctx.itemLedger)
+            const s = targetCellStatus(TARGET_PROFILES[t], c, ctx.targetCoverage.get(t))
             return `${c}${s === 'done' ? '✓' : s === 'blocked' ? '⊘' : '…'}`
           }).join(' ')}`,
       )
