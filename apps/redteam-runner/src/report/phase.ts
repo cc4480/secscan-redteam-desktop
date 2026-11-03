@@ -53,7 +53,7 @@ export async function reportPhase(
 ): Promise<Finding[]> {
   const selected = ctx.input.fullBattery ? activeTargets(ctx.input) : []
   const fbCells = selected.flatMap(t => BATTERY_CATEGORIES.map(c => ({ t, c })))
-  const fbStatus = fbCells.map(({ t, c }) => ({ t, c, s: targetCellStatus(TARGET_PROFILES[t], c, ctx.targetCoverage.get(t)) }))
+  const fbStatus = fbCells.map(({ t, c }) => ({ t, c, s: targetCellStatus(TARGET_PROFILES[t], c, ctx.targetCoverage.get(t), ctx.itemLedger) }))
   const fbDone = fbStatus.filter(x => x.s === 'done')
   const fbBlocked = fbStatus.filter(x => x.s === 'blocked')
   const fbMissing = fbStatus.filter(x => x.s === 'missing')
