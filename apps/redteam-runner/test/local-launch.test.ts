@@ -18,23 +18,40 @@ import { buildLocalLaunchBody, LOCAL_TOOLS } from "../src/ui/local-tools.js";
 import { EXEC_TOOLS } from "../src/ui/mcp-exec.js";
 import { buildLocalEngagementInput, parseCommand, planCommand } from "../src/workflows/commands.js";
 
+/** Narrow a launch build to its body, failing loudly when it refused. */
+function bodyOf(
+  r: ReturnType<typeof buildLocalLaunchBody>,
+): Extract<ReturnType<typeof buildLocalLaunchBody>, { body: unknown }>["body"] {
+  if ("error" in r) throw new Error(r.error);
+  return r.body;
+}
+
 describe("buildLocalLaunchBody (chat surface)", () => {
   it("targets this machine only: target = scope = hostname, windows family, localHost set", () => {
-    const { body } = buildLocalLaunchBody({}, "TESTBOX");
+    const body = bodyOf(buildLocalLaunchBody({ operatorName: "Carlos" }, "TESTBOX"));
     assert.equal(body.target, "TESTBOX");
     assert.deepEqual(body.scope, ["TESTBOX"]);
     assert.deepEqual(body.targets, ["windows"]);
     assert.equal(body.localHost, true);
     assert.equal(body.mode, "red");
-    assert.equal(body.operatorName, "the desktop user");
+    assert.equal(body.operatorName, "Carlos");
     assert.match(body.objective, /workstation/);
   });
 
+  it("never attests a placeholder — falls back to a real identity", () => {
+    // The ownership basis the authorize phase consumes is this name. It used to
+    // default to the constant "the desktop user", so the record attested that a
+    // named person had claimed ownership when nobody had.
+    const body = bodyOf(buildLocalLaunchBody({}, "TESTBOX"));
+    assert.notEqual(body.operatorName, "the desktop user");
+    assert.ok((body.operatorName ?? "").trim().length > 0, "no identity was recorded");
+  });
+
   it("carries the caller's objective, operator, client, mode, tier, dryRun", () => {
-    const { body } = buildLocalLaunchBody(
+    const body = bodyOf(buildLocalLaunchBody(
       { objective: "check my PC before the demo", operatorName: "Carlos", mode: "black", tier: 0, dryRun: true },
       "TESTBOX",
-    );
+    ));
     assert.equal(body.objective, "check my PC before the demo");
     assert.equal(body.operatorName, "Carlos");
     assert.equal(body.mode, "black");
@@ -43,10 +60,10 @@ describe("buildLocalLaunchBody (chat surface)", () => {
   });
 
   it("ignores any target/scope smuggled into the args — a local launch cannot be re-aimed", () => {
-    const { body } = buildLocalLaunchBody(
-      { target: "victim.example.com", scope: ["victim.example.com"], localHost: false },
+    const body = bodyOf(buildLocalLaunchBody(
+      { target: "victim.example.com", scope: ["victim.example.com"], localHost: false, operatorName: "Carlos" },
       "TESTBOX",
-    );
+    ));
     assert.equal(body.target, "TESTBOX");
     assert.deepEqual(body.scope, ["TESTBOX"]);
     assert.equal(body.localHost, true);
@@ -55,11 +72,11 @@ describe("buildLocalLaunchBody (chat surface)", () => {
 
 describe("engagement_launch passthrough", () => {
   it("buildLaunchBody carries localHost: true and nothing else changes", () => {
-    const plain = buildLaunchBody({ target: "example.com", objective: "scan it" });
+    const plain = buildLaunchBody({ target: "example.com", objective: "scan it", operatorName: "Carlos" });
     assert.ok(!("error" in plain));
     if ("error" in plain) return;
     assert.equal(plain.body.localHost, undefined);
-    const local = buildLaunchBody({ target: "example.com", objective: "scan it", localHost: true });
+    const local = buildLaunchBody({ target: "example.com", objective: "scan it", localHost: true, operatorName: "Carlos" });
     assert.ok(!("error" in local));
     if ("error" in local) return;
     assert.equal(local.body.localHost, true);

@@ -20,6 +20,7 @@
  * The console chat and the desktop host's chat consume one MCP tool
  * list (mcp-endpoint.ts), so this tool appears on both surfaces.
  */
+import { resolveLaunchOperator } from "./engagement-tools.js";
 import { hostname } from "node:os";
 import { capture, type ToolDef } from "./mcp-tools.js";
 import { handleLaunch } from "./routes/engagements.js";
@@ -39,7 +40,7 @@ const str = (d: string): Record<string, unknown> => ({ type: "string", descripti
  * @param host - The local hostname (injectable for tests).
  * @returns The launch request.
  */
-export function buildLocalLaunchBody(a: Record<string, unknown>, host: string = hostname()): { body: UiLaunchRequest } {
+export function buildLocalLaunchBody(a: Record<string, unknown>, host: string = hostname()): { body: UiLaunchRequest } | { error: string } {
   const objective =
     typeof a["objective"] === "string" && a["objective"].trim()
       ? a["objective"].trim()
@@ -55,7 +56,21 @@ export function buildLocalLaunchBody(a: Record<string, unknown>, host: string = 
   const operatorName = typeof a["operatorName"] === "string" && a["operatorName"].trim() ? a["operatorName"].trim() : undefined;
   const client = typeof a["client"] === "string" && a["client"].trim() ? a["client"].trim() : undefined;
   if (operatorName) body.operatorName = operatorName;
-  else if (!client) body.operatorName = "the desktop user";
+  // Never a placeholder. The operator name IS the ownership basis the authorize
+  // phase consumes, so the old "the desktop user" constant had the record attest
+  // that a named person claimed ownership when nobody had. Fall back to a REAL
+  // identity instead: the configured operator, then the account running the app.
+  else if (!client) {
+    const resolved = resolveLaunchOperator();
+    if (!resolved) {
+      return {
+        error:
+          "operatorName is required: the engagement record must name the person"
+          + " attesting ownership, and no configured operator or OS account could be resolved.",
+      };
+    }
+    body.operatorName = resolved;
+  }
   if (client) body.client = client;
   if (a["tier"] === 0 || a["tier"] === 1 || a["tier"] === 2) body.tier = a["tier"];
   if (a["dryRun"] === true) body.dryRun = true;
@@ -86,6 +101,7 @@ const localLaunchTool: ToolDef = {
   },
   run: async (store, a) => {
     const built = buildLocalLaunchBody(a);
+    if ("error" in built) return { status: 400, body: { error: built.error } };
     const c = capture();
     await handleLaunch(store, {} as never, c.res, built.body);
     const out = c.result();

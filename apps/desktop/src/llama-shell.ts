@@ -179,6 +179,22 @@ export function installLlamaShell(options: LlamaShellOptions): LlamaShell {
     }
   }
 
+  // A previous run can die without a clean stop, which skips restore(): the injected
+  // triple then stays in the environment every child process inherits, so the runner
+  // keeps choosing the local provider for a server that is not running — and, if the
+  // model file is gone, cannot start either. On install, clear a triple that only this
+  // process could have written: our own injection is always LOCAL_PROVIDER plus a base
+  // URL and model, so provider=local with no running server is stale, never an
+  // operator setting (an operator pointing at their own server sets a base URL too,
+  // and that is left alone). operatorOwnsProvider cannot gate this: it is true
+  // whenever the name is present, including when the present value is our own
+  // leftover injection.
+  if (server.state.status !== "running"
+    && (environment[PROVIDER_ENVIRONMENT_NAME] ?? "").trim() === LOCAL_PROVIDER) {
+    Reflect.deleteProperty(environment, PROVIDER_ENVIRONMENT_NAME)
+    Reflect.deleteProperty(environment, BASE_URL_ENVIRONMENT_NAME)
+    Reflect.deleteProperty(environment, MODEL_ENVIRONMENT_NAME)
+  }
   // `publish` sets the state before notifying, so a listener always reads the new one.
   const detachState = server.onState(() => {
     publishServerState()

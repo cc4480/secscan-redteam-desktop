@@ -445,16 +445,25 @@ export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob,
       return
     }
     setKillPhase({ key, state: 'pending' })
-    void killJob(sessionId, key).then((ok) => {
-      // An admitted kill stays pending: the unary response (HTTP) and the jobs
-      // frames (control stream) have no cross-carrier ordering, so re-enabling
-      // here could offer a duplicate kill while the row still reads `running`.
-      // The authoritative jobs frame flips the row to `stopping`, which removes
-      // the button and clears the phase through the killable-set effect above.
-      setKillPhase(current => current?.key === key && !ok
-        ? { key, state: 'failed' }
-        : current)
-    })
+    void killJob(sessionId, key)
+      .then((ok) => {
+        // An admitted kill stays pending: the unary response (HTTP) and the jobs
+        // frames (control stream) have no cross-carrier ordering, so re-enabling
+        // here could offer a duplicate kill while the row still reads `running`.
+        // The authoritative jobs frame flips the row to `stopping`, which removes
+        // the button and clears the phase through the killable-set effect above.
+        setKillPhase(current => current?.key === key && !ok
+          ? { key, state: 'failed' }
+          : current)
+      })
+      .catch(() => {
+        // A rejected RPC (transport error, dropped connection) used to leave this
+        // promise unhandled AND killPhase stuck on `pending` forever: the stop
+        // button stays disabled and the only clearing path is a jobs frame that,
+        // with the transport down, never arrives. Fail the phase so the operator
+        // can try again.
+        setKillPhase(current => current?.key === key ? { key, state: 'failed' } : current)
+      })
   }
 
   if (visibleCount === 0) return null

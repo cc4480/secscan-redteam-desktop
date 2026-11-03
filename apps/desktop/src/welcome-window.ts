@@ -125,6 +125,14 @@ export async function openWelcomeWindow(locale: DesktopLocale, operations: Welco
     throw error
   }
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Another window can replace ownership during loadFile.
-  if (active && !window.isDestroyed()) window.show()
+  if (active && !window.isDestroyed()) {
+    // show() alone is not enough: a window created from an IPC handler while the
+    // chat window holds focus can be raised BEHIND it on Windows, which looks like
+    // the app ignored the click. The llama window already carries this pair; the
+    // welcome window was the one surface that never got it.
+    if (process.platform === "win32") window.moveTop()
+    window.show()
+    window.focus()
+  }
   return window
 }

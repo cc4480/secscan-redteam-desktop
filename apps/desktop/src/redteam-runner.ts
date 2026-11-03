@@ -360,6 +360,8 @@ export class DesktopRedteamRunner {
   private bridgeReported = false
   private diagnostic = ''
   private active: RedteamRunnerConsole | undefined
+  /** The in-flight start(), so a second caller joins it instead of spawning again. */
+  private starting: Promise<RedteamRunnerConsole | undefined> | undefined
   private stopping = false
   private exitHook: (() => void) | undefined
 
@@ -394,6 +396,17 @@ export class DesktopRedteamRunner {
    */
   async start(): Promise<RedteamRunnerConsole | undefined> {
     if (this.active !== undefined) return this.active
+    // Join an in-flight start instead of starting a second one. `active` is only
+    // assigned AFTER the readiness await, so two concurrent calls (a double-clicked
+    // Save is enough) each spawned a child: the second overwrote this.child and
+    // this.exitHook, orphaning the first console — it held its loopback port until
+    // the app exited — and leaked its process exit listener.
+    this.starting ??= this.startOnce().finally(() => { this.starting = undefined })
+    return await this.starting
+  }
+
+  /** The body of start(); call start() so concurrent callers share one child. */
+  private async startOnce(): Promise<RedteamRunnerConsole | undefined> {
     this.armBridge()
     const testMode = isRedteamTestMode(this.environment)
     const operator = REDTEAM_CONSOLE_ENVIRONMENT_NAMES.filter(name => !this.options.installed.has(name)

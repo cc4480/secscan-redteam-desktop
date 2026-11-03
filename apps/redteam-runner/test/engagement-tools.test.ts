@@ -111,7 +111,11 @@ describe("launch body building", () => {
     const named = buildLaunchBody({ target: "secscan.us", objective: "scan", operatorName: "Carlos" });
     assert.ok("body" in named && named.body.operatorName === "Carlos");
     const fallback = buildLaunchBody({ target: "secscan.us", objective: "scan" });
-    assert.ok("body" in fallback && fallback.body.operatorName === "the desktop user");
+    // A real identity, never the old placeholder.
+  assert.ok("body" in fallback);
+  if (!("body" in fallback)) return;
+  assert.notEqual(fallback.body.operatorName, "the desktop user");
+  assert.ok((fallback.body.operatorName ?? "").trim().length > 0, "no identity was recorded");
     const clientOnly = buildLaunchBody({ target: "secscan.us", objective: "scan", client: "Acme" });
     assert.ok("body" in clientOnly && clientOnly.body.operatorName === undefined && clientOnly.body.client === "Acme");
   });
@@ -366,7 +370,8 @@ describe("desktop creation path — a chat launch on the operator's own machine"
     const built = buildLaunchBody({ target: "Cho-zen1", objective: "ADVERSARIAL PENTEST DEEPSCAN LOCAL HOST" });
     if ("error" in built) assert.fail(built.error);
     assert.deepEqual(built.body.scope, ["Cho-zen1"]);
-    assert.equal(built.body.operatorName, "the desktop user");
+    assert.notEqual(built.body.operatorName, "the desktop user");
+  assert.ok((built.body.operatorName ?? "").trim().length > 0, "no identity was recorded");
 
     const ctx = {
       domain: "cho-zen1",

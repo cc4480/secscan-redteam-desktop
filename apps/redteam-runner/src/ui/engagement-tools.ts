@@ -31,6 +31,7 @@
  * (mcp-endpoint.ts), so these tools appear on both surfaces at once.
  */
 
+import { userInfo } from "node:os";
 import { capture, type Captured, type ToolDef } from "./mcp-tools.js";
 import { handleDetail, handleLaunch } from "./routes/engagements.js";
 import { engagementDir } from "./store.js";
@@ -90,14 +91,26 @@ export function targetHost(cleaned: string): string | null {
  * defaulted to the target's host, and a named operator on the record; a named sibling command stamps its registry tier/targets/phases (S2-H2).
  *
  * The operator name matters beyond bookkeeping: authorizePhase attests
- * ownership from the engagement record (operatorName ?? client), so a chat
- * launch always names the person asking — falling back to a plain
- * "the desktop user" when the caller supplied neither — and the record
- * never carries a nameless attestation.
+ * ownership from the engagement record (operatorName ?? client), so a launch
+ * that names neither is REFUSED rather than recorded under a placeholder —
+ * the record must carry a real attestation or none at all.
  *
  * @param a - The tool arguments as the agent supplied them.
  * @returns The launch request, or the error the caller should be told.
  */
+/**
+ * The operator identity a launch records when the caller named nobody.
+ * @returns A real identity — REDTEAM_OPERATOR, else the OS account — or undefined.
+ */
+export function resolveLaunchOperator(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const configured = (env["REDTEAM_OPERATOR"] ?? "").trim();
+  if (configured) return configured;
+  try {
+    return userInfo().username.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
 export function buildLaunchBody(a: Record<string, unknown>): { body: UiLaunchRequest } | { error: string } {
   const target = cleanTarget(typeof a["target"] === "string" ? a["target"] : "");
   if (!target) return { error: "target is required: name the site or host to test" };
@@ -124,7 +137,21 @@ export function buildLaunchBody(a: Record<string, unknown>): { body: UiLaunchReq
   const operatorName = typeof a["operatorName"] === "string" && a["operatorName"].trim() ? a["operatorName"].trim() : undefined;
   const client = typeof a["client"] === "string" && a["client"].trim() ? a["client"].trim() : undefined;
   if (operatorName) body.operatorName = operatorName;
-  else if (!client) body.operatorName = "the desktop user";
+  // Never a placeholder. The operator name IS the ownership basis the authorize
+  // phase consumes, so the old "the desktop user" constant had the record attest
+  // that a named person claimed ownership when nobody had. Fall back to a REAL
+  // identity instead: the configured operator, then the account running the app.
+  else if (!client) {
+    const resolved = resolveLaunchOperator();
+    if (!resolved) {
+      return {
+        error:
+          "operatorName is required: the engagement record must name the person"
+          + " attesting ownership, and no configured operator or OS account could be resolved.",
+      };
+    }
+    body.operatorName = resolved;
+  }
   if (client) body.client = client;
   if (typeof a["fullBattery"] === "boolean") body.fullBattery = a["fullBattery"];
   if (a["localHost"] === true) body.localHost = true;
