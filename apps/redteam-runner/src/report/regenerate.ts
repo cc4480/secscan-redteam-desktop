@@ -10,7 +10,8 @@
  * run recorded on disk — report.json (the report model), report.md (the
  * narrative), state.json, events.jsonl, poc/*.json — then re-runs the
  * phase's own emitters and `finalizeDeliverables`, so the outcome is
- * verified and stamped exactly as at close.
+ * verified and stamped exactly as at close. A dead end (a non-terminal
+ * record with no live run behind it) regenerates as a halted end.
  *
  * What the record does NOT carry, stated plainly: the detail/matter
  * derivations need the live context (ROE, plan, item ledger), so a
@@ -37,29 +38,15 @@ import { ledgerSummary, type ItemVerdict } from "../coverage/items.js";
 import { gradeBanner, gradeFindings } from "./grading.js";
 import { type ReportMeta } from "./html.js";
 import { readHostInventory } from "./host-inventory.js";
-import {
-  renderEngagementReportHtml,
-  type ActivityInput,
-  type CoverageInput,
-  type EngagementReportInput,
-} from "./html/render.js";
+import { renderEngagementReportHtml, type ActivityInput, type CoverageInput, type EngagementReportInput } from "./html/render.js";
 import { buildFindingMeta, stripFindingsJson } from "./html/wire.js";
 import { emitDeliverables, emitFindingsSheet } from "./finding-refs.js";
-import {
-  buildReportModel,
-  finalizeDeliverables,
-  type DeliverablesOutcome,
-  type ReportModel,
-} from "./deliverables.js";
+import { buildReportModel, finalizeDeliverables, type DeliverablesOutcome, type ReportModel } from "./deliverables.js";
 
-/** The report-phase marker where runner-computed sections begin in
- * report.md; everything before it is the narrative the phase handed the
- * HTML renderer. */
+/** The report-phase marker where runner-computed sections begin in report.md; everything before it is the narrative the phase handed the HTML renderer. */
 const NARRATIVE_CUT = "\n\n---\n\n## Battery coverage (runner-computed)";
 
-/** The recorded report model, when report.json survived the close. A
- * file that is missing, unparseable, or not a report model is no model
- * at all — the caller falls back to the state record or fails typed. */
+/** The recorded report model, when report.json survived the close. A file that is missing, unparseable, or not a report model is no model at all — the caller falls back to the state record or fails typed. */
 function loadRecordedModel(dir: string): ReportModel | null {
   const path = join(dir, "report.json");
   if (!existsSync(path)) return null;
@@ -91,12 +78,10 @@ function ledgerTotals(dir: string): ReportModel["batteryTotals"] {
   }
 }
 
-/** Rebuild the report model from the state record when report.json is
- * gone. Only the ends whose record is fully reconstructable qualify —
- * a completed run, or a blocked run carrying its reason. Anything else
- * is a typed failure, never a fabricated model. */
-function fallbackModel(ctx: Ctx, state: LiveState, dir: string): ReportModel {
+/** Rebuild the report model from the state record when report.json is gone. Only the ends whose record is fully reconstructable qualify — a completed run, a blocked run carrying its reason, or a dead end (deadReason given): a non-terminal record the caller proved has no live run behind it, rebuilt as a halted model so buildReportModel issues it no grade, exactly like a recorded halt. Anything else is a typed failure, never a fabricated model. */
+function fallbackModel(ctx: Ctx, state: LiveState, dir: string, deadReason?: string): ReportModel {
   if (state.status !== "complete" && state.status !== "blocked") {
+    if (deadReason) return buildReportModel(ctx, { findings: state.findings, totals: ledgerTotals(dir), cells: [], haltedReason: deadReason });
     throw new Error(
       `cannot regenerate: no recorded report model and the ${state.status} end state cannot be reconstructed faithfully`,
     );
@@ -246,26 +231,33 @@ function assembleInput(
  * seven-file set is on disk afterwards.
  *
  * @param dir - The engagement directory (must carry state.json).
+ * @param opts - deadEnd: the caller proved a non-terminal record has no
+ *   live run behind it; it regenerates as a halted end (no grade).
  * @returns The deliverable verification outcome.
  */
-export function regenerateReport(dir: string): DeliverablesOutcome {
+export function regenerateReport(dir: string, opts: { deadEnd?: boolean } = {}): DeliverablesOutcome {
   const state = readState(dir);
   if (!state) throw new Error(`cannot regenerate: no recorded state in ${dir}`);
   const events = EventLog.open(dir);
   const recorded = loadRecordedModel(dir);
-  // The report emitters read exactly three slices of the context —
-  // `events`, `input.{target,mode,objective}` (model header, CSV rows)
-  // and `config.dryRunAgents` (model status) — so the recorded context
-  // supplies exactly those, plus the persisted attested scope
-  // (`verifiedScope`, S3-H6) so this reconstructed Ctx carries the
-  // record's scope stamp exactly as the live Ctx did.
+  // Dead-end honesty: a surviving recorded model that claims a completed
+  // (or dry-run) end is re-stamped halted with no grade — the run did not
+  // complete, and its deliverables must not present as if it had. The
+  // haltedReason then flows into every format exactly as a recorded halt.
+  const deadReason =
+    opts.deadEnd && state.status !== "complete" && state.status !== "halted" && state.status !== "blocked"
+      ? `the run ended without a recorded close (recorded status: ${state.status}); no live run remains`
+      : undefined;
+  // The report emitters read exactly three slices of the context — `events`, `input.{target,mode,objective}` (model header, CSV rows) and `config.dryRunAgents` (model status) — so the recorded context supplies exactly those, plus the persisted attested scope (`verifiedScope`, S3-H6) so this reconstructed Ctx carries the record's scope stamp exactly as the live Ctx did.
   const ctx = {
     events,
     verifiedScope: state.verifiedScope,
     input: { target: state.target, mode: state.mode, objective: state.objective },
     config: { dryRunAgents: recorded?.dryRun ?? false },
   } as unknown as Ctx;
-  const model = recorded ?? fallbackModel(ctx, state, dir);
+  const model = recorded && deadReason && recorded.status !== "halted" && recorded.status !== "blocked"
+    ? { ...recorded, status: "halted" as const, reason: deadReason, grade: null }
+    : (recorded ?? fallbackModel(ctx, state, dir, deadReason));
   const findings = model.findings;
   const bundles = loadBundles(dir);
   let reportInput: EngagementReportInput | undefined;
@@ -287,12 +279,16 @@ export function regenerateReport(dir: string): DeliverablesOutcome {
     });
   }
   emitFindingsSheet(ctx, findings, bundles);
+  // A dead run died before the report phase, so report.md — normally the narrative source regeneration reads back — does not exist. Only for that case, render it from the assembled document (the same document every other format renders from), with annexes limited to what the record carries; a surviving report.md is never rewritten.
+  const mdSource = deadReason && reportInput && !existsSync(join(dir, "report.md"))
+    ? { legacyMd: "", findings, bundles, annexes: { batteryLine: `Battery coverage (runner-computed): the run ended before the report phase (${deadReason}); the coverage above is the recorded ledger only.`, proofMd: "", integrationsMd: "" } }
+    : undefined;
   emitDeliverables(ctx, reportInput, {
     findings,
     totals: model.batteryTotals,
     cells: model.coverageCells.map((c) => ({ t: c.target, c: c.category, s: c.state })),
     ...(model.status === "halted" ? { haltedReason: model.reason ?? "engagement halted" } : {}),
     ...(model.status === "blocked" ? { blockedReason: model.reason } : {}),
-  });
+  }, mdSource);
   return finalizeDeliverables(ctx);
 }

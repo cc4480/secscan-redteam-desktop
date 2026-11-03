@@ -194,9 +194,135 @@ describe("engagement_regenerate_report", () => {
 
   it("refuses a still-running engagement — recorded ends only", async () => {
     const id = "eng-2026-11-01-fixture5";
-    recordedEngagement(id, { status: "running" });
+    const dir = recordedEngagement(id, { status: "running" });
+    // A live record that reports running is what "still running" means:
+    // the run owns its report phase and must never be re-fired under it.
+    store.register({ id, dir, status: "running", startedAt: "2026-11-01T08:00:00.000Z" });
     const out = await tool("engagement_regenerate_report").run(store, { id });
     assert.equal(out.status, 409);
     assert.match(String((out.body as Record<string, unknown>)["error"]), /recorded end/);
+  });
+});
+
+/** A dead run: the process was killed before any close ran, so the
+ * recorded status never became terminal (state starts at "authorizing"
+ * and only the close paths write complete/halted/blocked), no report
+ * artifacts exist, and the store holds no live record for it. */
+function deadEngagement(id: string, over: { status?: string } = {}): string {
+  const dir = join(tmp, id);
+  mkdirSync(join(dir, "poc"), { recursive: true });
+  writeFileSync(
+    join(dir, "state.json"),
+    JSON.stringify({
+      engagementId: id,
+      target: "https://example.com",
+      mode: "red",
+      objective: "fixture assessment",
+      status: over.status ?? "authorizing",
+      phase: "exploit",
+      verified: true,
+      verificationProof: "Operator-attested ownership",
+      plan: null,
+      findings: FINDINGS,
+      eventCount: 3,
+      startedAt: "2026-11-02T08:00:00.000Z",
+      updatedAt: "2026-11-02T08:05:00.000Z",
+    }),
+  );
+  writeFileSync(
+    join(dir, "events.jsonl"),
+    [
+      { seq: 1, ts: "2026-11-02T08:00:00.000Z", engagementId: id, phase: "authorize", actor: "runner", action: "authorized", result: "Ownership verified." },
+      { seq: 2, ts: "2026-11-02T08:03:00.000Z", engagementId: id, phase: "exploit", actor: "exploiter", action: "probe", result: "Fixture flaw observed." },
+      { seq: 3, ts: "2026-11-02T08:05:00.000Z", engagementId: id, phase: "exploit", actor: "runner", action: "finding_recorded", result: "F-1 recorded." },
+    ].map((e) => JSON.stringify(e)).join("\n") + "\n",
+  );
+  writeFileSync(
+    join(dir, "poc", "F-1.json"),
+    JSON.stringify({
+      version: 1, bundleId: "bundle-F-1", engagementId: id, findingId: "F-1",
+      attackIds: ["T1190"], severity: "high", title: "Fixture flaw",
+      target: "https://example.com", operator: "Carlos", generatedAt: "2026-11-02T08:05:00.000Z",
+      steps: [], validationTier: "observation",
+      proves: "The fixture flaw responded as recorded.", doesNotProve: "No impact beyond the fixture.",
+      reverifyCommand: "curl https://example.com",
+    }),
+  );
+  return dir;
+}
+
+describe("dead engagements (S6-H5)", () => {
+  it("engagement_report says the run ended without a report and names the repair tool", async () => {
+    const id = "eng-2026-11-02-dead1";
+    deadEngagement(id);
+    const out = await tool("engagement_report").run(store, { id });
+    assert.equal(out.status, 200);
+    const b = out.body as Record<string, unknown>;
+    assert.equal(b["ready"], false);
+    assert.match(String(b["summary"]), /ended without a report/);
+    assert.match(String(b["summary"]), /engagement_regenerate_report/);
+    assert.doesNotMatch(String(b["summary"]), /Keep polling/);
+  });
+
+  it("engagement_report names the repair tool for a terminal end with no report either", async () => {
+    const id = "eng-2026-11-02-dead2";
+    deadEngagement(id, { status: "halted" });
+    const out = await tool("engagement_report").run(store, { id });
+    const b = out.body as Record<string, unknown>;
+    assert.equal(b["ready"], false);
+    assert.match(String(b["summary"]), /ended without a report/);
+    assert.match(String(b["summary"]), /engagement_regenerate_report/);
+  });
+
+  it("regenerates a dead run into the full set with no grade, then reports ready", async () => {
+    const id = "eng-2026-11-02-dead3";
+    const dir = deadEngagement(id);
+    const out = await tool("engagement_regenerate_report").run(store, { id });
+    assert.equal(out.status, 200, String((out.body as Record<string, unknown>)["error"] ?? ""));
+    const b = out.body as Record<string, unknown>;
+    assert.equal(b["regenerated"], true);
+    assert.equal(b["ok"], true);
+    for (const name of DELIVERABLE_FILES) {
+      assert.ok(existsSync(join(dir, name)), `${name} produced for the dead run`);
+    }
+    const model = JSON.parse(readFileSync(join(dir, "report.json"), "utf8")) as ReportModel;
+    assert.equal(model.status, "halted", "a dead run presents as an ended, uncompleted run");
+    assert.equal(model.grade, null, "no completed-run grade is minted for a dead run");
+    const txt = readFileSync(join(dir, "report.txt"), "utf8");
+    assert.match(txt, /Grade: N\/A/);
+    const md = readFileSync(join(dir, "report.md"), "utf8");
+    assert.match(md, /Grade N\/A/);
+    const html = readFileSync(join(dir, "report.html"), "utf8");
+    assert.match(html, /Incomplete/);
+    assert.ok(html.includes("Fixture flaw"), "the recorded finding renders");
+    const after = await tool("engagement_report").run(store, { id });
+    assert.equal((after.body as Record<string, unknown>)["ready"], true);
+  });
+
+  it("a surviving 'complete' report model does not mint a grade for a dead run", async () => {
+    const id = "eng-2026-11-02-dead5";
+    const dir = deadEngagement(id);
+    // report.json survived claiming a completed end, but the recorded
+    // state never became terminal and no live run remains: the dead-end
+    // admission must re-stamp it halted, not deliver its recorded grade.
+    writeFileSync(join(dir, "report.json"), JSON.stringify(recordedModel(id), null, 2) + "\n");
+    const out = await tool("engagement_regenerate_report").run(store, { id });
+    assert.equal(out.status, 200, String((out.body as Record<string, unknown>)["error"] ?? ""));
+    const model = JSON.parse(readFileSync(join(dir, "report.json"), "utf8")) as ReportModel;
+    assert.equal(model.status, "halted");
+    assert.equal(model.grade, null);
+  });
+
+  it("a live running engagement still refuses regeneration and still reads as going", async () => {
+    const id = "eng-2026-11-02-dead4";
+    const dir = deadEngagement(id, { status: "running" });
+    store.register({ id, dir, status: "running", startedAt: "2026-11-02T08:00:00.000Z" });
+    const out = await tool("engagement_regenerate_report").run(store, { id });
+    assert.equal(out.status, 409);
+    const rep = await tool("engagement_report").run(store, { id });
+    const b = rep.body as Record<string, unknown>;
+    assert.equal(b["ready"], false);
+    assert.match(String(b["summary"]), /Keep polling/);
+    assert.doesNotMatch(String(b["summary"]), /engagement_regenerate_report/);
   });
 });
