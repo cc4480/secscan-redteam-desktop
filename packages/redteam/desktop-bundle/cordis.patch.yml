@@ -137,6 +137,12 @@
           # mcp__secscan__* tools simply do not appear - and the auth gate fails
           # closed anyway, so nothing aggressive can run without it.
           Authorization: !!js "'Bearer ' + (process.env.SECSCAN_MCP_TOKEN || '')"
+        reconnect:
+          enabled: true
+          # Copied from the runner row: the schema maximum is the
+          # supported equivalent of never giving up, so a mid-session
+          # outage does not permanently unregister these tools.
+          maxAttempts: 9007199254740991
 
     # The Seclayer service, over stdio. @seclayer/mcp serves stdio only, so
     # this row spawns it with npx; the version is pinned so an upstream
@@ -164,6 +170,12 @@
         command: !!js "process.platform === 'win32' ? 'npx.cmd' : 'npx'"
         args: ['-y', '@seclayer/mcp@1.0.0']
         secretEnv: ['SECLAYER_API_KEY']
+        reconnect:
+          enabled: true
+          # Copied from the runner row: the schema maximum is the
+          # supported equivalent of never giving up, so a mid-session
+          # outage does not permanently unregister these tools.
+          maxAttempts: 9007199254740991
 
     - id: secscan-redteam
       name: '@secscan/redteam-harness-plugin'
