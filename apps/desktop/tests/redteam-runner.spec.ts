@@ -108,6 +108,14 @@ function pairedTokenFile(home: string): string {
   return file
 }
 
+/** Write a bridge token file holding no usable token at the standard location under one test home. */
+function unusableTokenFile(home: string, contents: string): string {
+  const file = join(home, '.config', 'pc-bridge', 'token')
+  mkdirSync(dirname(file), { recursive: true })
+  writeFileSync(file, contents)
+  return file
+}
+
 /** @returns the newest captured spawn, which every lifecycle test asserts against. */
 function lastSpawn(): SpawnedChild {
   const spawn = harness.spawns.at(-1)
@@ -643,6 +651,48 @@ describe('AlterEgo bridge arming', () => {
       .toContain(`the AlterEgo bridge is armed for the fleet at ${DEFAULT_PC_BRIDGE_URL}: paired token file ${tokenFile}`)
   })
 
+  it('reports the bridge not armed when the token file at the standard location is empty', async () => {
+    const { root, resources, engagements } = payload()
+    const tokenFile = unusableTokenFile(root, '')
+    const environment: NodeJS.ProcessEnv = {}
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const runner = new DesktopRedteamRunner(resources, environment, {
+      engagementsDir: engagements,
+      installed: new Set(),
+      homeDir: root,
+      allocatePort: async () => 18_800,
+      probe: async () => true,
+    })
+
+    await runner.start()
+    expect(environment.PC_BRIDGE_TOKEN_FILE).toBe(tokenFile)
+    // The file exists but holds no token, which both token consumers read as
+    // not paired, so the startup log must not claim the bridge is armed.
+    expect(info.mock.calls.flat().join('\n'))
+      .toContain(`the AlterEgo bridge is not armed for the fleet: no paired token file at ${tokenFile}`)
+    expect(info.mock.calls.flat().join('\n')).not.toContain('bridge is armed for the fleet at')
+  })
+
+  it('reports the bridge not armed when the token file at the standard location holds only whitespace', async () => {
+    const { root, resources, engagements } = payload()
+    const tokenFile = unusableTokenFile(root, '  \n\t ')
+    const environment: NodeJS.ProcessEnv = {}
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const runner = new DesktopRedteamRunner(resources, environment, {
+      engagementsDir: engagements,
+      installed: new Set(),
+      homeDir: root,
+      allocatePort: async () => 18_801,
+      probe: async () => true,
+    })
+
+    await runner.start()
+    expect(environment.PC_BRIDGE_TOKEN_FILE).toBe(tokenFile)
+    expect(info.mock.calls.flat().join('\n'))
+      .toContain(`the AlterEgo bridge is not armed for the fleet: no paired token file at ${tokenFile}`)
+    expect(info.mock.calls.flat().join('\n')).not.toContain('bridge is armed for the fleet at')
+  })
+
   it('never overwrites a bridge URL or token file named for this run', async () => {
     const { root, resources, engagements } = payload()
     const operatorFile = join(root, 'operator', 'bridge-token')
@@ -713,15 +763,26 @@ describe('AlterEgo bridge arming', () => {
     expect(pcBridgeArming({}, home)).toEqual({
       url: DEFAULT_PC_BRIDGE_URL,
       tokenFile: join(home, '.config', 'pc-bridge', 'token'),
-      tokenFilePresent: false,
+      tokenFileUsable: false,
     })
     expect(pcBridgeArming({ PC_BRIDGE_URL: 'https://pc.secscan.info', PC_BRIDGE_TOKEN_FILE: '/operator/token' }, home))
-      .toEqual({ url: 'https://pc.secscan.info', tokenFile: '/operator/token', tokenFilePresent: false })
+      .toEqual({ url: 'https://pc.secscan.info', tokenFile: '/operator/token', tokenFileUsable: false })
     // An empty value names nothing, so the defaults resolve as if it were absent.
     expect(pcBridgeArming({ PC_BRIDGE_URL: '  ', PC_BRIDGE_TOKEN_FILE: '' }, home)).toEqual({
       url: DEFAULT_PC_BRIDGE_URL,
       tokenFile: join(home, '.config', 'pc-bridge', 'token'),
-      tokenFilePresent: false,
+      tokenFileUsable: false,
     })
+    // A token file is usable only when it holds a token: a missing, empty, or
+    // whitespace-only file resolves as not usable, as the token's consumers read it.
+    const { root } = payload()
+    const tokenHome = join(root, 'token-home')
+    expect(pcBridgeArming({}, tokenHome).tokenFileUsable).toBe(false)
+    unusableTokenFile(tokenHome, '')
+    expect(pcBridgeArming({}, tokenHome).tokenFileUsable).toBe(false)
+    unusableTokenFile(tokenHome, '  \n\t ')
+    expect(pcBridgeArming({}, tokenHome).tokenFileUsable).toBe(false)
+    pairedTokenFile(tokenHome)
+    expect(pcBridgeArming({}, tokenHome).tokenFileUsable).toBe(true)
   })
 })

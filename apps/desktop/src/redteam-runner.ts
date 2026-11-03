@@ -2,7 +2,7 @@
 
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -162,8 +162,8 @@ export interface PcBridgeArming {
   readonly url: string
   /** File the paired token is read from: the launch value, or the standard location. */
   readonly tokenFile: string | undefined
-  /** Whether a paired token file is present at that location. */
-  readonly tokenFilePresent: boolean
+  /** Whether the token file at that location holds a usable paired token. */
+  readonly tokenFileUsable: boolean
 }
 
 /**
@@ -171,10 +171,12 @@ export interface PcBridgeArming {
  * nothing: a value the launch environment already carries wins verbatim, and an
  * empty value names nothing. The runner resolves the same two names the same
  * way, so what is resolved here is what the runner child inherits once the
- * supervisor publishes it.
+ * supervisor publishes it. A token file is usable exactly when the token's
+ * consumers read a token from it: the file reads, and its trimmed contents
+ * are non-empty.
  * @param environment - Launch environment to read the bridge names from.
  * @param homeDir - Home directory the standard token location resolves under.
- * @returns The URL, the token file, and whether that file is present.
+ * @returns The URL, the token file, and whether that file holds a usable token.
  */
 export function pcBridgeArming(environment: NodeJS.ProcessEnv, homeDir: string = homedir()): PcBridgeArming {
   const configuredUrl = environment.PC_BRIDGE_URL ?? ''
@@ -183,7 +185,23 @@ export function pcBridgeArming(environment: NodeJS.ProcessEnv, homeDir: string =
   return {
     url: configuredUrl.trim() === '' ? DEFAULT_PC_BRIDGE_URL : configuredUrl,
     tokenFile,
-    tokenFilePresent: tokenFile !== undefined && existsSync(tokenFile),
+    tokenFileUsable: tokenFile !== undefined && bridgeTokenFileUsable(tokenFile),
+  }
+}
+
+/**
+ * Decide whether a paired bridge token file holds a usable token, by the rule
+ * the token's consumers apply: the file reads, and its trimmed contents are
+ * non-empty. A missing, unreadable, empty, or whitespace-only file is not
+ * paired.
+ * @param tokenFile - Token file to read.
+ * @returns Whether a token can be read from the file.
+ */
+function bridgeTokenFileUsable(tokenFile: string): boolean {
+  try {
+    return readFileSync(tokenFile, 'utf8').trim() !== ''
+  } catch {
+    return false
   }
 }
 
@@ -522,10 +540,10 @@ export class DesktopRedteamRunner {
 
   /**
    * Publish the AlterEgo bridge configuration the runner child inherits, once per
-   * instance, and log whether the fleet's bridge tools can arm. A paired token
-   * file present at the resolved location is what separates armed from not
-   * armed in this log line, because whether the bridge answers is probed by the
-   * runner at engagement time, not by the supervisor at startup.
+   * instance, and log whether the fleet's bridge tools can arm. A usable paired
+   * token at the resolved location is what separates armed from not armed in
+   * this log line, because whether the bridge answers is probed by the runner
+   * at engagement time, not by the supervisor at startup.
    */
   private armBridge(): void {
     if (this.bridgeReported) return
@@ -539,7 +557,7 @@ export class DesktopRedteamRunner {
     }
     if (arming.tokenFile === undefined) {
       console.info('desktop engagement runner: the AlterEgo bridge is not armed for the fleet: no home directory is known, so the standard paired token location cannot be named')
-    } else if (arming.tokenFilePresent) {
+    } else if (arming.tokenFileUsable) {
       console.info(`desktop engagement runner: the AlterEgo bridge is armed for the fleet at ${arming.url}: paired token file ${arming.tokenFile}`)
     } else {
       console.info(`desktop engagement runner: the AlterEgo bridge is not armed for the fleet: no paired token file at ${arming.tokenFile}`)
