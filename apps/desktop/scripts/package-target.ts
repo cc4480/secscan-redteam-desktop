@@ -478,6 +478,7 @@ export async function packageTarget(
     'packages/redteam/auth-gate',
     'packages/redteam/llm-router',
     'packages/redteam/llm-local',
+    'packages/redteam/llm-meta',
     'packages/redteam/harness-plugin',
     'packages/redteam/desktop-bundle',
     'packages/redteam/foundry-gate',
