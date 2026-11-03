@@ -7,7 +7,7 @@ import type { ToolCallViewProps } from '@deepseek-ai/dsh-client-ui-tool/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import {
   createEngagementDocumentActions, engagementDocumentsFromResult,
-  type EngagementDocument, type EngagementDocumentActions,
+  type EngagementDocument, type EngagementDocumentActions, type EngagementSignoff,
 } from './engagement-documents.ts'
 import type { NS } from './locales.ts'
 import css from './EngagementReportRow.module.css'
@@ -61,9 +61,24 @@ export function EngagementReportRow(props: RowProps) {
     <DisclosureRow title={props.t('engagement.title')} icon={<IconDeliverDocRegular size={14} />}
       open={expanded} expandable onToggle={() => { setExpanded(value => !value) }}>
       <div className={css.documents} data-engagement-documents>
+        {report.signoff !== null && <SignoffRow signoff={report.signoff} t={props.t} />}
         {report.documents.map(document => <DocumentRow key={document.file} document={document} actions={actions} t={props.t} />)}
       </div>
     </DisclosureRow>
+  </div>
+}
+
+/** The Scribe gate's outcome row: signed, or unsigned with its recorded reason and defect count. */
+function SignoffRow({ signoff, t }: {
+  signoff: EngagementSignoff
+} & PropsLocale<typeof NS>) {
+  const details: string[] = []
+  if (signoff.cycles !== undefined) details.push(t('engagement.signoffCycles', { count: signoff.cycles }))
+  if (!signoff.signed && signoff.reason !== undefined) details.push(t('engagement.unsignedReason', { reason: signoff.reason }))
+  if (!signoff.signed && signoff.defectCount !== undefined) details.push(t('engagement.unsignedDefects', { count: signoff.defectCount }))
+  return <div className={css.document} data-signoff={signoff.signed ? 'signed' : 'unsigned'}>
+    <span className={css.fileName}>{t(signoff.signed ? 'engagement.signed' : 'engagement.unsigned')}</span>
+    {details.length > 0 && <span className={css.note}>{details.join(' · ')}</span>}
   </div>
 }
 

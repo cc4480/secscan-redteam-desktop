@@ -87,6 +87,20 @@ export const reportTool: ToolDef = {
     // mechanical report names no author), and per-finding producers
     // from the recorded report.json.
     const st = readState(dir);
+    // S6-H2a: the Scribe gate's outcome, from the stamps the gate already
+    // recorded on state — an unsigned set must not read in-thread as
+    // indistinguishable from a signed one. No stamp recorded: no field,
+    // never a fabricated signing.
+    const signoff = st?.artifactSignoff
+      ? { signed: true, cycles: st.artifactSignoff.cycles }
+      : st?.artifactUnsigned
+        ? {
+            signed: false,
+            cycles: st.artifactUnsigned.cycles,
+            reason: st.artifactUnsigned.reason,
+            defectCount: st.artifactUnsigned.defects.length,
+          }
+        : undefined;
     const speaker = st
       ? reportAuthorSpeaker(readEvents(dir, Math.max(0, st.eventCount - 1000), 1000))
       : undefined;
@@ -102,6 +116,7 @@ export const reportTool: ToolDef = {
         ...(st ? { status: st.status } : {}),
         reportPath: join(dir, "report.md"),
         ...deliverableToolFields(dir),
+        ...(signoff ? { signoff } : {}),
         ...(speaker ? { speaker } : {}),
         ...(Object.keys(speakers).length > 0 ? { findingSpeakers: speakers } : {}),
         content,

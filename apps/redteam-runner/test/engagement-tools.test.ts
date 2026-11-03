@@ -42,7 +42,7 @@ const tool = (name: string) => {
   return t;
 };
 
-function cannedState(id: string, status: string, withReport: boolean): string {
+function cannedState(id: string, status: string, withReport: boolean, extra: Record<string, unknown> = {}): string {
   const dir = join(tmp, id);
   mkdirSync(dir, { recursive: true });
   writeFileSync(
@@ -54,6 +54,7 @@ function cannedState(id: string, status: string, withReport: boolean): string {
       objective: "test",
       status,
       phase: status === "complete" ? "report" : "exploit",
+      ...extra,
       verified: true,
       verificationProof: "Operator-attested ownership: the desktop user attests on the engagement record",
       findings: [
@@ -210,6 +211,47 @@ describe("engagement_report", () => {
     const b = out.body as Record<string, unknown>;
     assert.equal(b["ready"], true);
     assert.equal(b["status"], "complete");
+  });
+
+  it("carries the Scribe signoff on a ready signed report (S6-H2a)", async () => {
+    cannedState("eng-2026-10-28-sgnd", "complete", true, {
+      artifactSignoff: { by: "scribe", at: "2026-10-28T10:06:00Z", cycles: 2 },
+      artifactUnsigned: null,
+    });
+    const out = await tool("engagement_report").run(store, { id: "eng-2026-10-28-sgnd" });
+    assert.equal(out.status, 200);
+    const b = out.body as Record<string, unknown>;
+    assert.equal(b["ready"], true);
+    assert.deepEqual(b["signoff"], { signed: true, cycles: 2 });
+  });
+
+  it("carries the unsigned outcome on a ready unsigned report (S6-H2a)", async () => {
+    cannedState("eng-2026-10-28-unsg", "complete", true, {
+      artifactSignoff: null,
+      artifactUnsigned: {
+        reason: "defects",
+        defects: [
+          { file: "report.html", class: "craft", detail: "Grade cell empty", fix: "Render the grade" },
+          { file: "report.md", class: "completeness", detail: "Missing fix section", fix: "Add the section" },
+        ],
+        cycles: 3,
+        at: "2026-10-28T10:06:00Z",
+      },
+    });
+    const out = await tool("engagement_report").run(store, { id: "eng-2026-10-28-unsg" });
+    assert.equal(out.status, 200);
+    const b = out.body as Record<string, unknown>;
+    assert.equal(b["ready"], true);
+    assert.deepEqual(b["signoff"], { signed: false, cycles: 3, reason: "defects", defectCount: 2 });
+  });
+
+  it("carries no signoff field when no Scribe stamp was recorded (S6-H2a)", async () => {
+    cannedState("eng-2026-10-28-nost", "complete", true);
+    const out = await tool("engagement_report").run(store, { id: "eng-2026-10-28-nost" });
+    assert.equal(out.status, 200);
+    const b = out.body as Record<string, unknown>;
+    assert.equal(b["ready"], true);
+    assert.equal("signoff" in b, false);
   });
 
   it("says ready:false while the run is still going", async () => {
