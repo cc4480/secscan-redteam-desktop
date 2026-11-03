@@ -23,6 +23,50 @@ export function scanDirective(target: string): string {
   return `OPERATOR DIRECTIVE (/scan): launch a new engagement now against ${target} using your engagement_launch tool, with the target exactly as the operator gave it. Report the engagement id and the first status back in this thread. Do not substitute a service scan for the engagement.`
 }
 
+/** Usage line returned when a sibling command arrives without a target. */
+export function siblingUsage(name: string): string {
+  return `Usage: /${name} <target> — launch a /${name} engagement against the target as you would type it (for example /${name} https://example.com).`
+}
+
+/** The registry semantics one sibling command carries into its launch. */
+export interface SiblingSpec {
+  /** Autonomy tier the command runs at (0 read-only, 1 active testing, 2 destructive approved). */
+  readonly tier: 0 | 1 | 2
+  /** Phases the run must complete, in order. */
+  readonly phases: readonly string[]
+  /** Target families the command defaults to. */
+  readonly targets: readonly string[]
+  /** True when the run must stop for operator approval before launching. */
+  readonly requiresApproval: boolean
+}
+
+/**
+ * A sibling command's directive: start the engagement-launch flow for
+ * one target, carrying the command's name, tier, target families, and
+ * phase list as engagement_launch arguments — the semantics that make
+ * the sibling a bounded run instead of a plain `/scan`.
+ * @param name - the command name without the slash.
+ * @param target - the target exactly as the operator typed it.
+ * @param spec - the command's registry semantics.
+ * @returns the model-visible directive text.
+ */
+export function siblingDirective(name: string, target: string, spec: SiblingSpec): string {
+  const approval = spec.requiresApproval
+    ? ' This command requires operator approval: confirm the operator has approved this run before launching.'
+    : ''
+  return `OPERATOR DIRECTIVE (/${name}): launch a new engagement now against ${target} using your engagement_launch tool, with the target exactly as the operator gave it, command "${name}", tier ${spec.tier}, targets ${spec.targets.join(',')}, phases ${spec.phases.join('+')}. Report the engagement id and the first status back in this thread. Do not substitute a service scan for the engagement.${approval}`
+}
+
+/**
+ * The `/pcscan` directive: start the local-host assessment. There is no
+ * target argument — the machine assesses itself through the local
+ * launch tool.
+ * @returns the model-visible directive text.
+ */
+export function pcscanDirective(): string {
+  return 'OPERATOR DIRECTIVE (/pcscan): launch a local host assessment of this machine now using your engagement_launch_local tool. The target is this machine itself — do not name another host. Report the engagement id and the first status back in this thread.'
+}
+
 /**
  * The `/status` directive: report the current engagement snapshot.
  * @returns the model-visible directive text.
