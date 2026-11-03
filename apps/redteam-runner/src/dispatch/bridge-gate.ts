@@ -141,7 +141,10 @@ export async function bridgeToolsForEngagement(
 ): Promise<JsonSchemaTool[]> {
   let pending = offeringCache.get(ctx);
   if (!pending) {
-    pending = resolveOffering(ctx, phase, client);
+    pending = resolveOffering(ctx, phase, client).catch((err) => {
+      offeringCache.delete(ctx);
+      throw err;
+    });
     offeringCache.set(ctx, pending);
   }
   return pending;

@@ -84,6 +84,7 @@ Motion explains the data; it never delays reading. All animation is CSS; total e
 - **Footer:** audit facts (engagement id, target, verification, timestamps) in quiet mono type.
 
 ## Honesty rules (they bind the design, not just the data)
+- **A posture verdict requires a concluded battery.** "Secure", "no material risk" and a passing grade may only be asserted when every planned item carries a verdict. With items pending, blocked, or a run that halted, the report says **"assessment incomplete — posture not determined"** and gives the count. The engine returns the label "SECURE" for zero findings because that label describes the *findings set*, not whether the assessment finished — never print it over an unverdicted battery. The shared predicate is `report/completeness.ts`, and it binds every surface, not only this one: the MD/TXT/DOCX breakdown and the in-thread render carry the same prose and the same rule.
 - A PROVEN card exists only with an execution-tier proof bundle behind the finding. An observation-tier receipt is a receipt, never a PROVEN badge.
 - Never fabricate proof, coverage, or findings to fill the design. A section with nothing true to show renders its honest zero-state.
 - A halted or incomplete engagement renders the N/A grade state — never a passing number dressed up by the layout.

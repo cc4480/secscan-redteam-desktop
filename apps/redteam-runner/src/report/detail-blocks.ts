@@ -12,6 +12,7 @@ import {
   TIER_RANK, armOf, compareIds, isActionable, normalizeLabel, plural, req,
   signed,
 } from './detail-tables.js'
+import { gradeAnchorClause, postureClause } from './completeness.js'
 import type {
   ArmRun, BaselineInput, CoverageFactsInput, DetailFindingInput,
   DetailInput, DetailSeverity, DiffEntry, FindingDiff, PillarCard,
@@ -140,13 +141,14 @@ export function buildBreakdown(
   const n = riskAreas.reduce((sum, a) => sum + a.findings.length, 0)
   lines.push(
     `Automated ${input.mode} assessment of ${input.target}: ${n} active ${plural(n, 'finding', 'findings')} ` +
-    `across ${riskAreas.length} ${plural(riskAreas.length, 'area', 'areas')}; overall posture ${input.posture.postureRating}.`,
+    `across ${riskAreas.length} ${plural(riskAreas.length, 'area', 'areas')}; ` +
+    `${postureClause(input.posture.postureRating, input.coverage.totals)}.`,
   )
   const worst = input.worstConfirmed ?? null
   const anchor = worst ? ANCHOR_CLAUSE[worst.severity] : undefined
   lines.push(anchor && worst
     ? `The grade is anchored by ${worst.id} (${worst.severity} · ${worst.title}) — ${anchor}.`
-    : 'No single finding anchors the grade; it follows the confirmed set.')
+    : gradeAnchorClause(input.coverage.totals))
   const by = input.findingsBySeverity
   const tc = input.tierCounts
   lines.push(

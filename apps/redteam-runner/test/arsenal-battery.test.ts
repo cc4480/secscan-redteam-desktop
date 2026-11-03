@@ -160,7 +160,7 @@ after(async () => {
     if (savedEnv[k] === undefined) delete process.env[k]
     else process.env[k] = savedEnv[k]
   }
-  if (tmp) rmSync(tmp, { recursive: true, force: true })
+  if (tmp) { try { rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }) } catch { /* Windows: a live DB handle can pin the temp dir */ } }
 })
 
 describe('§6.1.3 real-composition boot (fixture index)', () => {
@@ -171,8 +171,13 @@ describe('§6.1.3 real-composition boot (fixture index)', () => {
     )
   })
 
-  it('§6.1.3 pre-existing composition counts are 16 cockpit+engagement and 27 exec', () => {
-    assert.equal(compositionCounts.cockpitAndEngagement, 16, 'TOOLS (cockpit + engagement) must be 16 before arsenal')
+  it('§6.1.3 pre-existing composition counts are 17 cockpit+engagement and 27 exec', () => {
+    // 17, not 16: HEAD composes COCKPIT_TOOLS + ENGAGEMENT_TOOLS + LOCAL_TOOLS,
+    // and LOCAL_TOOLS contributes `engagement_launch_local` (the local-host
+    // engagement). The pin predated that feature; the tool is intentional and
+    // present at HEAD, so the baseline is re-stated with it named rather than
+    // silently loosened.
+    assert.equal(compositionCounts.cockpitAndEngagement, 17, 'TOOLS (cockpit + engagement + local) must be 17 before arsenal')
     assert.equal(compositionCounts.exec, 27, 'EXEC_TOOLS must be 27 before arsenal')
   })
 

@@ -23,64 +23,12 @@
  */
 import { createHash } from 'node:crypto'
 import type { PlanStep } from '../types.js'
+import { MAX_SUBTASKS_PER_TASK, MAX_TASKS_PER_FLOW, type GraphSubtask, type GraphTask, type WorkFlow } from './types.js'
+import { compareReadyTasks } from './ready.js'
+export { MAX_SUBTASKS_PER_TASK, MAX_TASKS_PER_FLOW } from './types.js'
+export { compareReadyTasks } from './ready.js'
+export type { GraphStatus, GraphSubtask, GraphTask, WorkFlow } from './types.js'
 
-export const MAX_SUBTASKS_PER_TASK = 15
-
-/**
- * Whole-flow node budget: tasks + subtasks across the flow. The refiner
- * grows the graph after every completed subtask, so without a flow-level
- * bound a long engagement's graph (and its persisted workgraph.json)
- * grows without limit. At the budget, creation refuses through the same
- * result channel as the per-task cap and the engagement continues on
- * the work it already has — it degrades, it does not halt.
- */
-export const MAX_TASKS_PER_FLOW = 4096
-export type GraphStatus = 'pending' | 'running' | 'done' | 'failed' | 'skipped'
-
-export interface GraphSubtask {
-  readonly id: string
-  title: string
-  kind: string
-  status: GraphStatus
-  /** Dispatched tool calls recorded under this subtask. */
-  actions: number
-  resultSummary?: string
-  startedAt?: string
-  finishedAt?: string
-}
-
-export interface GraphTask {
-  readonly id: string
-  title: string
-  phase: string
-  attackId?: string
-  priority: number
-  /** ISO 8601 time the task should be settled by (same convention as
-   * GraphSubtask.startedAt). Absent = never overdue. Reporting and
-   * ready-order only — a past deadline never gates or fails a task. */
-  deadline?: string
-  /** Estimated cost in dispatched-action units — the same unit as
-   * GraphSubtask.actions, so estimates and actuals compare directly.
-   * Absent = contributes 0 to estimate roll-ups. Never reorders, never gates. */
-  cost?: number
-  dependsOn: string[]
-  status: GraphStatus
-  subtasks: GraphSubtask[]
-}
-
-export interface WorkFlow {
-  version: 1
-  readonly engagementId: string
-  objective: string
-  target: string
-  /** Bumped on every refiner pass that changes the graph. */
-  revision: number
-  /** Refiner passes applied, one per completed subtask at most. */
-  refinements: number
-  createdAt: string
-  updatedAt: string
-  tasks: GraphTask[]
-}
 
 function key(parts: string[]): string {
   return createHash('sha256').update(parts.join('\n')).digest('hex').slice(0, 12)
@@ -207,21 +155,6 @@ export function findSubtask(
     if (subtask) return { task, subtask }
   }
   return null
-}
-
-/**
- * The one ready-order comparator, exported so both sort sites use it and
- * can never drift: earliest deadline first, no-deadline tasks last, then
- * priority ascending. With no deadlines anywhere it degenerates to
- * exactly the historical priority sort.
- */
-export function compareReadyTasks(a: GraphTask, b: GraphTask): number {
-  if (a.deadline !== undefined && b.deadline !== undefined && a.deadline !== b.deadline) {
-    return a.deadline < b.deadline ? -1 : 1
-  }
-  if (a.deadline !== undefined && b.deadline === undefined) return -1
-  if (a.deadline === undefined && b.deadline !== undefined) return 1
-  return a.priority - b.priority
 }
 
 /** Tasks whose dependencies are all done/skipped, in ready order. */

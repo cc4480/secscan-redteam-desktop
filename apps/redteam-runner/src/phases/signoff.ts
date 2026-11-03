@@ -2,7 +2,7 @@
  * Coordinator sign-off gate (v0.19.0 refactor — extracted from phases.ts).
  */
 import { COMMAND_TOOLS } from "../tools.js";
-import { type Ctx, HaltError } from "../context.js";
+import { type Ctx } from "../context.js";
 import { type SignOffTransition, focusedExploit } from "./exploit-one.js";
 import { planPhase } from "./plan.js";
 import { agentLoop, commanderRedirect, promptCtx } from "../agents.js";
@@ -42,10 +42,15 @@ export async function coordinatorSignOff(
     3,
   );
   ctx.events.append({ phase: "plan", actor: "coordinator", action: "signoff_review", result: `${transition}: ${text.slice(0, 400)}` });
-  if (/^\s*REDIRECT\s*:/im.test(text)) {
-    if (ctx.redirects >= 2) {
-      throw new HaltError(`coordinator withheld sign-off for ${transition} after 2 redirects — engagement halted`);
-    }
+  const wantsRedirect = /^\s*REDIRECT\s*:/im.test(text);
+  const signedOff = /^\s*SIGN-OFF\s*:/im.test(text);
+  // Q-NOHALT: a coordinator that will not commit ships the transition UNSIGNED
+  // (the scribe gate's pattern) instead of halting the engagement. Fail-open on
+  // the signature, fail-closed on the evidence: findings still need their
+  // receipts, and the report states that this transition was never signed. The
+  // battery gate below STILL RUNS, so "unsigned" never means "unworked".
+  let unsigned = false;
+  if (wantsRedirect && ctx.redirects < 2) {
     const reason = (text.match(/^\s*REDIRECT\s*:\s*([\s\S]*)/im)?.[1] ?? "commander ordered redirect").trim().slice(0, 500);
     ctx.redirects++;
     ctx.events.append({ phase: "plan", actor: "coordinator", action: "signoff_redirect", result: `${transition}: ${reason}` });
@@ -58,8 +63,22 @@ export async function coordinatorSignOff(
     }
     return coordinatorSignOff(ctx, transition, payload, incompleteRounds);
   }
-  if (!/^\s*SIGN-OFF\s*:/im.test(text)) {
-    throw new HaltError(`coordinator did not issue a clear sign-off for ${transition} — engagement halted (fail closed)`);
+  if (wantsRedirect) {
+    unsigned = true;
+    ctx.events.append({
+      phase: "plan",
+      actor: "runner",
+      action: "signoff_unsigned",
+      result: `${transition}: coordinator withheld sign-off after ${ctx.redirects} redirect(s) — transition allowed UNSIGNED. The report records the unsigned sign-off.`,
+    });
+  } else if (!signedOff) {
+    unsigned = true;
+    ctx.events.append({
+      phase: "plan",
+      actor: "runner",
+      action: "signoff_unsigned",
+      result: `${transition}: no clear sign-off from the coordinator — transition allowed UNSIGNED. The report records the unsigned sign-off.`,
+    });
   }
 
   // The battery gate: a coordinator's approval is not sufficient while in-scope
@@ -103,6 +122,8 @@ export async function coordinatorSignOff(
       });
     }
   }
-  ctx.events.append({ phase: "plan", actor: "coordinator", action: "signoff", result: `${transition} approved.` });
+  if (!unsigned) {
+    ctx.events.append({ phase: "plan", actor: "coordinator", action: "signoff", result: `${transition} approved.` });
+  }
 }
 

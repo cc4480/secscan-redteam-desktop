@@ -253,13 +253,24 @@ describe("readSpill — paging and sandbox (T-S6)", () => {
     }
   });
 
-  it("refuses a symlink inside the spill dir that resolves outside it", () => {
+  it("refuses a symlink inside the spill dir that resolves outside it", (t) => {
     const { dir } = spilled();
     const outside = tempDir("spill-outside-");
     try {
       const secret = join(outside, "secret.txt");
       writeFileSync(secret, "outside-the-sandbox");
-      symlinkSync(secret, join(dir, "spill", "0009-evade.txt"));
+      try {
+        symlinkSync(secret, join(dir, "spill", "0009-evade.txt"));
+      } catch (err) {
+        // Windows refuses symlink creation without Developer Mode / SeCreateSymbolicLink,
+        // so the escape cannot be constructed here. Skip rather than fail: the
+        // guard itself is exercised on any platform that can build the fixture.
+        if ((err as { code?: string }).code === "EPERM") {
+          t.skip("symlink creation requires a privilege this platform does not grant");
+          return;
+        }
+        throw err;
+      }
       const r = readSpill({ dir, path: "spill/0009-evade.txt" });
       assert.equal(r.ok, false);
     } finally {

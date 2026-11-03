@@ -17,11 +17,11 @@ import { MemoryError } from "./errors.js";
 import { archiveDirName } from "./paths.js";
 import type { MemoryPaths } from "./paths.js";
 import { sealDiff, validateDiff, validateUnit, verifyDiffHash } from "./schema.js";
+import { requireOperator, trustDisagrees } from "./apply-rules.js";
 import { assertScopeBinding } from "./scope.js";
 import { openMemoryStore } from "./store.js";
-import { deriveTrust } from "./trust.js";
 import { atomicWriteText } from "./views.js";
-import type { DiffOp, MemoryApprovalRecord, MemoryApplyReceipt, MemoryDiff } from "./types.js";
+import type { MemoryApprovalRecord, MemoryApplyReceipt, MemoryDiff } from "./types.js";
 
 /**
  * Read and verify a diff from `proposals/`. Missing, malformed, or
@@ -62,14 +62,6 @@ function rewriteDiff(paths: MemoryPaths, diff: MemoryDiff): MemoryDiff {
   const archiveCopy = join(paths.archivesDir, diff.engagementId, archiveDirName(Number(seqPart)), "memory_diff.json");
   if (existsSync(archiveCopy)) atomicWriteText(archiveCopy, bytes);
   return resealed;
-}
-
-function requireOperator(operator: string): string {
-  const name = operator.trim();
-  if (!name) {
-    throw new MemoryError("SCHEMA_INVALID", "an approval/rejection requires a named human operator (--operator <name>)");
-  }
-  return name;
 }
 
 /**
@@ -154,20 +146,6 @@ function readApproval(paths: MemoryPaths, diffId: string): MemoryApprovalRecord 
     throw new MemoryError("SCHEMA_INVALID", `diff ${diffId} was rejected by ${record.approver} — apply refuses`);
   }
   return record;
-}
-
-/** True when the op's stored trust block disagrees with a fresh derivation (apply-time re-derivation, §7.3). */
-function trustDisagrees(op: Extract<DiffOp, { unit: unknown }>): boolean {
-  const derived = deriveTrust(
-    {
-      proof: op.unit.proof,
-      corroboration: op.unit.corroboration,
-      contentClass: op.unit.contentClass,
-      sourceRefs: op.unit.provenance.sourceRefs,
-    },
-    op.unit.trust.derivedAt,
-  );
-  return derived.tier !== op.unit.trust.tier || derived.baseScore !== op.unit.trust.baseScore;
 }
 
 /**

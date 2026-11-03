@@ -223,6 +223,22 @@ export interface Ctx {
   plan: OperationPlan | null
   opsecCooldown: Set<string> // method+path keys abandoned after a detection signal
   consecutive5xx: number
+  /**
+   * Q-NOHALT: set once the fleet's model provider has failed fatally for this
+   * run (dead credential, exhausted pool, unrecoverable billing/auth). Seats
+   * stop calling the model, phases close mechanically, and the report is
+   * assembled from the work already recorded — a provider outage is an
+   * infrastructure limitation, never a reason to throw the engagement away.
+   */
+  llmDown?: boolean
+  /** The provider's own words when llmDown was set, for the report. */
+  llmDownReason?: string
+  /**
+   * Q-NOHALT: the loop was closed by the action/duration cap rather than by
+   * finishing its work. The run still reports, but it ends INCOMPLETE — a spent
+   * budget is never a completion and never a safety halt.
+   */
+  budgetExhausted?: boolean
   /** Battery categories probed so far this engagement. */
   coverage: Set<BatteryCategory>
   /**

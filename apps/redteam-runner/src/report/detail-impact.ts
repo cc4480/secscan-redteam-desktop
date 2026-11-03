@@ -8,6 +8,7 @@
  * like every other derivation.
  */
 import type { DetailFindingInput, DetailTier } from './detail.js'
+import { noFindingClause, type CoverageTotals } from './completeness.js'
 import {
   AREA_IMPACT, SEVERITY_RANK, TIER_RANK, compareIds, plural, req,
 } from './detail-tables.js'
@@ -25,15 +26,21 @@ const bySeverityFirst = (a: DetailFindingInput, b: DetailFindingInput): number =
   SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] ||
   TIER_RANK[a.tier] - TIER_RANK[b.tier] || compareIds(a.id, b.id)
 
-/** §5 — the impact band selects the first matching fixed statement. */
+/** §5 — the impact band selects the first matching fixed statement.
+ *
+ * The zero-finding band is coverage-aware (completeness.ts): "no material
+ * business risk" may only be said of a battery that actually concluded. An
+ * engagement that halted with items unverdicted says so instead — otherwise
+ * the report asserts safety from items nobody tested. */
 export function buildImpact(
   actionable: DetailFindingInput[],
   areaOf: Map<string, string>,
+  coverage: CoverageTotals,
 ): ImpactBand {
   if (actionable.length === 0) {
     return {
       level: 'none',
-      text: 'No material business risk identified from this pass; continued monitoring is still recommended as the application evolves.',
+      text: noFindingClause(coverage),
     }
   }
   const ranked = [...actionable].sort(bySeverityFirst)

@@ -13,8 +13,8 @@
  */
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir, userInfo } from 'node:os'
 import { join } from 'node:path'
 
 import { buildXToolArgv, findProfile, findXTool } from '../src/xtool/registry.js'
@@ -38,7 +38,19 @@ describe('wordlist resolution', () => {
     assert.equal(candidates[0], '/explicit/list.txt')
     assert.equal(candidates[1], '/env/list.txt')
     assert.ok(candidates.some(c => c.includes('assets') && c.endsWith('common.txt')))
-    assert.ok(candidates.every(c => !c.includes('Cho-zen')), 'no machine-specific path may appear')
+    // The resolver legitimately derives bundled candidates from its own install
+    // location, so a runtime path may contain this machine's user name. The
+    // contract is that no operator-specific path is HARDCODED in the source —
+    // assert on the source, not on paths the installer produced.
+    const src = readFileSync(new URL('../../src/xtool/wordlist.ts', import.meta.url), 'utf8')
+    // The defect this guards against is a REAL operator's path baked into the
+    // resolver. Assert on this machine's actual user name, not on a path
+    // shape — the source legitimately documents `C:\Users\<dev>\…` as the
+    // thing it must not assume.
+    assert.ok(
+      !src.includes(userInfo().username),
+      'no operator-specific path may appear in the resolver source',
+    )
   })
 
   it('resolves the bundled asset that ships with the package', () => {

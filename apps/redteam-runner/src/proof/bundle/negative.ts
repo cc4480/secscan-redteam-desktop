@@ -6,6 +6,7 @@
 import { redactSecrets } from "../../host-exec/common.js";
 import { PROOF_TOOL_ACTIONS } from "./steps.js";
 import type { PocBundle } from "./bundle.js";
+import { bundleFileName } from "./bundle.js";
 import type { EngagementEvent } from "../../types.js";
 
 export interface NegativeProof {
@@ -56,6 +57,6 @@ export function bundleSummary(b: PocBundle): string {
   return (
     `**${b.findingId}** — ${b.title} [${b.severity}] (${b.validationTier} proof). ` +
     `${b.proves} Steps (${b.steps.length}): ${steps}. ` +
-    `Bundle: poc/${b.findingId}.json. Re-verify: \`${b.reverifyCommand}\``
+    `Bundle: poc/${bundleFileName(b.findingId)}. Re-verify: \`${b.reverifyCommand}\``
   );
 }

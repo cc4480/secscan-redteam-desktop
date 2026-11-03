@@ -8,7 +8,7 @@
  * testable with a fake binary — no real nuclei needed in tests.
  */
 import { spawn, type ChildProcess } from "node:child_process";
-import { redactSecrets } from "../host-exec/common.js";
+import { redactSecrets, scrubbedEnv } from "../host-exec/common.js";
 
 export interface NucleiSpawnOpts {
   argv: string[];
@@ -58,7 +58,7 @@ export function realNucleiSpawn(): SpawnFn {
       const [bin, ...args] = argv;
       let child: ChildProcess;
       try {
-        child = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
+        child = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"], env: scrubbedEnv() });
       } catch (err) {
         resolve({ stdout: "", stderr: String(err), exitCode: null, killed: false, timedOut: false });
         return;

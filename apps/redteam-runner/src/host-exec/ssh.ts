@@ -161,6 +161,9 @@ export function createSshTransport(): SshTransport {
           }
         };
         const timer = setTimeout(() => {
+          try { c.destroy(); } catch { /* already gone */ }
+          try { /* stream may not be defined yet */ } catch { /* noop */ }
+          client = null;
           done(() => reject(new Error(`[ssh] command timed out after ${timeoutMs}ms`)));
         }, timeoutMs);
         const onAbort = () => {

@@ -410,19 +410,15 @@ describe("scribe gate — end to end", () => {
     assert.ok(existsSync(join(engDir, "report-package.zip")), "the package still ships");
   });
 
-  it("(4) a halted engagement never calls the Scribe — the close stays mechanical", async () => {
+  it("(4) a refused sign-off no longer halts — the transition ships UNSIGNED and the run completes", async () => {
     const track = { reviews: 0, htmlAuthors: 0 };
     const res = await runEngagement(input, runOpts(e2eLlm({ refuseSignOff: true, track })));
-    assert.equal(res.status, "halted");
+    // Q-NOHALT: a coordinator that will not commit stops the SIGNATURE, never
+    // the engagement. The run finishes; the record names the unsigned transition.
+    assert.equal(res.status, "complete", "a refused sign-off must not halt the engagement");
     const engDir = join(dir, res.engagementId);
-    assert.equal(track.reviews, 0, "no gate review on a halted close");
-    assert.equal(track.htmlAuthors, 0, "no HTML authoring on a halted close");
-    const state = readState(engDir);
-    assert.equal(state?.artifactSignoff, undefined);
-    assert.equal(state?.artifactUnsigned, undefined);
     const events = readEvents(engDir);
-    assert.ok(!events.some((e) => e.action === "artifact_signed" || e.action === "artifact_unsigned"));
-    assert.ok(!readFileSync(join(engDir, "report.html"), "utf8").includes("SCRIBE-AUTHORED"), "the halted HTML is the mechanical renderer's");
+    assert.ok(events.some((e) => e.action === "signoff_unsigned"), "the unsigned transition is recorded");
   });
 
   it("(5e) the review seat throws: the run still completes, UNSIGNED scribe_unavailable", async () => {

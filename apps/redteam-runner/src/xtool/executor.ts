@@ -12,6 +12,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { buildXToolArgv, type XRunOptions, type XToolSpec } from "./registry.js";
 import { resolveExternalBinary } from "../toolchain.js";
+import { scrubbedEnv } from "../host-exec/common.js";
 
 export interface XSpawnOpts {
   file: string;
@@ -37,23 +38,25 @@ export const realXSpawn: XSpawnFn = async (opts) =>
       cwd: opts.cwd,
       windowsHide: true,
       env: opts.env,
+      detached: false,
     });
     let stdout = "";
     let stderr = "";
     let timedOut = false;
+    const killChild = () => { try { if (process.platform === "win32") { spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true }); } else { process.kill(-child.pid!, "SIGKILL"); } } catch { try { child.kill("SIGKILL"); } catch { /* gone */ } } };
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill();
+      killChild();
     }, opts.timeoutMs);
     const onAbort = (): void => {
-      child.kill();
+      killChild();
     };
     opts.signal?.addEventListener("abort", onAbort, { once: true });
     child.stdout.on("data", (d: Buffer) => {
-      stdout += d.toString("utf8");
+      if (stdout.length < 64_000) stdout += d.toString("utf8");
     });
     child.stderr.on("data", (d: Buffer) => {
-      stderr += d.toString("utf8");
+      if (stderr.length < 64_000) stderr += d.toString("utf8");
     });
     child.on("error", (err: Error) => {
       clearTimeout(timer);
@@ -164,7 +167,7 @@ export async function runXTool(
   },
   spawnFn: XSpawnFn = realXSpawn,
 ): Promise<XExecResult> {
-  const env = opts.env ?? process.env;
+  const env = opts.env ?? scrubbedEnv();
   const bin = resolveBinPath(spec, env);
 
   if (opts.action === "probe") {

@@ -121,11 +121,22 @@ export function targetDomain(args: Record<string, unknown>): string | null {
 
 /** True when the model explicitly asks for active/intrusive testing. */
 export function wantsActiveTesting(args: Record<string, unknown>): boolean {
+  // Explicit passive indicators win: a caller asking for passive recon is
+  // never treated as active, regardless of other flags.
   for (const [k, v] of Object.entries(args)) {
-    if (/aggress|active|intrusive/i.test(k) && !!v) return true
+    if (/passive/i.test(k) && !!v) return false
+    if (typeof v === 'string' && /^passive([-_ ]?(mode|scan|probe))?$/i.test(v.trim())) return false
+  }
+  for (const [k, v] of Object.entries(args)) {
+    if (/aggress|active|intrusive|deep|intens|depth|tier/i.test(k) && !!v) {
+      // A truthy depth/tier/intensity flag implies active testing unless the
+      // value is explicitly the lowest/passive tier.
+      if (typeof v === 'string' && /^(passive|standard|safe|0|1)$/i.test(v.trim())) continue
+      return true
+    }
     if (
       typeof v === 'string' &&
-      /^(aggressive|active|intrusive)([-_ ]?(test|scan|probe|mode|tier)s?)?$/i.test(v.trim())
+      /^(aggressive|active|intrusive|full|deep|comprehensive)([-_ ]?(test|scan|probe|mode|tier)s?)?$/i.test(v.trim())
     ) {
       return true
     }

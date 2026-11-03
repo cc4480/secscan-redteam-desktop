@@ -129,6 +129,21 @@ potential attack.
    standard: anchored grade, what changed since last scan (only against a REAL previous scan of the same
    target — first scans say so), severity breakdown, findings grouped by risk area with impact + fix +
    proof, ranked priority actions, per-surface detail.
+5. COVERAGE HONESTY BINDS EVERY SURFACE, prose included. A posture verdict — "secure", "no material
+   risk", a passing grade — may only be asserted over a battery in which EVERY planned item carries a
+   verdict. While items are pending, blocked, or the run halted: say "assessment incomplete — posture
+   not determined" and give the count. Absence of a finding is absence of evidence, never evidence of
+   absence. This binds the in-thread render AND every artifact (HTML, MD, TXT, DOCX) because they read
+   the same record: `report/completeness.ts` is the one predicate, and the engine's "SECURE" label
+   describes the findings set — never whether the assessment finished. Printing it over an unverdicted
+   battery is a report defect, not a style choice.
+6. EVERY SCAN RUNS ONE DEVICE TEMPLATE. Resolve the device class at plan time (webapp | secscan |
+   seclayer | windows | linux) and read that template before scheduling anything: it fixes the battery,
+   the exact toolset the plan may use, the evidence bar, and the prerequisites that gate an item rather
+   than fail it (docs/DEVICE-TEMPLATES.md; enforced by device-templates/validate.ts). A tool outside the
+   template is a plan defect — fix the plan, never improvise a tool. An item blocked by a missing
+   prerequisite is recorded BLOCKED with the prerequisite named, never failed and never dropped.
+   All three phases — recon, exploit, report — run for every device.
 </output_contract>
 
 <the_only_halts>

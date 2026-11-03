@@ -28,13 +28,11 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describeErrorCause, type ChatMessage } from "@secscan/redteam-llm-router";
-import { resolveKnobs } from "@secscan/redteam-fleet-skills";
 import { createCharteredComplete } from "../charter-completion.js";
 import { HaltError, type Ctx } from "../context.js";
 import { promptCtx } from "../agents.js";
 import { publisherPrompt } from "../prompts.js";
 import { tokenMeterFor } from "../harness2/trajectory-normalize.js";
-import { extractJsonBlock } from "../util.js";
 import {
   type ArtifactSignoff,
   type ArtifactUnsigned,
@@ -47,63 +45,9 @@ import { emitReportPackage } from "./package.js";
 import { rewriteAuthoredHtml } from "./scribe-html.js";
 
 export type { ScribeDefect } from "../events.js";
-
-/** The Scribe's structured review verdict. */
-export interface ScribeVerdict {
-  verdict: "sign" | "reject";
-  defects: ScribeDefect[];
-}
-
-/** The gate's outcome, for the caller's record. */
-export interface ScribeGateOutcome {
-  signed: boolean;
-  /** Review cycles spent (0 when the gate did not run). */
-  cycles: number;
-  /** Why the set shipped unsigned, when it did. */
-  reason?: "defects" | "scribe_unavailable" | "dry-run";
-}
-
-const DEFECT_CLASSES: readonly string[] = ["accuracy", "completeness", "craft"];
-
-/**
- * The Scribe's reject/rewrite budget: the SCRIBE_MAX_CYCLES fleet knob
- * (default 2). The runner carries no charter/engagement knob files, so
- * the package defaults govern — the same sources the prompt assembly
- * resolves.
- *
- * @returns the maximum review cycles per completed close, at least 1
- */
-export function scribeMaxCycles(): number {
-  const raw = Number.parseInt(resolveKnobs().values["SCRIBE_MAX_CYCLES"] ?? "2", 10);
-  return Number.isFinite(raw) && raw >= 1 ? raw : 2;
-}
-
-/**
- * Parse the seat's verdict answer. Anything off-shape is null — the
- * caller records an unavailable seat, never a guessed verdict. A sign
- * carries no defects (a signed set with open defects is a contradiction);
- * a reject must name at least one well-formed defect to be actionable.
- *
- * @param text - the completion text
- * @returns the parsed verdict, or null when off-shape
- */
-export function parseScribeVerdict(text: string): ScribeVerdict | null {
-  const parsed = extractJsonBlock(text) as { verdict?: unknown; defects?: unknown } | null;
-  if (!parsed || (parsed.verdict !== "sign" && parsed.verdict !== "reject")) return null;
-  if (parsed.verdict === "sign") return { verdict: "sign", defects: [] };
-  const defects: ScribeDefect[] = [];
-  for (const raw of Array.isArray(parsed.defects) ? parsed.defects : []) {
-    const d = raw as Partial<ScribeDefect> | null;
-    if (!d || typeof d.file !== "string" || typeof d.detail !== "string" || typeof d.fix !== "string") continue;
-    defects.push({
-      file: d.file.slice(0, 100),
-      class: DEFECT_CLASSES.includes(d.class ?? "") ? (d.class as ScribeDefect["class"]) : "accuracy",
-      detail: d.detail.slice(0, 500),
-      fix: d.fix.slice(0, 500),
-    });
-  }
-  return defects.length > 0 ? { verdict: "reject", defects } : null;
-}
+import { parseScribeVerdict, scribeMaxCycles, type ScribeGateOutcome, type ScribeVerdict } from "./scribe-verdict.js";
+export { parseScribeVerdict, scribeMaxCycles } from "./scribe-verdict.js";
+export type { ScribeGateOutcome, ScribeVerdict } from "./scribe-verdict.js";
 
 /** The recorded report model in the engagement dir, or null when the
  * file is missing, unparseable, or not a report model. */

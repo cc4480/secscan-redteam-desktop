@@ -22,7 +22,8 @@ import { appendFileSync, existsSync, readFileSync, readdirSync, statSync, writeF
 import { spawn } from 'node:child_process'
 import { randomUUID, createHash } from 'node:crypto'
 import { networkInterfaces } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, resolve, sep } from 'node:path'
+import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -32,6 +33,49 @@ const TOKEN = process.env.PC_AGENT_TOKEN ?? ''
 const ALLOW_DESTRUCTIVE = (process.env.PC_AGENT_ALLOW_DESTRUCTIVE ?? '').trim() === '1'
 const AUDIT = process.env.PC_AGENT_AUDIT_LOG ?? join(here, 'pc-agent-audit.jsonl')
 const SESSION = randomUUID()
+
+// --- filesystem containment roots (H2) ---------------------------------------
+const FS_ROOTS = (process.env.PC_AGENT_FS_ROOTS ?? process.env.PC_AGENT_FS_ROOT ?? homedir())
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean)
+  .map(p => resolve(p))
+
+function containedPath(p) {
+  const resolved = resolve(String(p ?? ''))
+  if (resolved.includes('\0')) throw Object.assign(new Error('invalid path'), { code: 'PATH_DENIED' })
+  const lower = resolved.toLowerCase()
+  const ok = FS_ROOTS.some(root => {
+    const r = root.toLowerCase()
+    return lower === r || lower.startsWith(r + '\\') || lower.startsWith(r + '/')
+  })
+  if (!ok) throw Object.assign(new Error(`path outside allowed roots: ${resolved}`), { code: 'PATH_DENIED' })
+  return resolved
+}
+
+// --- destructive command denylist (H3) ---------------------------------------
+const DESTRUCTIVE_PATTERNS = [
+  /\bformat\b/i, /\bdiskpart\b/i, /\brm\s+-rf\s+\/\b/i, /\bdel\s+\/[sfq]/i,
+  /\brd\s+\/s\b/i, /\bRemove-Item\b.*-Recurse/i, /\bmkfs\b/i, /\bdd\s+if=/i,
+  /\bshutdown\b/i, /\breboot\b/i, /\breg\s+delete\b/i,
+]
+function isDestructiveCommand(cmd) {
+  return DESTRUCTIVE_PATTERNS.some(re => re.test(String(cmd ?? '')))
+}
+
+// --- audit redaction (H4) ---------------------------------------------------
+const SECRET_KEY_RE = /secret|token|password|passwd|api[_-]?key|credential|private[_-]?key/i
+function redactValue(key, value) {
+  if (key !== undefined && SECRET_KEY_RE.test(String(key))) return '[REDACTED]'
+  if (typeof value === 'string' && value.length > 0 && /^[A-Za-z0-9_\-]{24,}$/.test(value)) return '[REDACTED]'
+  if (Array.isArray(value)) return value.map((v, i) => redactValue(String(i), v))
+  if (value && typeof value === 'object') {
+    const out = {}
+    for (const [k, v] of Object.entries(value)) out[k] = redactValue(k, v)
+    return out
+  }
+  return value
+}
 
 if (TOKEN.length < 16) {
   console.error('pc-agent: PC_AGENT_TOKEN must be at least 16 characters')
@@ -96,8 +140,8 @@ const TOOLS = {
     const result = await run('powershell.exe', ['-NoProfile', '-Command', 'Get-Process | Select-Object Id,ProcessName,MainWindowTitle | ConvertTo-Json -Compress'])
     return { text: result.output.trim() || '[]' }
   } },
-  list_dir: { tier: 0, schema: { path: 'string' }, run: async ({ path }) => ({ text: JSON.stringify(readdirSync(resolve(String(path))).slice(0, 500)) }) },
-  read_file: { tier: 0, schema: { path: 'string' }, run: async ({ path }) => ({ text: readFileSync(resolve(String(path)), 'utf8').slice(0, 64_000) }) },
+  list_dir: { tier: 0, schema: { path: 'string' }, run: async ({ path }) => ({ text: JSON.stringify(readdirSync(containedPath(path)).slice(0, 500)) }) },
+  read_file: { tier: 0, schema: { path: 'string' }, run: async ({ path }) => ({ text: readFileSync(containedPath(path), 'utf8').slice(0, 64_000) }) },
   screen_snapshot: { tier: 0, schema: { window: 'string', scale: 'number' }, run: async (args) => {
     const shot = await ps({ op: 'screenshot', window: args.window, scale: args.scale ?? 0.6 })
     return { text: JSON.stringify({ width: shot.width, height: shot.height, bounds: shot.bounds }), image: { mimeType: shot.mimeType, base64: shot.base64 } }
@@ -136,7 +180,8 @@ const TOOLS = {
   input_scroll: { tier: 1, schema: { delta: 'number' }, run: async (args) => ({ text: JSON.stringify(await ps({ op: 'input', kind: 'scroll', delta: args.delta })) }) },
   input_drag: { tier: 1, schema: {}, run: async () => ({ error: { code: 'NOT_IMPLEMENTED', message: 'input_drag is not implemented yet' } }) },
   window_focus: { tier: 1, schema: { title: 'string' }, run: async (args) => {
-    const result = await run('powershell.exe', ['-NoProfile', '-Command', `$w = (Get-Process | Where-Object { $_.MainWindowTitle -like '*${String(args.title)}*' } | Select-Object -First 1); if ($w) { Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.Interaction]::AppActivate($w.Id); 'ok' } else { 'not-found' }`])
+    const title = String(args.title ?? '').slice(0, 200).replace(/'/g, "''")
+    const result = await run('powershell.exe', ['-NoProfile', '-Command', `$w = (Get-Process | Where-Object { $_.MainWindowTitle -like '*${title}*' } | Select-Object -First 1); if ($w) { Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.Interaction]::AppActivate($w.Id); 'ok' } else { 'not-found' }`])
     return { text: result.output.trim() }
   } },
   window_arrange: { tier: 1, schema: {}, run: async () => ({ error: { code: 'NOT_IMPLEMENTED', message: 'window_arrange is not implemented yet' } }) },
@@ -148,11 +193,17 @@ const TOOLS = {
   assert_element: { tier: 1, schema: { ref: 'string', value: 'string' }, run: async () => ({ text: JSON.stringify(await ps({ op: 'assert' })) }) },
 
   // --- tier 2: robot path --------------------------------------------------
-  shell_exec: { tier: 2, schema: { command: 'string', cwd: 'string' }, run: async (args) => ({ text: JSON.stringify(await run('cmd.exe', ['/d', '/s', '/c', String(args.command)], args.timeoutMs)) }) },
-  shell_pwsh: { tier: 2, schema: { command: 'string' }, run: async (args) => ({ text: JSON.stringify(await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', String(args.command)], args.timeoutMs)) }) },
+  shell_exec: { tier: 2, schema: { command: 'string', cwd: 'string' }, run: async (args) => {
+    if (isDestructiveCommand(args.command)) throw Object.assign(new Error('destructive command denied by pc-agent policy'), { code: 'POLICY_DENIED' })
+    return { text: JSON.stringify(await run('cmd.exe', ['/d', '/s', '/c', String(args.command)], args.timeoutMs)) }
+  } },
+  shell_pwsh: { tier: 2, schema: { command: 'string' }, run: async (args) => {
+    if (isDestructiveCommand(args.command)) throw Object.assign(new Error('destructive command denied by pc-agent policy'), { code: 'POLICY_DENIED' })
+    return { text: JSON.stringify(await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', String(args.command)], args.timeoutMs)) }
+  } },
   proc_kill: { tier: 2, schema: { pid: 'number' }, run: async (args) => ({ text: JSON.stringify(await run('taskkill.exe', ['/PID', String(args.pid), '/F'])) }) },
-  fs_write: { tier: 2, schema: { path: 'string', content: 'string' }, run: async (args) => { writeFileSync(resolve(String(args.path)), String(args.content ?? '')); return { text: JSON.stringify({ ok: true }) } } },
-  fs_delete: { tier: 2, schema: { path: 'string' }, run: async (args) => { unlinkSync(resolve(String(args.path))); return { text: JSON.stringify({ ok: true }) } } },
+  fs_write: { tier: 2, schema: { path: 'string', content: 'string' }, run: async (args) => { writeFileSync(containedPath(args.path), String(args.content ?? '')); return { text: JSON.stringify({ ok: true }) } } },
+  fs_delete: { tier: 2, schema: { path: 'string' }, run: async (args) => { unlinkSync(containedPath(args.path)); return { text: JSON.stringify({ ok: true }) } } },
 }
 
 /** MCP tool descriptors derived from the table. */
@@ -220,7 +271,7 @@ const server = (await import('node:http')).createServer(async (req, res) => {
     const name = rpc.params?.name
     const args = rpc.params?.arguments ?? {}
     const outcome = await callTool(name, args)
-    audit({ session: SESSION, tool: name, args, ok: outcome.ok, receipt: outcome.receipt })
+    audit({ session: SESSION, tool: name, args: redactValue(undefined, args), ok: outcome.ok, receipt: outcome.receipt })
     const content = []
     if (outcome.content?.image !== undefined) {
       content.push({ type: 'image', data: outcome.content.image.base64, mimeType: outcome.content.image.mimeType })

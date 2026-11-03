@@ -11,7 +11,6 @@ import { type Ctx, type LiveFinding } from '../../context.js'
 import { type EngagementEvent, type Finding } from '../../types.js'
 import { BATTERY_CATEGORIES } from '../../battery.js'
 import { TARGET_PROFILES, activeTargets } from '../../targets.js'
-import { projectApprovals, projectDanglingCauses, projectToolStats } from '../../events/projections.js'
 import { type NegativeProof, type PocBundle } from '../../proof/index.js'
 import { gradeBanner, gradeFindings } from '../grading.js'
 import { buildReportDetail, type DetailInput } from '../detail.js'
@@ -25,7 +24,9 @@ import {
   type EngagementReportInput,
   type FindingMeta,
 } from './render.js'
-import { type TeamMember } from './sections.js'
+import { buildActivity } from './activity.js'
+import { FLEET_TEAM } from './fleet.js'
+export { FLEET_TEAM }
 
 /** Structured proof data the proof section computes alongside its
  * markdown (no-bundle reasons per finding + negative proofs). */
@@ -163,22 +164,6 @@ function buildCoverage(deps: WireDeps): CoverageInput {
   }
 }
 
-function buildActivity(events: EngagementEvent[]): ActivityInput {
-  const stats = projectToolStats(events)
-  return {
-    eventCount: events.length,
-    rows: stats.slice(0, 40).map(s => ({
-      action: s.action,
-      count: s.count,
-      attackIds: s.attackIds,
-      firstSeq: s.firstSeq,
-      lastSeq: s.lastSeq,
-    })),
-    totalActions: stats.length,
-    decisions: projectApprovals(events).map(e => ({ action: e.action, seq: e.seq })),
-    danglingCauses: projectDanglingCauses(events),
-  }
-}
 
 /** Q-RP-7 / Q-RP-8: assemble the front/back-matter + strengths
  * derivations from the same records the rest of the input reads — the
@@ -272,16 +257,6 @@ function deriveSection<T>(deps: WireDeps, section: string, build: () => T): T | 
   }
 }
 
-/** The fleet roster as the report's team section states it: every
- * seat, its role on the engagement. Summaries stay with the record —
- * the wire carries the standing roles only. */
-export const FLEET_TEAM: TeamMember[] = [
-  { agent: 'Morpheus', seat: 'Lead Coordinator', role: 'Owns the engagement: the plan, the scope and authorisation gates, fleet sequencing, and final adjudication of what counts as proven.' },
-  { agent: 'Operator', seat: 'Reconnaissance', role: 'Maps the target surface — hosts, services, endpoints, and exposure — and keeps the inventory the plan runs against.' },
-  { agent: 'Neo', seat: 'Exploitation', role: 'Executes the authorised attack paths and produces the execution evidence behind every proven finding.' },
-  { agent: 'Architect', seat: 'Attack Design & Toolbuilding', role: 'Designs the attack chains and builds or adapts the tooling the plan requires.' },
-  { agent: 'Reporter', seat: 'Reporting & Deliverables', role: 'Assembles this report and the full deliverable set from the verified engagement record.' },
-]
 
 /** Assemble the renderer's structured input from the phase's records. */
 export function buildEngagementReportInput(deps: WireDeps): EngagementReportInput {

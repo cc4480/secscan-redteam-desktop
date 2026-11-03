@@ -63,7 +63,7 @@ export interface NmapRunResult {
 export const realNmapSpawn: SpawnFn = async (opts) => {
   const { spawn } = await import("node:child_process");
   return new Promise<NmapSpawnResult>((resolve) => {
-    const child = spawn(opts.file, opts.args, { windowsHide: true });
+    const child = spawn(opts.file, opts.args, { windowsHide: true, env: (() => { const e = { ...process.env }; for (const k of Object.keys(e)) if (/KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|PRIVATE/i.test(k)) delete e[k]; return e; })() });
     let stdout = "";
     let stderr = "";
     let timedOut = false;
@@ -76,10 +76,10 @@ export const realNmapSpawn: SpawnFn = async (opts) => {
     };
     opts.signal?.addEventListener("abort", onAbort, { once: true });
     child.stdout.on("data", (d: Buffer) => {
-      stdout += d.toString("utf8");
+      if (stdout.length < 64_000) stdout += d.toString("utf8");
     });
     child.stderr.on("data", (d: Buffer) => {
-      stderr += d.toString("utf8");
+      if (stderr.length < 64_000) stderr += d.toString("utf8");
     });
     child.on("error", (err: Error) => {
       clearTimeout(timer);

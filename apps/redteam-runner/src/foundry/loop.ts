@@ -18,10 +18,33 @@
  * hook enqueues cycles fire-and-forget through enqueueLoopCycle).
  */
 
+import { spawnSync } from 'node:child_process'
 import { locateFoundry, type FoundryLocation } from './locate.js'
 import { scoreStoreCases } from './fitness.js'
 import { applyCaseOperator, OPERATORS, validateCaseMutant } from './mutate.js'
 import { runBundleEvolution } from './loop-bundle.js'
+
+/**
+ * Pick a Python interpreter that actually runs.
+ *
+ * The default used to be a bare 'python3'. On Windows that name resolves to the
+ * Microsoft Store alias, which EXISTS but exits non-zero — so the foundry
+ * syntax gate failed on every Windows host and every generated mutant was
+ * silently discarded as "syntax gate failed". An environment default that
+ * cannot execute must never be mistaken for a defect in generated code.
+ */
+function resolvePython(configured?: string): string {
+  if (configured !== undefined && configured.trim() !== '') return configured
+  const fromEnv = process.env['FOUNDRY_PYTHON']
+  if (fromEnv !== undefined && fromEnv.trim() !== '') return fromEnv
+  const candidates = process.platform === 'win32' ? ['python', 'py', 'python3'] : ['python3', 'python']
+  for (const candidate of candidates) {
+    const probe = spawnSync(candidate, ['-c', 'import sys'], { windowsHide: true, timeout: 5_000 })
+    if (probe.error === undefined && probe.status === 0) return candidate
+  }
+  return candidates[0] as string
+}
+
 import {
   loadLoopState,
   saveLoopState,
@@ -171,7 +194,7 @@ export async function runLoopCycle(
         `bundle evolution skipped: ${!location.snapshotDir ? 'no snapshot located' : 'gate CLI not located'}`,
       )
     } else {
-      const python = opts.python ?? process.env['FOUNDRY_PYTHON'] ?? 'python3'
+      const python = resolvePython(opts.python)
       const bundle = await runBundleEvolution(storeDir, location, cycle, summary.at, python)
       summary.bundleMutants = bundle.outcomes
       summary.mutantsGenerated += bundle.generated
