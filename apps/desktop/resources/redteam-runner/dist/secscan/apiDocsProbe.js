@@ -11,14 +11,14 @@ const TIMEOUT_MS = 7_000;
 function vuln(partial) {
     return { id: randomUUID(), ...partial };
 }
-async function safeGet(url) {
+async function safeGet(url, guard = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
         const res = await validatedFetch(url, {
             signal: controller.signal,
             headers: { "Accept": "text/html,application/json,application/yaml,*/*" },
-        }, { timeoutMs: TIMEOUT_MS });
+        }, { timeoutMs: TIMEOUT_MS, attestedHost: guard.attestedHost });
         const body = await res.text().catch(() => "");
         const headers = {};
         res.headers.forEach((v, k) => { headers[k.toLowerCase()] = v; });
@@ -92,7 +92,7 @@ function countApiPaths(body) {
     const matches = body.match(/^\s{2}\/\S/gm);
     return matches?.length ?? 0;
 }
-export async function runApiDocsProbe(baseUrl) {
+export async function runApiDocsProbe(baseUrl, guard = {}) {
     const findings = [];
     let origin;
     try {
@@ -108,7 +108,7 @@ export async function runApiDocsProbe(baseUrl) {
     for (const path of SWAGGER_UI_PATHS) {
         if (foundSwagger)
             break;
-        const res = await safeGet(`${origin}${path}`);
+        const res = await safeGet(`${origin}${path}`, guard);
         if (!res || res.status !== 200)
             continue;
         if (isSwaggerUi(res.body)) {
@@ -136,7 +136,7 @@ export async function runApiDocsProbe(baseUrl) {
     for (const path of OPENAPI_SPEC_PATHS) {
         if (foundOpenApiSpec)
             break;
-        const res = await safeGet(`${origin}${path}`);
+        const res = await safeGet(`${origin}${path}`, guard);
         if (!res || res.status !== 200)
             continue;
         const ct = res.headers["content-type"] ?? "";
@@ -164,7 +164,7 @@ export async function runApiDocsProbe(baseUrl) {
     for (const path of REDOC_PATHS) {
         if (foundRedoc || foundSwagger)
             break;
-        const res = await safeGet(`${origin}${path}`);
+        const res = await safeGet(`${origin}${path}`, guard);
         if (!res || res.status !== 200)
             continue;
         if (isRedoc(res.body)) {

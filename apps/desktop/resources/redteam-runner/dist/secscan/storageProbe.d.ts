@@ -11,4 +11,5 @@
  * Checks for public LIST access (the worst case — full inventory enumeration).
  */
 import type { ScanVulnerability } from "./scanner.js";
-export declare function runStorageProbe(_baseUrl: string, html: string): Promise<ScanVulnerability[]>;
+import { type TargetGuardOptions } from "./targetGuard.js";
+export declare function runStorageProbe(_baseUrl: string, html: string, guard?: TargetGuardOptions): Promise<ScanVulnerability[]>;

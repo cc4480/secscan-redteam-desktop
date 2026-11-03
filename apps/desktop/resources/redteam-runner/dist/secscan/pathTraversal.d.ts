@@ -13,4 +13,5 @@
  * Only runs on deep-tier scans. Non-fatal — all errors return [].
  */
 import type { ScanVulnerability } from "./scanner.js";
-export declare function checkPathTraversal(targetUrl: string, html: string): Promise<ScanVulnerability[]>;
+import { type TargetGuardOptions } from "./targetGuard.js";
+export declare function checkPathTraversal(targetUrl: string, html: string, guard?: TargetGuardOptions): Promise<ScanVulnerability[]>;

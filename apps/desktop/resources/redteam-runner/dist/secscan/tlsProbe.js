@@ -199,7 +199,7 @@ export async function probeTargetTls(targetUrl, options = {}) {
         return { checked: false, reachable: false, legacyProtocolsAccepted: [] };
     }
     const port = url.port ? Number(url.port) : 443;
-    const addresses = await assertPublicResolution(hostname);
+    const addresses = await assertPublicResolution(hostname, { attestedHost: options.attestedHost });
     const connectHost = addresses[0];
     if (connectHost === undefined) {
         // assertPublicResolution already throws on an empty result; this is the

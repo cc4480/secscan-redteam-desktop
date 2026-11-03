@@ -9,11 +9,15 @@ import { type FindingMeta } from "./html/cards.js";
  * paths kept verbatim — a different path is a different target. */
 export declare function normalizeTargetKey(raw: string): string;
 /** Record this engagement's posture of record for future diffs (§1.2.7:
- * engagements written before this record existed resolve counts-only). */
+ * engagements written before this record existed resolve counts-only).
+ * A null posture (halted / blocked end — the report issues no grade)
+ * writes the record WITHOUT score/grade: deriving them would fabricate
+ * an A/100 for a run that confirmed nothing (eng-2026-11-02-or12).
+ * Consumers tolerate the absence (both fields optional; counts-only). */
 export declare function recordReportMeta(ctx: Ctx, posture: {
     score: number;
     grade: string;
-}): void;
+} | null): void;
 /** §1.2 predecessor resolution over the sibling engagement directories. */
 export declare function resolvePredecessor(ctx: Ctx): BaselineInput | undefined;
 export declare function armLabelOf(vulnClass: string | undefined): string;

@@ -44,13 +44,17 @@ function readReportMeta(dir) {
     }
 }
 /** Record this engagement's posture of record for future diffs (§1.2.7:
- * engagements written before this record existed resolve counts-only). */
+ * engagements written before this record existed resolve counts-only).
+ * A null posture (halted / blocked end — the report issues no grade)
+ * writes the record WITHOUT score/grade: deriving them would fabricate
+ * an A/100 for a run that confirmed nothing (eng-2026-11-02-or12).
+ * Consumers tolerate the absence (both fields optional; counts-only). */
 export function recordReportMeta(ctx, posture) {
     try {
         writeFileSync(join(ctx.events.dir, "report-meta.json"), JSON.stringify({
             version: 1, engagementId: ctx.events.engagementId, target: ctx.input.target,
             startedAt: ctx.events.snapshot.startedAt, dryRun: !!ctx.config.dryRunAgents,
-            score: posture.score, grade: posture.grade,
+            ...(posture ? { score: posture.score, grade: posture.grade } : {}),
         }, null, 2));
     }
     catch {

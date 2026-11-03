@@ -9,4 +9,5 @@
  * Only sends POST requests with a well-known introspection query — non-destructive.
  */
 import type { ScanVulnerability } from "./scanner.js";
-export declare function runGraphqlProbe(baseUrl: string): Promise<ScanVulnerability[]>;
+import { type TargetGuardOptions } from "./targetGuard.js";
+export declare function runGraphqlProbe(baseUrl: string, guard?: TargetGuardOptions): Promise<ScanVulnerability[]>;

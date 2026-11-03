@@ -13,11 +13,11 @@ const PROBE_TIMEOUT_MS = 8_000;
 function vuln(partial) {
     return { id: randomUUID(), ...partial };
 }
-async function safeGet(url, options = {}, timeoutMs = PROBE_TIMEOUT_MS) {
+async function safeGet(url, options = {}, timeoutMs = PROBE_TIMEOUT_MS, guard = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-        const res = await validatedFetch(url, { ...options, signal: controller.signal }, { timeoutMs });
+        const res = await validatedFetch(url, { ...options, signal: controller.signal }, { timeoutMs, attestedHost: guard.attestedHost });
         const body = await res.text().catch(() => "");
         const headers = {};
         res.headers.forEach((v, k) => { headers[k.toLowerCase()] = v; });
@@ -34,7 +34,7 @@ async function safeGet(url, options = {}, timeoutMs = PROBE_TIMEOUT_MS) {
 // 1. SENSITIVE FILE EXPOSURE
 // ─────────────────────────────────────────────────────────────────────────────
 import { SENSITIVE_PATHS } from "./probes-data.js";
-export async function checkSensitiveFiles(baseUrl) {
+export async function checkSensitiveFiles(baseUrl, guard = {}) {
     let origin;
     let expectedHost;
     try {
@@ -47,7 +47,7 @@ export async function checkSensitiveFiles(baseUrl) {
     }
     const results = await Promise.allSettled(SENSITIVE_PATHS.map(async (p) => {
         const url = `${origin}${p.path}`;
-        const result = await safeGet(url, { redirect: "follow" });
+        const result = await safeGet(url, { redirect: "follow" }, undefined, guard);
         if (!result || result.status !== 200)
             return null;
         // Redirected to a different host = catch-all (login page etc.)
@@ -85,8 +85,8 @@ export async function checkSensitiveFiles(baseUrl) {
 // ─────────────────────────────────────────────────────────────────────────────
 // 2. HTTP METHODS PROBE
 // ─────────────────────────────────────────────────────────────────────────────
-export async function checkHttpMethods(targetUrl) {
-    const result = await safeGet(targetUrl, { method: "OPTIONS", redirect: "follow" });
+export async function checkHttpMethods(targetUrl, guard = {}) {
+    const result = await safeGet(targetUrl, { method: "OPTIONS", redirect: "follow" }, undefined, guard);
     if (!result)
         return [];
     // Only read the standard HTTP Allow header — NOT Access-Control-Allow-Methods.
@@ -142,7 +142,7 @@ export async function checkHttpMethods(targetUrl) {
 // ─────────────────────────────────────────────────────────────────────────────
 // 3. ACTIVE CORS TESTING
 // ─────────────────────────────────────────────────────────────────────────────
-export async function checkActiveCors(targetUrl) {
+export async function checkActiveCors(targetUrl, guard = {}) {
     const testOrigins = [
         "https://evil-attacker.com",
         "null",
@@ -151,7 +151,7 @@ export async function checkActiveCors(targetUrl) {
         const result = await safeGet(targetUrl, {
             headers: { Origin: origin },
             redirect: "follow",
-        });
+        }, undefined, guard);
         if (!result)
             continue;
         const acao = result.headers["access-control-allow-origin"];
@@ -192,13 +192,13 @@ export async function checkActiveCors(targetUrl) {
 // ─────────────────────────────────────────────────────────────────────────────
 // 4. OPEN REDIRECT TESTING
 // ─────────────────────────────────────────────────────────────────────────────
-export async function checkOpenRedirect(targetUrl) {
+export async function checkOpenRedirect(targetUrl, guard = {}) {
     const base = new URL(targetUrl);
     const probeTarget = OPEN_REDIRECT_PROBE.template;
     for (const param of OPEN_REDIRECT_PARAMS) {
         const testUrl = new URL(targetUrl);
         testUrl.searchParams.set(param, probeTarget);
-        const result = await safeGet(testUrl.toString(), { redirect: "manual" });
+        const result = await safeGet(testUrl.toString(), { redirect: "manual" }, undefined, guard);
         if (!result)
             continue;
         if (result.status >= 300 && result.status < 400) {
@@ -223,7 +223,7 @@ export async function checkOpenRedirect(targetUrl) {
 // ─────────────────────────────────────────────────────────────────────────────
 // 5. ROBOTS.TXT ANALYSIS
 // ─────────────────────────────────────────────────────────────────────────────
-export async function checkRobotsTxt(baseUrl) {
+export async function checkRobotsTxt(baseUrl, guard = {}) {
     let origin;
     try {
         origin = new URL(baseUrl).origin;
@@ -231,7 +231,7 @@ export async function checkRobotsTxt(baseUrl) {
     catch {
         return [];
     }
-    const result = await safeGet(`${origin}/robots.txt`);
+    const result = await safeGet(`${origin}/robots.txt`, {}, undefined, guard);
     if (!result || result.status !== 200 || result.body.length < 10)
         return [];
     const lines = result.body.split("\n");
@@ -312,7 +312,7 @@ export async function checkSRI(html, baseUrl) {
 // ─────────────────────────────────────────────────────────────────────────────
 // 7. ERROR PAGE DISCLOSURE
 // ─────────────────────────────────────────────────────────────────────────────
-export async function checkErrorDisclosure(baseUrl) {
+export async function checkErrorDisclosure(baseUrl, guard = {}) {
     let origin;
     try {
         origin = new URL(baseUrl).origin;
@@ -321,7 +321,7 @@ export async function checkErrorDisclosure(baseUrl) {
         return [];
     }
     const testPath = `/_vibescan-${Date.now()}-not-a-real-path`;
-    const result = await safeGet(`${origin}${testPath}`);
+    const result = await safeGet(`${origin}${testPath}`, {}, undefined, guard);
     if (!result)
         return [];
     const body = result.body;
@@ -363,7 +363,7 @@ export async function checkErrorDisclosure(baseUrl) {
 // ─────────────────────────────────────────────────────────────────────────────
 // 8. HTTP → HTTPS REDIRECT CHECK
 // ─────────────────────────────────────────────────────────────────────────────
-export async function checkHttpsRedirect(targetUrl) {
+export async function checkHttpsRedirect(targetUrl, guard = {}) {
     let hostname;
     try {
         const parsed = new URL(targetUrl);
@@ -381,7 +381,7 @@ export async function checkHttpsRedirect(targetUrl) {
     // Follow redirects automatically. Node.js fetch with redirect:"manual" returns
     // an opaque redirect (status 0, no headers) so we can't read the Location header.
     // Using redirect:"follow" and inspecting the final URL is simpler and reliable.
-    const result = await safeGet(`http://${hostname}/`, { redirect: "follow" }, 8_000);
+    const result = await safeGet(`http://${hostname}/`, { redirect: "follow" }, 8_000, guard);
     if (!result)
         return []; // network error — don't false-positive
     // If the final URL landed on HTTPS, the redirect chain is in place — all good.
@@ -393,6 +393,8 @@ export async function checkHttpsRedirect(targetUrl) {
     // omit HTTP-level redirects and this is NOT a vulnerability.
     try {
         const apex = hostname.replace(/^www\./, "");
+        // External service, not the target: no guard forwarded — the attested
+        // allowance covers engagement targets only, never third-party lookups.
         const preloadRes = await safeGet(`https://hstspreload.org/api/v2/status?domain=${encodeURIComponent(apex)}`, {}, 5_000);
         if (preloadRes && /"status"\s*:\s*"preloaded"/.test(preloadRes.body)) {
             return []; // domain is HSTS-preloaded — not a vulnerability
@@ -414,8 +416,8 @@ export async function checkHttpsRedirect(targetUrl) {
 // ─────────────────────────────────────────────────────────────────────────────
 // 9. RATE LIMITING DETECTION
 // ─────────────────────────────────────────────────────────────────────────────
-export async function checkRateLimiting(targetUrl) {
-    const result = await safeGet(targetUrl, {}, 6_000);
+export async function checkRateLimiting(targetUrl, guard = {}) {
+    const result = await safeGet(targetUrl, {}, 6_000, guard);
     if (!result)
         return [];
     const h = result.headers;
@@ -461,10 +463,10 @@ export async function checkRateLimiting(targetUrl) {
 // ─────────────────────────────────────────────────────────────────────────────
 // 10. CLICKJACKING VERIFICATION
 // ─────────────────────────────────────────────────────────────────────────────
-export async function checkClickjacking(targetUrl) {
+export async function checkClickjacking(targetUrl, guard = {}) {
     // Only run if main scanner didn't already flag this via headers
     // This does a direct page fetch and checks the actual response headers
-    const result = await safeGet(targetUrl, {}, 6_000);
+    const result = await safeGet(targetUrl, {}, 6_000, guard);
     if (!result)
         return [];
     const xfo = result.headers["x-frame-options"];
@@ -503,7 +505,7 @@ const DIRECTORY_LISTING_PATTERNS = [
     /<hr>\s*<pre>/i,
     /\?C=N&amp;O=D/,
 ];
-export async function checkDirectoryListing(targetUrl) {
+export async function checkDirectoryListing(targetUrl, guard = {}) {
     let origin;
     try {
         origin = new URL(targetUrl).origin;
@@ -516,7 +518,7 @@ export async function checkDirectoryListing(targetUrl) {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 6_000);
         try {
-            const res = await validatedFetch(url, { signal: controller.signal }, { timeoutMs: 6_000 });
+            const res = await validatedFetch(url, { signal: controller.signal }, { timeoutMs: 6_000, attestedHost: guard.attestedHost });
             if (!res.ok)
                 return null;
             const body = await res.text();
@@ -548,7 +550,7 @@ export async function checkDirectoryListing(targetUrl) {
         .filter((v) => v !== null)
         .slice(0, 3);
 }
-export async function checkSecurityTxt(targetUrl) {
+export async function checkSecurityTxt(targetUrl, guard = {}) {
     let origin;
     try {
         origin = new URL(targetUrl).origin;
@@ -561,7 +563,7 @@ export async function checkSecurityTxt(targetUrl) {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 6_000);
         try {
-            const res = await validatedFetch(origin + p, { signal: controller.signal }, { timeoutMs: 6_000 });
+            const res = await validatedFetch(origin + p, { signal: controller.signal }, { timeoutMs: 6_000, attestedHost: guard.attestedHost });
             if (res.ok) {
                 const body = await res.text();
                 if (/Contact:|Expires:|Policy:/i.test(body))
@@ -585,20 +587,20 @@ export async function checkSecurityTxt(targetUrl) {
         })];
 }
 // ─────────────────────────────────────────────────────────────────────────────
-export async function runAllProbes(targetUrl, html) {
+export async function runAllProbes(targetUrl, html, guard = {}) {
     const settled = await Promise.allSettled([
-        checkSensitiveFiles(targetUrl),
-        checkHttpMethods(targetUrl),
-        checkActiveCors(targetUrl),
-        checkOpenRedirect(targetUrl),
-        checkRobotsTxt(targetUrl),
+        checkSensitiveFiles(targetUrl, guard),
+        checkHttpMethods(targetUrl, guard),
+        checkActiveCors(targetUrl, guard),
+        checkOpenRedirect(targetUrl, guard),
+        checkRobotsTxt(targetUrl, guard),
         checkSRI(html, targetUrl),
-        checkErrorDisclosure(targetUrl),
-        checkHttpsRedirect(targetUrl),
-        checkRateLimiting(targetUrl),
-        checkClickjacking(targetUrl),
-        checkDirectoryListing(targetUrl),
-        checkSecurityTxt(targetUrl),
+        checkErrorDisclosure(targetUrl, guard),
+        checkHttpsRedirect(targetUrl, guard),
+        checkRateLimiting(targetUrl, guard),
+        checkClickjacking(targetUrl, guard),
+        checkDirectoryListing(targetUrl, guard),
+        checkSecurityTxt(targetUrl, guard),
     ]);
     return settled
         .filter((r) => r.status === "fulfilled")

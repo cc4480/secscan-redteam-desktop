@@ -11,6 +11,7 @@
  * Findings include the specific affected paths in their evidence.
  */
 import type { ScanVulnerability } from "./scanner.js";
+import { type TargetGuardOptions } from "./targetGuard.js";
 /**
  * Curated high-value paths probed on every deep scan regardless of whether
  * they appear in the site's HTML — many sensitive endpoints are never linked
@@ -33,4 +34,4 @@ export interface CrawlResult {
      */
     probedNotFound: string[];
 }
-export declare function crawlAndCheck(rootUrl: string, rootHtml: string, rootHeaders: Record<string, string>, maxPages: number): Promise<CrawlResult>;
+export declare function crawlAndCheck(rootUrl: string, rootHtml: string, rootHeaders: Record<string, string>, maxPages: number, guard?: TargetGuardOptions): Promise<CrawlResult>;

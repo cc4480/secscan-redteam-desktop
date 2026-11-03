@@ -8,4 +8,5 @@
  * 4. Debug/telemetry routes left enabled in production.
  */
 import type { ScanVulnerability } from "./scanner.js";
-export declare function runNextjsProbe(baseUrl: string, html: string, rawHeaders?: Record<string, string>): Promise<ScanVulnerability[]>;
+import { type TargetGuardOptions } from "./targetGuard.js";
+export declare function runNextjsProbe(baseUrl: string, html: string, rawHeaders?: Record<string, string>, guard?: TargetGuardOptions): Promise<ScanVulnerability[]>;

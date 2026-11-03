@@ -16,11 +16,11 @@ const TIMEOUT_MS = 8_000;
 function vuln(partial) {
     return { id: randomUUID(), ...partial };
 }
-async function safeGet(url, options = {}) {
+async function safeGet(url, options = {}, guard = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
-        const res = await validatedFetch(url, { ...options, signal: controller.signal }, { timeoutMs: TIMEOUT_MS });
+        const res = await validatedFetch(url, { ...options, signal: controller.signal }, { timeoutMs: TIMEOUT_MS, attestedHost: guard.attestedHost });
         const body = await res.text().catch(() => "");
         const headers = {};
         res.headers.forEach((v, k) => { headers[k.toLowerCase()] = v; });
@@ -65,12 +65,12 @@ function detectPocketBase(html, baseUrl) {
     // Deduplicate
     return [...new Set(candidates)];
 }
-async function runPocketBaseProbes(html, baseUrl) {
+async function runPocketBaseProbes(html, baseUrl, guard = {}) {
     const findings = [];
     const candidates = detectPocketBase(html, baseUrl);
     for (const pbUrl of candidates) {
         // 1. Admin UI exposure — /_/ is PocketBase's built-in admin dashboard
-        const adminUi = await safeGet(`${pbUrl}/_/`);
+        const adminUi = await safeGet(`${pbUrl}/_/`, {}, guard);
         if (adminUi && adminUi.status === 200 &&
             (adminUi.body.includes("PocketBase") || adminUi.body.includes("pb_admin"))) {
             findings.push(vuln({
@@ -91,7 +91,7 @@ async function runPocketBaseProbes(html, baseUrl) {
         // 2. Unauthenticated collections list — /api/collections
         const colList = await safeGet(`${pbUrl}/api/collections`, {
             headers: { "Accept": "application/json" },
-        });
+        }, guard);
         if (colList &&
             colList.status === 200 &&
             colList.headers["content-type"]?.includes("application/json") &&
@@ -153,12 +153,12 @@ function detectAppwrite(html, baseUrl) {
     }
     return [...new Set(candidates)];
 }
-async function runAppwriteProbes(html, baseUrl) {
+async function runAppwriteProbes(html, baseUrl, guard = {}) {
     const findings = [];
     const candidates = detectAppwrite(html, baseUrl);
     for (const awUrl of candidates) {
         // Appwrite console exposure at /console
-        const console_ = await safeGet(`${awUrl}/console`);
+        const console_ = await safeGet(`${awUrl}/console`, {}, guard);
         if (console_ && console_.status === 200 &&
             (console_.body.includes("Appwrite") || console_.body.includes("appwrite-console"))) {
             findings.push(vuln({
@@ -179,7 +179,7 @@ async function runAppwriteProbes(html, baseUrl) {
         // Appwrite health endpoint — reveals version info
         const health = await safeGet(`${awUrl}/v1/health`, {
             headers: { "Accept": "application/json" },
-        });
+        }, guard);
         if (health && health.status === 200 &&
             health.headers["content-type"]?.includes("application/json") &&
             (health.body.includes('"status"') || health.body.includes('"ping"'))) {
@@ -203,10 +203,10 @@ async function runAppwriteProbes(html, baseUrl) {
 // ─────────────────────────────────────────────────────────────────────────────
 // ORCHESTRATOR
 // ─────────────────────────────────────────────────────────────────────────────
-export async function runBaasProbes(baseUrl, html) {
+export async function runBaasProbes(baseUrl, html, guard = {}) {
     const [pbFindings, awFindings] = await Promise.allSettled([
-        runPocketBaseProbes(html, baseUrl),
-        runAppwriteProbes(html, baseUrl),
+        runPocketBaseProbes(html, baseUrl, guard),
+        runAppwriteProbes(html, baseUrl, guard),
     ]);
     return [
         ...(pbFindings.status === "fulfilled" ? pbFindings.value : []),

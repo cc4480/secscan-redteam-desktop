@@ -14,7 +14,7 @@ const TIMEOUT_MS = 8_000;
 function vuln(partial) {
     return { id: randomUUID(), ...partial };
 }
-async function safePost(url, body) {
+async function safePost(url, body, guard = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
@@ -23,7 +23,7 @@ async function safePost(url, body) {
             signal: controller.signal,
             headers: { "Content-Type": "application/json", "Accept": "application/json" },
             body: JSON.stringify(body),
-        }, { timeoutMs: TIMEOUT_MS });
+        }, { timeoutMs: TIMEOUT_MS, attestedHost: guard.attestedHost });
         const text = await res.text().catch(() => "");
         const headers = {};
         res.headers.forEach((v, k) => { headers[k.toLowerCase()] = v; });
@@ -67,7 +67,7 @@ function hasIntrospectionData(body) {
         return false;
     }
 }
-export async function runGraphqlProbe(baseUrl) {
+export async function runGraphqlProbe(baseUrl, guard = {}) {
     const findings = [];
     let origin;
     try {
@@ -78,7 +78,7 @@ export async function runGraphqlProbe(baseUrl) {
     }
     for (const path of COMMON_GQL_PATHS) {
         const url = `${origin}${path}`;
-        const res = await safePost(url, INTROSPECTION_QUERY);
+        const res = await safePost(url, INTROSPECTION_QUERY, guard);
         if (!res)
             continue;
         // Endpoint must respond with JSON (not HTML 404 or redirect)
@@ -124,7 +124,7 @@ export async function runGraphqlProbe(baseUrl) {
         }
         else {
             // GraphQL is running but introspection is off — check for field suggestions leaking info
-            const probe = await safePost(url, { query: "{ __typename nonExistentField }" });
+            const probe = await safePost(url, { query: "{ __typename nonExistentField }" }, guard);
             if (probe &&
                 isGraphQLResponse(probe.body) &&
                 probe.body.includes("Did you mean")) {

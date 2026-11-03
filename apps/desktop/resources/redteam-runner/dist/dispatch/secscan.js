@@ -26,7 +26,7 @@
 import { BATTERY_CATEGORIES } from '../battery.js';
 import { isTargetId } from '../targets.js';
 import { techniqueAllowed } from '../gate.js';
-import { redactPii } from '../safety/index.js';
+import { redactPii, attestedHostAllowed } from '../safety/index.js';
 import { noteCategoryCoverage } from './prelude.js';
 import { syncLiveFindingsToState, writeFindingToRegistry } from './verdicts.js';
 import { runScan } from '#secscan/scanner.js';
@@ -84,7 +84,7 @@ export async function handleSecscanTools(ctx, _role, _phase, call, args) {
     noteCategoryCoverage(ctx, category, targetProfile);
     let scan;
     try {
-        scan = await runScan(url, depth === 'deep' ? 'deep' : 'basic');
+        scan = await runScan(url, depth === 'deep' ? 'deep' : 'basic', undefined, { attestedHost: (host) => attestedHostAllowed(ctx, host) });
     }
     catch (err) {
         return { result: `secscan_exec failed: ${err.message}`, attackId, target: url, ok: false };

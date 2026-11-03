@@ -85,7 +85,7 @@ export function extractInternalLinks(html, baseUrl) {
     // Return as full URLs (high-value path probing is handled separately in crawlAndCheck)
     return [...seen].map((path) => `${base.origin}${path}`);
 }
-async function fetchPage(url, timeoutMs) {
+async function fetchPage(url, timeoutMs, guard = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -96,7 +96,7 @@ async function fetchPage(url, timeoutMs) {
                 "User-Agent": "Mozilla/5.0 (compatible; VibeScan-Security-Bot/1.0; +https://vibescan.app/bot)",
                 "Accept": "text/html,application/xhtml+xml,*/*",
             },
-        }, { timeoutMs });
+        }, { timeoutMs, attestedHost: guard.attestedHost });
         const headers = {};
         res.headers.forEach((v, k) => { headers[k.toLowerCase()] = v; });
         const body = await res.text().catch(() => "");
@@ -116,14 +116,14 @@ async function fetchPage(url, timeoutMs) {
     }
 }
 // Light probe — fetches a URL and returns status, headers, body, and final URL after redirects
-async function probeUrl(url, timeoutMs) {
+async function probeUrl(url, timeoutMs, guard = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
         const res = await validatedFetch(url, {
             signal: controller.signal,
             headers: { "User-Agent": "Mozilla/5.0 (compatible; VibeScan-Security-Bot/1.0)" },
-        }, { timeoutMs });
+        }, { timeoutMs, attestedHost: guard.attestedHost });
         const headers = {};
         res.headers.forEach((v, k) => { headers[k.toLowerCase()] = v; });
         const body = await res.text().catch(() => "");
@@ -155,7 +155,7 @@ import { PATH_PROBES } from "./crawler-data.js";
  * E.g. for page "/api/v1/users", probes are run under "/api/v1/".
  * timeoutMs caps each individual probe request to respect the overall crawl budget.
  */
-async function probePathSensitiveFiles(pageUrl, origin, expectedHostname, timeoutMs) {
+async function probePathSensitiveFiles(pageUrl, origin, expectedHostname, timeoutMs, guard = {}) {
     let pathname;
     try {
         pathname = new URL(pageUrl).pathname;
@@ -172,7 +172,7 @@ async function probePathSensitiveFiles(pageUrl, origin, expectedHostname, timeou
     const findings = [];
     await Promise.allSettled(PATH_PROBES.map(async (probe) => {
         const probeUrl = `${origin}${dirPrefix}${probe.suffix.replace(/^\//, "")}`;
-        const result = await probeUrlFn(probeUrl, timeoutMs);
+        const result = await probeUrlFn(probeUrl, timeoutMs, guard);
         if (!result || result.status !== 200)
             return;
         // Ensure we didn't get redirected off-domain (catch-all login pages, etc.)
@@ -375,7 +375,7 @@ function buildHeaderGapVulns(rootSnapshot, gapMap, probedSet) {
     }
     return results;
 }
-export async function crawlAndCheck(rootUrl, rootHtml, rootHeaders, maxPages) {
+export async function crawlAndCheck(rootUrl, rootHtml, rootHeaders, maxPages, guard = {}) {
     let origin;
     let expectedHostname;
     try {
@@ -447,7 +447,7 @@ export async function crawlAndCheck(rootUrl, rootHtml, rootHeaders, maxPages) {
             return null;
         // Cap per-fetch timeout to whatever budget remains (hard deadline enforcement)
         const fetchTimeout = Math.min(PAGE_TIMEOUT_MS, remaining);
-        const page = await fetchPage(url, fetchTimeout);
+        const page = await fetchPage(url, fetchTimeout, guard);
         if (!page || page.status === 0 || page.status >= 400)
             return page?.status ?? null;
         // Verify we didn't get redirected off-domain (catch-all login redirects, etc.)
@@ -476,7 +476,7 @@ export async function crawlAndCheck(rootUrl, rootHtml, rootHeaders, maxPages) {
         const probeRemaining = crawlDeadline - Date.now();
         if (probeRemaining >= MIN_BUDGET_MS) {
             const probeTimeout = Math.min(PAGE_TIMEOUT_MS, probeRemaining);
-            const pathFindings = await probePathSensitiveFiles(url, origin, expectedHostname, probeTimeout);
+            const pathFindings = await probePathSensitiveFiles(url, origin, expectedHostname, probeTimeout, guard);
             perPageFindings.push(...pathFindings);
         }
         return page.status;

@@ -27,3 +27,4 @@ export { assertDistFresh, distIsFresh, findWorkspaceRoot, hashSrcDir } from './d
 export type { FreshnessResult } from './distfresh.js';
 export { ScopeGuard, scopeGuardFor, HostSet, classifyScopeEntry, extractTargets, commandUsesNetworkTool, stripSubstitutions, parseIp, parseIPv4, parseIPv6, parseNetwork, LOCAL_HOSTS, NETWORK_TOOLS, NEVER_FILE_EXT_TLDS, } from './scope-guard.js';
 export type { HostMembership, ScopeVerdict, ScopeViolation, ScopeGuardSets } from './scope-guard.js';
+export { attestedHostAllowed } from './attested-host.js';

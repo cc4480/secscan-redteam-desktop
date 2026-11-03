@@ -31,6 +31,7 @@
  * as validatedFetch, and no new egress destination.
  */
 import tls from 'node:tls';
+import { type TargetGuardOptions } from './targetGuard.js';
 import type { ScanVulnerability } from './scanner.js';
 /** Legacy protocol versions whose acceptance the probe tests explicitly. */
 export type LegacyTlsVersion = 'TLSv1' | 'TLSv1.1';
@@ -100,6 +101,8 @@ export interface TlsProbeOptions {
     defaultTimeoutMs?: number;
     /** Per-attempt timeout for the pinned legacy handshakes. */
     legacyTimeoutMs?: number;
+    /** The verified engagement record's per-host verdict (targetGuard allowance). */
+    attestedHost?: TargetGuardOptions['attestedHost'];
 }
 /**
  * Probe one host:port directly. Performs NO target-guard validation —

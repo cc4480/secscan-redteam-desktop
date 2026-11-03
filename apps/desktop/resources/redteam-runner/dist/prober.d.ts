@@ -14,9 +14,10 @@
  * Non-destructive by construction: single requests, never floods; payload
  * discipline lives in the exploiter prompt (no writes/deletes, no exhaustion).
  */
-import { allHostsPrivateOrLoopback, isPrivateOrLoopbackHost } from './prober-address.js';
+import { allHostsPrivateOrLoopback, isPrivateOrLoopbackHost, validateProbeTarget } from './prober-address.js';
 import { type DnsResolver } from './prober-net.js';
-export { allHostsPrivateOrLoopback, isPrivateOrLoopbackHost };
+export { allHostsPrivateOrLoopback, isPrivateOrLoopbackHost, validateProbeTarget };
+export type { ValidateProbeTargetOptions } from './prober-address.js';
 export interface ProbeRequest {
     method: string;
     url: string;
@@ -54,24 +55,6 @@ export interface ProbeBurstResult {
     maxMs: number;
     note: string;
 }
-export interface ValidateProbeTargetOptions {
-    /**
-     * LOCAL SANDBOX MODE ONLY. When true, a private/loopback host that is also
-     * an exact in-scope host is allowed. This never widens the scope check —
-     * it only lifts the private-IP rejection for a host you explicitly put in
-     * the ROE. Never set this for an engagement against a real domain: it has
-     * no effect there (the host still has to resolve as private/loopback to
-     * qualify), but it should never be on by default or implied by anything
-     * other than an explicit, separate opt-in flag.
-     */
-    allowPrivateHosts?: boolean;
-}
-export declare function validateProbeTarget(url: string, scopeHosts: string[], opts?: ValidateProbeTargetOptions): {
-    ok: true;
-} | {
-    ok: false;
-    reason: string;
-};
 export interface ProberOptions {
     scopeHosts: string[];
     timeoutMs?: number;
@@ -79,6 +62,8 @@ export interface ProberOptions {
     minDelayMs?: number;
     /** LOCAL SANDBOX MODE ONLY — see ValidateProbeTargetOptions. Default false. */
     allowPrivateHosts?: boolean;
+    /** The verified engagement record's per-host verdict — see ValidateProbeTargetOptions. */
+    attestedHost?: (host: string) => boolean;
     /** Injectable DNS resolver (test seam); production uses the system resolver. */
     resolver?: DnsResolver;
 }
@@ -93,9 +78,12 @@ export declare class WebProber implements ProberLike {
     private readonly timeoutMs;
     private readonly minDelayMs;
     private readonly allowPrivateHosts;
+    private readonly attestedHost?;
     private readonly resolver?;
     private lastProbeAt;
     constructor(opts: ProberOptions);
+    /** Private-resolution allowance for one host: the sandbox flag, or the verified record's verdict for that host. */
+    private allowPrivateFor;
     /**
      * Resolve the URL's hostname, validate every address (prober-net.ts), and
      * return the set the connection is pinned to. Throws `[prober] refused:`

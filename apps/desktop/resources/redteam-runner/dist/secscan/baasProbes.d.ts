@@ -11,4 +11,5 @@
  *   Checks: console exposure, unauthenticated project enumeration.
  */
 import type { ScanVulnerability } from "./scanner.js";
-export declare function runBaasProbes(baseUrl: string, html: string): Promise<ScanVulnerability[]>;
+import { type TargetGuardOptions } from "./targetGuard.js";
+export declare function runBaasProbes(baseUrl: string, html: string, guard?: TargetGuardOptions): Promise<ScanVulnerability[]>;

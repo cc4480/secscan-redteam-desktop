@@ -10,6 +10,7 @@
  * DNS security checks via dnsChecks.ts, and JavaScript secret scanning
  * via jsScanner.ts — all run concurrently with stage 2.
  */
+import { type TargetGuardOptions } from './targetGuard.js';
 export interface ScanVulnerability {
     id: string;
     name: string;
@@ -44,6 +45,6 @@ export interface ScanResult {
     probedNotFound: string[];
 }
 export type StepCallback = (key: string, status: 'running' | 'done' | 'error', findings?: number) => void;
-export declare function runScan(targetUrl: string, tier: string, onStep?: StepCallback): Promise<ScanResult>;
+export declare function runScan(targetUrl: string, tier: string, onStep?: StepCallback, guard?: TargetGuardOptions): Promise<ScanResult>;
 export declare function computeRiskScore(vulns: ScanVulnerability[]): number;
 export declare function computeGrade(riskScore: number): string;

@@ -16,14 +16,14 @@ const TIMEOUT_MS = 8_000;
 function vuln(partial) {
     return { id: randomUUID(), ...partial };
 }
-async function safeGet(url) {
+async function safeGet(url, guard = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
         const res = await validatedFetch(url, {
             signal: controller.signal,
             headers: { "Accept": "application/xml,application/json,*/*" },
-        }, { timeoutMs: TIMEOUT_MS });
+        }, { timeoutMs: TIMEOUT_MS, attestedHost: guard.attestedHost });
         const body = await res.text().catch(() => "");
         const headers = {};
         res.headers.forEach((v, k) => { headers[k.toLowerCase()] = v; });
@@ -140,13 +140,13 @@ const FIX_BY_PROVIDER = {
     azure: "Set the container's public access level to 'Private' in Azure Portal. Remove any Shared Access Signatures (SAS) with public list permissions.",
     r2: "In Cloudflare R2 settings, disable the public development URL and use a custom domain with Worker-based auth instead.",
 };
-export async function runStorageProbe(_baseUrl, html) {
+export async function runStorageProbe(_baseUrl, html, guard = {}) {
     const findings = [];
     const buckets = extractBuckets(html);
     if (buckets.length === 0)
         return [];
     const results = await Promise.allSettled(buckets.map(async (bucket) => {
-        const res = await safeGet(bucket.listUrl);
+        const res = await safeGet(bucket.listUrl, guard);
         if (!res)
             return null;
         if (res.status !== 200)

@@ -34,11 +34,11 @@ const PROBE_ENDPOINTS = [
 ];
 const PROBE_PARAMS = ["file", "path", "doc", "page", "name"];
 // ─── HTTP helper ──────────────────────────────────────────────────────────────
-async function safeGet(url) {
+async function safeGet(url, guard = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
-        const res = await validatedFetch(url, { signal: controller.signal }, { timeoutMs: TIMEOUT_MS });
+        const res = await validatedFetch(url, { signal: controller.signal }, { timeoutMs: TIMEOUT_MS, attestedHost: guard.attestedHost });
         if (!res.ok && res.status !== 200)
             return null;
         const body = await res.text().catch(() => "");
@@ -52,7 +52,7 @@ async function safeGet(url) {
     }
 }
 // ─── Main export ──────────────────────────────────────────────────────────────
-export async function checkPathTraversal(targetUrl, html) {
+export async function checkPathTraversal(targetUrl, html, guard = {}) {
     let origin;
     let targetPath;
     try {
@@ -111,7 +111,7 @@ export async function checkPathTraversal(targetUrl, html) {
         for (const payload of PATH_TRAVERSAL_TEMPLATES) {
             const testUrl = new URL(`${origin}${path}`);
             testUrl.searchParams.set(param, payload);
-            const result = await safeGet(testUrl.toString());
+            const result = await safeGet(testUrl.toString(), guard);
             if (!result)
                 continue;
             const os = classifyTraversalBody(result.body);

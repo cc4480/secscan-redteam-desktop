@@ -21,4 +21,34 @@ export function isPrivateOrLoopbackHost(host) {
 export function allHostsPrivateOrLoopback(hosts) {
     return hosts.length > 0 && hosts.every(h => isPrivateOrLoopbackHost(h));
 }
+/**
+ * The prober's pre-flight target validation: scheme, link-local,
+ * private/loopback, and exact scope membership, in that order — every
+ * refusal lands before any packet is sent.
+ */
+export function validateProbeTarget(url, scopeHosts, opts = {}) {
+    let u;
+    try {
+        u = new URL(url);
+    }
+    catch {
+        return { ok: false, reason: `unparseable URL: ${url}` };
+    }
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+        return { ok: false, reason: `scheme not allowed: ${u.protocol}` };
+    }
+    const host = u.hostname.toLowerCase();
+    // Link-local literals (cloud metadata 169.254.169.254, fe80::/10) are
+    // refused unconditionally — no allowance must ever open metadata.
+    if (/^169\.254\.|^\[?fe[89ab][0-9a-f]:/i.test(host)) {
+        return { ok: false, reason: `link-local host rejected (never allowed, incl. sandbox): ${host}` };
+    }
+    if (isPrivateOrLoopbackHost(host) && !opts.allowPrivateHosts && !opts.attestedHost?.(host)) {
+        return { ok: false, reason: `private/loopback host rejected: ${host}` };
+    }
+    if (!scopeHosts.includes(host)) {
+        return { ok: false, reason: `out of scope: ${host} (scope: ${scopeHosts.join(', ')})` };
+    }
+    return { ok: true };
+}
 //# sourceMappingURL=prober-address.js.map

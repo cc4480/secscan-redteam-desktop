@@ -25,7 +25,7 @@ import { validatedFetch } from './targetGuard.js';
  * Returns true to SUPPRESS the HSTS finding; false to allow it (at MEDIUM).
  * Always fails-safe: any network error returns false so the check still runs.
  */
-async function isHstsPreloaded(hostname) {
+async function isHstsPreloaded(hostname, guard = {}) {
     const apex = hostname.replace(/^www\./, '');
     // ── hstspreload.org tracking API ─────────────────────────────────────────
     // This API only tracks domains submitted via their form. Domains natively
@@ -55,7 +55,7 @@ async function isHstsPreloaded(hostname) {
     try {
         const ctrl2 = new AbortController();
         const timer2 = setTimeout(() => ctrl2.abort(), 5_000);
-        const httpRes = await validatedFetch(`http://${apex}/`, { signal: ctrl2.signal }, { timeoutMs: 5_000 });
+        const httpRes = await validatedFetch(`http://${apex}/`, { signal: ctrl2.signal }, { timeoutMs: 5_000, attestedHost: guard.attestedHost });
         clearTimeout(timer2);
         if (httpRes.url.startsWith('https://'))
             return true;
@@ -190,7 +190,7 @@ function analyzeCookies(setCookieHeader) {
     }
     return findings;
 }
-export async function runScan(targetUrl, tier, onStep) {
+export async function runScan(targetUrl, tier, onStep, guard = {}) {
     const startedAt = Date.now();
     const controller = new AbortController();
     const timeoutHandle = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -205,7 +205,7 @@ export async function runScan(targetUrl, tier, onStep) {
                 'Accept': 'text/html,application/xhtml+xml,*/*',
                 'Accept-Language': 'en-US,en;q=0.9',
             },
-        });
+        }, { attestedHost: guard.attestedHost });
         finalUrl = response.url || targetUrl;
         try {
             html = await response.text();
@@ -271,7 +271,7 @@ export async function runScan(targetUrl, tier, onStep) {
     // leaves tlsGrade null and adds no findings: unmeasured is reported as
     // unmeasured, never as a letter or a clean bill.
     if (isHttps) {
-        const observation = await probeTargetTls(finalUrl).catch(() => null);
+        const observation = await probeTargetTls(finalUrl, { attestedHost: guard.attestedHost }).catch(() => null);
         if (observation) {
             tlsGrade = deriveTlsGrade(observation);
             for (const finding of buildTlsFindings(observation, finalUrl)) {
@@ -286,7 +286,7 @@ export async function runScan(targetUrl, tier, onStep) {
         // enforced in browsers before the first request, so the header is optional.
         // This also prevents false positives when the scanner runs behind a
         // TLS-terminating proxy that strips security headers from HTTPS responses.
-        const preloaded = await isHstsPreloaded(new URL(finalUrl).hostname).catch(() => false);
+        const preloaded = await isHstsPreloaded(new URL(finalUrl).hostname, guard).catch(() => false);
         if (!preloaded) {
             // Since we successfully fetched this site over HTTPS, it clearly HAS HTTPS.
             // A missing STS header means browsers won't cache the HTTPS preference, but
@@ -647,9 +647,9 @@ export async function runScan(targetUrl, tier, onStep) {
     };
     // Crawl gets index 0 (fires immediately); remaining probes stagger from there
     onStep?.('crawl', 'running');
-    const crawlPromise = crawlAndCheck(finalUrl, html, rawHeaders, tier === 'deep' ? 20 : 0).then((r) => { onStep?.('crawl', 'done', r.vulnerabilities.length); return r; }, () => { onStep?.('crawl', 'error', 0); return { vulnerabilities: [], pagesVisited: [], probedNotFound: [] }; });
+    const crawlPromise = crawlAndCheck(finalUrl, html, rawHeaders, tier === 'deep' ? 20 : 0, guard).then((r) => { onStep?.('crawl', 'done', r.vulnerabilities.length); return r; }, () => { onStep?.('crawl', 'error', 0); return { vulnerabilities: [], pagesVisited: [], probedNotFound: [] }; });
     const probePromises = [
-        wp('headers', runAllProbes(finalUrl, html)),
+        wp('headers', runAllProbes(finalUrl, html, guard)),
         wp('dns', checkDnsSecurity(finalUrl)),
         wp('cve', checkForKnownVulnerabilities(html, rawHeaders)),
         // Passive JWT analysis — no extra HTTP requests
@@ -661,20 +661,20 @@ export async function runScan(targetUrl, tier, onStep) {
         // Vibe-stack database security — Supabase RLS + Firebase rules (both tiers)
         wp('vibestack', checkVibeStackSecurity(html, finalUrl, tier)),
         // BaaS open-data: PocketBase admin UI / collection exposure, Appwrite console
-        wp('baas', runBaasProbes(finalUrl, html)),
+        wp('baas', runBaasProbes(finalUrl, html, guard)),
         // GraphQL introspection enabled, field suggestion schema leakage
-        wp('graphql', runGraphqlProbe(finalUrl)),
+        wp('graphql', runGraphqlProbe(finalUrl, guard)),
         // Swagger UI / OpenAPI spec / Redoc exposed without auth
-        wp('apidocs', runApiDocsProbe(finalUrl)),
+        wp('apidocs', runApiDocsProbe(finalUrl, guard)),
         // Next.js source maps, build ID, HMR endpoint, NEXT_PUBLIC_ secrets
-        wp('nextjs', runNextjsProbe(finalUrl, html, rawHeaders)),
+        wp('nextjs', runNextjsProbe(finalUrl, html, rawHeaders, guard)),
         // Cloud storage public listing: S3, GCS, Azure Blob, R2
-        wp('storage', runStorageProbe(finalUrl, html)),
+        wp('storage', runStorageProbe(finalUrl, html, guard)),
     ];
     if (tier === 'deep') {
         probePromises.push(wp('jssecrets', scanJavaScriptForSecrets(html, finalUrl)), 
         // Active path traversal probing — multiple HTTP requests
-        wp('traversal', checkPathTraversal(finalUrl, html)));
+        wp('traversal', checkPathTraversal(finalUrl, html, guard)));
     }
     const [crawlResult, ...probeResults] = await Promise.all([
         crawlPromise,

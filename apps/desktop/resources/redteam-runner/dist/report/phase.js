@@ -241,7 +241,7 @@ export async function reportPhase(ctx, reconBrief, exploitSummary, opts = {}) {
         let detailInput;
         let baselineMeta;
         try {
-            recordReportMeta(ctx, gradeFindings(findings));
+            recordReportMeta(ctx, opts.haltedReason || opts.blockedReason ? null : gradeFindings(findings));
             const assembled = buildDetailInput({
                 ctx, findings, bundles: pocBundleMap, totals, cells,
                 findingMeta: buildFindingMeta(pocBundleMap, findings),

@@ -14,38 +14,13 @@
  * Non-destructive by construction: single requests, never floods; payload
  * discipline lives in the exploiter prompt (no writes/deletes, no exhaustion).
  */
-import { allHostsPrivateOrLoopback, isPrivateOrLoopbackHost } from './prober-address.js';
+import { allHostsPrivateOrLoopback, isPrivateOrLoopbackHost, validateProbeTarget, } from './prober-address.js';
 import { pinnedHttpRequest, resolveCheckedAddresses, } from './prober-net.js';
 // Re-exported for callers (gate, sandbox) that import the address policy from this
 // module: moving the implementation must not change their import path.
-export { allHostsPrivateOrLoopback, isPrivateOrLoopbackHost };
+export { allHostsPrivateOrLoopback, isPrivateOrLoopbackHost, validateProbeTarget };
 const BURST_SIZE = 8;
 const MAX_BODY_BYTES = 64 * 1024;
-export function validateProbeTarget(url, scopeHosts, opts = {}) {
-    let u;
-    try {
-        u = new URL(url);
-    }
-    catch {
-        return { ok: false, reason: `unparseable URL: ${url}` };
-    }
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') {
-        return { ok: false, reason: `scheme not allowed: ${u.protocol}` };
-    }
-    const host = u.hostname.toLowerCase();
-    // Link-local literals (cloud metadata 169.254.169.254, fe80::/10) are
-    // refused unconditionally — allowPrivateHosts must never open metadata.
-    if (/^169\.254\.|^\[?fe[89ab][0-9a-f]:/i.test(host)) {
-        return { ok: false, reason: `link-local host rejected (never allowed, incl. sandbox): ${host}` };
-    }
-    if (isPrivateOrLoopbackHost(host) && !opts.allowPrivateHosts) {
-        return { ok: false, reason: `private/loopback host rejected: ${host}` };
-    }
-    if (!scopeHosts.includes(host)) {
-        return { ok: false, reason: `out of scope: ${host} (scope: ${scopeHosts.join(', ')})` };
-    }
-    return { ok: true };
-}
 function detectOpsecSignal(status, headers, body) {
     if (status === 429)
         return 'rate-limited (429)';
@@ -64,6 +39,7 @@ export class WebProber {
     timeoutMs;
     minDelayMs;
     allowPrivateHosts;
+    attestedHost;
     resolver;
     lastProbeAt = 0;
     constructor(opts) {
@@ -71,7 +47,12 @@ export class WebProber {
         this.timeoutMs = opts.timeoutMs ?? 20_000;
         this.minDelayMs = opts.minDelayMs ?? 800;
         this.allowPrivateHosts = opts.allowPrivateHosts ?? false;
+        this.attestedHost = opts.attestedHost;
         this.resolver = opts.resolver;
+    }
+    /** Private-resolution allowance for one host: the sandbox flag, or the verified record's verdict for that host. */
+    allowPrivateFor(host) {
+        return this.allowPrivateHosts || (this.attestedHost?.(host) ?? false);
     }
     /**
      * Resolve the URL's hostname, validate every address (prober-net.ts), and
@@ -81,7 +62,7 @@ export class WebProber {
     async resolveFor(url) {
         const host = new URL(url).hostname;
         const checked = await resolveCheckedAddresses(host, {
-            allowPrivateHosts: this.allowPrivateHosts,
+            allowPrivateHosts: this.allowPrivateFor(host),
             resolver: this.resolver,
         });
         if (!checked.ok)
@@ -107,14 +88,14 @@ export class WebProber {
             throw new Error(`[prober] refused: redirect to non-http(s) scheme ${target.protocol}`);
         }
         const checked = await resolveCheckedAddresses(target.hostname, {
-            allowPrivateHosts: this.allowPrivateHosts,
+            allowPrivateHosts: this.allowPrivateFor(target.hostname),
             resolver: this.resolver,
         });
         if (!checked.ok)
             throw new Error(`[prober] refused: redirect target ${target.hostname} rejected: ${checked.reason}`);
     }
     async probe(req) {
-        const v = validateProbeTarget(req.url, this.scopeHosts, { allowPrivateHosts: this.allowPrivateHosts });
+        const v = validateProbeTarget(req.url, this.scopeHosts, { allowPrivateHosts: this.allowPrivateHosts, attestedHost: this.attestedHost });
         if (!v.ok)
             throw new Error(`[prober] refused: ${v.reason}`);
         if (req.body && Buffer.byteLength(req.body, 'utf8') > MAX_BODY_BYTES) {
@@ -165,7 +146,7 @@ export class WebProber {
         if (method !== 'GET' && method !== 'HEAD') {
             throw new Error(`[prober] refused: burst probe only allows GET/HEAD (idempotent), got ${method}`);
         }
-        const v = validateProbeTarget(req.url, this.scopeHosts, { allowPrivateHosts: this.allowPrivateHosts });
+        const v = validateProbeTarget(req.url, this.scopeHosts, { allowPrivateHosts: this.allowPrivateHosts, attestedHost: this.attestedHost });
         if (!v.ok)
             throw new Error(`[prober] refused: ${v.reason}`);
         const wait = this.minDelayMs - (Date.now() - this.lastProbeAt);
