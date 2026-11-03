@@ -1,8 +1,10 @@
 /**
  * Human-facing RedTeam slash commands for the SecScan RedTeam profile:
- * `/scan`, `/status`, `/report`, `/stop`, and `/use`, registered with the
- * harness command registry so the composer's existing `/` menu, keyboard
- * flow, and lifecycle logging carry them with no new client surface.
+ * `/scan`, `/status`, `/report`, `/stop`, and `/use`, plus the sibling
+ * engagement commands `/pcscan`, `/deepscan`, `/nmap`, `/nuclei`, and
+ * `/metasploit`, registered with the harness command registry so the
+ * composer's existing `/` menu, keyboard flow, and lifecycle logging
+ * carry them with no new client surface.
  * @module @secscan/redteam-command
  */
 

@@ -39,6 +39,7 @@ import { verifyDeliverables } from "../report/deliverables.js";
 import { regenerateTool, reportTool } from "./report-tools.js";
 import { currentSeatSpeaker, findingSpeakers } from "./speaker.js";
 import type { UiLaunchRequest } from "./types.js";
+import { findSiblingCommand } from "../workflows/commands.js";
 
 const str = (d: string): Record<string, unknown> => ({ type: "string", description: d });
 const req = (d: string): Record<string, unknown> => ({ type: "string", description: d });
@@ -86,7 +87,7 @@ export function targetHost(cleaned: string): string | null {
 /**
  * Build the launch request an engagement_launch call hands to the launch
  * handler: cleaned target, red mode unless black was asked for, scope
- * defaulted to the target's host, and a named operator on the record.
+ * defaulted to the target's host, and a named operator on the record; a named sibling command stamps its registry tier/targets/phases (S2-H2).
  *
  * The operator name matters beyond bookkeeping: authorizePhase attests
  * ownership from the engagement record (operatorName ?? client), so a chat
@@ -113,6 +114,10 @@ export function buildLaunchBody(a: Record<string, unknown>): { body: UiLaunchReq
   }
 
   const body: UiLaunchRequest = { target, mode: a["mode"] === "black" ? "black" : "red", objective, scope };
+  // S2-H2: a sibling command names itself in `command`; stamp the body from its registry spec — an unknown name stamps nothing. Explicit tier/targets arguments override.
+  const sibling = typeof a["command"] === "string" ? findSiblingCommand(a["command"]) : undefined;
+  if (sibling) Object.assign(body, { command: sibling.name, tier: sibling.tier, targets: [...sibling.targets], phases: [...sibling.phases] });
+  if (Array.isArray(a["targets"]) && a["targets"].length > 0 && a["targets"].every((s) => typeof s === "string" && s.trim())) body.targets = (a["targets"] as string[]).map((s) => s.trim());
   if (Array.isArray(a["outOfScope"]) && a["outOfScope"].length > 0 && a["outOfScope"].every((s) => typeof s === "string" && s.trim())) {
     body.outOfScope = (a["outOfScope"] as string[]).map((s) => s.trim());
   }
@@ -153,6 +158,8 @@ const launchTool: ToolDef = {
     properties: {
       target: req("Target as the user gave it: a URL or a bare host"),
       objective: req("The user's ask, in their words"),
+      command: str("The sibling operator command being fulfilled (nmap, deepscan, nuclei, metasploit — pcscan uses engagement_launch_local). Stamps the launch with that command's registry tier, target families, and phases; omit for a plain /scan."),
+      targets: { type: "array", items: { type: "string" }, description: "Target families for the engagement (webapp, windows, linux, cloud, api, ai, secscan, seclayer). Default: the named command's families." },
       mode: { type: "string", enum: ["red", "black"], description: "red = full knowledge (default), black = no prior knowledge" },
       operatorName: str("The user asking, by name — the operator the engagement record attests"),
       client: str("Client name for the report; also attests when no operator is named"),
@@ -186,7 +193,8 @@ const launchTool: ToolDef = {
         scope: built.body.scope,
         summary:
           `Engagement ${id} launched against ${built.body.target} (mode ${built.body.mode}). It runs in this app — ` +
-          "authorize, recon, exploit, report. Poll engagement_status with this id and narrate each phase change in the thread; " +
+          (built.body.phases ? `phases ${built.body.phases.join(", ")}${built.body.command ? ` per the /${built.body.command} command` : ""}. ` : "authorize, recon, exploit, report. ") +
+          "Poll engagement_status with this id and narrate each phase change in the thread; " +
           "when it completes, call engagement_report and deliver the report here.",
       },
     };

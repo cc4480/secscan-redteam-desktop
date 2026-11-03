@@ -19,8 +19,10 @@ import { createRedteamCommandDefinitions } from '../src/commands.js'
 import {
   catalogSample,
   parseUseInput,
+  pcscanDirective,
   reportDirective,
   scanDirective,
+  siblingDirective,
   statusDirective,
   useDirective,
 } from '../src/directive.js'
@@ -161,12 +163,81 @@ async function mount(): Promise<{ ctx: Context; recorded: RecordedAgent }> {
   return { ctx, recorded }
 }
 
-test('composition: the registry lists exactly the five RedTeam commands', async () => {
+test('composition: the registry lists the five RedTeam commands plus the five siblings', async () => {
   const { ctx, recorded } = await mount()
   const names = ctx.commands.list(recorded.agent).map(d => d.name)
-  assert.deepEqual(names, ['report', 'scan', 'status', 'stop', 'use'])
+  assert.deepEqual(names, ['deepscan', 'metasploit', 'nmap', 'nuclei', 'pcscan', 'report', 'scan', 'status', 'stop', 'use'])
   const scan = ctx.commands.list(recorded.agent).find(d => d.name === 'scan')
   assert.equal(scan?.input?.hint, '<target>')
+})
+
+test('sibling directive texts name the command and carry its registry semantics', () => {
+  assert.equal(
+    siblingDirective('nmap', 'https://example.com', { tier: 0, phases: ['recon', 'report'], targets: ['windows', 'linux'], requiresApproval: false }),
+    'OPERATOR DIRECTIVE (/nmap): launch a new engagement now against https://example.com using your engagement_launch tool, with the target exactly as the operator gave it, command "nmap", tier 0, targets windows,linux, phases recon+report. Report the engagement id and the first status back in this thread. Do not substitute a service scan for the engagement.',
+  )
+  assert.ok(
+    siblingDirective('metasploit', 'example.com', { tier: 2, phases: ['recon', 'exploit', 'report'], targets: ['windows', 'linux'], requiresApproval: true })
+      .includes('This command requires operator approval: confirm the operator has approved this run before launching.'),
+  )
+  assert.ok(pcscanDirective().startsWith('OPERATOR DIRECTIVE (/pcscan):'))
+  assert.ok(pcscanDirective().includes('engagement_launch_local'))
+})
+
+test('/nmap queues a directive that carries tier 0 and the recon+report phases', async () => {
+  const definitions = createRedteamCommandDefinitions(fakeCtx(LEAD_CATALOG))
+  const nmap = definitions.find(d => d.name === 'nmap')
+  assert.ok(nmap)
+  const recorded = recordedAgent()
+  const result = await nmap.handler(invocation(recorded.agent, ' https://example.com'))
+  assert.equal(result.kind, 'success')
+  assert.equal(recorded.followups.length, 1)
+  assert.ok(recorded.followups[0]?.includes('OPERATOR DIRECTIVE (/nmap)'))
+  assert.ok(recorded.followups[0]?.includes('command "nmap", tier 0'))
+  assert.ok(recorded.followups[0]?.includes('phases recon+report'))
+  assert.ok(recorded.followups[0]?.includes('engagement_launch'))
+})
+
+test('/nmap without a target is a usage error and sends nothing', async () => {
+  const definitions = createRedteamCommandDefinitions(fakeCtx(LEAD_CATALOG))
+  const nmap = definitions.find(d => d.name === 'nmap')
+  assert.ok(nmap)
+  const recorded = recordedAgent()
+  const result = await nmap.handler(invocation(recorded.agent, ''))
+  assert.equal(result.kind, 'error')
+  assert.ok(result.kind === 'error' && result.text.includes('Usage: /nmap'))
+  assert.equal(recorded.followups.length, 0)
+})
+
+test('/metasploit queues a tier-2 directive that names the approval requirement', async () => {
+  const definitions = createRedteamCommandDefinitions(fakeCtx(LEAD_CATALOG))
+  const msf = definitions.find(d => d.name === 'metasploit')
+  assert.ok(msf)
+  const recorded = recordedAgent()
+  const result = await msf.handler(invocation(recorded.agent, ' example.com'))
+  assert.equal(result.kind, 'success')
+  assert.ok(recorded.followups[0]?.includes('OPERATOR DIRECTIVE (/metasploit)'))
+  assert.ok(recorded.followups[0]?.includes('tier 2'))
+  assert.ok(recorded.followups[0]?.includes('requires operator approval'))
+})
+
+test('/pcscan queues the local-launch directive and needs no target', async () => {
+  const definitions = createRedteamCommandDefinitions(fakeCtx(LEAD_CATALOG))
+  const pcscan = definitions.find(d => d.name === 'pcscan')
+  assert.ok(pcscan)
+  const recorded = recordedAgent()
+  const result = await pcscan.handler(invocation(recorded.agent, ''))
+  assert.equal(result.kind, 'success')
+  assert.ok(recorded.followups[0]?.includes('OPERATOR DIRECTIVE (/pcscan)'))
+  assert.ok(recorded.followups[0]?.includes('engagement_launch_local'))
+})
+
+test('composition: /nmap executes through the registry', async () => {
+  const { ctx, recorded } = await mount()
+  const execution = await ctx.commands.execute(recorded.agent, '/nmap https://example.com', [], new AbortController().signal)
+  assert.equal(execution?.result.kind, 'success')
+  assert.equal(recorded.followups.length, 1)
+  assert.ok(recorded.followups[0]?.includes('OPERATOR DIRECTIVE (/nmap)'))
 })
 
 test('composition: /scan executes through the registry and logs its lifecycle', async () => {

@@ -12,6 +12,15 @@ log for every execution. No new client surface is added.
   routes the session's Lead through its `engagement_launch` tool with the
   target exactly as typed: the same engagement-launch flow a typed request
   takes, made deterministic at the command seam.
+- `/deepscan <target>`, `/nmap <target>`, `/nuclei <target>`,
+  `/metasploit <target>` — the sibling engagement commands: each queues
+  its own directive naming the command and carrying its registry tier,
+  target families, and phase list as `engagement_launch` arguments, so
+  the run is the bounded one the registry defines (for example `/nmap`
+  is tier 0 over recon+report and runs no exploit phase; `/metasploit`
+  is tier 2 and approval-gated). `/pcscan` takes no target: its
+  directive routes through `engagement_launch_local` for a local host
+  assessment of this machine.
 - `/status` — queues the directive that routes the Lead through
   `engagement_status` and narrates the snapshot in the thread.
 - `/report` — queues the directive that routes the Lead through
@@ -37,13 +46,13 @@ switch it, and the sidebar's New Chat action already owns it.
 
 ## Model Experience
 
-Each of `/scan`, `/status`, `/report` adds exactly one user message (the
-operator directive in `src/directive.ts`, verbatim) as its own follow-up
-turn; `/use` adds one steering user message consumed at the next step
-boundary. The directive text is fixed apart from the operator's own
-target, tool name, and instruction, so the model-visible content is
-reconstructable from the session log word for word. `/stop` adds no model
-input.
+Each of `/scan`, the sibling commands, `/status`, `/report` adds exactly
+one user message (the operator directive in `src/directive.ts`, verbatim)
+as its own follow-up turn; `/use` adds one steering user message consumed
+at the next step boundary. The directive text is fixed apart from the
+operator's own target, tool name, and instruction, so the model-visible
+content is reconstructable from the session log word for word. `/stop`
+adds no model input.
 
 #### KV Cache effect
 

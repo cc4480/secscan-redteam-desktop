@@ -3,7 +3,7 @@
  * paths. Every API endpoint calls the same functions the CLI calls.
  */
 
-import type { EngagementStatus } from "../types.js";
+import type { EngagementPhase, EngagementStatus } from "../types.js";
 
 /** Validated launch request body for POST /api/engagements. */
 export interface UiLaunchRequest {
@@ -23,6 +23,15 @@ export interface UiLaunchRequest {
   /** Cap on agent actions; default 60. Raise for full-battery work. */
   maxActions?: number;
   targets?: string[];
+  /** S2-H2: the sibling operator command that launched this engagement
+   * (canonical name without the slash, e.g. "nmap"), resolved against
+   * the workflows registry by the launch-body builder. Recorded for the
+   * launch summary; the semantics it names ride in tier/targets/phases. */
+  command?: string;
+  /** S2-H2: the launching command's phase list, carried into
+   * EngagementInput.phases (a list without "exploit" skips the exploit
+   * phase). Absent for a plain /scan launch. */
+  phases?: EngagementPhase[];
   environment?: "staging" | "production";
   confirmProduction?: boolean;
   tier?: 0 | 1 | 2;
