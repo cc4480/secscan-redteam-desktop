@@ -46,6 +46,14 @@ export const LLAMA_PREFERRED_PORT = 0
 /** Deadline for `llama-server` to answer its first readiness probe; loading a 27B from disk is slow. */
 export const LLAMA_READY_TIMEOUT_MS = 120_000
 
+/**
+ * How long the captured child output may stop advancing, once the readiness deadline is
+ * reached, before the load counts as stalled. Output that keeps advancing extends the
+ * wait past {@link LLAMA_READY_TIMEOUT_MS} without bound; output that does not advance
+ * for this long ends it, so a wedged child is still bounded.
+ */
+export const LLAMA_READY_STALL_TIMEOUT_MS = 120_000
+
 /** Deadline for the child to exit after each termination signal. */
 export const LLAMA_EXIT_TIMEOUT_MS = 5_000
 
@@ -166,6 +174,8 @@ export interface LlamaServerOptions {
   readonly timeouts?: {
     /** Readiness deadline; defaults to {@link LLAMA_READY_TIMEOUT_MS}. */
     readonly readyMs?: number
+    /** Stall window for captured load output past the readiness deadline; defaults to {@link LLAMA_READY_STALL_TIMEOUT_MS}. */
+    readonly stallMs?: number
     /** Exit deadline per termination signal; defaults to {@link LLAMA_EXIT_TIMEOUT_MS}. */
     readonly exitMs?: number
   }
@@ -573,7 +583,11 @@ export class LlamaServer {
   }
 
   /**
-   * Poll the readiness routes until one answers, the child exits, or the deadline passes.
+   * Poll the readiness routes until one answers, the child exits, or its load stalls.
+   * The readiness deadline is progress-aware: captured child output that keeps advancing
+   * extends the wait past it, because llama.cpp streams its load steps to that output.
+   * The wait ends when the output has not advanced for the stall window past the
+   * deadline, which bounds a live child that will never answer.
    * @throws LlamaServerStartupError carrying the child's last output, because an operator
    * faces a dialog rather than a log.
    */
@@ -587,8 +601,12 @@ export class LlamaServer {
     const fetcher = this.options.fetch ?? fetchLlamaProbe
     const clock = this.options.clock ?? systemClock
     const ceiling = this.options.timeouts?.readyMs ?? LLAMA_READY_TIMEOUT_MS
-    const deadline = clock.now() + ceiling
+    const stallMs = this.options.timeouts?.stallMs ?? LLAMA_READY_STALL_TIMEOUT_MS
+    const startedAt = clock.now()
+    const deadline = startedAt + ceiling
     const endpoint = `http://${LLAMA_SERVER_LOOPBACK}:${String(port)}`
+    let lastProgressAt = startedAt
+    let progressSnapshot = this.capturedOutput()
     for (;;) {
       this.assertCurrent(generation)
       if (await probeLlamaServer(port, fetcher)) return
@@ -610,16 +628,28 @@ export class LlamaServer {
           + this.diagnosticSuffix(),
         )
       }
-      if (clock.now() >= deadline) {
+      const now = clock.now()
+      const captured = this.capturedOutput()
+      if (captured !== progressSnapshot) {
+        progressSnapshot = captured
+        lastProgressAt = now
+      }
+      if (now >= deadline && now - lastProgressAt >= stallMs) {
         throw this.failFor(
           generation,
           modelId,
-          `desktop llama-server: the local inference server did not become ready on ${endpoint} `
-          + `within ${String(ceiling)} ms${this.diagnosticSuffix()}`,
+          `desktop llama-server: the local inference server load stalled on ${endpoint}: `
+          + `no new output for ${String(now - lastProgressAt)} ms after ${String(now - startedAt)} ms elapsed`
+          + this.diagnosticSuffix(),
         )
       }
       await clock.sleep(READY_POLL_INTERVAL_MS)
     }
+  }
+
+  /** @returns the child's retained output, combined so a change on either stream counts as load progress. */
+  private capturedOutput(): string {
+    return `${this.stderrOutput}\n${this.stdoutOutput}`
   }
 
   /** @throws LlamaServerStartupError when a stop invalidated the start this call belongs to. */
