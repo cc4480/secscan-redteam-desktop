@@ -11,6 +11,9 @@ export interface UiLaunchRequest {
   mode: "red" | "black";
   objective: string;
   scope: string[];
+  /** Out-of-scope hosts/IPs/CIDRs that must never be touched, even when
+   * they fall inside scope (roe.outOfScope; deny beats allow). */
+  outOfScope?: string[];
   client?: string;
   operatorName?: string;
   fullBattery?: boolean;

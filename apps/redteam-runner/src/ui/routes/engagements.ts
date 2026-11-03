@@ -19,12 +19,15 @@ import { engagementDir, generateEngagementId } from "../store.js";
 import type { UiLaunchRequest } from "../types.js";
 import { json, badRequest } from "./http.js";
 
-function toEngagementInput(b: UiLaunchRequest): EngagementInput {
+export function toEngagementInput(b: UiLaunchRequest): EngagementInput {
   if (!b.target || typeof b.target !== "string") throw new Error("target is required");
   if (b.mode !== "red" && b.mode !== "black") throw new Error("mode must be red|black");
   if (!b.objective || typeof b.objective !== "string") throw new Error("objective is required");
   if (!Array.isArray(b.scope) || b.scope.length === 0 || !b.scope.every((s) => typeof s === "string" && s.trim())) {
     throw new Error("scope is required (non-empty array of exact hosts)");
+  }
+  if (b.outOfScope !== undefined && (!Array.isArray(b.outOfScope) || !b.outOfScope.every((s) => typeof s === "string" && s.trim()))) {
+    throw new Error("outOfScope must be an array of exact hosts");
   }
   let targets: TargetId[] | undefined;
   if (b.targets && b.targets.length > 0) {
@@ -47,6 +50,7 @@ function toEngagementInput(b: UiLaunchRequest): EngagementInput {
     objective: b.objective,
     roe: {
       scope: b.scope,
+      ...(b.outOfScope?.length ? { outOfScope: b.outOfScope } : {}),
       excludedTechniques: b.excludedTechniques?.length ? b.excludedTechniques : null,
       blackoutWindows: [],
       stopConditions: [],

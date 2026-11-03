@@ -113,6 +113,9 @@ export function buildLaunchBody(a: Record<string, unknown>): { body: UiLaunchReq
   }
 
   const body: UiLaunchRequest = { target, mode: a["mode"] === "black" ? "black" : "red", objective, scope };
+  if (Array.isArray(a["outOfScope"]) && a["outOfScope"].length > 0 && a["outOfScope"].every((s) => typeof s === "string" && s.trim())) {
+    body.outOfScope = (a["outOfScope"] as string[]).map((s) => s.trim());
+  }
   const operatorName = typeof a["operatorName"] === "string" && a["operatorName"].trim() ? a["operatorName"].trim() : undefined;
   const client = typeof a["client"] === "string" && a["client"].trim() ? a["client"].trim() : undefined;
   if (operatorName) body.operatorName = operatorName;
@@ -154,6 +157,7 @@ const launchTool: ToolDef = {
       operatorName: str("The user asking, by name — the operator the engagement record attests"),
       client: str("Client name for the report; also attests when no operator is named"),
       scope: { type: "array", items: { type: "string" }, description: "Exact in-scope hosts. Default: the target's host only." },
+      outOfScope: { type: "array", items: { type: "string" }, description: "Exact out-of-scope hosts — never touched, even when inside scope (deny beats allow). Default: none." },
       fullBattery: { type: "boolean", description: "Run the full battery (default true)" },
       tier: { type: "integer", enum: [0, 1, 2], description: "Autonomy tier; production defaults to 1" },
       environment: { type: "string", enum: ["staging", "production"] },
