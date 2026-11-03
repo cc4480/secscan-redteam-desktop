@@ -182,6 +182,17 @@ function expandIpv6(addr: string): number[] | null {
 // production, off unless SCAN_DEV_ALLOW_HOSTS lists the exact host[:port]
 // (comma-separated, e.g. "127.0.0.1:4100"). This is the ONLY way the SSRF guard
 // yields an internal address, and only for a hand-listed loopback test target.
+//
+// Scope (S3-H13c): SCAN_DEV_ALLOW_HOSTS governs ONLY this Seclayer server's
+// SSRF guard — the guardedFetch / safeFetch / assertTargetIsScannable path in
+// this file. It is NOT an engagement/runner unlock: the runner's web prober
+// and the SecScan engine's target guard never read this variable, so setting
+// it changes nothing on either engagement-path guard. On the engagement
+// path, private/loopback targets are allowed only via the attested scope
+// record the authorize phase stamps (ctx.verifiedScope, consulted through
+// attestedHostAllowed) — the SecScan target guard keys on that record alone,
+// and the prober additionally honors its launch-config adjuncts
+// (localSandbox when the whole scope is private/loopback, or testMode).
 function isDevAllowedHost(parsedUrl: URL): boolean {
   if (process.env.NODE_ENV === "production") return false;
   const allow = (process.env.SCAN_DEV_ALLOW_HOSTS || "")
