@@ -118,6 +118,7 @@ export async function authorizePhase(ctx: Ctx): Promise<GateVerdict> {
       verified: true,
       verificationTs: ctx.verifiedAt,
       verificationProof: ctx.verificationProof,
+      verifiedScope: ctx.verifiedScope,
     });
     return { allowed: true };
   }
@@ -184,6 +185,7 @@ export async function authorizePhase(ctx: Ctx): Promise<GateVerdict> {
     verified: true,
     verificationTs: ctx.verifiedAt,
     verificationProof: ctx.verificationProof,
+    verifiedScope: ctx.verifiedScope,
   });
   return verdict;
 }

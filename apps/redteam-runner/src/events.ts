@@ -26,6 +26,12 @@ export interface LiveState {
   verified: boolean;
   verificationTs?: string;
   verificationProof?: string;
+  /** The AUTHORIZE phase's attested scope (authorize.ts
+   * stampVerifiedScope): the raw ROE entries whose hosts passed
+   * authorization, persisted beside the proof so the record itself —
+   * not just the in-memory Ctx — carries what was attested. Absent on
+   * records written before this field existed. */
+  verifiedScope?: string[];
   plan: OperationPlan | null;
   findings: Finding[];
   batteryCoverage?: Record<BatteryCategory, number>;

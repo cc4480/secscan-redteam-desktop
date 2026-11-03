@@ -256,9 +256,12 @@ export function regenerateReport(dir: string): DeliverablesOutcome {
   // The report emitters read exactly three slices of the context —
   // `events`, `input.{target,mode,objective}` (model header, CSV rows)
   // and `config.dryRunAgents` (model status) — so the recorded context
-  // supplies exactly those, from the engagement's own record.
+  // supplies exactly those, plus the persisted attested scope
+  // (`verifiedScope`, S3-H6) so this reconstructed Ctx carries the
+  // record's scope stamp exactly as the live Ctx did.
   const ctx = {
     events,
+    verifiedScope: state.verifiedScope,
     input: { target: state.target, mode: state.mode, objective: state.objective },
     config: { dryRunAgents: recorded?.dryRun ?? false },
   } as unknown as Ctx;
