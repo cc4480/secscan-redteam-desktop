@@ -19,6 +19,7 @@ export function writeComplianceArtifacts(
   findings: Finding[],
   batteryLine: string,
   safetyManifest: ReturnType<typeof buildSafetyManifest> | undefined,
+  endStatus: 'complete' | 'blocked' | 'halted' | 'dry-run' = 'complete',
 ): void {
   try {
     const pack = buildCompliancePack({
@@ -60,7 +61,11 @@ export function writeComplianceArtifacts(
       const sev = String(f.severity ?? "").toLowerCase();
       if (Object.prototype.hasOwnProperty.call(counts, sev)) counts[sev as keyof typeof counts]++;
     }
-    const letterMd = renderAttestationLetter({
+    // An attestation asserts a test was performed. A blocked, halted or dry-run
+    // engagement never performed one to completion, so it gets a withheld record
+    // instead of a letter claiming canary validation that never happened.
+    const letterMd = endStatus === 'complete'
+      ? renderAttestationLetter({
       engagementId: ctx.events.engagementId,
       client: ctx.input.client,
       operator: resolveOperatorName(ctx.input.operatorName),
@@ -74,7 +79,13 @@ export function writeComplianceArtifacts(
       testEnd: new Date().toISOString(),
       findingCounts: counts,
       exclusions: METHODOLOGY_EXCLUSIONS,
-    });
+      })
+      : `# No attestation issued
+
+This engagement ended **${endStatus}** — no authorized test of the listed scope was
+performed to completion, so no attestation letter is issued. The engagement report
+records what did and did not run.
+`
     writeFileSync(join(ctx.events.dir, "attestation.md"), letterMd);
     writeFileSync(
       join(ctx.events.dir, "attestation.html"),

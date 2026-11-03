@@ -1,3 +1,4 @@
+import { atomicWriteFileSync } from "../atomic.js";
 /**
  * App-data Foundry store: the live-case registry scans feed.
  *
@@ -14,7 +15,7 @@
  */
 
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync, appendFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, appendFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 /** Vuln families the Foundry classifies into; anything else is unclassified. */
@@ -135,18 +136,9 @@ export function caseIdFor(engagementId: string, contentHash: string): string {
 
 /** Write a file atomically (tmp + rename; unlink first on Windows). */
 export function atomicWriteFile(path: string, body: string): void {
-  const tmp = `${path}.tmp-${process.pid}-${Date.now().toString(36)}`
-  try {
-    writeFileSync(tmp, body)
-    try {
-      renameSync(tmp, path)
-    } catch {
-      rmSync(path, { force: true })
-      renameSync(tmp, path)
-    }
-  } finally {
-    if (existsSync(tmp)) rmSync(tmp, { force: true })
-  }
+  // Shared atomic replace — the local copy deleted the live file on a failed
+  // rename, which on Windows could lose both the store and its tmp.
+  atomicWriteFileSync(path, body)
 }
 
 /**

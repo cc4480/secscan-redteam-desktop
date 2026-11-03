@@ -24,7 +24,8 @@
  * was actually launched) stays on the record.
  */
 
-import { closeSync, mkdirSync, openSync, rmSync } from 'node:fs'
+import { atomicWriteFileSync } from "../atomic.js";
+import { closeSync, mkdirSync, openSync } from 'node:fs'
 import { dirname } from 'node:path'
 import type { CampaignRecord, CampaignStatus } from './types.js'
 import { isForbiddenKind, isSafeCampaignId } from './schema.js'
@@ -142,8 +143,12 @@ export function createCampaign(
     createdBy: input.createdBy,
     updatedAt: ts,
   }
-  rmSync(file, { force: true })
-  saveCampaignFile(file, rec)
+  // Never delete the handle we just claimed. The exclusive `wx` open above
+  // proves the record did not exist; the shared atomic replace can land the
+  // bytes over that empty claim safely (it moves the target aside instead of
+  // unlinking it), so a crash cannot leave a zero-byte record that blocks
+  // recreation with EEXIST for good.
+  atomicWriteFileSync(file, JSON.stringify(rec, null, 2))
   return loadCampaignFile(file)
 }
 

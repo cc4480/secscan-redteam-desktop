@@ -5,8 +5,9 @@
  * query.ts. (Module doc comment preserved on the registry.ts barrel.)
  */
 
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { atomicWriteFileSync } from "../atomic.js";
 import { MemoryError } from '../memory/errors.js'
 import { emptyRegistry, type ConfirmedFinding, type KilledHypothesis, type TargetFingerprint, type VulnerabilityRegistry } from './types.js'
 export * from './types.js'
@@ -62,18 +63,9 @@ export function loadRegistryFile(path: string): VulnerabilityRegistry | null {
  * below refuses to overwrite, so the write path must never produce one.
  */
 function writeRegistryFile(path: string, reg: VulnerabilityRegistry): void {
-  const tmp = `${path}.tmp-${process.pid}-${Date.now().toString(36)}`
-  try {
-    writeFileSync(tmp, JSON.stringify(reg, null, 2))
-    try {
-      renameSync(tmp, path)
-    } catch {
-      rmSync(path, { force: true })
-      renameSync(tmp, path)
-    }
-  } finally {
-    if (existsSync(tmp)) rmSync(tmp, { force: true })
-  }
+  // One shared atomic replace: a failed rename moves the live file aside
+  // instead of deleting it, so an AV lock can never cost the registry.
+  atomicWriteFileSync(path, JSON.stringify(reg, null, 2))
 }
 
 /** Persist the registry (creates parent dirs). Called after every verdict write-through and at engagement end. */

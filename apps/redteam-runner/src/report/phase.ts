@@ -303,7 +303,9 @@ export async function reportPhase(
     { legacyMd: reportMd, findings, bundles: pocBundleMap, annexes: { batteryLine, nucleiLine: ncAny || undefined, itemsMd: reportMd.slice(itemsMark), proofMd: proofData.markdown, integrationsMd } })
   ctx.events.append({ phase: 'report', actor: 'reporter', action: 'report_written', result: `Report written (${findings.length} findings parsed).` })
   const safetyManifest = writeSafetyArtifacts(ctx)
-  writeComplianceArtifacts(ctx, findings, batteryLine, safetyManifest)
+  // The end status decides whether an attestation may be issued at all.
+  const endStatus = opts.blockedReason ? 'blocked' : opts.haltedReason ? 'halted' : ctx.config.dryRunAgents ? 'dry-run' : 'complete'
+  writeComplianceArtifacts(ctx, findings, batteryLine, safetyManifest, endStatus)
   ctx.events.updateState({ findings })
   return findings
 }

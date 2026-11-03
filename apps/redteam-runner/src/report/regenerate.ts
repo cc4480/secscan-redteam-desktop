@@ -25,7 +25,7 @@
  * narrative all read back from the run's own record — nothing is
  * derived from severity or estimated.
  */
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { rmSync, existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { EventLog, readEvents, readState, type LiveState } from "../events.js";
 import { type Ctx } from "../context.js";
@@ -263,7 +263,11 @@ export function regenerateReport(dir: string, opts: { deadEnd?: boolean } = {}):
   let reportInput: EngagementReportInput | undefined;
   try {
     reportInput = assembleInput(state, model, dir, bundles);
-    writeFileSync(join(dir, "report.html"), renderEngagementReportHtml(reportInput));
+    // Render before touching the file. A render failure used to leave the previous
+    // HTML in place, where verifyDeliverables certified it as the current set —
+    // a stale document shipping under a "complete" close.
+    const html = renderEngagementReportHtml(reportInput);
+    writeFileSync(join(dir, "report.html"), html);
     events.append({
       phase: "report",
       actor: "runner",
@@ -271,6 +275,9 @@ export function regenerateReport(dir: string, opts: { deadEnd?: boolean } = {}):
       result: "HTML report regenerated from the recorded engagement state.",
     });
   } catch (err) {
+    // A failed regeneration must not leave the previous HTML behind: delete it so
+    // the closing set cannot certify an artifact that disagrees with report.md.
+    rmSync(join(dir, "report.html"), { force: true });
     events.append({
       phase: "report",
       actor: "runner",
