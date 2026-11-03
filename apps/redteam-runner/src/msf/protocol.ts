@@ -9,19 +9,19 @@
  * Reference: Metasploit Framework msfrpc (external service, not vendored).
  */
 
-import { encode, decode } from "@msgpack/msgpack";
+import { encode, decode } from '@msgpack/msgpack'
 
-export const MSFRPC_DEFAULT_HOST = "127.0.0.1";
-export const MSFRPC_DEFAULT_PORT = 55553;
-export const MSFRPC_DEFAULT_TLS = true;
+export const MSFRPC_DEFAULT_HOST = '127.0.0.1'
+export const MSFRPC_DEFAULT_PORT = 55553
+export const MSFRPC_DEFAULT_TLS = true
 
 /** Raw request function: POST body → response body. Injectable for tests. */
-export type MsfRequestFn = (body: Uint8Array) => Promise<Uint8Array>;
+export type MsfRequestFn = (body: Uint8Array) => Promise<Uint8Array>
 
 export class MsfTransportError extends Error {
   constructor(message: string, public readonly cause?: unknown) {
-    super(message);
-    this.name = "MsfTransportError";
+    super(message)
+    this.name = 'MsfTransportError'
   }
 }
 
@@ -46,20 +46,20 @@ export class MsfTransportError extends Error {
 function decodeMsfResponse(raw: Uint8Array): unknown {
   return decode(raw, {
     mapKeyConverter: (key: unknown): string | number =>
-      typeof key === "string" || typeof key === "number" ? key : new TextDecoder().decode(key as Uint8Array),
-  });
+      typeof key === 'string' || typeof key === 'number' ? key : new TextDecoder().decode(key as Uint8Array),
+  })
 }
 
 /** Recursively turn binary leaves into UTF-8 strings, leaving other types alone. */
 function normaliseBinary(value: unknown): unknown {
-  if (value instanceof Uint8Array) return new TextDecoder().decode(value);
-  if (Array.isArray(value)) return value.map(normaliseBinary);
-  if (value !== null && typeof value === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = normaliseBinary(v);
-    return out;
+  if (value instanceof Uint8Array) return new TextDecoder().decode(value)
+  if (Array.isArray(value)) return value.map(normaliseBinary)
+  if (value !== null && typeof value === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = normaliseBinary(v)
+    return out
   }
-  return value;
+  return value
 }
 
 /**
@@ -78,32 +78,32 @@ export async function msfCall(
   token: string | null,
   args: unknown[],
 ): Promise<Record<string, unknown> | unknown[]> {
-  const payload = token === null ? [method, ...args] : [method, token, ...args];
-  let raw: Uint8Array;
+  const payload = token === null ? [method, ...args] : [method, token, ...args]
+  let raw: Uint8Array
   try {
-    raw = await request(encode(payload as unknown[]));
+    raw = await request(encode(payload as unknown[]))
   } catch (err) {
-    throw new MsfTransportError(`msfrpcd request failed (${method}): ${(err as Error).message}`, err);
+    throw new MsfTransportError(`msfrpcd request failed (${method}): ${(err as Error).message}`, err)
   }
-  let decoded: unknown;
+  let decoded: unknown
   try {
-    decoded = normaliseBinary(decodeMsfResponse(raw));
+    decoded = normaliseBinary(decodeMsfResponse(raw))
   } catch (err) {
-    throw new MsfTransportError(`msfrpcd returned undecodable data (${method})`, err);
+    throw new MsfTransportError(`msfrpcd returned undecodable data (${method})`, err)
   }
-  if (Array.isArray(decoded)) return decoded;
-  if (typeof decoded !== "object" || decoded === null) {
-    throw new MsfTransportError(`msfrpcd returned neither a map nor an array (${method})`);
+  if (Array.isArray(decoded)) return decoded
+  if (typeof decoded !== 'object' || decoded === null) {
+    throw new MsfTransportError(`msfrpcd returned neither a map nor an array (${method})`)
   }
-  return decoded as Record<string, unknown>;
+  return decoded as Record<string, unknown>
 }
 
 export interface MsfHttpOptions {
-  host: string;
-  port: number;
-  useTls: boolean;
-  timeoutMs: number;
-  signal?: AbortSignal;
+  host: string
+  port: number
+  useTls: boolean
+  timeoutMs: number
+  signal?: AbortSignal
 }
 
 /**
@@ -113,34 +113,34 @@ export interface MsfHttpOptions {
  * do public-CA validation here; the credential (user/pass) is the auth.
  */
 export function createHttpMsfRequest(opts: MsfHttpOptions): MsfRequestFn {
-  const scheme = opts.useTls ? "https" : "http";
-  const url = `${scheme}://${opts.host}:${opts.port}/api/`;
+  const scheme = opts.useTls ? 'https' : 'http'
+  const url = `${scheme}://${opts.host}:${opts.port}/api/`
   return async (body: Uint8Array): Promise<Uint8Array> => {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), opts.timeoutMs);
-    const onAbort = () => ctrl.abort();
-    opts.signal?.addEventListener("abort", onAbort, { once: true });
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), opts.timeoutMs)
+    const onAbort = () => ctrl.abort()
+    opts.signal?.addEventListener('abort', onAbort, { once: true })
     try {
       const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "binary/message-pack" },
+        method: 'POST',
+        headers: { 'Content-Type': 'binary/message-pack' },
         body: body as unknown as BodyInit,
         signal: ctrl.signal,
         // @ts-expect-error Node fetch extension: msfrpcd default certs are self-signed.
-        rejectUnauthorized: !(opts.host === "127.0.0.1" || opts.host === "localhost" || process.env.MSF_ALLOW_INSECURE === "1"),
-      });
+        rejectUnauthorized: !(opts.host === '127.0.0.1' || opts.host === 'localhost' || process.env.MSF_ALLOW_INSECURE === '1'),
+      })
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status} ${res.statusText}`);
+        throw new Error(`HTTP ${res.status} ${res.statusText}`)
       }
-      return new Uint8Array(await res.arrayBuffer());
+      return new Uint8Array(await res.arrayBuffer())
     } catch (err) {
-      if ((err as Error).name === "AbortError") {
-        throw new MsfTransportError(`msfrpcd request timed out after ${opts.timeoutMs}ms — is msfrpcd running?`);
+      if ((err as Error).name === 'AbortError') {
+        throw new MsfTransportError(`msfrpcd request timed out after ${opts.timeoutMs}ms — is msfrpcd running?`)
       }
-      throw err;
+      throw err
     } finally {
-      clearTimeout(timer);
-      opts.signal?.removeEventListener("abort", onAbort);
+      clearTimeout(timer)
+      opts.signal?.removeEventListener('abort', onAbort)
     }
-  };
+  }
 }

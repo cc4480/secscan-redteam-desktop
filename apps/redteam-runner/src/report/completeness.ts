@@ -48,7 +48,7 @@ export function isCoverageComplete(t: CoverageTotals): boolean {
 export function postureClause(rating: string, t: CoverageTotals): string {
   if (isCoverageComplete(t)) return `overall posture ${rating}`
   return (
-    `assessment incomplete — overall posture not determined ` +
+    'assessment incomplete — overall posture not determined ' +
     `(${pendingVerdicts(t)} of ${t.total} battery items carry no verdict)`
   )
 }
@@ -62,9 +62,9 @@ export function noFindingClause(t: CoverageTotals): string {
     return 'No material business risk identified from this pass; continued monitoring is still recommended as the application evolves.'
   }
   return (
-    `No confirmed findings in the part of this assessment that ran — and that is not a clean result. ` +
+    'No confirmed findings in the part of this assessment that ran — and that is not a clean result. ' +
     `${pendingVerdicts(t)} of ${t.total} battery items carry no verdict, so absence of a finding here ` +
-    `is absence of evidence, not evidence of absence.`
+    'is absence of evidence, not evidence of absence.'
   )
 }
 

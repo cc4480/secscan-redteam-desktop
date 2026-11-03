@@ -27,6 +27,6 @@ export function incompleteEndHeader(ctx: Ctx, reason: string, blocked: boolean):
     `Status: ${word} — ${reason}\n` +
     `Authorization: ${ctx.verificationProof}\n\n` +
     `This engagement ${sentence}. The findings, coverage, proof bundles, and safety manifest below are the runner-computed record of ` +
-    `work completed up to that point — no reporter-agent narrative was generated.\n`
+    'work completed up to that point — no reporter-agent narrative was generated.\n'
   )
 }

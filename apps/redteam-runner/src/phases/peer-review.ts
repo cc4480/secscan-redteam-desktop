@@ -36,111 +36,111 @@
  * unstamped and the failure is an event carrying the cause. A
  * HaltError (deliberate stop) rethrows untouched.
  */
-import { describeErrorCause, type AgentRole, type ChatMessage } from "@secscan/redteam-llm-router";
-import { promptCtx } from "../agents.js";
-import { createCharteredComplete } from "../charter-completion.js";
-import { buildFleetPrompt } from "../prompts/fleet-assembly.js";
-import { HaltError, type Ctx, type KilledLive, type LiveFinding } from "../context.js";
-import type { PeerReviewStamp } from "../types.js";
-import { tokenMeterFor } from "../harness2/trajectory-normalize.js";
-import { syncLiveFindingsToState, writeKilledToRegistry } from "../dispatch/verdicts.js";
+import { describeErrorCause, type AgentRole, type ChatMessage } from '@secscan/redteam-llm-router'
+import { promptCtx } from '../agents.js'
+import { createCharteredComplete } from '../charter-completion.js'
+import { buildFleetPrompt } from '../prompts/fleet-assembly.js'
+import { HaltError, type Ctx, type KilledLive, type LiveFinding } from '../context.js'
+import type { PeerReviewStamp } from '../types.js'
+import { tokenMeterFor } from '../harness2/trajectory-normalize.js'
+import { syncLiveFindingsToState, writeKilledToRegistry } from '../dispatch/verdicts.js'
 
-import { coerceSeverity, oneNotchDown, parsePeerVerdict, selectChecker, SEVERITY_LADDER, type ParsedPeerVerdict } from "./peer-verdict.js";
-export { CHECKER_PREFERENCE, SEVERITY_LADDER, selectChecker, parsePeerVerdict } from "./peer-verdict.js";
-export type { ParsedPeerVerdict, PeerVerdict } from "./peer-verdict.js";
+import { coerceSeverity, oneNotchDown, parsePeerVerdict, selectChecker, SEVERITY_LADDER, type ParsedPeerVerdict } from './peer-verdict.js'
+export { CHECKER_PREFERENCE, SEVERITY_LADDER, selectChecker, parsePeerVerdict } from './peer-verdict.js'
+export type { ParsedPeerVerdict, PeerVerdict } from './peer-verdict.js'
 
 
 function challengeMessages(ctx: Ctx, lf: LiveFinding, checker: AgentRole): ChatMessage[] {
-  const producer = lf.producer ?? "unknown seat (recorded before producer stamps)";
+  const producer = lf.producer ?? 'unknown seat (recorded before producer stamps)'
   // The checker prompt is fleet-assembled for the ARCHITECT seat
   // (buildFleetPrompt + the verified record), not a hardcoded system.
   const system = buildFleetPrompt(
-    "reporter",
+    'reporter',
     `You are the ${checker} seat of an autonomous red-team fleet whose seats check each other's work. ` +
-    `For this task you are NOT the producer — you are the PEER REVIEWER of the finding in the record below, ` +
-    `and your job is to challenge the claim, not the target: producer and checker are never the same seat, and no finding ` +
-    `reaches the report on its producer's say-so alone. Judge ONLY the record below — never invent evidence you were not shown.\n\n` +
-    `Challenge three things: (1) EVIDENCE — does the recorded evidence actually prove the title, or is it equally consistent ` +
-    `with a benign explanation? (2) SCOPE — does the finding stay inside the engagement's authorized scope below? ` +
-    `(3) SEVERITY — is it honest for the impact the evidence actually demonstrates?\n\n` +
-    `Answer with a JSON object only: {"verdict": "upheld" | "downgraded" | "needs-evidence" | "killed", ` +
-    `"severity": "<only for downgraded: the honest lower severity>", "rationale": "<one or two concrete sentences>"}\n` +
-    `- upheld: the evidence proves it and the severity is honest.\n` +
-    `- downgraded: real, but the claimed severity overstates the demonstrated impact.\n` +
-    `- needs-evidence: plausible, but the recorded evidence does not prove it yet — send it back rather than let it print as confirmed.\n` +
-    `- killed: the evidence refutes it or shows the benign explanation. A kill stands unless stronger proof exists.`,
+    'For this task you are NOT the producer — you are the PEER REVIEWER of the finding in the record below, ' +
+    'and your job is to challenge the claim, not the target: producer and checker are never the same seat, and no finding ' +
+    'reaches the report on its producer\'s say-so alone. Judge ONLY the record below — never invent evidence you were not shown.\n\n' +
+    'Challenge three things: (1) EVIDENCE — does the recorded evidence actually prove the title, or is it equally consistent ' +
+    'with a benign explanation? (2) SCOPE — does the finding stay inside the engagement\'s authorized scope below? ' +
+    '(3) SEVERITY — is it honest for the impact the evidence actually demonstrates?\n\n' +
+    'Answer with a JSON object only: {"verdict": "upheld" | "downgraded" | "needs-evidence" | "killed", ' +
+    '"severity": "<only for downgraded: the honest lower severity>", "rationale": "<one or two concrete sentences>"}\n' +
+    '- upheld: the evidence proves it and the severity is honest.\n' +
+    '- downgraded: real, but the claimed severity overstates the demonstrated impact.\n' +
+    '- needs-evidence: plausible, but the recorded evidence does not prove it yet — send it back rather than let it print as confirmed.\n' +
+    '- killed: the evidence refutes it or shows the benign explanation. A kill stands unless stronger proof exists.',
     promptCtx(ctx),
-  );
+  )
   const user =
-    `FINDING UNDER CHALLENGE\n` +
+    'FINDING UNDER CHALLENGE\n' +
     `Producer seat: ${producer}\n` +
     `Title: ${lf.title}\n` +
     `Severity claimed: ${lf.severity}\n` +
-    `ATT&CK: ${lf.attackId}${lf.vulnClass ? ` · class: ${lf.vulnClass}` : ""}\n` +
-    `Cell adjudication: ${lf.cellState ? lf.cellState.toUpperCase() : "none"}` +
-    `${lf.cellState === "proven" ? " (dual-exploiter cell: both signatures + a passing negative control)" : ""}\n` +
+    `ATT&CK: ${lf.attackId}${lf.vulnClass ? ` · class: ${lf.vulnClass}` : ''}\n` +
+    `Cell adjudication: ${lf.cellState ? lf.cellState.toUpperCase() : 'none'}` +
+    `${lf.cellState === 'proven' ? ' (dual-exploiter cell: both signatures + a passing negative control)' : ''}\n` +
     `Evidence: ${lf.evidence}\n` +
-    (lf.payload ? `Payload used: ${lf.payload}\n` : "") +
+    (lf.payload ? `Payload used: ${lf.payload}\n` : '') +
     `Target: ${ctx.input.target}\n` +
-    `Authorized scope (ROE hosts): ${ctx.hosts.join(", ")}`;
+    `Authorized scope (ROE hosts): ${ctx.hosts.join(', ')}`
   return [
-    { role: "system", content: system },
-    { role: "user", content: user },
-  ];
+    { role: 'system', content: system },
+    { role: 'user', content: user },
+  ]
 }
 
 interface AppliedOutcome {
-  stamp: PeerReviewStamp;
+  stamp: PeerReviewStamp
   /** flows = stays in the confirmed flow; otherwise the list it joins. */
-  flow: "flows" | "deferred" | "killed";
-  note?: string;
+  flow: 'flows' | 'deferred' | 'killed'
+  note?: string
 }
 
 /** Apply one parsed verdict mechanically. Pure: mutates only the
  * finding's severity/stamp; list moves are the caller's. */
 function applyVerdict(lf: LiveFinding, checker: AgentRole, parsed: ParsedPeerVerdict): AppliedOutcome {
-  const { verdict, rationale } = parsed;
-  if (verdict === "upheld") {
-    return { stamp: { checker, verdict, rationale, disposition: "flows" }, flow: "flows" };
+  const { verdict, rationale } = parsed
+  if (verdict === 'upheld') {
+    return { stamp: { checker, verdict, rationale, disposition: 'flows' }, flow: 'flows' }
   }
-  if (verdict === "downgraded") {
-    const from = coerceSeverity(lf.severity);
-    const proposed = parsed.severity ? coerceSeverity(parsed.severity) : null;
+  if (verdict === 'downgraded') {
+    const from = coerceSeverity(lf.severity)
+    const proposed = parsed.severity ? coerceSeverity(parsed.severity) : null
     const to =
       proposed && SEVERITY_LADDER.indexOf(proposed) < SEVERITY_LADDER.indexOf(from)
         ? proposed
-        : oneNotchDown(from);
+        : oneNotchDown(from)
     if (!to) {
       return {
         stamp: {
           checker,
           verdict,
           rationale: `${rationale} (downgrade proposed at the severity floor — severity unchanged)`.slice(0, 500),
-          disposition: "flows",
+          disposition: 'flows',
         },
-        flow: "flows",
-        note: "downgrade at severity floor — flows unchanged",
-      };
+        flow: 'flows',
+        note: 'downgrade at severity floor — flows unchanged',
+      }
     }
-    lf.severity = to;
+    lf.severity = to
     return {
-      stamp: { checker, verdict, rationale, disposition: "downgraded", fromSeverity: from, toSeverity: to },
-      flow: "flows",
+      stamp: { checker, verdict, rationale, disposition: 'downgraded', fromSeverity: from, toSeverity: to },
+      flow: 'flows',
       note: `severity ${from} → ${to}`,
-    };
+    }
   }
-  if (verdict === "needs-evidence") {
-    return { stamp: { checker, verdict, rationale, disposition: "deferred" }, flow: "deferred" };
+  if (verdict === 'needs-evidence') {
+    return { stamp: { checker, verdict, rationale, disposition: 'deferred' }, flow: 'deferred' }
   }
   // killed — unless a PROVEN cell verdict already stands: proven wins.
-  if (lf.cellState === "proven") {
+  if (lf.cellState === 'proven') {
     return {
-      stamp: { checker, verdict, rationale, disposition: "flows" },
-      flow: "flows",
-      note: "kill overridden — PROVEN cell verdict stands (proven wins)",
-    };
+      stamp: { checker, verdict, rationale, disposition: 'flows' },
+      flow: 'flows',
+      note: 'kill overridden — PROVEN cell verdict stands (proven wins)',
+    }
   }
-  return { stamp: { checker, verdict, rationale, disposition: "killed" }, flow: "killed" };
+  return { stamp: { checker, verdict, rationale, disposition: 'killed' }, flow: 'killed' }
 }
 
 /**
@@ -151,98 +151,98 @@ function applyVerdict(lf: LiveFinding, checker: AgentRole, parsed: ParsedPeerVer
  * runs — there are no agent findings to challenge.
  */
 export async function peerReviewPhase(ctx: Ctx): Promise<void> {
-  if (ctx.config.dryRunAgents) return;
-  ctx.peerKilledLive ??= [];
-  ctx.peerDeferredLive ??= [];
-  const complete = ctx.deps.completeForRole ?? createCharteredComplete(ctx, "report");
-  const counts = { challenged: 0, flows: 0, downgraded: 0, deferred: 0, killed: 0, failed: 0 };
-  const survivors: LiveFinding[] = [];
+  if (ctx.config.dryRunAgents) return
+  ctx.peerKilledLive ??= []
+  ctx.peerDeferredLive ??= []
+  const complete = ctx.deps.completeForRole ?? createCharteredComplete(ctx, 'report')
+  const counts = { challenged: 0, flows: 0, downgraded: 0, deferred: 0, killed: 0, failed: 0 }
+  const survivors: LiveFinding[] = []
   for (const lf of [...ctx.liveFindings]) {
-    const checker = selectChecker(lf.producer);
-    counts.challenged++;
+    const checker = selectChecker(lf.producer)
+    counts.challenged++
     ctx.events.append({
-      phase: "report",
+      phase: 'report',
       actor: checker,
-      action: "peer_challenge",
+      action: 'peer_challenge',
       target: ctx.input.target,
       result:
-        `Challenging "${lf.title}" (${lf.attackId}, severity ${lf.severity}) produced by ${lf.producer ?? "unknown seat"}: ` +
-        `evidence ${lf.evidence.length} chars${lf.cellState ? `, cell ${lf.cellState}` : ""}.`,
-    });
-    let parsed: ParsedPeerVerdict | null;
+        `Challenging "${lf.title}" (${lf.attackId}, severity ${lf.severity}) produced by ${lf.producer ?? 'unknown seat'}: ` +
+        `evidence ${lf.evidence.length} chars${lf.cellState ? `, cell ${lf.cellState}` : ''}.`,
+    })
+    let parsed: ParsedPeerVerdict | null
     try {
       const res = await complete(checker, challengeMessages(ctx, lf, checker), {
         tools: [],
-        responseFormat: { type: "json_object" },
-      });
-      tokenMeterFor(ctx).record(res.usage);
-      parsed = parsePeerVerdict(res.text);
+        responseFormat: { type: 'json_object' },
+      })
+      tokenMeterFor(ctx).record(res.usage)
+      parsed = parsePeerVerdict(res.text)
       if (!parsed) {
-        counts.failed++;
+        counts.failed++
         ctx.events.append({
-          phase: "report",
-          actor: "runner",
-          action: "peer_review_failed",
+          phase: 'report',
+          actor: 'runner',
+          action: 'peer_review_failed',
           target: ctx.input.target,
           result: `"${lf.title}": ${checker} answered no parseable verdict — finding flows UNSTAMPED (no verdict fabricated).`,
-        });
-        survivors.push(lf);
-        continue;
+        })
+        survivors.push(lf)
+        continue
       }
     } catch (err) {
-      if (err instanceof HaltError) throw err;
-      counts.failed++;
+      if (err instanceof HaltError) throw err
+      counts.failed++
       ctx.events.append({
-        phase: "report",
-        actor: "runner",
-        action: "peer_review_failed",
+        phase: 'report',
+        actor: 'runner',
+        action: 'peer_review_failed',
         target: ctx.input.target,
         result: `"${lf.title}": checker call failed (${describeErrorCause(err)}) — finding flows UNSTAMPED (no verdict fabricated).`,
-      });
-      survivors.push(lf);
-      continue;
+      })
+      survivors.push(lf)
+      continue
     }
-    const { stamp, flow, note } = applyVerdict(lf, checker, parsed);
-    lf.peerReview = stamp;
-    if (flow === "flows") {
-      survivors.push(lf);
-      if (stamp.disposition === "downgraded") counts.downgraded++;
-      else counts.flows++;
-    } else if (flow === "deferred") {
-      ctx.peerDeferredLive.push(lf);
-      counts.deferred++;
+    const { stamp, flow, note } = applyVerdict(lf, checker, parsed)
+    lf.peerReview = stamp
+    if (flow === 'flows') {
+      survivors.push(lf)
+      if (stamp.disposition === 'downgraded') counts.downgraded++
+      else counts.flows++
+    } else if (flow === 'deferred') {
+      ctx.peerDeferredLive.push(lf)
+      counts.deferred++
     } else {
-      ctx.peerKilledLive.push(lf);
-      counts.killed++;
+      ctx.peerKilledLive.push(lf)
+      counts.killed++
       const kl: KilledLive = {
         hypothesis: lf.title,
         killingObservation: `Peer-review kill by ${checker}: ${parsed.rationale}`.slice(0, 500),
         attackId: lf.attackId,
         vulnClass: lf.vulnClass,
         payload: lf.payload,
-      };
-      ctx.killedLive.push(kl);
-      writeKilledToRegistry(ctx, kl);
+      }
+      ctx.killedLive.push(kl)
+      writeKilledToRegistry(ctx, kl)
     }
     ctx.events.append({
-      phase: "report",
+      phase: 'report',
       actor: checker,
-      action: "peer_verdict",
+      action: 'peer_verdict',
       target: ctx.input.target,
       result:
         `"${lf.title}": verdict=${parsed.verdict} disposition=${stamp.disposition}` +
-        `${note ? ` (${note})` : ""} — ${parsed.rationale}`,
-    });
+        `${note ? ` (${note})` : ''} — ${parsed.rationale}`,
+    })
   }
-  ctx.liveFindings = survivors;
-  syncLiveFindingsToState(ctx);
+  ctx.liveFindings = survivors
+  syncLiveFindingsToState(ctx)
   ctx.events.append({
-    phase: "report",
-    actor: "runner",
-    action: "peer_review_complete",
+    phase: 'report',
+    actor: 'runner',
+    action: 'peer_review_complete',
     target: ctx.input.target,
     result:
       `Peer review: ${counts.challenged} challenged — ${counts.flows} upheld, ${counts.downgraded} downgraded, ` +
       `${counts.deferred} deferred, ${counts.killed} killed, ${counts.failed} unchallenged (checker failed — flowed unstamped).`,
-  });
+  })
 }

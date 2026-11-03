@@ -1,3 +1,4 @@
+import { AUX_CSS } from "./aux-css.js";
 /**
  * The unified report stylesheet — a single inline <style> block, no external
  * requests, no web fonts (system stacks only; the display/mono faces named
@@ -253,4 +254,15 @@ footer.doc code{color:var(--muted)}
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   @page{margin:1.5cm 2cm}
 }
+${AUX_CSS}
 `
+
+/** The copy-to-clipboard progressive enhancement every document shares. */
+export const COPY_SCRIPT = `<script>
+document.querySelectorAll("[data-copy]").forEach(function (b) {
+  b.addEventListener("click", function () {
+    var el = document.getElementById(b.getAttribute("data-copy"));
+    if (el && navigator.clipboard) { navigator.clipboard.writeText(el.innerText); b.textContent = "Copied"; }
+  });
+});
+</script>`

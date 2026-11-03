@@ -113,7 +113,14 @@ describe("executeToolGroup", () => {
     assert.equal(settled.length, 3);
     assert.ok(settled.every((s) => s.d?.result === "ok"));
     assert.equal(maxActive, 3);
-    assert.ok(elapsed < 110, `3 x 40ms concurrent should land well under the 120ms sequential floor, took ${elapsed}ms`);
+    // maxActive above is the real proof: all three calls were in flight at
+    // once. The wall-clock check is only a sanity ceiling. It used to be
+    // `elapsed < 110` (just under the 3x40ms sequential floor) and failed
+    // under full-suite load with no loss of concurrency — the event loop is
+    // shared, so a genuine 3-way overlap can still exceed 110ms wall time.
+    // Deliberately loose now: concurrency is asserted structurally, not
+    // inferred from a stopwatch.
+    assert.ok(elapsed < 600, `a 3-way concurrent group should not approach sequential-plus-load, took ${elapsed}ms`);
   });
 
   it("a singleton group runs its one call without concurrency", async () => {
