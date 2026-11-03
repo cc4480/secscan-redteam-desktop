@@ -26,7 +26,13 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
 /** Resolved options relevant to tool bridging. */
 export interface ToolBridgeOptions {
-  /** Whether a registry conflict is contained or rejects this synchronization. */
+  /**
+   * Whether a synchronization failure this bridge can contain — a registry
+   * conflict, or an initialize reply that advertised neither the tools nor
+   * the resources capability — is contained or rejects this synchronization.
+   * The connection supervisor selects 'throw' only for the initial
+   * synchronization of a `failOnStartupError` row.
+   */
   registrationFailure: 'contain' | 'throw'
   serverName: string
   toolCallTimeoutMs: number
@@ -102,6 +108,13 @@ export function publicToolName(serverName: string, rawName: string): string {
  *    synchronization may propagate the conflict so its parent transaction
  *    rejects; ordinary clients and later re-syncs return an empty map.
  *
+ * An initialize reply that advertised no tools capability is never silent:
+ * the fetch phase logs an error naming the server. A resource-only server
+ * still completes the synchronization with an empty tool set, because this
+ * connection also serves its resources; strict synchronization rejects only
+ * when the reply advertised neither the tools nor the resources capability.
+ * Contained synchronization still swaps to an empty generation.
+ *
  * @param client - Connected MCP Client instance used to list and call tools.
  * @param ctx - Cordis context providing the `tools` service for registration.
  * @param opts - Bridge options: server namespace and per-call timeout.
@@ -118,7 +131,14 @@ export async function syncTools(
 ): Promise<ToolDisposers> {
   // Phase 1: fetch and build the next generation without touching the registry.
   const definitions = new Map<string, ToolDefinition>()
-  const response = client.getServerCapabilities()?.tools === undefined
+  const capabilities = client.getServerCapabilities()
+  const toolsCapability = capabilities?.tools
+  if (toolsCapability === undefined) {
+    const message = `mcp-client(${opts.serverName}): initialize reply advertised no tools capability — zero tools registered`
+    ctx.logger.error(message)
+    if (opts.registrationFailure === 'throw' && capabilities?.resources === undefined) throw new Error(message)
+  }
+  const response = toolsCapability === undefined
     ? { tools: [] }
     : await client.listTools(undefined, { cacheMode: 'refresh' })
   for (const tool of response.tools) {

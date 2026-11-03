@@ -14,10 +14,11 @@ import type { Config } from '@deepseek-ai/dsh-mcp-client'
 
 // vi.mock factories are hoisted above every import/const, so the mock fns and
 // class must be created inside vi.hoisted to exist when the factories run.
-const { mockConnect, mockClose, mockListTools, mockCallTool, mockSetNotificationHandler, MockClient } = vi.hoisted(() => {
+const { mockConnect, mockClose, mockListTools, mockCallTool, mockSetNotificationHandler, mockGetServerCapabilities, MockClient } = vi.hoisted(() => {
   const mockConnect = vi.fn<() => Promise<void>>()
   const mockClose = vi.fn<() => Promise<void>>()
   const mockListTools = vi.fn<(_params?: Record<string, unknown>) => Promise<unknown>>()
+  const mockGetServerCapabilities = vi.fn<() => { tools?: object; resources?: object }>()
   const mockCallTool = vi.fn<(
     _params?: Record<string, unknown>, _options?: unknown,
   ) => Promise<unknown>>()
@@ -31,10 +32,10 @@ const { mockConnect, mockClose, mockListTools, mockCallTool, mockSetNotification
     constructor(_info: unknown, options: { listChanged: { tools: { onChanged: () => void } } }) {
       mockSetNotificationHandler('notifications/tools/list_changed', options.listChanged.tools.onChanged)
     }
-    getServerCapabilities = () => ({ tools: {} })
+    getServerCapabilities = mockGetServerCapabilities
     getInstructions(): string | undefined { return undefined }
   }
-  return { mockConnect, mockClose, mockListTools, mockCallTool, mockSetNotificationHandler, MockClient }
+  return { mockConnect, mockClose, mockListTools, mockCallTool, mockSetNotificationHandler, mockGetServerCapabilities, MockClient }
 })
 
 vi.mock('@modelcontextprotocol/client', () => ({
@@ -163,6 +164,7 @@ describe('apply (plugin lifecycle)', () => {
       nextCursor: undefined,
     })
     mockCallTool.mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] })
+    mockGetServerCapabilities.mockReturnValue({ tools: {} })
     ctx = await mountRegistry()
   })
 
@@ -334,6 +336,67 @@ describe('apply (plugin lifecycle)', () => {
     expect(ctx.tools.get('mcp__srv__remote')).toBeDefined()
     await ctx.fiber.dispose()
     expect(mockClose).toHaveBeenCalled()
+  })
+
+  it('logs an error and starts with zero tools when initialize advertises no capabilities', async () => {
+    mockGetServerCapabilities.mockReturnValue({})
+    const reported = vi.spyOn(ctx.logger, 'error')
+    try {
+      await apply(ctx, { ...stdioConfig, reconnect: { enabled: false } })
+
+      expect(reported).toHaveBeenCalledWith(
+        expect.stringContaining('mcp-client(srv): initialize reply advertised no tools capability'),
+      )
+      expect(mockListTools).not.toHaveBeenCalled()
+      expect(ctx.tools.get('mcp__srv__remote')).toBeUndefined()
+    } finally {
+      mockGetServerCapabilities.mockReturnValue({ tools: {} })
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('rejects activation when initialize advertises no capabilities and startup failure is fatal', async () => {
+    mockGetServerCapabilities.mockReturnValue({})
+    const reported = vi.spyOn(ctx.logger, 'error')
+    try {
+      const failure: unknown = await apply(ctx, {
+        ...stdioConfig,
+        failOnStartupError: true,
+        reconnect: { enabled: false },
+      }).catch((error: unknown) => error)
+      assert(failure instanceof Error)
+      assert(failure.cause instanceof Error)
+      expect(failure.message).toBe('mcp-client(srv): initial connection or tool synchronization failed')
+      expect(failure.cause.message).toContain('initialize reply advertised no tools capability')
+      expect(reported).toHaveBeenCalledWith(
+        expect.stringContaining('mcp-client(srv): initialize reply advertised no tools capability'),
+      )
+      expect(ctx.tools.get('mcp__srv__remote')).toBeUndefined()
+    } finally {
+      mockGetServerCapabilities.mockReturnValue({ tools: {} })
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('starts a resource-only server with zero tools when startup failure is fatal', async () => {
+    mockGetServerCapabilities.mockReturnValue({ resources: {} })
+    const reported = vi.spyOn(ctx.logger, 'error')
+    try {
+      await apply(ctx, {
+        ...stdioConfig,
+        failOnStartupError: true,
+        reconnect: { enabled: false },
+      })
+
+      expect(reported).toHaveBeenCalledWith(
+        expect.stringContaining('mcp-client(srv): initialize reply advertised no tools capability'),
+      )
+      expect(mockListTools).not.toHaveBeenCalled()
+      expect(ctx.tools.get('mcp__srv__remote')).toBeUndefined()
+    } finally {
+      mockGetServerCapabilities.mockReturnValue({ tools: {} })
+      await ctx.fiber.dispose()
+    }
   })
 
   it('preserves strict startup registration when list_changed arrives before connect resolves', async () => {

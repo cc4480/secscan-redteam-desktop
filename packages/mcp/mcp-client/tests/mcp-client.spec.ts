@@ -235,6 +235,56 @@ describe('syncTools', () => {
     expect(ctx.tools.get('mcp__srv__dup')).toBeUndefined()
   })
 
+  it('logs an error naming the server and registers zero tools when initialize advertises no capabilities', async () => {
+    const client = createMockClient([
+      { name: 'greet', inputSchema: { type: 'object' } },
+    ])
+    client.getServerCapabilities = () => ({})
+    const reported = vi.spyOn(ctx.logger, 'error')
+
+    const disposers = await syncTools(client as never, ctx, defaultOpts, new Map())
+
+    expect(disposers.size).toBe(0)
+    expect(client.listTools).not.toHaveBeenCalled()
+    expect(ctx.tools.get('mcp__srv__greet')).toBeUndefined()
+    expect(reported).toHaveBeenCalledWith(
+      expect.stringContaining('mcp-client(srv): initialize reply advertised no tools capability'),
+    )
+  })
+
+  it('rejects the sync when initialize advertises no capabilities and synchronization failure is strict', async () => {
+    const client = createMockClient([
+      { name: 'greet', inputSchema: { type: 'object' } },
+    ])
+    client.getServerCapabilities = () => ({})
+    const reported = vi.spyOn(ctx.logger, 'error')
+
+    await expect(syncTools(client as never, ctx, { ...defaultOpts, registrationFailure: 'throw' }, new Map()))
+      .rejects.toThrow(/initialize reply advertised no tools capability/)
+    expect(client.listTools).not.toHaveBeenCalled()
+    expect(ctx.tools.get('mcp__srv__greet')).toBeUndefined()
+    expect(reported).toHaveBeenCalledWith(
+      expect.stringContaining('mcp-client(srv): initialize reply advertised no tools capability'),
+    )
+  })
+
+  it('logs an error but completes a strict sync when initialize advertises resources without tools', async () => {
+    const client = createMockClient([
+      { name: 'greet', inputSchema: { type: 'object' } },
+    ])
+    client.getServerCapabilities = () => ({ resources: {} })
+    const reported = vi.spyOn(ctx.logger, 'error')
+
+    const disposers = await syncTools(client as never, ctx, { ...defaultOpts, registrationFailure: 'throw' }, new Map())
+
+    expect(disposers.size).toBe(0)
+    expect(client.listTools).not.toHaveBeenCalled()
+    expect(ctx.tools.get('mcp__srv__greet')).toBeUndefined()
+    expect(reported).toHaveBeenCalledWith(
+      expect.stringContaining('mcp-client(srv): initialize reply advertised no tools capability'),
+    )
+  })
+
   it('keeps the previous generation when the fetch phase fails', async () => {
     const client = createMockClient([{ name: 'stable', inputSchema: { type: 'object' } }])
     const first = await syncTools(client as never, ctx, defaultOpts, new Map())
