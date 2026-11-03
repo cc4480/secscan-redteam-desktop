@@ -49,14 +49,30 @@ it('keeps one shared resource consumer beside the fork MCP clients', () => {
     'mcp-redteam-runner',
     'mcp-alterego',
   ])
+  // The SecScan row composes as the production row, and its reconnect
+  // budget must not give up: a mid-session outage longer than the schema
+  // default budget must not permanently unregister its tools.
+  expect(rows.find(row => row.id === 'mcp-secscan')?.config).toMatchObject({
+    serverName: 'secscan',
+    transport: 'streamable-http',
+    reconnect: {
+      enabled: true,
+      maxAttempts: Number.MAX_SAFE_INTEGER,
+    },
+  })
   // The Seclayer row composes as the production row, not a stub: stdio
   // transport, the pinned server package, and the operator's key named —
-  // never valued — in secretEnv.
+  // never valued — in secretEnv. Its reconnect budget must not give up
+  // either, for the same reason as the SecScan row above.
   expect(rows.find(row => row.id === 'mcp-seclayer')?.config).toMatchObject({
     serverName: 'seclayer',
     transport: 'stdio',
     args: ['-y', '@seclayer/mcp@1.0.0'],
     secretEnv: ['SECLAYER_API_KEY'],
+    reconnect: {
+      enabled: true,
+      maxAttempts: Number.MAX_SAFE_INTEGER,
+    },
   })
   // The engagement engine is not optional in the shipped profile: a failed
   // initial connection must reject this row instead of silently leaving the

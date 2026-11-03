@@ -99,6 +99,14 @@ export async function openLlamaWindow(options: LlamaWindowOptions = {}): Promise
     if (!window.isDestroyed()) window.destroy()
     throw error
   }
-  if (options.show !== false && !window.isDestroyed()) window.show()
+  if (options.show !== false && !window.isDestroyed()) {
+    // show() alone is not enough: a window created from an IPC handler while the chat
+    // window holds focus can be raised BEHIND it on Windows, which looks like the app
+    // ignored the click. focus() raises it, and moveTop() settles the z-order race that
+    // show() loses when the foreground window is being activated in the same tick.
+    if (process.platform === 'win32') window.moveTop()
+    window.show()
+    window.focus()
+  }
   return window
 }

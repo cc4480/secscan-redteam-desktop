@@ -61,6 +61,7 @@ import { DesktopRedteamRunner, redteamRunnerResources } from './redteam-runner.t
 import { provisionArsenalIndex } from './arsenal-provisioning.ts'
 import { DesktopMetasploit, findMetasploitHome } from './redteam-msf.ts'
 import { runRunnerReadiness } from './readiness.ts'
+import { probeMcpServers } from './mcp-server-status.ts'
 import { DesktopUpdatePreparationError } from './update-error.ts'
 import { DesktopUpdateSchedule, resolveDesktopUpdateScheduleConfig } from './update-schedule.ts'
 import { desktopUpdateErrorSummary, presentDesktopUpdate } from './update-presentation.ts'
@@ -1135,7 +1136,7 @@ async function main(): Promise<void> {
   }
   let openingWelcome: Promise<void> | undefined
   /** Masked MCP state for the setup window; built from the document and the environment, never from a value. */
-  const welcomeMcpState = (): WelcomeMcpState => ({
+  const welcomeMcpState = (): Omit<WelcomeMcpState, 'servers'> => ({
     required: mcpSetupRequired(process.env, storedMcpCredentials, engagementRunner.consoleEnvironmentNames),
     entryRequired: welcomeAccountEntryRequired,
     endpoint: process.env.REDTEAM_MCP_URL ?? storedMcpCredentials.values.REDTEAM_MCP_URL ?? DEFAULT_REDTEAM_MCP_URL,
@@ -1163,6 +1164,28 @@ async function main(): Promise<void> {
     } catch {
       // The backend publishes the failure with its own diagnostics; this line must carry no credential.
       console.warn('desktop mcp credentials: the Host could not be restarted with the new credentials')
+      return false
+    }
+  }
+  /**
+   * Start the bundled console again after a credential change redefined it.
+   * Callers stop the supervisor before reloading the credential document: the
+   * supervisor installed the running console's endpoint and token in the
+   * environment itself, not through the document, so the loader leaves both
+   * names untouched while they stand, and only the stop empties them for the
+   * stored values to install into. The start then applies the same launch
+   * rules as a fresh launch - a stored endpoint suppresses the bundled
+   * console, a stored token is reused by the restarted one.
+   * @returns whether the supervisor settled without a startup failure.
+   */
+  const restartBundledRunner = async (): Promise<boolean> => {
+    try {
+      await engagementRunner.start()
+      return true
+    } catch {
+      // The document already holds the new values, so the next launch retries the
+      // start with its own failure surface; this line must carry no credential.
+      console.warn('desktop mcp credentials: the bundled console could not be restarted with the new credentials')
       return false
     }
   }
@@ -1207,7 +1230,21 @@ async function main(): Promise<void> {
           return { ok: true }
         },
         skip: enterWorkspace,
-        readMcp: async () => welcomeMcpState(),
+        readMcp: async () => {
+          const state = welcomeMcpState()
+          // Per-row status is probed live on every read, from the same effective
+          // values the MCP rows compose from, so a dead, rejected, or tools-less
+          // server is visible on this surface instead of only in the Host log.
+          const servers = await probeMcpServers({
+            secscanToken: process.env.SECSCAN_MCP_TOKEN ?? storedMcpCredentials.values.SECSCAN_MCP_TOKEN,
+            seclayerKey: process.env.SECLAYER_API_KEY ?? storedMcpCredentials.values.SECLAYER_API_KEY,
+            runnerEndpoint: state.endpoint,
+            runnerToken: process.env.REDTEAM_UI_TOKEN ?? storedMcpCredentials.values.REDTEAM_UI_TOKEN,
+            bridgeUrl: process.env.PC_BRIDGE_URL,
+            bridgeTokenFile: process.env.PC_BRIDGE_TOKEN_FILE,
+          })
+          return { ...state, servers }
+        },
         saveMcp: async (input) => {
           const draft = normalizeMcpCredentialDraft(input)
           if (draft === undefined) return { ok: false }
@@ -1220,16 +1257,29 @@ async function main(): Promise<void> {
             console.error(`[desktop] MCP credentials were not saved: ${error.message}`)
             return { ok: false }
           }
+          // A draft that redefines the console takes effect in this session only if
+          // the bundled supervisor re-runs; while it runs, its own endpoint and token
+          // occupy the names the stored values would install into.
+          const redefineRunner = (draft.runner !== null || draft.endpoint !== null)
+            && engagementRunner.consoleEnvironmentNames.size > 0
+          if (redefineRunner) await engagementRunner.stop()
           storedMcpCredentials = await loadStoredMcpCredentials(
             process.env, mcpCredentialPath, desktopMcpSecretProtector(), installedMcpNames,
           )
-          return await restartWorkspaceHost() ? { ok: true } : { ok: false }
+          const runnerRestarted = !redefineRunner || await restartBundledRunner()
+          const hostRestarted = await restartWorkspaceHost()
+          return hostRestarted && runnerRestarted ? { ok: true } : { ok: false }
         },
         clearMcp: async () => {
           if (!await clearStoredMcpCredentials(mcpCredentialPath)) return { ok: false }
+          // Removal deletes the console names from the document too, so a running
+          // bundled console restarts under the same rule as a redefining save.
+          const redefineRunner = engagementRunner.consoleEnvironmentNames.size > 0
+          if (redefineRunner) await engagementRunner.stop()
           storedMcpCredentials = await loadStoredMcpCredentials(
             process.env, mcpCredentialPath, desktopMcpSecretProtector(), installedMcpNames,
           )
+          if (redefineRunner) await restartBundledRunner()
           await restartWorkspaceHost()
           return { ok: true }
         },

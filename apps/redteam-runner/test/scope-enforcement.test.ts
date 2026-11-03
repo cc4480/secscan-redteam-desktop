@@ -58,15 +58,25 @@ describe("nmap_exec scope enforcement", () => {
     const ctx = baseCtx({
       nmapExecutor: { scan: async (a: { target: string }) => { scanned = a.target; return { ok: true, message: "ok", run: { hosts: [] } }; } },
     });
-    const r = await handleNmapTools(ctx, "recon", "recon", call("nmap_exec"), {
-      action: "scan",
-      host: "seclayer.app",
-      targetProfile: "linux",
-      profile: "quick",
-    });
-    assert.ok(r);
-    assert.ok(!/DENIED/.test(r.result), "in-scope is not denied");
-    assert.equal(scanned, "seclayer.app", "the executor received the in-scope host");
+    // The scan path also presence-gates the resolved nmap binary (S4-H2);
+    // this test's subject is scope, so name a binary that exists (the test
+    // runner's own node) and restore the env afterwards.
+    const savedBin = process.env["REDTEAM_NMAP_BIN"];
+    process.env["REDTEAM_NMAP_BIN"] = process.execPath;
+    try {
+      const r = await handleNmapTools(ctx, "recon", "recon", call("nmap_exec"), {
+        action: "scan",
+        host: "seclayer.app",
+        targetProfile: "linux",
+        profile: "quick",
+      });
+      assert.ok(r);
+      assert.ok(!/DENIED/.test(r.result), "in-scope is not denied");
+      assert.equal(scanned, "seclayer.app", "the executor received the in-scope host");
+    } finally {
+      if (savedBin === undefined) delete process.env["REDTEAM_NMAP_BIN"];
+      else process.env["REDTEAM_NMAP_BIN"] = savedBin;
+    }
   });
 
   it("does not scope-gate the read-only 'profiles' listing", async () => {

@@ -172,9 +172,9 @@ export async function runToolBatch(deps: ToolBatchDeps): Promise<void> {
         role: 'user',
         content: `REFLECTION (${reflection.count}/${reflection.cap}) — verdict: ${reflection.verdict}: ${reflection.steering}`,
       })
-    } else if (phase === 'exploit' && ctx.deniedStreak >= 4 && ctx.redirects < 2) {
+    } else if (phase === 'exploit' && ctx.deniedStreak >= 4 && ctx.wallRedirects < 2) {
       ctx.deniedStreak = 0
-      ctx.redirects++
+      ctx.wallRedirects++
       const intel = await commanderRedirect(
         ctx,
         'The exploiter hit a wall: 4+ consecutive probes denied, cooled-down, or OPSEC-signaled with no successful observation.',

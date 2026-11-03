@@ -6,13 +6,12 @@
  * it is handed and reports what came back.
  */
 
-import { execFileSync } from 'node:child_process'
-import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
-import { buildXToolArgv, type XRunOptions, type XToolSpec } from './registry.js'
-import { resolveExternalBinary } from '../toolchain.js'
-import { scrubbedEnv } from '../host-exec/common.js'
+import { execFileSync } from "node:child_process";
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { buildXToolArgv, type XRunOptions, type XToolSpec } from "./registry.js";
+import { resolveExternalBinary, toolChildEnv } from "../toolchain.js";
 
 export interface XSpawnOpts {
   file: string
@@ -167,8 +166,8 @@ export async function runXTool(
   },
   spawnFn: XSpawnFn = realXSpawn,
 ): Promise<XExecResult> {
-  const env = opts.env ?? scrubbedEnv()
-  const bin = resolveBinPath(spec, env)
+  const env = toolChildEnv(opts.env ?? process.env);
+  const bin = resolveBinPath(spec, env);
 
   if (opts.action === 'probe') {
     return {

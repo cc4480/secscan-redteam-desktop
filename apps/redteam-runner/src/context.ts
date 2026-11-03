@@ -14,7 +14,7 @@ import { HostExecutor } from './host-exec/index.js'
 import { TargetRateLimiter, type CredentialAttemptGuard, type TestEnvironment } from './safety/index.js'
 import { ApprovalLog, type TierState } from './accountability/index.js'
 import { type RegistryEntry, type TargetFingerprint, type VulnerabilityRegistry } from './registry.js'
-import { type ActorRole, type EngagementInput, type OperationPlan, type PeerReviewStamp, type ResolvedRunnerConfig } from './types.js'
+import { type EngagementInput, type OperationPlan, type ResolvedRunnerConfig } from './types.js'
 import { type BatteryCategory } from './battery.js'
 import { type TargetId } from './targets.js'
 import { MsfExecutor } from './msf/index.js'
@@ -28,6 +28,7 @@ import { type SearchProvider } from './research/provider.js'
 import { type PolicyRules } from './policy/rules.js'
 import { type ScopeGuard } from './safety/scope-guard.js'
 import { type HookRegistry } from './hooks/index.js'
+import { type SignOffTransition } from './phases/exploit-one.js'
 
 export interface RunnerDeps {
   verify?: (domain: string, cfg: { endpoint: string; token: string }) => Promise<boolean>
@@ -60,72 +61,10 @@ export interface RunnerDeps {
   researchProvider?: SearchProvider
 }
 
+import type { KilledLive, LiveFinding, TargetMapEntry } from "./context-types.js"
+export { HaltError } from "./context-types.js"
+export type { KilledLive, LiveFinding, TargetMapEntry } from "./context-types.js"
 /** One entry in the shared target map (recon-written, whole-team-read). */
-export interface TargetMapEntry {
-  area: string
-  method: string
-  params?: string
-  authState?: string
-  attackId?: string
-  notes?: string
-}
-
-/** A confirmed finding recorded live during exploitation (shared state). */
-export interface LiveFinding {
-  severity: string
-  title: string
-  vulnClass?: string
-  attackId: string
-  evidence: string
-  payload?: string
-  /**
-   * Dual-exploiter cell outcome (spec §5), set only when the finding was
-   * recorded with a proven claim and adjudicated by exploit-cell/live.ts:
-   * 'proven' means both cell signatures plus a passing negative control;
-   * anything else ends 'detected'. Absent = never adjudicated.
-   */
-  cellState?: 'proven' | 'detected'
-  /**
-   * The adjudicated claim's expected marker + target URL, retained by
-   * exploit-cell/live.ts only when a claim was present at adjudication, so
-   * the report layer can show what was proven. The claim's receipt is NOT
-   * retained here — it lives in the audit trail.
-   */
-  provenClaim?: { expectedMarker: string; targetUrl: string }
-  /** The adjudication outcome's one-line detail, retained with the claim. */
-  cellDetail?: string
-  /**
-   * Engine-recorded CVSS base score (Q-RP-3), copied verbatim from the
-   * producing engine's record (the SecScan scanner's cvssScore) at the
-   * dispatch seam. Absent when the engine recorded none — never derived
-   * from severity, never estimated.
-   */
-  cvss?: number
-  /** Engine-recorded CWE id (Q-RP-3), same provenance rule as cvss. */
-  cwe?: string
-  /**
-   * Q-FLEET-XCHECK: the fleet seat that recorded this finding, stamped
-   * by the RUNNER from the dispatch role at record time (or, for the
-   * exploiter's VERDICTS-block backstop, from the block's owner) — never
-   * a model-supplied tool argument. The reviewer pass challenges each
-   * finding with a different seat; without a recorded producer that
-   * rule has nothing to bite on. Absent = recorded before the stamp.
-   */
-  producer?: ActorRole
-  /** Q-FLEET-XCHECK peer-review stamp (types.ts PeerReviewStamp). Stamped by the reviewer pass only. */
-  peerReview?: PeerReviewStamp
-}
-
-/** A killed hypothesis recorded live during exploitation (shared state). */
-export interface KilledLive {
-  hypothesis: string
-  killingObservation: string
-  vulnClass?: string
-  attackId?: string
-  payload?: string
-}
-
-export class HaltError extends Error {}
 
 export interface Ctx {
   input: EngagementInput
@@ -283,8 +222,18 @@ export interface Ctx {
    */
   peerKilledLive: LiveFinding[]
   peerDeferredLive: LiveFinding[]
-  /** Coordinator re-recon redirections used this engagement (max 2). */
-  redirects: number
+  /**
+   * Coordinator sign-off redirects used, per phase gate (S2-H7): each
+   * transition (plan→recon / recon→exploit / exploit→report) spends from
+   * its OWN budget of 2, so one gate's redirects never starve another
+   * gate's first redirect.
+   */
+  redirects: Record<SignOffTransition, number>
+  /**
+   * Mechanical wall redirects used by the exploit agent loop (agents.ts),
+   * on their own budget of 2 — never shared with the sign-off gates.
+   */
+  wallRedirects: number
   /** Consecutive denied/cooled-down/OPSEC-signaled probes — wall detection. */
   deniedStreak: number
   /** The reporter's 2–3 sentence unified operation narrative (console header). */

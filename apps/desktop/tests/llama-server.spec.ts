@@ -337,7 +337,7 @@ describe('llama-server lifecycle', () => {
     ])
   })
 
-  it('fails with a typed error, publishes error and kills the child when readiness times out', async () => {
+  it('fails with a typed error, publishes error and kills the child when a silent child stalls', async () => {
     const directory = payloadDirectory()
     let now = 0
     const clock: LlamaServerClock = {
@@ -351,20 +351,107 @@ describe('llama-server lifecycle', () => {
       allocatePort: async () => FIXED_PORT,
       fetch: fetcher,
       clock,
-      timeouts: { readyMs: 1_000, exitMs: 20 },
+      timeouts: { readyMs: 1_000, stallMs: 1_000, exitMs: 20 },
     })
     servers.push(target)
     const states = recordStates(target)
 
     const failure = await startFailure(target)
 
-    expect(failure.message).toMatch(/did not become ready on http:\/\/127\.0\.0\.1:19001 within 1000 ms/u)
+    // A live but silent child fails by the stall path, not the old generic ceiling wording.
+    expect(failure.message).toMatch(/load stalled on http:\/\/127\.0\.0\.1:19001/u)
+    expect(failure.message).toMatch(/no new output for 1000 ms/u)
+    expect(failure.message).not.toMatch(/did not become ready .* within \d+ ms/u)
     expect(target.state.status).toBe('error')
     expect(target.state.error).toBe(failure.message)
     expect(states.map(state => state.status)).toEqual(['starting', 'error'])
-    // The injected clock proves the loop honoured the deadline without sleeping.
+    // The injected clock proves the loop honoured the stall bound without sleeping.
     expect(now).toBeGreaterThanOrEqual(1_000)
+    expect(now).toBeLessThan(2_000)
     expect(lastSpawn().child.signals).toEqual(['SIGTERM'])
+  })
+
+  it('keeps waiting past the readiness ceiling while load output keeps advancing, then succeeds', async () => {
+    const directory = payloadDirectory()
+    let now = 0
+    let steps = 0
+    const clock: LlamaServerClock = {
+      now: () => now,
+      sleep: async (milliseconds) => { now += milliseconds; await tick() },
+    }
+    const fetcher: LlamaFetch = async () => {
+      steps += 1
+      lastSpawn().child.stderr.write(`llama_model_loader: loading tensor ${String(steps)}\n`)
+      return now >= 2_600 ? { ok: true, status: 200 } : { ok: false, status: 503 }
+    }
+    const target = supervisor(directory, {
+      fetch: fetcher,
+      clock,
+      timeouts: { readyMs: 1_000, stallMs: 1_000, exitMs: 20 },
+    })
+    const states = recordStates(target)
+
+    const started = await target.start(START_INPUT)
+
+    // Readiness arrived at 2600 ms, well past the 1000 ms ceiling: progress kept the wait alive.
+    expect(started.status).toBe('running')
+    expect(now).toBeGreaterThanOrEqual(2_600)
+    expect(states.map(state => state.status)).toEqual(['starting', 'running'])
+    expect(lastSpawn().child.signals).toEqual([])
+  })
+
+  it('fails with the stall message and the diagnostic tail when output stops advancing', async () => {
+    const directory = payloadDirectory()
+    let now = 0
+    const clock: LlamaServerClock = {
+      now: () => now,
+      sleep: async (milliseconds) => { now += milliseconds; await tick() },
+    }
+    const fetcher: LlamaFetch = async () => ({ ok: false, status: 503 })
+    const target = supervisor(directory, {
+      spawn: (command, args, options) => {
+        const child = spawnIntoHarness(command, args, options)
+        lastSpawn().child.stderr.write('llama_model_loader: loading model tensors\n')
+        return child
+      },
+      fetch: fetcher,
+      clock,
+      timeouts: { readyMs: 1_000, stallMs: 1_000, exitMs: 20 },
+    })
+    const states = recordStates(target)
+
+    const failure = await startFailure(target)
+
+    expect(failure.message).toMatch(/load stalled/u)
+    expect(failure.message).toMatch(/no new output for 1000 ms/u)
+    expect(failure.message).toMatch(/\d+ ms elapsed/u)
+    // The retained stderr tail rides the stall message, as it does the other failure paths.
+    expect(failure.message).toContain('loading model tensors')
+    expect(failure.message).not.toMatch(/did not become ready .* within \d+ ms/u)
+    expect(target.state.status).toBe('error')
+    expect(states.map(state => state.status)).toEqual(['starting', 'error'])
+    expect(now).toBeGreaterThanOrEqual(1_000)
+    expect(now).toBeLessThan(2_000)
+    expect(lastSpawn().child.signals).toEqual(['SIGTERM'])
+  })
+
+  it('reports a child that exits before readiness with its exit code, not a stall', async () => {
+    const directory = payloadDirectory()
+    const fetcher: LlamaFetch = async () => {
+      lastSpawn().child.exit(2, null)
+      return { ok: false, status: 503 }
+    }
+    const target = supervisor(directory, {
+      fetch: fetcher,
+      timeouts: { readyMs: 1_000, stallMs: 1_000, exitMs: 20 },
+    })
+
+    const failure = await startFailure(target)
+
+    expect(failure.message).toMatch(/exited with code 2 before it answered on http:\/\/127\.0\.0\.1:19001/u)
+    expect(failure.message).not.toMatch(/stalled/u)
+    expect(target.state.status).toBe('error')
+    expect(target.state.error).toBe(failure.message)
   })
 
   it('reports a crash after startup with the exit code and the last stderr lines', async () => {

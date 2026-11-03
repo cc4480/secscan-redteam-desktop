@@ -55,6 +55,31 @@ export interface ReadinessView {
 export type ReadinessResult = { ok: true; readiness: ReadinessView } | { ok: false; reason: string }
 
 /**
+ * One configured MCP server's live status, probed by the shell when the MCP
+ * step is read. It carries no credential value: `detail` is a fixed phrase or
+ * an HTTP status, never a server reply body or a token.
+ */
+export interface McpServerStatusItem {
+  /** Stable row identity: the server namespace the harness row registers under. */
+  readonly id: 'secscan' | 'seclayer' | 'redteam' | 'alterego'
+  /** Product label shown for the row. */
+  readonly label: string
+  /**
+   * The row's real state when the step was read: `connected` (handshake and
+   * tool listing succeeded), `no-tools` (the initialize reply advertised no
+   * tools capability, so zero tools registered), `failed` (the server could
+   * not be reached or rejected the handshake), `unkeyed` (no token or key is
+   * seated for the row, so it was not probed), or `unpaired` (the bridge row's
+   * token file is missing or empty, so it was not probed).
+   */
+  readonly state: 'connected' | 'failed' | 'no-tools' | 'unkeyed' | 'unpaired'
+  /** Number of tools the server listed; present only after a successful listing (0 for `no-tools`). */
+  readonly toolCount?: number | undefined
+  /** Safe detail for a failed row, e.g. `HTTP 401`. */
+  readonly detail?: string | undefined
+}
+
+/**
  * Masked first-run MCP state. It carries a fingerprint and never a credential
  * value: the renderer is sandboxed, and nothing that reaches it may be echoed
  * into a log, an error, or a checked-in fixture.
@@ -74,6 +99,8 @@ export interface WelcomeMcpState {
   readonly fingerprints: Partial<Record<McpTokenName, string>>
   /** Token names this run inherits from the process environment rather than from the document. */
   readonly fromEnvironment: readonly McpEnvironmentName[]
+  /** Per-server live status for every configured MCP row, in row order. */
+  readonly servers: readonly McpServerStatusItem[]
 }
 
 /** Host-owned operations used by the welcome window. */
@@ -103,13 +130,17 @@ export interface WelcomeOperations {
    */
   readMcp(): Promise<WelcomeMcpState>
   /**
-   * Store MCP credentials and restart the Host so the MCP rows see them.
+   * Store MCP credentials and restart the Host so the MCP rows see them. A draft
+   * that supplies a runner token or a console endpoint also restarts the bundled
+   * console supervisor, so the redefined values are the ones in effect when this
+   * resolves rather than only at the next launch.
    * @param input - raw field values; an empty string keeps the stored entry.
    * @returns whether the values are stored and the Host restarted with them.
    */
   saveMcp(input: McpCredentialDraftInput): Promise<WelcomeSaveResult>
   /**
-   * Delete the stored MCP credentials, which revokes them on the next Host start.
+   * Delete the stored MCP credentials and restart the Host without them; a
+   * running bundled console restarts as well, under a fresh supervisor token.
    * @returns whether no credential document remains.
    */
   clearMcp(): Promise<WelcomeSaveResult>

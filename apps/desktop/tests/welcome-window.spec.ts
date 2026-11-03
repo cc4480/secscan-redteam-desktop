@@ -53,6 +53,7 @@ const operations = {
     stored: false,
     fingerprints: {},
     fromEnvironment: [],
+    servers: [],
   }),
   saveMcp: () => Promise.resolve({ ok: true as const }),
   clearMcp: () => Promise.resolve({ ok: true as const }),

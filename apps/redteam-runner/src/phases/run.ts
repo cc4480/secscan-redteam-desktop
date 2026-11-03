@@ -7,12 +7,10 @@ import { type Ctx, HaltError } from '../context.js'
 import { type EngagementInput, type EngagementResult, type Finding } from '../types.js'
 import { EventLog } from '../events.js'
 import { describeEnvironment, parseEnvironment, productionConfirmed, requireGraduation, resolveEffectiveRps, resolveLogRotationConfig, assertDistFresh } from '../safety/index.js'
-import { type VulnerabilityRegistry, loadRegistryFile, saveRegistryFile, seedRegistry } from '../registry.js'
 import { fireSlack, reportPhase, scribeGate } from '../report.js'
 import { finalizeDeliverables } from '../report/deliverables.js'
 import { inTestWindow, scopeHosts } from '../gate.js'
 import { safeEngagementId } from '../util.js'
-import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { verifiedRecordFor } from '../prompts/fleet-assembly.js'
 import { authorizePhase } from './authorize.js'
@@ -27,7 +25,6 @@ import { peerReviewPhase } from './peer-review.js'
 import { captureEngagementTrajectory } from '../harness2/trajectory.js'
 import { poolSnapshots, roleModelPolicy } from '@secscan/redteam-llm-router'
 import {
-  MemoryError,
   commitMemoryForRun,
   deriveEngagementScope,
   injectExploitMemory,
@@ -36,6 +33,7 @@ import {
 } from '../memory/index.js'
 import { buildEngagementContext } from './run-context.js'
 import { closePhaseIncomplete } from './run-close.js'
+import { loadOrSeedRegistry } from './run-registry.js'
 
 import { type RunOptions } from './run-options.js'
 
@@ -104,20 +102,7 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
   // (atomically) when the operator changes the tier. No new network surface.
   writeTierFile(dir, { tier, declared: tier, environment, updatedAt: new Date().toISOString() })
 
-  // The registry: load, or seed with the v0.3.x secscan.us engagement data on first run.
-  const registryPath = config.registryPath
-  const loadedRegistry = loadRegistryFile(registryPath)
-  // Q-MEMTIER §8 row 1: a registry file that EXISTS but does not load is
-  // corrupt or wrong-version — fail loud naming the path, before seeding
-  // can overwrite the only copy. (Absent file → seed, unchanged.)
-  if (loadedRegistry === null && existsSync(registryPath)) {
-    throw new MemoryError(
-      'REGISTRY_UNREADABLE',
-      `findings registry at ${registryPath} exists but could not be loaded (corrupt or wrong version) — refusing to seed over it`,
-    )
-  }
-  const registry: VulnerabilityRegistry = loadedRegistry ?? seedRegistry()
-  saveRegistryFile(registryPath, registry)
+  const { registryPath, registry } = loadOrSeedRegistry(config.registryPath)
 
   const ctx: Ctx = buildEngagementContext({
     input,
@@ -210,40 +195,50 @@ export async function runEngagement(input: EngagementInput, opts: RunOptions = {
       events.append({ phase: 'authorize', actor: 'runner', action: 'provider_unavailable', result: deadReason })
       return await closeIncomplete(deadReason, 'blocked')
     }
-    await planPhase(ctx)
-    await coordinatorSignOff(ctx, 'plan→recon', `Operation plan:\n${JSON.stringify(ctx.plan, null, 1)}`)
-    void fireSlack(ctx, { kind: 'phase', phase: 'recon' })
-    brief = await reconPhase(ctx)
-    // Q-MEMTIER moment 3 (§7.1): the refresh pack — after recon, with
-    // the fingerprint set, before the recon→exploit sign-off.
-    const refreshPack = injectExploitMemory(ctx)
-    await coordinatorSignOff(
-      ctx,
-      'recon→exploit',
-      `Recon brief:\n${brief.slice(0, 3000)}\n\nShared target map (${ctx.targetMap.length} entries):\n${ctx.targetMap.map(t => `- ${t.method} ${t.area}${t.authState ? ` [${t.authState}]` : ''}${t.attackId ? ` ${t.attackId}` : ''}`).join('\n') || '(empty)'}\nRegistry hits consulted: ${ctx.registryHits.length}. Fingerprint: ${JSON.stringify(ctx.fingerprint)}\nMemory refresh: ${refreshPack.survivors.length} units surfaced (${[...new Set(refreshPack.survivors.map(s => s.tier))].join(', ') || 'none'}), receipt ${refreshPack.receiptId}`,
-    )
-    summary = await exploitPhase(ctx, brief)
-    // Q-NOHALT: a dead provider ends the WORK, not the record — close with the
-    // deliverables instead of letting the remaining phases call it again.
-    // A spent budget is NOT closed here: the run finishes its phases normally
-    // and the report records the battery as incomplete (the engine's existing
-    // convention — see the pending-item and 12-cell coverage tests).
-    if (ctx.llmDown) {
-      return await closeIncomplete(ctx.llmDownReason ?? 'fleet provider unavailable', 'blocked')
+    await planPhase(ctx);
+    await coordinatorSignOff(ctx, "plan→recon", () => `Operation plan:\n${JSON.stringify(ctx.plan, null, 1)}`);
+    void fireSlack(ctx, { kind: "phase", phase: "recon" });
+    brief = await reconPhase(ctx);
+    // S2-H2: a launching command whose phase list excludes "exploit" (a
+    // recon+report sibling such as /nmap) skips the exploit phase, the
+    // peer-review pass, and both exploit-bound sign-off gates — recon
+    // hands straight to the report. Unset phases run the full pipeline.
+    const commandPhases = input.phases;
+    const skipExploit = commandPhases !== undefined && !commandPhases.includes("exploit");
+    if (skipExploit) {
+      events.append({ phase: "recon", actor: "runner", action: "exploit_skipped", result: `Exploit phase skipped: the launching command's phase list is ${commandPhases.join("+")} — recon hands straight to report.` });
+    } else {
+      // Q-MEMTIER moment 3 (§7.1): the refresh pack — after recon, with
+      // the fingerprint set, before the recon→exploit sign-off.
+      const refreshPack = injectExploitMemory(ctx);
+      await coordinatorSignOff(
+        ctx,
+        "recon→exploit",
+        () => `Recon brief:\n${brief.slice(0, 3000)}\n\nShared target map (${ctx.targetMap.length} entries):\n${ctx.targetMap.map((t) => `- ${t.method} ${t.area}${t.authState ? ` [${t.authState}]` : ""}${t.attackId ? ` ${t.attackId}` : ""}`).join("\n") || "(empty)"}\nRegistry hits consulted: ${ctx.registryHits.length}. Fingerprint: ${JSON.stringify(ctx.fingerprint)}\nMemory refresh: ${refreshPack.survivors.length} units surfaced (${[...new Set(refreshPack.survivors.map((s) => s.tier))].join(", ") || "none"}), receipt ${refreshPack.receiptId}`,
+      );
+      summary = await exploitPhase(ctx, brief);
+      // Q-NOHALT: a dead provider ends the WORK, not the record — close with the
+      // deliverables instead of letting the remaining phases call it again.
+      // A spent budget is NOT closed here: the run finishes its phases normally
+      // and the report records the battery as incomplete (the engine's existing
+      // convention — see the pending-item and 12-cell coverage tests).
+      if (ctx.llmDown) {
+        return await closeIncomplete(ctx.llmDownReason ?? "fleet provider unavailable", "blocked");
+      }
+      // Q-FLEET-XCHECK: the reviewer pass — every finding is challenged
+      // by a different seat than its producer before the report, and
+      // before this sign-off, so the verdict counts below are the
+      // post-challenge counts.
+      await peerReviewPhase(ctx);
+      void fireSlack(ctx, { kind: "phase", phase: "exploit" });
+      await coordinatorSignOff(
+        ctx,
+        "exploit→report",
+        () => `Exploitation summary:\n${summary.slice(0, 3000)}\n\nVerdicts — confirmed: ${ctx.liveFindings.length}, killed: ${ctx.killedLive.length}.\nBattery: ${["logic", "functionality", "validation"].map((c) => `${c}:${ctx.coverage.has(c as BatteryCategory) ? "yes" : "no"}`).join(", ")}.`,
+      );
     }
-    // Q-FLEET-XCHECK: the reviewer pass — every finding is challenged
-    // by a different seat than its producer before the report, and
-    // before this sign-off, so the verdict counts below are the
-    // post-challenge counts.
-    await peerReviewPhase(ctx)
-    void fireSlack(ctx, { kind: 'phase', phase: 'exploit' })
-    await coordinatorSignOff(
-      ctx,
-      'exploit→report',
-      `Exploitation summary:\n${summary.slice(0, 3000)}\n\nVerdicts — confirmed: ${ctx.liveFindings.length}, killed: ${ctx.killedLive.length}.\nBattery: ${['logic', 'functionality', 'validation'].map(c => `${c}:${ctx.coverage.has(c as BatteryCategory) ? 'yes' : 'no'}`).join(', ')}.`,
-    )
-    const findings = await reportPhase(ctx, brief, summary)
-    void fireSlack(ctx, { kind: 'phase', phase: 'report' })
+    const findings = await reportPhase(ctx, brief, summary);
+    void fireSlack(ctx, { kind: "phase", phase: "report" });
     // SCRIBE GATE, then Q-DELIVERABLES-AUTOFIRE: the publisher seat signs
     // the closing set (or leaves it UNSIGNED — report/scribe.ts); the set
     // is then verified on disk before the completion is recorded.

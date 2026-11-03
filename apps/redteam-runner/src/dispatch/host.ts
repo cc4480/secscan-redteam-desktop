@@ -46,7 +46,8 @@ function hostExecPrelude(
   attackId: string | undefined,
   category: BatteryCategory | undefined,
   wantTp: "linux" | "windows",
-): { refused: DispatchResult } | { host: string; ctrl: AbortController } {
+  dispatchSignal?: AbortSignal,
+): { refused: DispatchResult } | { host: string; ctrl: { signal: AbortSignal } } {
   if (!techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe, { testMode: ctx.config?.testMode === true })) {
     return { refused: { result: `DENIED by ROE: technique ${attackId} is excluded for this engagement.`, attackId, target: String(args["host"] ?? "") } };
   }
@@ -64,19 +65,21 @@ function hostExecPrelude(
   // The exec is really going out: count it toward the battery.
   ctx.probesUsed++;
   noteCategoryCoverage(ctx, category, wantTp);
-  // Per-call timeout wiring: this execution's controller — the dispatch
-  // timeout aborts it when the call overruns (dispatch/timeout.ts).
-  const ctrl = new AbortController();
+  // Per-call timeout wiring: the router's dispatch controller (armed in
+  // dispatch/router.ts from dispatch/timeout.ts) — it aborts this signal
+  // when the call overruns its budget. Without a dispatch signal (direct
+  // handler calls in tests) a private, unarmed controller stands in.
+  const ctrl: { signal: AbortSignal } = { signal: dispatchSignal ?? new AbortController().signal };
   return { host, ctrl };
 }
 
-export async function handleHostTools(ctx: Ctx, _role: ActorRole, phase: EngagementPhase, call: ToolCallRequest, args: Record<string, unknown>): Promise<DispatchResult | null> {
+export async function handleHostTools(ctx: Ctx, _role: ActorRole, phase: EngagementPhase, call: ToolCallRequest, args: Record<string, unknown>, _seam?: unknown, dispatchSignal?: AbortSignal): Promise<DispatchResult | null> {
   if (call.name !== "ssh_exec" && call.name !== "smb_exec" && call.name !== "winrm_exec" && !WAVE2_TOOLS.has(call.name)) return null;
 if (call.name === "ssh_exec" || call.name === "smb_exec" || call.name === "winrm_exec") {
   const attackId = typeof args["attackId"] === "string" ? (args["attackId"] as string).toUpperCase() : undefined;
   const rawCat = typeof args["category"] === "string" ? (args["category"] as string).toLowerCase() : "";
   const category = (BATTERY_CATEGORIES as string[]).includes(rawCat) ? (rawCat as BatteryCategory) : undefined;
-  const pre = hostExecPrelude(ctx, call, args, attackId, category, call.name === "ssh_exec" ? "linux" : "windows");
+  const pre = hostExecPrelude(ctx, call, args, attackId, category, call.name === "ssh_exec" ? "linux" : "windows", dispatchSignal);
   if ("refused" in pre) return pre.refused;
   const { host, ctrl } = pre;
   // TEST MODE (operator order): the executor's preflight will skip the
@@ -133,7 +136,7 @@ if (WAVE2_TOOLS.has(call.name)) {
   const rawCat = typeof args["category"] === "string" ? (args["category"] as string).toLowerCase() : "";
   const category = (BATTERY_CATEGORIES as string[]).includes(rawCat) ? (rawCat as BatteryCategory) : undefined;
   const wantTp = call.name === "ssh_agent_audit" || call.name === "nfs_enum" ? "linux" : "windows";
-  const pre = hostExecPrelude(ctx, call, args, attackId, category, wantTp);
+  const pre = hostExecPrelude(ctx, call, args, attackId, category, wantTp, dispatchSignal);
   if ("refused" in pre) return pre.refused;
   const { host, ctrl } = pre;
   try {

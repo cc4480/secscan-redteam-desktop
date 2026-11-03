@@ -133,8 +133,10 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
     toolCallTimeoutMs: config.toolCallTimeoutMs,
   }
   // The initial sync uses 'throw' when failOnStartupError is configured, so
-  // a registration conflict propagates to the startup-await path. Re-syncs
-  // and reconnect syncs always contain conflicts.
+  // a strict synchronization failure (a registration conflict, or an
+  // initialize reply advertising neither the tools nor the resources
+  // capability) propagates to the startup-await path. Re-syncs and reconnect
+  // syncs always contain failures.
   const startupOpts: ToolBridgeOptions = config.failOnStartupError
     ? { ...opts, registrationFailure: 'throw' }
     : opts

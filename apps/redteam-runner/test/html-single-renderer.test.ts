@@ -12,7 +12,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, sep } from "node:path";
 
 const SRC = new URL("../../src/", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
 
@@ -26,7 +26,7 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 /** The one module allowed to wrap a report document. */
-const SHELL = "report\\html\\shell.ts";
+const SHELL = join("report", "html", "shell.ts");
 
 test("only the shell wraps a report HTML document", () => {
   const emitters = walk(SRC)
@@ -34,7 +34,7 @@ test("only the shell wraps a report HTML document", () => {
     // The console UI (login page, static shell) is chrome, not a deliverable
     // document — none of ui/ is a report artifact.
     .map((f) => relative(SRC, f))
-    .filter((f) => !f.startsWith("ui\\"));
+    .filter((f) => !f.startsWith(`ui${sep}`));
 
   assert.deepEqual(
     emitters,
@@ -44,7 +44,7 @@ test("only the shell wraps a report HTML document", () => {
 });
 
 test("the legacy second stylesheet is gone", () => {
-  const html = readFileSync(join(SRC, "report\\html.ts"), "utf8");
+  const html = readFileSync(join(SRC, "report", "html.ts"), "utf8");
   assert.ok(
     !/const STYLE = `/.test(html),
     "report/html.ts still defines its own stylesheet; it must use the design system's REPORT_CSS via the shell",
@@ -52,14 +52,14 @@ test("the legacy second stylesheet is gone", () => {
 });
 
 test("every report artifact goes through the shell", () => {
-  for (const rel of ["report\\html.ts", "report\\html\\render.ts"]) {
+  for (const rel of [join("report", "html.ts"), join("report", "html", "render.ts")]) {
     const body = readFileSync(join(SRC, rel), "utf8");
     assert.match(body, /renderHtmlDocument/, `${rel} does not use the single document shell`);
   }
 });
 
 test("companion documents keep the design system's stylesheet", () => {
-  const style = readFileSync(join(SRC, "report\\html\\style.ts"), "utf8");
+  const style = readFileSync(join(SRC, "report", "html", "style.ts"), "utf8");
   assert.match(
     style,
     /\$\{AUX_CSS\}/,

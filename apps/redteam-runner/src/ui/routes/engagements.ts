@@ -12,19 +12,22 @@ import { join } from "node:path";
 import { runEngagement } from "../../phases.js";
 import { ALL_TARGETS, isTargetId, type TargetId } from "../../targets.js";
 import { parseTier } from "../../accountability/index.js";
-import type { EngagementInput } from "../../types.js";
+import type { EngagementInput, EngagementPhase } from "../../types.js";
 import { readState } from "../../events.js";
 import type { UiStore } from "../store.js";
 import { engagementDir, generateEngagementId } from "../store.js";
 import type { UiLaunchRequest } from "../types.js";
 import { json, badRequest } from "./http.js";
 
-function toEngagementInput(b: UiLaunchRequest): EngagementInput {
+export function toEngagementInput(b: UiLaunchRequest): EngagementInput {
   if (!b.target || typeof b.target !== "string") throw new Error("target is required");
   if (b.mode !== "red" && b.mode !== "black") throw new Error("mode must be red|black");
   if (!b.objective || typeof b.objective !== "string") throw new Error("objective is required");
   if (!Array.isArray(b.scope) || b.scope.length === 0 || !b.scope.every((s) => typeof s === "string" && s.trim())) {
     throw new Error("scope is required (non-empty array of exact hosts)");
+  }
+  if (b.outOfScope !== undefined && (!Array.isArray(b.outOfScope) || !b.outOfScope.every((s) => typeof s === "string" && s.trim()))) {
+    throw new Error("outOfScope must be an array of exact hosts");
   }
   let targets: TargetId[] | undefined;
   if (b.targets && b.targets.length > 0) {
@@ -35,6 +38,21 @@ function toEngagementInput(b: UiLaunchRequest): EngagementInput {
   let tier: 0 | 1 | 2 | undefined;
   if (b.tier !== undefined) {
     tier = parseTier(String(b.tier)) as 0 | 1 | 2;
+  }
+  // S2-H2: the launching command's phase list rides into the input,
+  // validated against the phase vocabulary — a malformed list refuses
+  // the launch instead of being silently dropped (which is how the
+  // sibling semantics were lost in the first place). The command name
+  // itself is validated and dropped here: buildLaunchBody resolves it
+  // against the registry before the body is built, so by this seam the
+  // name is a record, not an instruction.
+  let phases: EngagementPhase[] | undefined;
+  if (b.phases !== undefined) {
+    const PHASES: readonly string[] = ["authorize", "plan", "recon", "exploit", "report", "done", "blocked", "halted"];
+    if (!Array.isArray(b.phases) || b.phases.length === 0 || !b.phases.every((p) => typeof p === "string" && PHASES.includes(p))) {
+      throw new Error(`bad phases ${JSON.stringify(b.phases)}; want a non-empty subset of ${PHASES.join(",")}`);
+    }
+    phases = b.phases;
   }
   let environment: "staging" | "production" | undefined;
   if (b.environment !== undefined) {
@@ -47,6 +65,7 @@ function toEngagementInput(b: UiLaunchRequest): EngagementInput {
     objective: b.objective,
     roe: {
       scope: b.scope,
+      ...(b.outOfScope?.length ? { outOfScope: b.outOfScope } : {}),
       excludedTechniques: b.excludedTechniques?.length ? b.excludedTechniques : null,
       blackoutWindows: [],
       stopConditions: [],
@@ -56,6 +75,7 @@ function toEngagementInput(b: UiLaunchRequest): EngagementInput {
     fullBattery: b.fullBattery ?? true,
     ...(b.localHost ? { localHost: true } : {}),
     targets,
+    ...(phases ? { phases } : {}),
     environment,
     confirmProduction: b.confirmProduction ?? false,
     tier,

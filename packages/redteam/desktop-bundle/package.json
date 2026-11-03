@@ -23,7 +23,8 @@
     "@secscan/redteam-command": "workspace:*",
     "@secscan/redteam-console-share": "workspace:*",
     "@secscan/redteam-harness-plugin": "workspace:*",
-    "@secscan/redteam-llm-local": "workspace:*"
+    "@secscan/redteam-llm-local": "workspace:*",
+    "@secscan/redteam-llm-meta": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-mcp-client": "workspace:*"

@@ -476,6 +476,13 @@ body {
 .readiness-glyph--unreachable { background: #dc2626; }
 .readiness-glyph--not-configured { background: var(--dsw-alias-label-caption); }
 
+/* MCP server status rows reuse the readiness list; only the glyph colors are new. */
+.readiness-glyph--connected { background: #2e9e5b; }
+.readiness-glyph--failed { background: #dc2626; }
+.readiness-glyph--no-tools { background: #d97706; }
+.readiness-glyph--unkeyed { background: var(--dsw-alias-label-caption); }
+.readiness-glyph--unpaired { background: var(--dsw-alias-label-caption); }
+
 .readiness-item-label {
   color: var(--dsw-alias-label-primary);
   font-family: var(--dsw-font-family);

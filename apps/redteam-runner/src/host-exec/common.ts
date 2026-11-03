@@ -206,15 +206,6 @@ export function redactSecrets(text: string, secrets: string[]): string {
 }
 
 /** Truncate to the output cap (no bulk exfiltration through the tool). */
-/** Environment with secret-bearing variables removed, for spawning external tools. */
-export function scrubbedEnv(): NodeJS.ProcessEnv {
-  const out: NodeJS.ProcessEnv = { ...process.env }
-  for (const key of Object.keys(out)) {
-    if (/KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|PRIVATE/i.test(key)) delete out[key]
-  }
-  return out
-}
-
 export function capOutput(text: string, cap = HOST_OUTPUT_CAP): string {
   if (text.length <= cap) return text
   return text.slice(0, cap) + `\n…[truncated at ${cap} bytes — refine the command instead of dumping bulk output]`

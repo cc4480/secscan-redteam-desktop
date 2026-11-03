@@ -110,7 +110,8 @@ export function buildEngagementContext(opts: BuildEngagementContextOptions): Ctx
     killedLive: [],
     peerKilledLive: [],
     peerDeferredLive: [],
-    redirects: 0,
+    redirects: { "plan→recon": 0, "recon→exploit": 0, "exploit→report": 0 },
+    wallRedirects: 0,
     deniedStreak: 0,
   }
   return ctx

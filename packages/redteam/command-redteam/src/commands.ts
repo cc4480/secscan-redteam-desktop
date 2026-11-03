@@ -1,11 +1,18 @@
 /**
  * The RedTeam command definitions: `/scan`, `/status`, `/report`, `/stop`,
- * and `/use` over the harness command registry.
+ * and `/use` over the harness command registry, plus the sibling
+ * engagement commands `/pcscan`, `/deepscan`, `/nmap`, `/nuclei`, and
+ * `/metasploit`.
  *
  * `/scan`, `/status`, and `/report` submit one fixed operator-directive
  * user message (see directive.ts) that routes the session's Lead through
  * the engagement tools it already owns — the same launch/status/report
  * flow a typed request takes, made deterministic at the command seam.
+ * The siblings submit their own directives, each naming the command and
+ * carrying its registry tier, target families, and phase list as
+ * `engagement_launch` arguments (S2-H2), so a sibling run is the bounded
+ * run its registry entry defines — not a plain `/scan`. `/pcscan` names
+ * no target: its directive routes through `engagement_launch_local`.
  * `/stop` cancels the active turn through the agent's own cancellation
  * path. `/use` validates its tool name against the tools service's real
  * per-agent catalog and steers the running driver with the directive.
@@ -20,10 +27,14 @@ import {
   USE_USAGE,
   catalogSample,
   parseUseInput,
+  pcscanDirective,
   reportDirective,
   scanDirective,
+  siblingDirective,
+  siblingUsage,
   statusDirective,
   useDirective,
+  type SiblingSpec,
 } from './directive.js'
 
 /** The slice of the tools service the `/use` handler resolves at call time. */
@@ -64,6 +75,57 @@ function executeScan(invocation: CommandInvocation): CommandResult {
   return {
     kind: 'success',
     text: `Scan directive queued for ${target}: the Lead will launch the engagement and report progress in this thread.`,
+  }
+}
+
+/**
+ * The sibling engagement commands and the registry semantics each one
+ * carries (S2-H2). This table mirrors the runner's command registry
+ * (apps/redteam-runner/src/workflows/commands.ts COMMANDS) — the tier,
+ * phase list, default target families, and approval requirement of each
+ * sibling — because this package cannot import the runner; the values
+ * are the registry's, kept verbatim.
+ */
+const SIBLINGS: readonly { name: string; description: string; spec: SiblingSpec }[] = [
+  {
+    name: 'deepscan',
+    description: 'Full battery across the selected families with proof discipline',
+    spec: { tier: 1, phases: ['recon', 'exploit', 'report'], targets: ['webapp', 'windows', 'linux'], requiresApproval: true },
+  },
+  {
+    name: 'nmap',
+    description: 'Port and service discovery only (recon + report, tier 0)',
+    spec: { tier: 0, phases: ['recon', 'report'], targets: ['windows', 'linux'], requiresApproval: false },
+  },
+  {
+    name: 'nuclei',
+    description: 'Template-based checks through the nuclei bridge',
+    spec: { tier: 1, phases: ['recon', 'exploit', 'report'], targets: ['webapp'], requiresApproval: false },
+  },
+  {
+    name: 'metasploit',
+    description: 'CVE validation through the Metasploit bridge (tier 2, approval required)',
+    spec: { tier: 2, phases: ['recon', 'exploit', 'report'], targets: ['windows', 'linux'], requiresApproval: true },
+  },
+]
+
+/** Execute one sibling command: route the trimmed target into its directive. */
+function executeSibling(name: string, spec: SiblingSpec, invocation: CommandInvocation): CommandResult {
+  const target = invocation.rawInput.trim()
+  if (target === '') return { kind: 'error', text: siblingUsage(name) }
+  followupDirective(invocation, siblingDirective(name, target, spec))
+  return {
+    kind: 'success',
+    text: `${name} directive queued for ${target}: the Lead will launch the /${name} engagement (tier ${spec.tier}, phases ${spec.phases.join('+')}) and report progress in this thread.`,
+  }
+}
+
+/** Execute `/pcscan`: route into the local-launch flow; no target is taken. */
+function executePcscan(invocation: CommandInvocation): CommandResult {
+  followupDirective(invocation, pcscanDirective())
+  return {
+    kind: 'success',
+    text: 'Local scan directive queued: the Lead will launch the local host assessment and report progress in this thread.',
   }
 }
 
@@ -124,7 +186,8 @@ function executeUse(ctx: Context, invocation: CommandInvocation): CommandResult 
 }
 
 /**
- * Build the five RedTeam command definitions bound to one plugin context.
+ * Build the RedTeam command definitions bound to one plugin context:
+ * the five original commands plus the five sibling engagement commands.
  * @param ctx - the plugin context; the tools service is resolved from it
  *   at invocation time, never captured at registration time.
  * @returns the definitions to register with the command registry.
@@ -138,6 +201,20 @@ export function createRedteamCommandDefinitions(ctx: Context): CommandDefinition
       input: { hint: '<target>' },
       handler: invocation => executeScan(invocation),
     },
+    {
+      definitionId: CommandDefinitionId('@secscan/redteam-command/pcscan'),
+      name: 'pcscan',
+      description: 'Local host assessment of this workstation',
+      input: { hint: '[quick|full]' },
+      handler: invocation => executePcscan(invocation),
+    },
+    ...SIBLINGS.map((sibling): CommandDefinition => ({
+      definitionId: CommandDefinitionId(`@secscan/redteam-command/${sibling.name}`),
+      name: sibling.name,
+      description: sibling.description,
+      input: { hint: '<target>' },
+      handler: invocation => executeSibling(sibling.name, sibling.spec, invocation),
+    })),
     {
       definitionId: CommandDefinitionId('@secscan/redteam-command/status'),
       name: 'status',

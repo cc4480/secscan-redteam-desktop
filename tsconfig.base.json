@@ -544,6 +544,7 @@
       "@secscan/redteam-auth-gate": ["./packages/redteam/auth-gate/src"],
       "@secscan/redteam-llm-router": ["./packages/redteam/llm-router/src"],
       "@secscan/redteam-llm-local": ["./packages/redteam/llm-local/src"],
+      "@secscan/redteam-llm-meta": ["./packages/redteam/llm-meta/src"],
       "@secscan/redteam-harness-plugin": ["./packages/redteam/harness-plugin/src"],
       "@secscan/redteam-console-share": ["./packages/redteam/console-share/src"],
       "@secscan/redteam-console-share/shared": ["./packages/redteam/console-share/src/shared.ts"],

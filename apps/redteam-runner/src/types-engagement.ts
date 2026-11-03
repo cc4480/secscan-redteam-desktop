@@ -131,6 +131,15 @@ export interface EngagementInput {
    */
   confirmTier2Production?: boolean
   /**
+   * The phase list of the operator command that launched this engagement
+   * (S2-H2), set from the registry spec by the CLI and the chat launch
+   * path. Unset → the full pipeline, exactly as before the field existed.
+   * A list without "exploit" (a recon+report command such as /nmap)
+   * makes runEngagement skip the exploit phase, its peer-review pass,
+   * and both exploit-bound sign-off gates: recon hands to the report.
+   */
+  phases?: readonly EngagementPhase[]
+  /**
    * How deep the verified access runs (L12): carried through authorize
    * into the fleet record's accessLevel (same value set as the record
    * type's). Unset → 'verified-domain' (authorize is the precondition)

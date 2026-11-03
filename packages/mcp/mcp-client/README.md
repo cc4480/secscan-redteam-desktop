@@ -164,7 +164,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-After discovery succeeds, SDK-admitted MCP tools appear as native tools named `mcp__<serverName>__<rawName>` (or their deterministic normalized form), with the server description and input schema. A re-sync replaces the generation; disposal or an exhausted reconnect budget removes it. A server without the tools capability connects with an empty tool set.
+After discovery succeeds, SDK-admitted MCP tools appear as native tools named `mcp__<serverName>__<rawName>` (or their deterministic normalized form), with the server description and input schema. A re-sync replaces the generation; disposal or an exhausted reconnect budget removes it. A server whose initialize reply advertises no tools capability registers an empty tool set and logs an error naming the server; a resource-only server still connects so this connection can serve its resources, while with `failOnStartupError: true` a server advertising neither the tools nor the resources capability fails the initial synchronization instead, rejecting plugin activation.
 
 #### Token effect
 

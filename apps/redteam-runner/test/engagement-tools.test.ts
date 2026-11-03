@@ -194,13 +194,36 @@ describe("engagement_report", () => {
     assert.equal(b["reportPath"], join(dir, "report.md"));
   });
 
+  it("carries the recorded status on a ready halted report (S2-H10)", async () => {
+    cannedState("eng-2026-10-28-hh10", "halted", true);
+    const out = await tool("engagement_report").run(store, { id: "eng-2026-10-28-hh10" });
+    assert.equal(out.status, 200);
+    const b = out.body as Record<string, unknown>;
+    assert.equal(b["ready"], true);
+    assert.equal(b["status"], "halted");
+  });
+
+  it("carries the recorded status on a ready complete report (S2-H10)", async () => {
+    cannedState("eng-2026-10-28-cc10", "complete", true);
+    const out = await tool("engagement_report").run(store, { id: "eng-2026-10-28-cc10" });
+    assert.equal(out.status, 200);
+    const b = out.body as Record<string, unknown>;
+    assert.equal(b["ready"], true);
+    assert.equal(b["status"], "complete");
+  });
+
   it("says ready:false while the run is still going", async () => {
-    cannedState("eng-2026-10-28-dddd", "running", false);
+    const dir = cannedState("eng-2026-10-28-dddd", "running", false);
+    // Still going means a live record behind it: without one, a
+    // non-terminal record is a dead run and the answer names the repair
+    // tool instead (S6-H5, covered in report-regenerate.test.ts).
+    store.register({ id: "eng-2026-10-28-dddd", dir, status: "running", startedAt: "2026-10-28T10:00:00Z" });
     const out = await tool("engagement_report").run(store, { id: "eng-2026-10-28-dddd" });
     assert.equal(out.status, 200);
     const b = out.body as Record<string, unknown>;
     assert.equal(b["ready"], false);
     assert.equal(b["status"], "running");
+    assert.match(String(b["summary"]), /Keep polling/);
   });
 
   it("404s an unknown id", async () => {

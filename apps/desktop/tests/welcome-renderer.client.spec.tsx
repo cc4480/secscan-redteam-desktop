@@ -21,6 +21,7 @@ const unconfiguredMcp: WelcomeMcpState = {
   stored: false,
   fingerprints: {},
   fromEnvironment: [],
+  servers: [],
 }
 
 function mount(language = 'zh-CN', options: { page?: 'entry' | 'mcp'; mcp?: Partial<WelcomeMcpState> } = {}) {
@@ -313,6 +314,35 @@ describe('desktop welcome MCP access step', () => {
     expect(view.api.readMcp).toHaveBeenCalledOnce()
     expect(view.button('#mcp-save').disabled).toBe(true)
     await expect(view.copy()).toMatchFileSnapshot(`./expected/welcome/${language}-mcp.expected.txt`)
+  })
+
+  it('renders each MCP server row with its own status, so a failed row cannot pass for a healthy one', async () => {
+    const view = mount('en', {
+      page: 'mcp',
+      mcp: {
+        servers: [
+          { id: 'secscan', label: 'SecScan MCP', state: 'connected', toolCount: 3 },
+          { id: 'seclayer', label: 'Seclayer MCP', state: 'unkeyed' },
+          { id: 'redteam', label: 'Engagement runner', state: 'failed', detail: 'HTTP 401' },
+          { id: 'alterego', label: 'AlterEgo bridge', state: 'no-tools', toolCount: 0 },
+        ],
+      },
+    })
+    await loaded(view)
+    const section = view.document.querySelector('#mcp-server-status')
+    expect(section).not.toBeNull()
+    expect(section!.querySelector('.readiness-title')!.textContent).toBe(view.api.messages.welcomeMcpStatusTitle)
+    const row = (id: string) => view.document.querySelector(`#mcp-server-${id}`)!.textContent ?? ''
+    expect(row('secscan')).toContain('SecScan MCP')
+    expect(row('secscan')).toContain(view.api.messages.welcomeMcpStatusConnected)
+    expect(row('secscan')).toContain('3')
+    expect(row('seclayer')).toContain(view.api.messages.welcomeMcpStatusUnkeyed)
+    expect(row('redteam')).toContain(view.api.messages.welcomeMcpStatusFailed)
+    expect(row('redteam')).toContain('HTTP 401')
+    expect(row('alterego')).toContain(view.api.messages.welcomeMcpStatusNoTools)
+    // The whole point of the surface: the four rows are not interchangeable.
+    const texts = ['secscan', 'seclayer', 'redteam', 'alterego'].map(row)
+    expect(new Set(texts).size).toBe(4)
   })
 
   it('stores one trimmed draft and continues to the account step', async () => {
