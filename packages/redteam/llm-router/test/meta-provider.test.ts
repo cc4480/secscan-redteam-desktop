@@ -58,6 +58,57 @@ describe('MetaProvider configuration', () => {
     assert.equal(new MetaProvider().isConfigured(), true)
   })
 
+  test('a blank MODEL_API_KEY does not shadow the META_API_KEY fallback (S1-H9)', async () => {
+    process.env[META_API_KEY_ENV] = ''
+    process.env[META_API_KEY_FALLBACK_ENV] = 'fallback-key'
+    assert.equal(new MetaProvider().isConfigured(), true)
+    let seenAuth: unknown
+    stubFetch(async (_url, init) => {
+      seenAuth = (init?.headers as Record<string, string>)['Authorization']
+      return jsonResponse({ choices: [{ message: { content: 'ok' } }] })
+    })
+    await new MetaProvider().complete({ model: META_MODELS.spark, messages: [{ role: 'user', content: 'hi' }] })
+    assert.equal(seenAuth, 'Bearer fallback-key')
+  })
+
+  test('a whitespace-only MODEL_API_KEY does not shadow the META_API_KEY fallback (S1-H9)', async () => {
+    process.env[META_API_KEY_ENV] = '   '
+    process.env[META_API_KEY_FALLBACK_ENV] = 'fallback-key'
+    assert.equal(new MetaProvider().isConfigured(), true)
+    let seenAuth: unknown
+    stubFetch(async (_url, init) => {
+      seenAuth = (init?.headers as Record<string, string>)['Authorization']
+      return jsonResponse({ choices: [{ message: { content: 'ok' } }] })
+    })
+    await new MetaProvider().complete({ model: META_MODELS.spark, messages: [{ role: 'user', content: 'hi' }] })
+    assert.equal(seenAuth, 'Bearer fallback-key')
+  })
+
+  test('a whitespace-only key in both env vars is not configured (S1-H9)', async () => {
+    process.env[META_API_KEY_ENV] = '   '
+    process.env[META_API_KEY_FALLBACK_ENV] = '  '
+    assert.equal(new MetaProvider().isConfigured(), false)
+    await assert.rejects(
+      new MetaProvider().complete({ model: META_MODELS.spark, messages: [{ role: 'user', content: 'hi' }] }),
+      /neither MODEL_API_KEY nor META_API_KEY is set/,
+    )
+    delete process.env[META_API_KEY_FALLBACK_ENV]
+    assert.equal(new MetaProvider().isConfigured(), false)
+  })
+
+  test('a real MODEL_API_KEY still wins over the META_API_KEY fallback (S1-H9)', async () => {
+    process.env[META_API_KEY_ENV] = 'primary-key'
+    process.env[META_API_KEY_FALLBACK_ENV] = 'fallback-key'
+    assert.equal(new MetaProvider().isConfigured(), true)
+    let seenAuth: unknown
+    stubFetch(async (_url, init) => {
+      seenAuth = (init?.headers as Record<string, string>)['Authorization']
+      return jsonResponse({ choices: [{ message: { content: 'ok' } }] })
+    })
+    await new MetaProvider().complete({ model: META_MODELS.spark, messages: [{ role: 'user', content: 'hi' }] })
+    assert.equal(seenAuth, 'Bearer primary-key')
+  })
+
   test('complete() without a key fails loud, naming the env var, before any fetch', async () => {
     delete process.env[META_API_KEY_ENV]
     delete process.env[META_API_KEY_FALLBACK_ENV]

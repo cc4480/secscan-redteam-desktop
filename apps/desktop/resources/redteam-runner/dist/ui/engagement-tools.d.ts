@@ -54,7 +54,7 @@ export declare function targetHost(cleaned: string): string | null;
 /**
  * Build the launch request an engagement_launch call hands to the launch
  * handler: cleaned target, red mode unless black was asked for, scope
- * defaulted to the target's host, and a named operator on the record.
+ * defaulted to the target's host, and a named operator on the record; a named sibling command stamps its registry tier/targets/phases (S2-H2).
  *
  * The operator name matters beyond bookkeeping: authorizePhase attests
  * ownership from the engagement record (operatorName ?? client), so a chat

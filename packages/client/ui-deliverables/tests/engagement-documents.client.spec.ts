@@ -78,6 +78,21 @@ describe('engagementDocumentsFromResult', () => {
     expect(byFile.get('report.docx')).toBe(true)
   })
 
+  it('maps the Scribe signoff field to the report model (S6-H2a)', () => {
+    const signed = engagementDocumentsFromResult(JSON.stringify(resultBody({ signoff: { signed: true, cycles: 2 } })))
+    expect(signed?.signoff).toEqual({ signed: true, cycles: 2 })
+    const unsigned = engagementDocumentsFromResult(JSON.stringify(resultBody({
+      signoff: { signed: false, cycles: 3, reason: 'defects', defectCount: 2 },
+    })))
+    expect(unsigned?.signoff).toEqual({ signed: false, cycles: 3, reason: 'defects', defectCount: 2 })
+  })
+
+  it('maps an absent or malformed signoff field to null, never a fabricated signing (S6-H2a)', () => {
+    expect(engagementDocumentsFromResult(JSON.stringify(resultBody()))?.signoff).toBeNull()
+    expect(engagementDocumentsFromResult(JSON.stringify(resultBody({ signoff: null })))?.signoff).toBeNull()
+    expect(engagementDocumentsFromResult(JSON.stringify(resultBody({ signoff: { cycles: 1 } })))?.signoff).toBeNull()
+  })
+
   it('declines results that are not a ready report', () => {
     expect(engagementDocumentsFromResult(JSON.stringify(resultBody({ ready: false })))).toBeNull()
     expect(engagementDocumentsFromResult('not json')).toBeNull()
@@ -179,6 +194,79 @@ describe('EngagementReportRow', () => {
     fireEvent.click(view.getByRole('button', { name: 'Download report.html' }))
     await waitFor(() => { expect(actions.download).toHaveBeenCalledWith('report.html') })
   }, 20000)
+
+  it('offers Preview only on the report.html row; the sandboxed frame mounts on the gesture, not at render (S6-H4b)', () => {
+    const actions: EngagementDocumentActions = {
+      download: vi.fn(async () => true),
+      copy: vi.fn(async () => MD_CONTENT),
+    }
+    const view = settledRow(actions, resultBody())
+    const htmlRow = view.container.querySelector('[data-document="report.html"]')
+    expect(htmlRow?.querySelector('iframe')).toBeNull()
+    for (const row of view.container.querySelectorAll('[data-document]')) {
+      const names = [...row.querySelectorAll('button')].map(button => button.getAttribute('aria-label') ?? '')
+      if (row.getAttribute('data-document') === 'report.html') {
+        expect(names).toContain('Preview report.html')
+      } else {
+        expect(names.some(name => name.startsWith('Preview'))).toBe(false)
+      }
+    }
+    fireEvent.click(view.getByRole('button', { name: 'Preview report.html' }))
+    const frame = htmlRow?.querySelector('iframe')
+    expect(frame?.getAttribute('src')).toBe(
+      `redteam-console/api/engagements/${ID}/deliverables/report.html?display=inline`,
+    )
+    expect(frame?.getAttribute('sandbox')).toBe('')
+    fireEvent.click(view.getByRole('button', { name: 'Hide preview of report.html' }))
+    expect(htmlRow?.querySelector('iframe')).toBeNull()
+  })
+
+  it('offers no Preview on a gap report.html row (S6-H4b)', () => {
+    const actions: EngagementDocumentActions = {
+      download: vi.fn(async () => true),
+      copy: vi.fn(async () => MD_CONTENT),
+    }
+    const view = settledRow(actions, resultBody({
+      reportHtmlPath: undefined,
+      deliverableGap: 'report.md is missing from the engagement directory — the deliverable set is incomplete (missing: report.html); see the run\'s deliverable_failed record.',
+    }))
+    const gap = view.container.querySelector('[data-document="report.html"]')
+    expect(gap?.hasAttribute('data-gap')).toBe(true)
+    expect(gap?.querySelectorAll('button')).toHaveLength(0)
+    expect(view.container.querySelector('iframe')).toBeNull()
+  })
+
+  it('renders a Signed row for a signed report and an Unsigned row for an unsigned one (S6-H2a)', () => {
+    const actions: EngagementDocumentActions = {
+      download: vi.fn(async () => true),
+      copy: vi.fn(async () => MD_CONTENT),
+    }
+    const signedView = settledRow(actions, resultBody({ signoff: { signed: true, cycles: 2 } }))
+    const signedRow = signedView.container.querySelector('[data-signoff]')
+    expect(signedRow?.getAttribute('data-signoff')).toBe('signed')
+    expect(signedRow?.textContent).toContain('Signed by Scribe')
+    expect(signedRow?.textContent).toContain('2')
+    signedView.unmount()
+
+    const unsignedView = settledRow(actions, resultBody({
+      signoff: { signed: false, cycles: 3, reason: 'defects', defectCount: 2 },
+    }))
+    const unsignedRow = unsignedView.container.querySelector('[data-signoff]')
+    expect(unsignedRow?.getAttribute('data-signoff')).toBe('unsigned')
+    expect(unsignedRow?.textContent).toContain('Unsigned')
+    expect(unsignedRow?.textContent).toContain('defects')
+    expect(unsignedRow?.textContent).toContain('2')
+  })
+
+  it('renders no signoff row when the result carries no signoff field (S6-H2a)', () => {
+    const actions: EngagementDocumentActions = {
+      download: vi.fn(async () => true),
+      copy: vi.fn(async () => MD_CONTENT),
+    }
+    const view = settledRow(actions, resultBody())
+    expect(view.container.querySelector('[data-signoff]')).toBeNull()
+    expect(view.container.querySelectorAll('[data-document]')).toHaveLength(7)
+  })
 
   it('shows a failure note when an action fails, and no documents before ready', async () => {
     const actions: EngagementDocumentActions = {

@@ -5,5 +5,5 @@
  * derived by `trust.ts` (never taken from a proposal's word), and there
  * is no delete operation in v1.
  */
-export {};
+export * from "./types-diff.js";
 //# sourceMappingURL=types.js.map

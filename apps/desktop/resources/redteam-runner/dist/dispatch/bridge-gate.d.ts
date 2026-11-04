@@ -21,10 +21,10 @@
  * (dispatch/bridge.ts) — this cache governs only what is offered,
  * never what may run.
  */
-import type { JsonSchemaTool } from "@secscan/redteam-llm-router";
-import type { Ctx } from "../context.js";
-import type { EngagementPhase } from "../types.js";
-import { type BridgeClientLike } from "./bridge-client.js";
+import type { JsonSchemaTool } from '@secscan/redteam-llm-router';
+import type { Ctx } from '../context.js';
+import type { EngagementPhase } from '../types.js';
+import { type BridgeClientLike } from './bridge-client.js';
 /** Prefix separating the fleet surface's bridge tools from every other family. */
 export declare const BRIDGE_TOOL_PREFIX = "bridge_";
 /**

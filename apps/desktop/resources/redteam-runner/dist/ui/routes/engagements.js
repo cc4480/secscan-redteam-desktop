@@ -13,7 +13,7 @@ import { parseTier } from "../../accountability/index.js";
 import { readState } from "../../events.js";
 import { engagementDir, generateEngagementId } from "../store.js";
 import { json, badRequest } from "./http.js";
-function toEngagementInput(b) {
+export function toEngagementInput(b) {
     if (!b.target || typeof b.target !== "string")
         throw new Error("target is required");
     if (b.mode !== "red" && b.mode !== "black")
@@ -22,6 +22,9 @@ function toEngagementInput(b) {
         throw new Error("objective is required");
     if (!Array.isArray(b.scope) || b.scope.length === 0 || !b.scope.every((s) => typeof s === "string" && s.trim())) {
         throw new Error("scope is required (non-empty array of exact hosts)");
+    }
+    if (b.outOfScope !== undefined && (!Array.isArray(b.outOfScope) || !b.outOfScope.every((s) => typeof s === "string" && s.trim()))) {
+        throw new Error("outOfScope must be an array of exact hosts");
     }
     let targets;
     if (b.targets && b.targets.length > 0) {
@@ -33,6 +36,21 @@ function toEngagementInput(b) {
     let tier;
     if (b.tier !== undefined) {
         tier = parseTier(String(b.tier));
+    }
+    // S2-H2: the launching command's phase list rides into the input,
+    // validated against the phase vocabulary — a malformed list refuses
+    // the launch instead of being silently dropped (which is how the
+    // sibling semantics were lost in the first place). The command name
+    // itself is validated and dropped here: buildLaunchBody resolves it
+    // against the registry before the body is built, so by this seam the
+    // name is a record, not an instruction.
+    let phases;
+    if (b.phases !== undefined) {
+        const PHASES = ["authorize", "plan", "recon", "exploit", "report", "done", "blocked", "halted"];
+        if (!Array.isArray(b.phases) || b.phases.length === 0 || !b.phases.every((p) => typeof p === "string" && PHASES.includes(p))) {
+            throw new Error(`bad phases ${JSON.stringify(b.phases)}; want a non-empty subset of ${PHASES.join(",")}`);
+        }
+        phases = b.phases;
     }
     let environment;
     if (b.environment !== undefined) {
@@ -46,6 +64,7 @@ function toEngagementInput(b) {
         objective: b.objective,
         roe: {
             scope: b.scope,
+            ...(b.outOfScope?.length ? { outOfScope: b.outOfScope } : {}),
             excludedTechniques: b.excludedTechniques?.length ? b.excludedTechniques : null,
             blackoutWindows: [],
             stopConditions: [],
@@ -55,6 +74,7 @@ function toEngagementInput(b) {
         fullBattery: b.fullBattery ?? true,
         ...(b.localHost ? { localHost: true } : {}),
         targets,
+        ...(phases ? { phases } : {}),
         environment,
         confirmProduction: b.confirmProduction ?? false,
         tier,

@@ -1,6 +1,6 @@
-import { type Ctx } from "../context.js";
-import { type CoordinatorDirective } from "./tasks.js";
-export declare function coordinatorDirective(ctx: Ctx, kind: "decompose" | "replan", context: string): Promise<CoordinatorDirective>;
+import { type Ctx } from '../context.js';
+import { type CoordinatorDirective } from './tasks.js';
+export declare function coordinatorDirective(ctx: Ctx, kind: 'decompose' | 'replan', context: string): Promise<CoordinatorDirective>;
 /**
  * Condense a directive context for the single re-issue after a
  * content-policy rejection: the raw batch dump is what the provider
@@ -12,7 +12,7 @@ export declare function coordinatorDirective(ctx: Ctx, kind: "decompose" | "repl
  * @param context - the original, uncondensed directive context
  * @returns the condensed context for the re-issue call
  */
-export declare function condenseDirectiveContext(kind: "decompose" | "replan", context: string): string;
+export declare function condenseDirectiveContext(kind: 'decompose' | 'replan', context: string): string;
 /**
  * coordinatorDirective with the honest-close failure path (Q-HALT Item 4).
  *
@@ -35,4 +35,4 @@ export declare function condenseDirectiveContext(kind: "decompose" | "replan", c
  * other failure falls into the same honest close, whose single
  * directive_failed event carries that final error's cause.
  */
-export declare function coordinatorDirectiveOrClose(ctx: Ctx, kind: "decompose" | "replan", context: string): Promise<CoordinatorDirective | null>;
+export declare function coordinatorDirectiveOrClose(ctx: Ctx, kind: 'decompose' | 'replan', context: string): Promise<CoordinatorDirective | null>;

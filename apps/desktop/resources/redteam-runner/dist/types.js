@@ -8,5 +8,5 @@
  * server-authoritative domain-ownership proof before any active testing —
  * covert means covert vs the blue team, NEVER vs the authorization gate.
  */
-export {};
+export * from './types-engagement.js';
 //# sourceMappingURL=types.js.map

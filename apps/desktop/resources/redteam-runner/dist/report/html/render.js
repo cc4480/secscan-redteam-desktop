@@ -1,10 +1,10 @@
 import { renderMarkdown } from '../../ui/markdown.js';
-import { REPORT_CSS } from './style.js';
+import { renderHtmlDocument } from "./shell.js";
 import { severityChips } from './gauge.js';
 import { findingCard, negativeProofCard } from './cards.js';
 import { buildReportDocument } from '../document.js';
 import { activitySection, allClearSection, bannerSection, blockedBanner, coverSection, coverageSection, fixPromptSection, footerSection, haltBanner, teamSection, } from './sections.js';
-import { TIER_DEFINITION, TIER_LABEL, esc } from './tokens.js';
+import { TIER_DEFINITION, TIER_LABEL } from './tokens.js';
 import { limitationsSection, methodSection, riskMethodSection, scopeSection, strengthsSection, } from './matter-sections.js';
 import { breakdownSection, impactSection, pillarSection, prioritySection, riskAreasSection, surfaceSection, whatChangedSection, } from './detail-sections.js';
 import { inventorySection } from './inventory-sections.js';
@@ -27,14 +27,6 @@ function tierGroupHtml(o, group) {
         `<p class="tier-def">${TIER_DEFINITION[group.tier]}</p>` +
         cards.join(''));
 }
-const COPY_SCRIPT = `<script>
-document.querySelectorAll("[data-copy]").forEach(function (b) {
-  b.addEventListener("click", function () {
-    var el = document.getElementById(b.getAttribute("data-copy"));
-    if (el && navigator.clipboard) { navigator.clipboard.writeText(el.innerText); b.textContent = "Copied"; }
-  });
-});
-</script>`;
 export function renderEngagementReportHtml(o) {
     // The sections render from the ONE shared report document
     // (report/document.ts) in its canonical order — the same model the
@@ -110,22 +102,6 @@ export function renderEngagementReportHtml(o) {
         parts.push(limitationsSection(o.matter));
     }
     parts.push(footerSection(o.meta));
-    return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="generator" content="SecScan RedTeam">
-<meta name="robots" content="noindex,nofollow">
-<title>${esc(o.title)} — ${esc(o.meta.target)}</title>
-<style>${REPORT_CSS}</style>
-</head>
-<body>
-<div class="wrap">
-${parts.join('\n')}
-</div>
-${COPY_SCRIPT}
-</body>
-</html>`;
+    return renderHtmlDocument({ title: `${o.title} — ${o.meta.target}`, body: parts.join('\n') });
 }
 //# sourceMappingURL=render.js.map

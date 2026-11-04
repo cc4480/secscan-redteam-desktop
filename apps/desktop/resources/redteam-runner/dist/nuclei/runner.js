@@ -9,6 +9,7 @@
  */
 import { spawn } from "node:child_process";
 import { redactSecrets } from "../host-exec/common.js";
+import { toolChildEnv } from "../toolchain.js";
 const CVE_RE = /CVE-\d{4}-\d{4,7}/i;
 /** Extract a CVE from a template id or name (template ids embed CVEs). */
 export function extractCveFromTemplate(templateId, name) {
@@ -21,14 +22,14 @@ export function realNucleiSpawn() {
         const [bin, ...args] = argv;
         let child;
         try {
-            child = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
+            child = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"], env: toolChildEnv() });
         }
         catch (err) {
-            resolve({ stdout: "", stderr: String(err), exitCode: null, killed: false, timedOut: false });
+            resolve({ stdout: '', stderr: String(err), exitCode: null, killed: false, timedOut: false });
             return;
         }
-        let stdout = "";
-        let stderr = "";
+        let stdout = '';
+        let stderr = '';
         let done = false;
         const finish = (r) => {
             if (done)
@@ -38,7 +39,7 @@ export function realNucleiSpawn() {
         };
         const timer = setTimeout(() => {
             try {
-                child.kill("SIGKILL");
+                child.kill('SIGKILL');
             }
             catch { /* already gone */ }
             finish({ stdout, stderr, exitCode: null, killed: true, timedOut: true });
@@ -47,36 +48,36 @@ export function realNucleiSpawn() {
             if (opts.signal.aborted) {
                 clearTimeout(timer);
                 try {
-                    child.kill("SIGKILL");
+                    child.kill('SIGKILL');
                 }
                 catch { /* already gone */ }
                 finish({ stdout, stderr, exitCode: null, killed: true, timedOut: false });
                 return;
             }
-            opts.signal.addEventListener("abort", () => {
+            opts.signal.addEventListener('abort', () => {
                 clearTimeout(timer);
                 try {
-                    child.kill("SIGKILL");
+                    child.kill('SIGKILL');
                 }
                 catch { /* already gone */ }
                 finish({ stdout, stderr, exitCode: null, killed: true, timedOut: false });
             }, { once: true });
         }
-        child.stdout?.on("data", (d) => {
-            stdout += d.toString("utf8");
+        child.stdout?.on('data', (d) => {
+            stdout += d.toString('utf8');
             if (stdout.length > 4_000_000) {
                 try {
-                    child.kill("SIGKILL");
+                    child.kill('SIGKILL');
                 }
                 catch { /* already gone */ }
             }
         });
-        child.stderr?.on("data", (d) => { stderr += d.toString("utf8").slice(0, 8000); });
-        child.on("error", (err) => {
+        child.stderr?.on('data', (d) => { stderr += d.toString('utf8').slice(0, 8000); });
+        child.on('error', (err) => {
             clearTimeout(timer);
             finish({ stdout, stderr: stderr + String(err), exitCode: null, killed: false, timedOut: false });
         });
-        child.on("close", (code) => {
+        child.on('close', (code) => {
             clearTimeout(timer);
             finish({ stdout, stderr, exitCode: code, killed: false, timedOut: false });
         });
@@ -87,7 +88,7 @@ export function parseNucleiJsonl(stdout, secrets = []) {
     const findings = [];
     let parseErrors = 0;
     let rawLines = 0;
-    for (const line of stdout.split("\n")) {
+    for (const line of stdout.split('\n')) {
         const t = line.trim();
         if (!t)
             continue;
@@ -100,16 +101,16 @@ export function parseNucleiJsonl(stdout, secrets = []) {
             parseErrors++;
             continue;
         }
-        const templateId = String(obj["template-id"] ?? obj["templateID"] ?? "unknown");
-        const info = (obj["info"] ?? {});
-        const name = String(info["name"] ?? templateId);
-        const severity = String(info["severity"] ?? obj["severity"] ?? "unknown").toLowerCase();
-        const tags = Array.isArray(info["tags"]) ? info["tags"].map(String) : [];
-        const matchedAt = String(obj["matched-at"] ?? obj["host"] ?? "");
-        const excerpt = redactSecrets(String(obj["extracted-results"] ?? obj["matcher-name"] ?? "").slice(0, 500), secrets);
+        const templateId = String(obj['template-id'] ?? obj['templateID'] ?? 'unknown');
+        const info = (obj['info'] ?? {});
+        const name = String(info['name'] ?? templateId);
+        const severity = String(info['severity'] ?? obj['severity'] ?? 'unknown').toLowerCase();
+        const tags = Array.isArray(info['tags']) ? info['tags'].map(String) : [];
+        const matchedAt = String(obj['matched-at'] ?? obj['host'] ?? '');
+        const excerpt = redactSecrets(String(obj['extracted-results'] ?? obj['matcher-name'] ?? '').slice(0, 500), secrets);
         findings.push({
             templateId, name, severity,
-            host: String(obj["host"] ?? ""),
+            host: String(obj['host'] ?? ''),
             matchedAt,
             cve: extractCveFromTemplate(templateId, name),
             tags, excerpt,

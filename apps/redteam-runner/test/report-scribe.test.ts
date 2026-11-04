@@ -22,6 +22,7 @@ import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { strFromU8, unzipSync } from 'fflate'
 import type { AgentRole, ChatMessage, ChatResult, ToolCallRequest } from '@secscan/redteam-llm-router'
 import type { VerifiedEngagementRecord } from '@secscan/redteam-fleet-skills'
 import { EventLog, readEvents, readState } from '../src/events.js'
@@ -283,6 +284,37 @@ describe('scribe gate — the close-out loop', () => {
     const state = readState(dir)
     assert.equal(state?.artifactUnsigned?.reason, 'scribe_unavailable')
     assert.equal(state?.artifactSignoff, null)
+  })
+
+  it('(7) dry-run: the gate stamps UNSIGNED dry-run in state + report.json + the package zip, and never calls the seat', async () => {
+    writeFixtureSet(dir)
+    let reviews = 0
+    const complete: CompleteFn = async () => { reviews++; return textOnly('{"verdict":"sign","defects":[]}') }
+    const ctx = fixtureCtx(dir, complete)
+    ctx.config.dryRunAgents = true
+    const outcome = await scribeGate(ctx)
+    assert.equal(outcome.signed, false)
+    assert.equal(outcome.cycles, 0)
+    assert.equal(outcome.reason, 'dry-run')
+    assert.equal(reviews, 0, 'a dry run never calls the review seat')
+    const state = readState(dir)
+    assert.equal(state?.artifactSignoff, null, 'a dry run carries no signoff')
+    assert.equal(state?.artifactUnsigned?.reason, 'dry-run')
+    assert.deepEqual(state?.artifactUnsigned?.defects, [])
+    assert.equal(state?.artifactUnsigned?.cycles, 0)
+    assert.ok(state?.artifactUnsigned?.at && !Number.isNaN(Date.parse(state.artifactUnsigned.at)), 'the stamp carries a timestamp')
+    const model = JSON.parse(readFileSync(join(dir, 'report.json'), 'utf8')) as ReportModel
+    assert.equal(model.artifactSignoff, null)
+    assert.deepEqual(model.artifactUnsigned, state?.artifactUnsigned, 'report.json carries the same dry-run stamp as state')
+    const zip = unzipSync(readFileSync(join(dir, 'report-package.zip')))
+    const packagedEntry = zip['report.json']
+    assert.ok(packagedEntry, 'the package zip carries report.json')
+    const packaged = JSON.parse(strFromU8(packagedEntry)) as ReportModel
+    assert.equal(packaged.artifactSignoff, null)
+    assert.deepEqual(packaged.artifactUnsigned, state?.artifactUnsigned, "the zip's report.json carries the dry-run stamp")
+    const events = readEvents(dir)
+    assert.equal(events.filter(e => e.action === 'artifact_unsigned').length, 1, 'exactly one unsigned stamp event')
+    assert.ok(!events.some(e => e.action === 'artifact_signed'), 'no signature event on a dry run')
   })
 
   it('(5b) an unparseable answer: UNSIGNED scribe_unavailable, no fabricated verdict', async () => {

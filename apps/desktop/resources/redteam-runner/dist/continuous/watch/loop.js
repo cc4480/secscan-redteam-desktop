@@ -1,8 +1,8 @@
 /**
  * Loop watch cycles on the profile's cadence until aborted.
  */
-import { loadWatchProfile } from "../profile.js";
-import { runWatchCycle } from "./cycle.js";
+import { loadWatchProfile } from '../profile.js';
+import { runWatchCycle } from './cycle.js';
 export async function watchLoop(opts, signal) {
     for (;;) {
         if (signal?.aborted)
@@ -12,22 +12,21 @@ export async function watchLoop(opts, signal) {
             const profile = loadWatchProfile(opts.profilePath);
             intervalHours = profile.cadence.intervalHours;
             const result = await runWatchCycle({ ...opts, once: true });
-            console.log(`[watch] cycle ${result.status}${result.engagementId ? ` ${result.engagementId}` : ""}` +
+            console.log(`[watch] cycle ${result.status}${result.engagementId ? ` ${result.engagementId}` : ''}` +
                 (result.drift
                     ? ` — new:${result.drift.newFindings.length} reopened:${result.drift.reopened.length} remediated:${result.drift.remediated.length} needs-review:${result.drift.needsReview.length}`
-                    : "") +
-                (result.reason ? ` — ${result.reason}` : ""));
+                    : '') +
+                (result.reason ? ` — ${result.reason}` : ''));
         }
         catch (err) {
             console.log(`[watch] cycle error (loop continues): ${err.message}`);
         }
         const waitMs = Math.max(60_000, intervalHours * 3600_000);
         await new Promise((resolve) => {
-            const t = setTimeout(resolve, waitMs);
-            signal?.addEventListener("abort", () => {
-                clearTimeout(t);
-                resolve();
-            }, { once: true });
+            let t;
+            const onAbort = () => { clearTimeout(t); resolve(); };
+            t = setTimeout(() => { signal?.removeEventListener('abort', onAbort); resolve(); }, waitMs);
+            signal?.addEventListener('abort', onAbort, { once: true });
         });
     }
 }

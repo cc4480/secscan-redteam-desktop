@@ -92,6 +92,33 @@ export function findCommand(name) {
     return COMMANDS.find(command => command.name === normalized);
 }
 /**
+ * Every registry command except /scan (the plain launch, which carries
+ * no command stamp) and /report (report delivery, not a launch),
+ * projected to {@link SiblingSpec}. Derived from COMMANDS so the specs
+ * can never drift from the registry.
+ */
+export const SIBLING_COMMANDS = COMMANDS
+    .filter(command => command.name !== "/scan" && command.name !== "/report")
+    .map(command => ({
+    name: command.name.slice(1),
+    tier: command.tier,
+    phases: command.phases,
+    targets: command.targets,
+    requiresApproval: command.requiresApproval,
+}));
+/**
+ * Resolve one sibling by name (`/x` and `x` both resolve, via
+ * {@link findCommand}).
+ * @param name - the command name as given by the caller.
+ * @returns the sibling spec, or undefined for /scan, /report, and unknown names.
+ */
+export function findSiblingCommand(name) {
+    const spec = findCommand(name);
+    if (spec === undefined)
+        return undefined;
+    return SIBLING_COMMANDS.find(sibling => sibling.name === spec.name.slice(1));
+}
+/**
  * Parse one operator line into an invocation.
  * @param line - e.g. `/deepscan app.example.com webapp,windows`
  * @param defaultTargets - resolved targets when the line names none.
@@ -160,6 +187,8 @@ export function buildLocalEngagementInput(invocation, host, mode = "red") {
         objective: `${invocation.command.summary} (${invocation.command.name})`,
         roe: { scope: [host] },
         targets: [...invocation.targets],
+        tier: invocation.command.tier,
+        phases: [...invocation.command.phases],
         localHost: true,
     };
 }

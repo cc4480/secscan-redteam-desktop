@@ -104,6 +104,7 @@ export async function authorizePhase(ctx) {
             verified: true,
             verificationTs: ctx.verifiedAt,
             verificationProof: ctx.verificationProof,
+            verifiedScope: ctx.verifiedScope,
         });
         return { allowed: true };
     }
@@ -160,6 +161,7 @@ export async function authorizePhase(ctx) {
         verified: true,
         verificationTs: ctx.verifiedAt,
         verificationProof: ctx.verificationProof,
+        verifiedScope: ctx.verifiedScope,
     });
     return verdict;
 }

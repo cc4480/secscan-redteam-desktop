@@ -4,59 +4,12 @@
  * Store: types, record/load/save, and the v0.3.x seed. Querying lives in
  * query.ts. (Module doc comment preserved on the registry.ts barrel.)
  */
-export interface TargetFingerprint {
-    host: string;
-    /** e.g. ["react-spa", "cloudflare-edge", "bearer-rest-api"] */
-    stack: string[];
-    /** e.g. "security-scanner-saas", "ecommerce", "banking-portal" */
-    appType: string;
-    notes?: string;
-}
-interface RegistryEntryBase {
-    id: string;
-    date: string;
-    engagementId: string;
-    target: TargetFingerprint;
-}
-export interface ConfirmedFinding extends RegistryEntryBase {
-    kind: "confirmed";
-    vulnClass: string;
-    technique: string;
-    attackId?: string;
-    owasp?: string;
-    /** The payload/shape that proved it, generalized (no live secrets). */
-    payloadPattern: string;
-    /** Path to the evidence within the engagement dir. */
-    evidenceRef: string;
-    severity: "critical" | "high" | "medium" | "low" | "info";
-}
-export interface KilledHypothesis extends RegistryEntryBase {
-    kind: "killed";
-    hypothesis: string;
-    killingObservation: string;
-    attackId?: string;
-    vulnClass?: string;
-}
-export type RegistryEntry = ConfirmedFinding | KilledHypothesis;
-export interface VulnerabilityRegistry {
-    version: 1;
-    confirmed: ConfirmedFinding[];
-    killed: KilledHypothesis[];
-}
-export declare function emptyRegistry(): VulnerabilityRegistry;
-export interface RegistryQuery {
-    vulnClass?: string;
-    /** Comma-separated stack hints, e.g. "react-spa,cloudflare-edge". */
-    stack?: string;
-    appType?: string;
-    attackId?: string;
-    kind?: "confirmed" | "killed";
-    limit?: number;
-}
-export declare function recordConfirmed(reg: VulnerabilityRegistry, entry: Omit<ConfirmedFinding, "id" | "kind" | "date"> & {
+import { type ConfirmedFinding, type KilledHypothesis, type VulnerabilityRegistry } from './types.js';
+export * from './types.js';
+export declare function recordConfirmed(reg: VulnerabilityRegistry, entry: Omit<ConfirmedFinding, 'id' | 'kind' | 'date'> & {
     date?: string;
 }): ConfirmedFinding;
-export declare function recordKilled(reg: VulnerabilityRegistry, entry: Omit<KilledHypothesis, "id" | "kind" | "date"> & {
+export declare function recordKilled(reg: VulnerabilityRegistry, entry: Omit<KilledHypothesis, 'id' | 'kind' | 'date'> & {
     date?: string;
 }): KilledHypothesis;
 export declare function loadRegistryFile(path: string): VulnerabilityRegistry | null;
@@ -78,4 +31,3 @@ export declare function saveRegistryFile(path: string, reg: VulnerabilityRegistr
  */
 export declare function transactRegistryFile<T>(path: string, fn: (reg: VulnerabilityRegistry) => T): T;
 export declare function seedRegistry(): VulnerabilityRegistry;
-export {};

@@ -1,6 +1,6 @@
-import { resolveBridgeClient } from "./bridge-client.js";
+import { resolveBridgeClient } from './bridge-client.js';
 /** Prefix separating the fleet surface's bridge tools from every other family. */
-export const BRIDGE_TOOL_PREFIX = "bridge_";
+export const BRIDGE_TOOL_PREFIX = 'bridge_';
 /**
  * True when a tool name belongs to the bridge surface.
  * @param name - the offered/dispatched tool name.
@@ -22,39 +22,39 @@ export function bridgeOpName(toolName) {
  */
 const OWN_MACHINE = "This tool acts through the AlterEgo bridge on the OPERATOR'S OWN machine — the operator's hands on " +
     "his own box. It is never an action against a remote target directly; the operator's machine can be " +
-    "the launch point for the work, the way xtool runs from this machine.";
+    'the launch point for the work, the way xtool runs from this machine.';
 /** Per-family teaching text, keyed by the bridge operation's family. */
 function familyTeaching(op) {
-    if (op.startsWith("cdp_")) {
+    if (op.startsWith('cdp_')) {
         return ("Authenticated browser work in a real Chrome on the operator's machine: drive the in-scope local " +
-            "application the way a user would — log in as the owner to establish a session, then test authorization " +
-            "as a second account. Address elements from cdp_snapshot output, never by coordinates. cdp_type " +
-            "verifies by readback: if the readback differs, the type did not land — re-snapshot instead of " +
-            "retrying blind.");
+            'application the way a user would — log in as the owner to establish a session, then test authorization ' +
+            'as a second account. Address elements from cdp_snapshot output, never by coordinates. cdp_type ' +
+            'verifies by readback: if the readback differs, the type did not land — re-snapshot instead of ' +
+            'retrying blind.');
     }
-    if (op === "submit_job" || op.startsWith("job_")) {
+    if (op === 'submit_job' || op.startsWith('job_')) {
         return ("Long-running work on the operator's machine, run as a background job: submit_job returns a job_id " +
-            "immediately and the work continues whether or not this call stays open — poll job_status, collect " +
-            "the outcome with job_result, stop it with job_cancel. Use it for host-side runs that would outlast " +
-            "a single call.");
+            'immediately and the work continues whether or not this call stays open — poll job_status, collect ' +
+            'the outcome with job_result, stop it with job_cancel. Use it for host-side runs that would outlast ' +
+            'a single call.');
     }
-    if (op === "screenshot" || op === "uia_find") {
+    if (op === 'screenshot' || op === 'uia_find') {
         return ("Verify what is actually on the operator's machine instead of inferring it from process or file " +
-            "state: screenshot shows the screen; uia_find locates accessibility elements on it. Read-only " +
-            "observation.");
+            'state: screenshot shows the screen; uia_find locates accessibility elements on it. Read-only ' +
+            'observation.');
     }
     return ("Direct control of the operator's own machine — shell, files, windows, input, processes, power: " +
         "the operator's hands on his own box. Work on this machine as the operator would himself; anything " +
-        "aimed at a target goes out from this machine through its own network and tools.");
+        'aimed at a target goes out from this machine through its own network and tools.');
 }
 /** Map one bridge tool entry onto the fleet surface, full registry, unfiltered. */
 function toBridgeTool(info) {
     const teaching = familyTeaching(info.name);
-    const description = [teaching, info.description?.trim() ?? "", OWN_MACHINE].filter(Boolean).join(" ");
+    const description = [teaching, info.description?.trim() ?? '', OWN_MACHINE].filter(Boolean).join(' ');
     return {
         name: BRIDGE_TOOL_PREFIX + info.name,
         description,
-        parameters: (info.inputSchema ?? info.parameters ?? { type: "object", properties: {} }),
+        parameters: (info.inputSchema ?? info.parameters ?? { type: 'object', properties: {} }),
     };
 }
 const offeringCache = new WeakMap();
@@ -72,9 +72,9 @@ async function resolveOffering(ctx, phase, clientArg) {
         return [];
     ctx.events.append({
         phase,
-        actor: "runner",
-        action: "bridge_tools_active",
-        result: `AlterEgo bridge tools are active in this engagement: the bridge is live on the operator's machine, ` +
+        actor: 'runner',
+        action: 'bridge_tools_active',
+        result: 'AlterEgo bridge tools are active in this engagement: the bridge is live on the operator\'s machine, ' +
             `so its full toolset (${offered.length} tools) is offered as bridge_* tools. They act on the ` +
             "operator's OWN machine — shell, files, windows, browser, power — never against a remote target directly.",
     });
@@ -91,7 +91,10 @@ async function resolveOffering(ctx, phase, clientArg) {
 export async function bridgeToolsForEngagement(ctx, phase, client) {
     let pending = offeringCache.get(ctx);
     if (!pending) {
-        pending = resolveOffering(ctx, phase, client);
+        pending = resolveOffering(ctx, phase, client).catch((err) => {
+            offeringCache.delete(ctx);
+            throw err;
+        });
         offeringCache.set(ctx, pending);
     }
     return pending;

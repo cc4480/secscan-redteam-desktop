@@ -12,6 +12,9 @@
       "path": "../../packages/boot/app-boot"
     },
     {
+      "path": "../../packages/redteam/llm-router"
+    },
+    {
       "path": "../../packages/util/home-paths"
     },
     {

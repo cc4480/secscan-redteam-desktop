@@ -29,7 +29,7 @@ function specForTool(name) {
         return undefined;
     return findXTool(name.slice(0, -"_exec".length));
 }
-export async function handleXTool(ctx, _role, _phase, call, args) {
+export async function handleXTool(ctx, _role, _phase, call, args, _seam, dispatchSignal) {
     const spec = specForTool(call.name);
     if (!spec)
         return null;
@@ -93,13 +93,17 @@ export async function handleXTool(ctx, _role, _phase, call, args) {
             }
         }
     }
-    if (action === "probe" && !binPresent(spec, process.env)) {
-        return { result: `UNAVAILABLE: ${spec.setup.join("\n")}`, attackId, target: "(no target — probe)" };
+    if ((action === "probe" || action === "run") && !binPresent(spec, process.env)) {
+        return {
+            result: `UNAVAILABLE: ${spec.setup.join("\n")}`,
+            attackId,
+            target: action === "probe" ? "(no target — probe)" : host,
+        };
     }
     if (!offline)
         ctx.probesUsed++;
     noteCategoryCoverage(ctx, category, rawTp ? rawTp : undefined);
-    const ctrl = new AbortController();
+    const ctrl = { signal: dispatchSignal ?? new AbortController().signal };
     try {
         // Resolve through the shared resolver (arg → REDTEAM_WORDLIST → bundled
         // assets → operator override). A missing list is a returned setup message,

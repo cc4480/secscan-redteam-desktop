@@ -5,8 +5,6 @@
  * repository's per-file budget; the rules themselves are the same ones
  * validateProbeTarget has always applied before any packet is sent.
  */
-/** Literal private-range / loopback host, by name or address (pre-resolution guard). */
-export declare const PRIVATE_HOST: RegExp;
 /** True when `host` is a literal private-range or loopback address/name. */
 export declare function isPrivateOrLoopbackHost(host: string): boolean;
 /**

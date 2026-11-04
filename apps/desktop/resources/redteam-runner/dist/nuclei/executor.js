@@ -99,6 +99,18 @@ export class NucleiExecutor {
         });
         const r = await this.spawn(argv, { timeoutMs: timeoutS * 1000 + 15000, signal: args.signal });
         const parsed = parseNucleiJsonl(r.stdout);
+        // S4-H4: a process-level failure with no parsed findings is a failure,
+        // not a clean "0 findings" success — a non-zero exit (dead templates
+        // dir, template-load failure) or no exit code at all outside the
+        // timedOut/killed paths means the scan never ran. Parsed findings are
+        // preserved even on a non-zero exit, and the timedOut/killed shapes
+        // below are untouched.
+        if (parsed.findings.length === 0 && !r.timedOut && !r.killed && r.exitCode !== 0) {
+            const detail = r.stderr.trim().split("\n").slice(0, 3).join("\n") || "(no stderr)";
+            return this.refused(r.exitCode === null
+                ? `nuclei exited without an exit code and produced no findings. Stderr: ${detail}`
+                : `nuclei exited ${r.exitCode} with no findings. Stderr: ${detail}`, started);
+        }
         const sev = (parsed.findings[0]?.severity ?? "none");
         return {
             summary: `Nuclei run against ${target}: ${parsed.findings.length} findings ` +

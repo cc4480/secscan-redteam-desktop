@@ -1,13 +1,15 @@
 /** The engagement_report tool row: the finished report's document card with Copy/Download actions. */
 import { useState } from 'react'
 import {
-  DisclosureRow, IconCheckOutlineRegular, IconCopyOutlineRegular, IconDeliverDocRegular, IconDownloadOutlineRegular,
+  DisclosureRow, IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronUpOutlineRegular,
+  IconCopyOutlineRegular, IconDeliverDocRegular, IconDownloadOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { deliverableDisplayRoute } from '@secscan/redteam-console-share/shared'
 import type { ToolCallViewProps } from '@deepseek-ai/dsh-client-ui-tool/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import {
   createEngagementDocumentActions, engagementDocumentsFromResult,
-  type EngagementDocument, type EngagementDocumentActions,
+  type EngagementDocument, type EngagementDocumentActions, type EngagementSignoff,
 } from './engagement-documents.ts'
 import type { NS } from './locales.ts'
 import css from './EngagementReportRow.module.css'
@@ -61,19 +63,44 @@ export function EngagementReportRow(props: RowProps) {
     <DisclosureRow title={props.t('engagement.title')} icon={<IconDeliverDocRegular size={14} />}
       open={expanded} expandable onToggle={() => { setExpanded(value => !value) }}>
       <div className={css.documents} data-engagement-documents>
-        {report.documents.map(document => <DocumentRow key={document.file} document={document} actions={actions} t={props.t} />)}
+        {report.signoff !== null && <SignoffRow signoff={report.signoff} t={props.t} />}
+        {report.documents.map(document => <DocumentRow key={document.file} document={document} actions={actions} t={props.t}
+          previewRoute={document.file === 'report.html' ? deliverableDisplayRoute(report.id, document.file) : undefined} />)}
       </div>
     </DisclosureRow>
   </div>
 }
 
-/** One deliverable's row: name, format note, and its actions — or its gap label. */
-function DocumentRow({ document, actions, t }: {
+/** The Scribe gate's outcome row: signed, or unsigned with its recorded reason and defect count. */
+function SignoffRow({ signoff, t }: {
+  signoff: EngagementSignoff
+} & PropsLocale<typeof NS>) {
+  const details: string[] = []
+  if (signoff.cycles !== undefined) details.push(t('engagement.signoffCycles', { count: signoff.cycles }))
+  if (!signoff.signed && signoff.reason !== undefined) details.push(t('engagement.unsignedReason', { reason: signoff.reason }))
+  if (!signoff.signed && signoff.defectCount !== undefined) details.push(t('engagement.unsignedDefects', { count: signoff.defectCount }))
+  return <div className={css.document} data-signoff={signoff.signed ? 'signed' : 'unsigned'}>
+    <span className={css.fileName}>{t(signoff.signed ? 'engagement.signed' : 'engagement.unsigned')}</span>
+    {details.length > 0 && <span className={css.note}>{details.join(' · ')}</span>}
+  </div>
+}
+
+/**
+ * One deliverable's row: name, format note, and its actions — or its
+ * gap label. The report.html row additionally carries the Preview
+ * toggle (S6-H4b): collapsed by default, and the sandboxed frame
+ * mounts only on the operator's first opening gesture — no frame and
+ * no fetch exist at render.
+ */
+function DocumentRow({ document, actions, previewRoute, t }: {
   document: EngagementDocument
   actions: EngagementDocumentActions
+  /** Display route of the thread preview frame; only the report.html row receives one. */
+  previewRoute?: string | undefined
 } & PropsLocale<typeof NS>) {
   const [copied, setCopied] = useState(false)
   const [failed, setFailed] = useState<'copy' | 'download' | null>(null)
+  const [previewOpen, setPreviewOpen] = useState(false)
   if (!document.present) {
     return <div className={css.document} data-document={document.file} data-gap>
       <span className={css.fileName}>{document.file}</span>
@@ -98,6 +125,12 @@ function DocumentRow({ document, actions, t }: {
     {!document.copyable && <span className={css.note}>{t('engagement.downloadOnly')}</span>}
     {failed !== null && <span className={css.error} role="status">{t(failed === 'copy' ? 'engagement.copyFailed' : 'engagement.downloadFailed')}</span>}
     <span className={css.actions}>
+      {previewRoute !== undefined && <button type="button" className={css.action} aria-expanded={previewOpen}
+        onClick={() => { setPreviewOpen(value => !value) }}
+        aria-label={t(previewOpen ? 'engagement.hidePreview' : 'engagement.preview', { name: document.file })}>
+        {previewOpen ? <IconChevronUpOutlineRegular size={14} /> : <IconChevronDownOutlineRegular size={14} />}
+        <span>{t(previewOpen ? 'engagement.hidePreviewLabel' : 'engagement.previewLabel')}</span>
+      </button>}
       {document.copyable && <button type="button" className={css.action} onClick={onCopy}
         aria-label={t(copied ? 'engagement.copied' : 'engagement.copy', { name: document.file })}>
         {copied ? <IconCheckOutlineRegular size={14} /> : <IconCopyOutlineRegular size={14} />}
@@ -109,5 +142,7 @@ function DocumentRow({ document, actions, t }: {
         <span>{t(isPackage ? 'engagement.downloadAllLabel' : 'engagement.downloadLabel')}</span>
       </button>
     </span>
+    {previewOpen && previewRoute !== undefined && <iframe className={css.previewFrame} sandbox="" src={previewRoute}
+      title={t('engagement.preview', { name: document.file })} />}
   </div>
 }

@@ -9,7 +9,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-E11D48" alt="许可证：MIT"></a>
   <a href="https://github.com/cc4480/secscan-redteam-desktop/actions/workflows/windows-installer.yml"><img src="https://github.com/cc4480/secscan-redteam-desktop/actions/workflows/windows-installer.yml/badge.svg" alt="Windows 安装包"></a>
-  <img src="https://img.shields.io/badge/version-0.1.7--rc.9-E11D48" alt="版本 0.1.7-rc.9">
+  <img src="https://img.shields.io/badge/version-0.1.7--rc.7-E11D48" alt="版本 0.1.7-rc.9">
   <img src="https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-E11D48" alt="Node ^22.19 || >=24">
   <img src="https://img.shields.io/badge/platform-Windows-E11D48" alt="平台：Windows">
 </p>
@@ -39,7 +39,7 @@
 
 ### 安装桌面应用（Windows）
 
-从本项目的 GitHub Releases 下载安装包并运行。CI 构建的安装包按设计未签名；Windows 会要求您确认。应用打开即直达聊天——没有账户，没有登录墙。
+公开安装包尚未发布：当前构建（0.1.7-rc.7）正在最终验证，通过后将发布到本项目的 GitHub Releases。在此之前，请按下方开发者快速入门从源码构建。发布后，CI 构建的安装包按设计未签名；Windows 会要求您确认。应用打开即直达聊天——没有账户，没有登录墙。
 
 首次运行时，欢迎流程会要求一个必需密钥，并提供两个可选密钥：
 

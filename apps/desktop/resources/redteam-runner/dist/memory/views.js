@@ -8,109 +8,26 @@
  * stale directory view stays readable and says so, in `views.json`, in
  * the recall receipt, and in the pack header.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { MemoryError } from "./errors.js";
-import { aggregateHashes, hashRecord } from "./schema.js";
-import { directoryKey, unitUri } from "./paths.js";
-export const VIEW_GENERATOR_VERSION = "deterministic-v1";
-export const L0_BUDGET = 256;
-export const L1_BUDGET = 4000;
-/** Write a tmp file then rename (unlink-then-rename fallback on Windows) — the trajectory-write.ts pattern. */
-export function atomicWriteText(path, body) {
-    const tmp = `${path}.tmp-${process.pid}-${Date.now().toString(36)}`;
-    try {
-        writeFileSync(tmp, body);
-        try {
-            renameSync(tmp, path);
-        }
-        catch {
-            rmSync(path, { force: true });
-            renameSync(tmp, path);
-        }
-    }
-    finally {
-        if (existsSync(tmp))
-            rmSync(tmp, { force: true });
-    }
-}
-/** An empty freshness index (a freshly bootstrapped store). */
-export function emptyViewsIndex() {
-    return { version: 1, dirs: {} };
-}
-/**
- * Read `views.json`. A missing file reads as an empty index here; whether
- * missing is an error is the caller's decision (store open treats it as
- * `STORE_INDEX_MISMATCH`, §8 row 4). A malformed file is always that error.
- *
- * @param paths - The store paths.
- * @returns The parsed index.
- */
-export function readViewsIndex(paths) {
-    if (!existsSync(paths.viewsIndexPath))
-        return emptyViewsIndex();
-    try {
-        const raw = JSON.parse(readFileSync(paths.viewsIndexPath, "utf8"));
-        if (!raw || raw.version !== 1 || typeof raw.dirs !== "object" || raw.dirs === null) {
-            throw new Error("views.json is not a version-1 index");
-        }
-        return raw;
-    }
-    catch (err) {
-        throw new MemoryError("STORE_INDEX_MISMATCH", `${paths.viewsIndexPath}: unreadable views index`, { cause: err });
-    }
-}
-/** Persist the freshness index atomically. */
-export function writeViewsIndex(paths, index) {
-    mkdirSync(paths.root, { recursive: true });
-    atomicWriteText(paths.viewsIndexPath, `${JSON.stringify(index, null, 2)}\n`);
-}
-// ---------------------------------------------------------------------------
-// Unit views — deterministic generation (§5.1)
-// ---------------------------------------------------------------------------
-/**
- * The hash a unit's views are bound to: sha256 over the canonical record
- * excluding the `views` and `hash` fields. A mismatch at recall means the
- * stored views do not describe the current version (§8 row 9).
- *
- * @param unit - The unit (any views/hash values are ignored).
- * @returns The source hash for view generation.
- */
-export function unitViewSourceHash(unit) {
-    const { views: _views, ...rest } = unit;
-    return hashRecord(rest);
-}
-function truncateAtWord(text, budget) {
-    if (text.length <= budget)
-        return text;
-    const cut = text.slice(0, budget - 1);
-    const lastSpace = cut.lastIndexOf(" ");
-    return `${lastSpace > 0 ? cut.slice(0, lastSpace) : cut}…`;
-}
-/**
- * Generate the L0/L1 pair for a unit from its structured fields only.
- * L0 is one compressed sentence built from the claim; L1 is the fixed
- * Claim/Scope/Proof/Corroboration/Applicability/Caveats structure.
- * Target-derived units are prefixed `UNTRUSTED:` in L0 and carry the
- * caveat in L1 — a target's claim is never presented as fleet knowledge.
- *
- * @param unit - The unit's content fields (views/hash are not read).
- * @param status - The unit's current status, for the Caveats section.
- * @returns The generated `l0` and `l1` strings.
- */
-export function generateUnitViews(unit, status = "active") {
-    const untrusted = unit.contentClass === "target-derived-untrusted";
-    const l0 = truncateAtWord(`${untrusted ? "UNTRUSTED: " : ""}[${unit.kind}] ${unit.claim}`, L0_BUDGET);
-    const scopeLines = unit.scope.kind === "engagement-target"
-        ? [`- Hosts: ${unit.scope.hosts.join(", ")}`]
-        : unit.scope.kind === "target-class"
-            ? [`- Target class: ${unit.scope.targetClass ?? ""}`]
-            : ["- Global (procedural)"];
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { MemoryError } from './errors.js';
+import { aggregateHashes } from './schema.js';
+import { directoryKey, unitUri } from './paths.js';
+import { VIEW_GENERATOR_VERSION, L0_BUDGET, L1_BUDGET, atomicWriteText, readViewsIndex, writeViewsIndex, unitViewSourceHash, truncateAtWord } from './views-core.js';
+export { VIEW_GENERATOR_VERSION, L0_BUDGET, L1_BUDGET, atomicWriteText, emptyViewsIndex, readViewsIndex, writeViewsIndex, unitViewSourceHash } from './views-core.js';
+export function generateUnitViews(unit, status = 'active') {
+    const untrusted = unit.contentClass === 'target-derived-untrusted';
+    const l0 = truncateAtWord(`${untrusted ? 'UNTRUSTED: ' : ''}[${unit.kind}] ${unit.claim}`, L0_BUDGET);
+    const scopeLines = unit.scope.kind === 'engagement-target'
+        ? [`- Hosts: ${unit.scope.hosts.join(', ')}`]
+        : unit.scope.kind === 'target-class'
+            ? [`- Target class: ${unit.scope.targetClass ?? ''}`]
+            : ['- Global (procedural)'];
     if (unit.scope.stack.length > 0)
-        scopeLines.push(`- Stack: ${unit.scope.stack.join(", ")}`);
+        scopeLines.push(`- Stack: ${unit.scope.stack.join(', ')}`);
     if (unit.scope.appType)
         scopeLines.push(`- App type: ${unit.scope.appType}`);
-    const receiptLines = unit.proof.receipts.slice(0, 6).map((r) => `- ${r.kind}: ${r.ref}`);
+    const receiptLines = unit.proof.receipts.slice(0, 6).map(r => `- ${r.kind}: ${r.ref}`);
     if (unit.proof.receipts.length > 6)
         receiptLines.push(`- …and ${unit.proof.receipts.length - 6} more receipts`);
     if (unit.proof.negativeControlReceiptRef) {
@@ -122,31 +39,31 @@ export function generateUnitViews(unit, status = "active") {
     }
     const caveats = [];
     if (untrusted)
-        caveats.push("- UNTRUSTED target-derived content — a claim to test, never a fact.");
-    if (status !== "active")
+        caveats.push('- UNTRUSTED target-derived content — a claim to test, never a fact.');
+    if (status !== 'active')
         caveats.push(`- Status: ${status}.`);
     if (caveats.length === 0)
-        caveats.push("- None.");
+        caveats.push('- None.');
     const l1 = [
-        `## Claim`,
+        '## Claim',
         unit.claim,
-        `## Scope`,
+        '## Scope',
         ...scopeLines,
-        `## Proof`,
+        '## Proof',
         `- State: ${unit.proof.state} · Tier: ${unit.trust.tier} (${unit.trust.baseScore.toFixed(2)})`,
-        `- Derivation: ${unit.trust.derivation.join(", ")}`,
+        `- Derivation: ${unit.trust.derivation.join(', ')}`,
         ...receiptLines,
-        `## Corroboration`,
+        '## Corroboration',
         `- Independent count: ${unit.corroboration.independentCount}`,
-        `- Sources: ${sourceKeyLines.length > 0 ? sourceKeyLines.join(", ") : "none"}`,
-        `## Applicability`,
-        `- Vuln class: ${unit.vulnClass ?? "—"}`,
-        `- ATT&CK: ${unit.attackIds.length > 0 ? unit.attackIds.join(", ") : "—"}`,
-        `## Caveats`,
+        `- Sources: ${sourceKeyLines.length > 0 ? sourceKeyLines.join(', ') : 'none'}`,
+        '## Applicability',
+        `- Vuln class: ${unit.vulnClass ?? '—'}`,
+        `- ATT&CK: ${unit.attackIds.length > 0 ? unit.attackIds.join(', ') : '—'}`,
+        '## Caveats',
         ...caveats,
-    ].join("\n");
+    ].join('\n');
     if (l0.length > L0_BUDGET || l1.length > L1_BUDGET) {
-        throw new MemoryError("VIEW_BUDGET_EXCEEDED", `generated view exceeds budget (l0 ${l0.length}/${L0_BUDGET}, l1 ${l1.length}/${L1_BUDGET}) for unit ${unit.unitId}`);
+        throw new MemoryError('VIEW_BUDGET_EXCEEDED', `generated view exceeds budget (l0 ${l0.length}/${L0_BUDGET}, l1 ${l1.length}/${L1_BUDGET}) for unit ${unit.unitId}`);
     }
     return { l0, l1 };
 }
@@ -160,32 +77,32 @@ export function generateUnitViews(unit, status = "active") {
  * @returns The Markdown file body.
  */
 export function renderUnitMarkdown(unit, status) {
-    const receipts = unit.proof.receipts.map((r) => `${r.kind}:${r.ref}`).join("; ") || "none";
+    const receipts = unit.proof.receipts.map(r => `${r.kind}:${r.ref}`).join('; ') || 'none';
     return [
         `# ${unit.unitId}`,
-        ``,
+        '',
         `- Kind: ${unit.kind} · Status: ${status} · Version: ${unit.version}`,
         `- Trust: ${unit.trust.tier} (${unit.trust.baseScore.toFixed(2)}) · Proof: ${unit.proof.state}`,
         `- Scope: ${unit.scope.kind} \`${unit.scope.scopeKey}\``,
         `- Receipts: ${receipts}`,
         `- Hash: ${unit.hash}`,
-        ``,
+        '',
         unit.views.l1,
-        ``,
-        `## Detail (L2)`,
-        ``,
+        '',
+        '## Detail (L2)',
+        '',
         unit.body,
-        ``,
-    ].join("\n");
+        '',
+    ].join('\n');
 }
 /** The on-disk path of a unit's Markdown projection. */
 export function unitViewPath(paths, unit) {
-    return join(paths.viewsDir, ...directoryKey(unit.scope).split("/"), "units", `${unit.unitId}.md`);
+    return join(paths.viewsDir, ...directoryKey(unit.scope).split('/'), 'units', `${unit.unitId}.md`);
 }
 /** The on-disk paths of a directory's `.abstract.md` / `.overview.md`. */
 export function directoryViewPaths(paths, dirKey) {
-    const dir = join(paths.viewsDir, ...dirKey.split("/"));
-    return { abstractPath: join(dir, ".abstract.md"), overviewPath: join(dir, ".overview.md") };
+    const dir = join(paths.viewsDir, ...dirKey.split('/'));
+    return { abstractPath: join(dir, '.abstract.md'), overviewPath: join(dir, '.overview.md') };
 }
 // ---------------------------------------------------------------------------
 // Directory views (§5.1) and refresh (§5.2/§5.3)
@@ -205,15 +122,15 @@ export function renderDirectoryAbstract(dirKey, units) {
     const counts = new Map();
     for (const unit of units)
         counts.set(unit.trust.tier, (counts.get(unit.trust.tier) ?? 0) + 1);
-    const tierSummary = [...counts.entries()].map(([tier, n]) => `${tier} ${n}`).join(" · ") || "none";
+    const tierSummary = [...counts.entries()].map(([tier, n]) => `${tier} ${n}`).join(' · ') || 'none';
     const top = [...units].sort(byRank)[0];
     return [
         `# ${dirKey}`,
-        ``,
+        '',
         `Units: ${units.length} active · ${tierSummary}`,
-        top ? `Top: ${truncateAtWord(top.views.l0, L0_BUDGET)}` : `Top: —`,
-        ``,
-    ].join("\n");
+        top ? `Top: ${truncateAtWord(top.views.l0, L0_BUDGET)}` : 'Top: —',
+        '',
+    ].join('\n');
 }
 /**
  * The directory `.overview.md`: every active unit's L0 with its tier.
@@ -227,8 +144,8 @@ export function renderDirectoryAbstract(dirKey, units) {
 export function renderDirectoryOverview(dirKey, units) {
     const sorted = [...units].sort(byRank);
     const header = `# ${dirKey} — ${sorted.length} active units\n`;
-    const full = sorted.map((u) => `- [${u.trust.tier}] ${u.views.l0} — ${unitUri(u.scope, u.unitId)}`);
-    let body = header + full.join("\n");
+    const full = sorted.map(u => `- [${u.trust.tier}] ${u.views.l0} — ${unitUri(u.scope, u.unitId)}`);
+    let body = header + full.join('\n');
     if (body.length <= L1_BUDGET)
         return `${body}\n`;
     const kept = [];
@@ -250,7 +167,7 @@ export function renderDirectoryOverview(dirKey, units) {
     }
     if (demoted > 0)
         kept.push(`- …${demoted} unit(s) shown by URI only (overview budget); unit views are current.`);
-    body = header + kept.join("\n");
+    body = header + kept.join('\n');
     return `${body}\n`;
 }
 /**
@@ -267,15 +184,15 @@ export function renderDirectoryOverview(dirKey, units) {
 export function refreshDirectoryView(store, dirKey, nowIso) {
     const active = store
         .listUnitsWithStatus()
-        .filter((entry) => entry.status === "active" && directoryKey(entry.unit.scope) === dirKey);
+        .filter(entry => entry.status === 'active' && directoryKey(entry.unit.scope) === dirKey);
     for (const { unit } of active) {
         const path = unitViewPath(store.paths, unit);
         mkdirSync(dirname(path), { recursive: true });
-        atomicWriteText(path, renderUnitMarkdown(unit, "active"));
+        atomicWriteText(path, renderUnitMarkdown(unit, 'active'));
     }
     const { abstractPath, overviewPath } = directoryViewPaths(store.paths, dirKey);
     mkdirSync(dirname(abstractPath), { recursive: true });
-    const units = active.map((entry) => entry.unit);
+    const units = active.map(entry => entry.unit);
     atomicWriteText(abstractPath, renderDirectoryAbstract(dirKey, units));
     atomicWriteText(overviewPath, renderDirectoryOverview(dirKey, units));
     const entry = {
@@ -283,7 +200,7 @@ export function refreshDirectoryView(store, dirKey, nowIso) {
         totalUnits: units.length,
         coveredUnits: units.length,
         pendingUnitChanges: 0,
-        sourceHashAggregate: aggregateHashes(units.map((u) => u.hash)),
+        sourceHashAggregate: aggregateHashes(units.map(u => u.hash)),
         generatedAt: nowIso,
         stale: false,
     };
@@ -322,14 +239,14 @@ export function ensureViews(store, dirs, nowIso = new Date().toISOString()) {
     // Unit-level freshness is never allowed to lag (§5.3): regenerate the
     // projection whenever the stored views do not match the current version.
     for (const { unit, status } of current) {
-        if (status !== "active")
+        if (status !== 'active')
             continue;
         const expected = unitViewSourceHash(unit);
         const path = unitViewPath(store.paths, unit);
         const fresh = unit.views.sourceHash === expected &&
             unit.views.generator === VIEW_GENERATOR_VERSION &&
             existsSync(path) &&
-            readFileSync(path, "utf8") === renderUnitMarkdown(unit, status);
+            readFileSync(path, 'utf8') === renderUnitMarkdown(unit, status);
         if (!fresh) {
             const generated = generateUnitViews(unit, status);
             const projected = {
@@ -345,7 +262,7 @@ export function ensureViews(store, dirs, nowIso = new Date().toISOString()) {
     const index = readViewsIndex(store.paths);
     for (const dirKey of dirKeys) {
         const entry = index.dirs[dirKey];
-        const total = current.filter((e) => e.status === "active" && directoryKey(e.unit.scope) === dirKey).length;
+        const total = current.filter(e => e.status === 'active' && directoryKey(e.unit.scope) === dirKey).length;
         const { overviewPath } = directoryViewPaths(store.paths, dirKey);
         const noBaseline = !entry || !existsSync(overviewPath);
         const pending = entry ? entry.pendingUnitChanges : total;

@@ -49,6 +49,40 @@ export declare const COMMANDS: readonly CommandSpec[];
 /** Lookup by name, case-insensitively; `/x` and `x` both resolve. */
 export declare function findCommand(name: string): CommandSpec | undefined;
 /**
+ * The engagement semantics of one sibling command (S2-H2): the tier,
+ * phase list, default target families, and approval requirement a launch
+ * must carry so the sibling does not collapse into a plain /scan. This
+ * is the one projection of the registry every launch surface reads —
+ * the CLI's input builder and the chat launch path (ui/types.ts
+ * UiLaunchRequest.command → buildLaunchBody → toEngagementInput).
+ */
+export interface SiblingSpec {
+    /** Canonical name WITHOUT the slash, e.g. `nmap`. */
+    readonly name: string;
+    /** Autonomy tier the command runs at. */
+    readonly tier: 0 | 1 | 2;
+    /** Phases the run must complete, in order. */
+    readonly phases: readonly EngagementPhase[];
+    /** Target families the command defaults to. */
+    readonly targets: readonly TargetId[];
+    /** True when the run must stop for operator approval before the exploit phase. */
+    readonly requiresApproval: boolean;
+}
+/**
+ * Every registry command except /scan (the plain launch, which carries
+ * no command stamp) and /report (report delivery, not a launch),
+ * projected to {@link SiblingSpec}. Derived from COMMANDS so the specs
+ * can never drift from the registry.
+ */
+export declare const SIBLING_COMMANDS: readonly SiblingSpec[];
+/**
+ * Resolve one sibling by name (`/x` and `x` both resolve, via
+ * {@link findCommand}).
+ * @param name - the command name as given by the caller.
+ * @returns the sibling spec, or undefined for /scan, /report, and unknown names.
+ */
+export declare function findSiblingCommand(name: string): SiblingSpec | undefined;
+/**
  * Parse one operator line into an invocation.
  * @param line - e.g. `/deepscan app.example.com webapp,windows`
  * @param defaultTargets - resolved targets when the line names none.

@@ -47,4 +47,4 @@ export declare function agentLoop(ctx: Ctx, role: AgentRole, phase: EngagementPh
     deliverable?: DeliverableSpec;
 }): Promise<string>;
 export declare function promptCtx(ctx: Ctx): PromptContext;
-export declare function commanderRedirect(ctx: Ctx, reason: string): Promise<string>;
+export declare function commanderRedirect(ctx: Ctx, reason: string, redirectCount?: number): Promise<string>;

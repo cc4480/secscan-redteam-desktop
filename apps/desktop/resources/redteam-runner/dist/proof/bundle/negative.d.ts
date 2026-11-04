@@ -2,8 +2,8 @@
  * Negative proof (killed hypotheses with decisive audit evidence) and the
  * one-line bundle summary for the report.
  */
-import type { PocBundle } from "./bundle.js";
-import type { EngagementEvent } from "../../types.js";
+import type { PocBundle } from './bundle.js';
+import type { EngagementEvent } from '../../types.js';
 export interface NegativeProof {
     hypothesis: string;
     killingObservation: string;

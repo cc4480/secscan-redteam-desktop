@@ -65,12 +65,13 @@ describe('SidebarRoot.module.css', () => {
   })
 
   it('keeps one uniform menu cadence in both states', () => {
-    // 36px controls, 12px between every block and every panel row.
-    expect(declarations('.logoRow')?.get('margin-bottom')).toBe('12px')
+    // 36px controls; the expanded stack runs tight at 8px between blocks
+    // and panel rows, while the rail keeps its own 12px rhythm.
+    expect(declarations('.logoRow')?.get('margin-bottom')).toBe('8px')
     expect(declarations('.newSession')?.get('height')).toBe('36px')
-    expect(declarations('.newSession')?.get('margin')).toBe('0 2px 12px')
-    expect(declarations('.panelList')?.get('gap')).toBe('12px')
-    expect(declarations('.panelList')?.get('margin-bottom')).toBe('12px')
+    expect(declarations('.newSession')?.get('margin')).toBe('0 2px 8px')
+    expect(declarations('.panelList')?.get('gap')).toBe('8px')
+    expect(declarations('.panelList')?.get('margin-bottom')).toBe('8px')
     expect(declarations('.collapsed .panelList')?.get('gap')).toBe('12px')
     expect(declarations('.panelRow')?.get('height')).toBe('36px')
     expect(declarations('.collapsed .panelRow')?.get('height')).toBe('36px')
@@ -116,11 +117,11 @@ describe('SidebarRoot.module.css', () => {
   })
 
   it('keeps the slotted brand row at the full artwork height', () => {
-    expect(declarations('.brandIdentity')?.get('height')).toBe('24px')
-    expect(declarations('.brandName')?.get('height')).toBe('24px')
-    expect(declarations('.brandName')?.get('line-height')).toBe('24px')
-    expect(declarations('.brandName')?.get('font-size')).toBe('18px')
-    expect(declarations('.fallbackBrandName')?.get('font-size')).toBe('17px')
+    expect(declarations('.brandIdentity')?.get('height')).toBe('32px')
+    expect(declarations('.brandName')?.get('height')).toBe('32px')
+    expect(declarations('.brandName')?.get('line-height')).toBe('32px')
+    expect(declarations('.brandName')?.get('font-size')).toBe('20px')
+    expect(declarations('.fallbackBrandName')?.get('font-size')).toBe('18px')
     expect(declarations('.fallbackBrandName')?.get('white-space')).toBe('nowrap')
   })
 })

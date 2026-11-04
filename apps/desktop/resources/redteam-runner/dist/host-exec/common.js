@@ -18,46 +18,46 @@ export const HOST_EXEC_TIMEOUT_MS = 30_000;
 export const HOST_OUTPUT_CAP = 8 * 1024;
 /** Scope check: exact match against the engagement's declared scope hosts. */
 export function validateHostTarget(host, scopeHosts) {
-    const h = (host ?? "").trim().toLowerCase();
+    const h = (host ?? '').trim().toLowerCase();
     if (!h)
-        return { ok: false, reason: "empty host" };
+        return { ok: false, reason: 'empty host' };
     if (h.length > 253)
-        return { ok: false, reason: "host too long" };
-    const scope = scopeHosts.map((s) => s.toLowerCase());
+        return { ok: false, reason: 'host too long' };
+    const scope = scopeHosts.map(s => s.toLowerCase());
     if (!scope.includes(h)) {
-        return { ok: false, reason: `out of scope: ${h} (scope: ${scope.join(", ") || "(empty)"})` };
+        return { ok: false, reason: `out of scope: ${h} (scope: ${scope.join(', ') || '(empty)'})` };
     }
     return { ok: true };
 }
 const DENY = [
-    { label: "recursive delete of filesystem root", re: /\brm\s+(-[a-z]*r[a-z]*\s+|--recursive\s+)(["']?)(\/|\/\*|\$HOME|\~|\%SystemDrive\%|\%windir\%|C:\\?)(["']?)/i },
-    { label: "recursive delete of filesystem root", re: /\brm\s+.*\s\/\s*$/i },
-    { label: "Windows recursive delete of system drive", re: /\b(rmdir|rd)\s+\/s(\s+\/q)?\s+["']?(C:\\?|%SystemDrive%)/i },
-    { label: "PowerShell recursive remove of system drive", re: /\bRemove-Item\s+.*(-Recurse).*(C:\\?|C:\\)/i },
-    { label: "filesystem format", re: /\bmkfs(\.\w+)?\b/i },
-    { label: "Windows volume format", re: /\bFormat-Volume\b/i },
-    { label: "raw disk write", re: /\bdd\b[^|]*\bof=\s*\/dev\/(sd|hd|nvme|vd|xvd|mmcblk)/i },
-    { label: "disk wipe", re: /\b(shred|wipefs|blkdiscard)\b.*\/dev\//i },
-    { label: "diskpart destructive script", re: /\bdiskpart\b/i },
-    { label: "partition table destruction", re: /\b(gdisk|fdisk|parted)\b.*\/(dev)\//i },
-    { label: "fork bomb", re: /:\(\)\s*\{\s*:\|\:&\s*\}\s*;/ },
-    { label: "host shutdown/poweroff", re: /\b(shutdown|poweroff|halt)(\.exe)?\b/i },
-    { label: "host reboot", re: /\b(reboot|Restart-Computer)\b/i },
-    { label: "init runlevel change", re: /\binit\s+[06]\b/ },
-    { label: "volume shadow copy deletion (ransomware precursor)", re: /\bvssadmin\b.*delete\s+shadows/i },
-    { label: "backup catalog deletion", re: /\bwbadmin\b.*delete\s+(catalog|backup)/i },
-    { label: "boot config tampering", re: /\bbcdedit\b/i },
-    { label: "Windows cipher wipe", re: /\bcipher\b.*\/w/i },
-    { label: "mass file encryption loop (ransomware pattern)", re: /\b(openssl\s+enc|gpg\s+--?(encrypt|symmetric)|7z\s+a\s+.*-p)\b.*(\$\(|\`|\*\.\*)/i },
-    { label: "kernel module force-load of unsigned code", re: /\binsmod\b/i },
-    { label: "firmware flash", re: /\bflashrom\b/i },
+    { label: 'recursive delete of filesystem root', re: /\brm\s+(-[a-z]*r[a-z]*\s+|--recursive\s+)(["']?)(\/|\/\*|\$HOME|\~|\%SystemDrive\%|\%windir\%|C:\\?)(["']?)/i },
+    { label: 'recursive delete of filesystem root', re: /\brm\s+.*\s\/\s*$/i },
+    { label: 'Windows recursive delete of system drive', re: /\b(rmdir|rd)\s+\/s(\s+\/q)?\s+["']?(C:\\?|%SystemDrive%)/i },
+    { label: 'PowerShell recursive remove of system drive', re: /\bRemove-Item\s+.*(-Recurse).*(C:\\?|C:\\)/i },
+    { label: 'filesystem format', re: /\bmkfs(\.\w+)?\b/i },
+    { label: 'Windows volume format', re: /\bFormat-Volume\b/i },
+    { label: 'raw disk write', re: /\bdd\b[^|]*\bof=\s*\/dev\/(sd|hd|nvme|vd|xvd|mmcblk)/i },
+    { label: 'disk wipe', re: /\b(shred|wipefs|blkdiscard)\b.*\/dev\//i },
+    { label: 'diskpart destructive script', re: /\bdiskpart\b/i },
+    { label: 'partition table destruction', re: /\b(gdisk|fdisk|parted)\b.*\/(dev)\//i },
+    { label: 'fork bomb', re: /:\(\)\s*\{\s*:\|\:&\s*\}\s*;/ },
+    { label: 'host shutdown/poweroff', re: /\b(shutdown|poweroff|halt)(\.exe)?\b/i },
+    { label: 'host reboot', re: /\b(reboot|Restart-Computer)\b/i },
+    { label: 'init runlevel change', re: /\binit\s+[06]\b/ },
+    { label: 'volume shadow copy deletion (ransomware precursor)', re: /\bvssadmin\b.*delete\s+shadows/i },
+    { label: 'backup catalog deletion', re: /\bwbadmin\b.*delete\s+(catalog|backup)/i },
+    { label: 'boot config tampering', re: /\bbcdedit\b/i },
+    { label: 'Windows cipher wipe', re: /\bcipher\b.*\/w/i },
+    { label: 'mass file encryption loop (ransomware pattern)', re: /\b(openssl\s+enc|gpg\s+--?(encrypt|symmetric)|7z\s+a\s+.*-p)\b.*(\$\(|\`|\*\.\*)/i },
+    { label: 'kernel module force-load of unsigned code', re: /\binsmod\b/i },
+    { label: 'firmware flash', re: /\bflashrom\b/i },
 ];
 /**
  * Returns the matched denylist label, or null when the command is allowed.
  * Pure function — tested directly, no network.
  */
 export function checkDestructive(command) {
-    const norm = ` ${command.replace(/\s+/g, " ")} `;
+    const norm = ` ${command.replace(/\s+/g, ' ')} `;
     for (const d of DENY) {
         if (d.re.test(norm))
             return d.label;
@@ -66,23 +66,23 @@ export function checkDestructive(command) {
 }
 /** Exported for tests and docs — the mechanical backstop, stated plainly. */
 export function destructiveDenyList() {
-    return DENY.map((d) => d.label);
+    return DENY.map(d => d.label);
 }
 function need(name, value, hint) {
     if (value && value.trim())
         return value;
     throw new Error(`[host-exec] missing credential ${name}: ${hint} ` +
-        `Set it in the environment or Secure Vault — host-exec refuses to run without operator-provided test-account credentials.`);
+        'Set it in the environment or Secure Vault — host-exec refuses to run without operator-provided test-account credentials.');
 }
 /** SSH credentials: REDTEAM_SSH_USER + one of PASSWORD / KEY / KEY_PATH. */
 export function resolveSshCredentials(env = process.env) {
-    const username = need("REDTEAM_SSH_USER", env["REDTEAM_SSH_USER"], "the authorized test-account login name.");
-    let password = env["REDTEAM_SSH_PASSWORD"];
-    let privateKey = env["REDTEAM_SSH_KEY"];
-    const keyPath = env["REDTEAM_SSH_KEY_PATH"];
+    const username = need('REDTEAM_SSH_USER', env['REDTEAM_SSH_USER'], 'the authorized test-account login name.');
+    const password = env['REDTEAM_SSH_PASSWORD'];
+    let privateKey = env['REDTEAM_SSH_KEY'];
+    const keyPath = env['REDTEAM_SSH_KEY_PATH'];
     if (!password && !privateKey && !keyPath) {
-        throw new Error("[host-exec] missing SSH credential: set one of REDTEAM_SSH_PASSWORD, REDTEAM_SSH_KEY, or REDTEAM_SSH_KEY_PATH. " +
-            "Host-exec refuses to run without operator-provided test-account credentials.");
+        throw new Error('[host-exec] missing SSH credential: set one of REDTEAM_SSH_PASSWORD, REDTEAM_SSH_KEY, or REDTEAM_SSH_KEY_PATH. ' +
+            'Host-exec refuses to run without operator-provided test-account credentials.');
     }
     if (keyPath && !privateKey) {
         // Read lazily at use time so a missing file is a clear error, not a silent skip.
@@ -92,14 +92,14 @@ export function resolveSshCredentials(env = process.env) {
 }
 /** SMB credentials: REDTEAM_SMB_USER + REDTEAM_SMB_PASSWORD (+ optional DOMAIN). */
 export function resolveSmbCredentials(env = process.env) {
-    const username = need("REDTEAM_SMB_USER", env["REDTEAM_SMB_USER"], "the authorized test-account login name.");
-    const password = need("REDTEAM_SMB_PASSWORD", env["REDTEAM_SMB_PASSWORD"], "the test account's password.");
-    return { username, password, domain: env["REDTEAM_SMB_DOMAIN"] };
+    const username = need('REDTEAM_SMB_USER', env['REDTEAM_SMB_USER'], 'the authorized test-account login name.');
+    const password = need('REDTEAM_SMB_PASSWORD', env['REDTEAM_SMB_PASSWORD'], "the test account's password.");
+    return { username, password, domain: env['REDTEAM_SMB_DOMAIN'] };
 }
 /** WinRM credentials: REDTEAM_WINRM_USER + REDTEAM_WINRM_PASSWORD. */
 export function resolveWinrmCredentials(env = process.env) {
-    const username = need("REDTEAM_WINRM_USER", env["REDTEAM_WINRM_USER"], "the authorized test-account login name.");
-    const password = need("REDTEAM_WINRM_PASSWORD", env["REDTEAM_WINRM_PASSWORD"], "the test account's password.");
+    const username = need('REDTEAM_WINRM_USER', env['REDTEAM_WINRM_USER'], 'the authorized test-account login name.');
+    const password = need('REDTEAM_WINRM_PASSWORD', env['REDTEAM_WINRM_PASSWORD'], "the test account's password.");
     return { username, password };
 }
 /**
@@ -108,24 +108,24 @@ export function resolveWinrmCredentials(env = process.env) {
  * never dumped, never another principal's material. Strict 32-hex validation.
  */
 export function resolveSmbHashCredentials(env = process.env) {
-    const username = need("REDTEAM_SMB_USER", env["REDTEAM_SMB_USER"], "the authorized test-account login name.");
-    const ntHash = need("REDTEAM_SMB_NTHASH", env["REDTEAM_SMB_NTHASH"], "the test account's own NTLM hash as 32 hex chars (client-provided; used for the WS-023 pass-the-hash exposure test only).").toLowerCase();
+    const username = need('REDTEAM_SMB_USER', env['REDTEAM_SMB_USER'], 'the authorized test-account login name.');
+    const ntHash = need('REDTEAM_SMB_NTHASH', env['REDTEAM_SMB_NTHASH'], "the test account's own NTLM hash as 32 hex chars (client-provided; used for the WS-023 pass-the-hash exposure test only).").toLowerCase();
     if (!/^[0-9a-f]{32}$/.test(ntHash)) {
-        throw new Error("[host-exec] REDTEAM_SMB_NTHASH must be exactly 32 hex characters (the NT hash, not a password).");
+        throw new Error('[host-exec] REDTEAM_SMB_NTHASH must be exactly 32 hex characters (the NT hash, not a password).');
     }
-    return { username, ntHash, domain: env["REDTEAM_SMB_DOMAIN"] };
+    return { username, ntHash, domain: env['REDTEAM_SMB_DOMAIN'] };
 }
 /**
  * AD/LDAP credentials: dedicated REDTEAM_AD_* when set, otherwise the SMB
  * test-account credentials (same authorized test account, documented fallback).
  */
 export function resolveAdCredentials(env = process.env) {
-    const username = env["REDTEAM_AD_USER"] ?? env["REDTEAM_SMB_USER"];
-    const password = env["REDTEAM_AD_PASSWORD"] ?? env["REDTEAM_SMB_PASSWORD"];
-    const domain = env["REDTEAM_AD_DOMAIN"] ?? env["REDTEAM_SMB_DOMAIN"];
+    const username = env['REDTEAM_AD_USER'] ?? env['REDTEAM_SMB_USER'];
+    const password = env['REDTEAM_AD_PASSWORD'] ?? env['REDTEAM_SMB_PASSWORD'];
+    const domain = env['REDTEAM_AD_DOMAIN'] ?? env['REDTEAM_SMB_DOMAIN'];
     if (!username || !password) {
-        throw new Error("[host-exec] missing AD credential: set REDTEAM_AD_USER + REDTEAM_AD_PASSWORD (or REDTEAM_SMB_USER + REDTEAM_SMB_PASSWORD as fallback). " +
-            "Host-exec refuses to run without operator-provided test-account credentials.");
+        throw new Error('[host-exec] missing AD credential: set REDTEAM_AD_USER + REDTEAM_AD_PASSWORD (or REDTEAM_SMB_USER + REDTEAM_SMB_PASSWORD as fallback). ' +
+            'Host-exec refuses to run without operator-provided test-account credentials.');
     }
     return { username, password, domain };
 }
@@ -136,7 +136,7 @@ export function collectSecrets(creds) {
         // Redact every non-empty secret. The old `length >= 4` guard dropped 1–3
         // character passwords from the redaction list, so a short credential could
         // reach a summary or event in the clear.
-        if (v && !v.startsWith("__KEY_PATH__:"))
+        if (v && !v.startsWith('__KEY_PATH__:'))
             out.push(v);
     }
     return out;
@@ -147,7 +147,7 @@ export function redactSecrets(text, secrets) {
     for (const s of secrets) {
         if (!s)
             continue;
-        out = out.split(s).join("[REDACTED]");
+        out = out.split(s).join('[REDACTED]');
     }
     return out;
 }
@@ -159,6 +159,6 @@ export function capOutput(text, cap = HOST_OUTPUT_CAP) {
 }
 /** One-line audit summary of a command (redacted, capped). */
 export function summarizeCommand(command, secrets) {
-    return redactSecrets(command.replace(/\s+/g, " ").trim().slice(0, 200), secrets);
+    return redactSecrets(command.replace(/\s+/g, ' ').trim().slice(0, 200), secrets);
 }
 //# sourceMappingURL=common.js.map

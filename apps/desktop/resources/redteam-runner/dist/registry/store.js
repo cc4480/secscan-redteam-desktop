@@ -4,19 +4,18 @@
  * Store: types, record/load/save, and the v0.3.x seed. Querying lives in
  * query.ts. (Module doc comment preserved on the registry.ts barrel.)
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
-import { MemoryError } from "../memory/errors.js";
-export function emptyRegistry() {
-    return { version: 1, confirmed: [], killed: [] };
-}
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { MemoryError } from '../memory/errors.js';
+import { emptyRegistry } from './types.js';
+export * from './types.js';
 function nextId(prefix, existing) {
-    return `${prefix}-${String(existing + 1).padStart(4, "0")}`;
+    return `${prefix}-${String(existing + 1).padStart(4, '0')}`;
 }
 export function recordConfirmed(reg, entry) {
     const full = {
-        kind: "confirmed",
-        id: nextId("vuln", reg.confirmed.length),
+        kind: 'confirmed',
+        id: nextId('vuln', reg.confirmed.length),
         date: entry.date ?? new Date().toISOString(),
         ...entry,
     };
@@ -25,8 +24,8 @@ export function recordConfirmed(reg, entry) {
 }
 export function recordKilled(reg, entry) {
     const full = {
-        kind: "killed",
-        id: nextId("killed", reg.killed.length),
+        kind: 'killed',
+        id: nextId('killed', reg.killed.length),
         date: entry.date ?? new Date().toISOString(),
         ...entry,
     };
@@ -35,7 +34,7 @@ export function recordKilled(reg, entry) {
 }
 export function loadRegistryFile(path) {
     try {
-        const raw = JSON.parse(readFileSync(path, "utf8"));
+        const raw = JSON.parse(readFileSync(path, 'utf8'));
         if (raw && raw.version === 1 && Array.isArray(raw.confirmed) && Array.isArray(raw.killed))
             return raw;
         return null;
@@ -96,7 +95,7 @@ export function transactRegistryFile(path, fn) {
     // silently replace the whole accumulated registry with this one
     // transaction's entries — fail loud instead, leaving the file intact.
     if (loaded === null && existsSync(path)) {
-        throw new MemoryError("REGISTRY_UNREADABLE", `findings registry at ${path} exists but could not be loaded (corrupt or wrong version) — refusing to overwrite it`);
+        throw new MemoryError('REGISTRY_UNREADABLE', `findings registry at ${path} exists but could not be loaded (corrupt or wrong version) — refusing to overwrite it`);
     }
     const reg = loaded ?? emptyRegistry();
     const out = fn(reg);
@@ -109,93 +108,93 @@ export function transactRegistryFile(path, fn) {
 // findings — so the very first live engagement already reasons from history.
 // ---------------------------------------------------------------------------
 const SEED_FP = {
-    host: "secscan.us",
-    stack: ["react-spa", "cloudflare-edge", "bearer-rest-api"],
-    appType: "security-scanner-saas",
-    notes: "1.27MB JS bundle; /api/v1 bearer API + /api/* web namespace; SPA shell; Cloudflare edge",
+    host: 'secscan.us',
+    stack: ['react-spa', 'cloudflare-edge', 'bearer-rest-api'],
+    appType: 'security-scanner-saas',
+    notes: '1.27MB JS bundle; /api/v1 bearer API + /api/* web namespace; SPA shell; Cloudflare edge',
 };
-const SEED_DATE = "2026-10-01T12:45:00.000Z";
-const SEED_ENG = "secscan-us-2026-10-01";
+const SEED_DATE = '2026-10-01T12:45:00.000Z';
+const SEED_ENG = 'secscan-us-2026-10-01';
 export function seedRegistry() {
     const reg = emptyRegistry();
     const killed = [
         {
             engagementId: SEED_ENG,
             target: SEED_FP,
-            hypothesis: "Unauthenticated REST endpoints expose scan data (IDOR/status oracle)",
-            killingObservation: "Unauth GET /api/v1/scans, /scans/{id}, /scans/{id}/report, /me → ALL uniform 401, byte-identical bodies. Only /api/v1/openapi.json is public (by design). No oracle.",
-            attackId: "T1190",
-            vulnClass: "IDOR / broken object-level authorization",
+            hypothesis: 'Unauthenticated REST endpoints expose scan data (IDOR/status oracle)',
+            killingObservation: 'Unauth GET /api/v1/scans, /scans/{id}, /scans/{id}/report, /me → ALL uniform 401, byte-identical bodies. Only /api/v1/openapi.json is public (by design). No oracle.',
+            attackId: 'T1190',
+            vulnClass: 'IDOR / broken object-level authorization',
         },
         {
             engagementId: SEED_ENG,
             target: SEED_FP,
-            hypothesis: "Web-app /api/* namespace (from JS bundle) has ungated routes",
-            killingObservation: "/api/auth/user → 200 {\"user\":null} (correct anonymous); /api/account/tokens, /domain-verifications, /scans, /monitor/subscriptions, /billing/status → uniform 401. Properly gated.",
-            attackId: "T1190",
-            vulnClass: "missing authorization",
+            hypothesis: 'Web-app /api/* namespace (from JS bundle) has ungated routes',
+            killingObservation: '/api/auth/user → 200 {"user":null} (correct anonymous); /api/account/tokens, /domain-verifications, /scans, /monitor/subscriptions, /billing/status → uniform 401. Properly gated.',
+            attackId: 'T1190',
+            vulnClass: 'missing authorization',
         },
         {
             engagementId: SEED_ENG,
             target: SEED_FP,
-            hypothesis: "Direct /report/1 and /share/test URLs leak scan data",
-            killingObservation: "Both return the generic ~9KB SPA shell (marketing copy only); zero scan IDs, grades, or tokens. Data loads via authenticated API. Cross-account object test deferred (needs 2nd account).",
-            attackId: "T1190",
-            vulnClass: "IDOR via direct URL",
+            hypothesis: 'Direct /report/1 and /share/test URLs leak scan data',
+            killingObservation: 'Both return the generic ~9KB SPA shell (marketing copy only); zero scan IDs, grades, or tokens. Data loads via authenticated API. Cross-account object test deferred (needs 2nd account).',
+            attackId: 'T1190',
+            vulnClass: 'IDOR via direct URL',
         },
         {
             engagementId: SEED_ENG,
             target: SEED_FP,
-            hypothesis: "Host-header injection influences password-reset links (X-Forwarded-Host)",
+            hypothesis: 'Host-header injection influences password-reset links (X-Forwarded-Host)',
             killingObservation: "GET /forgot-password with X-Forwarded-Host: evil-attacker.example → 200, zero reflections. Bare 'Host: evil.example' rejected at the edge (connection refused).",
-            attackId: "T1190",
-            vulnClass: "host-header injection",
+            attackId: 'T1190',
+            vulnClass: 'host-header injection',
         },
         {
             engagementId: SEED_ENG,
             target: SEED_FP,
-            hypothesis: "A live WebSocket/EventSource channel exists to attack",
-            killingObservation: "Zero WebSocket/EventSource/socket.io references in the full 1.27MB bundle. No channel exists; permissive CSP ws:/wss: is config-only.",
-            vulnClass: "websocket hijacking",
+            hypothesis: 'A live WebSocket/EventSource channel exists to attack',
+            killingObservation: 'Zero WebSocket/EventSource/socket.io references in the full 1.27MB bundle. No channel exists; permissive CSP ws:/wss: is config-only.',
+            vulnClass: 'websocket hijacking',
         },
         {
             engagementId: SEED_ENG,
             target: SEED_FP,
-            hypothesis: "robots.txt / sitemap hide undocumented routes",
-            killingObservation: "5,984B robots.txt fully explained: 16 AI-bot user-agent groups repeating the Disallow list. sitemap.xml lists public pages only. No hidden route strings.",
-            attackId: "T1595.003",
-            vulnClass: "hidden endpoint discovery",
+            hypothesis: 'robots.txt / sitemap hide undocumented routes',
+            killingObservation: '5,984B robots.txt fully explained: 16 AI-bot user-agent groups repeating the Disallow list. sitemap.xml lists public pages only. No hidden route strings.',
+            attackId: 'T1595.003',
+            vulnClass: 'hidden endpoint discovery',
         },
         {
             engagementId: SEED_ENG,
             target: SEED_FP,
             hypothesis: "Reflected input + style-src 'unsafe-inline' = live CSS/HTML injection",
             killingObservation: "4 canary probes (/?q=<style>oast7x</style>, /?search=\"><style>oast7x, /?name=';background:url(oast7x), /scan?url=oast7x) → all 200, ZERO reflections. Killed as a live vector; directive stays a latent LOW.",
-            attackId: "T1190",
-            vulnClass: "CSS injection",
+            attackId: 'T1190',
+            vulnClass: 'CSS injection',
         },
         {
             engagementId: SEED_ENG,
             target: SEED_FP,
-            hypothesis: "www.secscan.us hostname confusion / reflection",
-            killingObservation: "GET https://www.secscan.us/ → clean 301 to https://secscan.us/, no hostname reflection.",
-            vulnClass: "host confusion",
+            hypothesis: 'www.secscan.us hostname confusion / reflection',
+            killingObservation: 'GET https://www.secscan.us/ → clean 301 to https://secscan.us/, no hostname reflection.',
+            vulnClass: 'host confusion',
         },
         {
             engagementId: SEED_ENG,
             target: SEED_FP,
-            hypothesis: "Weak TLS posture (obsolete versions, bad chain)",
+            hypothesis: 'Weak TLS posture (obsolete versions, bad chain)',
             killingObservation: "Live-edge handshake: TLS 1.3 / AES-256-GCM / ECDSA P-256, chain verifies. Modern and valid. (An early direct-connect 'TLS 1.3 fails' reading was discarded as a VM resolver artifact.)",
-            attackId: "T1590.002",
-            vulnClass: "TLS misconfiguration",
+            attackId: 'T1590.002',
+            vulnClass: 'TLS misconfiguration',
         },
         {
             engagementId: SEED_ENG,
             target: SEED_FP,
-            hypothesis: "MCP scope gate bypass via percent-encoded path traversal (/api/mcp/%2e%2e/v1/scans)",
-            killingObservation: "Traversal → 404 {\"error\":\"Not found\"} vs control /api/v1/scans → 401. Traversal normalized before the scope check; gate holds. Positive control for scope enforcement.",
-            attackId: "T1190",
-            vulnClass: "scope-confusion / path traversal",
+            hypothesis: 'MCP scope gate bypass via percent-encoded path traversal (/api/mcp/%2e%2e/v1/scans)',
+            killingObservation: 'Traversal → 404 {"error":"Not found"} vs control /api/v1/scans → 401. Traversal normalized before the scope check; gate holds. Positive control for scope enforcement.',
+            attackId: 'T1190',
+            vulnClass: 'scope-confusion / path traversal',
         },
     ];
     for (const k of killed)
@@ -204,41 +203,41 @@ export function seedRegistry() {
         {
             engagementId: SEED_ENG,
             target: SEED_FP,
-            vulnClass: "CSP weak directive (latent XSS enabler)",
-            technique: "CSS/HTML injection probing with canary markers",
-            attackId: "T1190",
-            owasp: "WSTG-CONF",
-            payloadPattern: "?q=<style>oast7x</style> (+3 reflection-context variants); 0 reflections observed",
-            evidenceRef: "engagements/evidence/aggressive-battery-2026-10-01.md (P7)",
-            severity: "low",
+            vulnClass: 'CSP weak directive (latent XSS enabler)',
+            technique: 'CSS/HTML injection probing with canary markers',
+            attackId: 'T1190',
+            owasp: 'WSTG-CONF',
+            payloadPattern: '?q=<style>oast7x</style> (+3 reflection-context variants); 0 reflections observed',
+            evidenceRef: 'engagements/evidence/aggressive-battery-2026-10-01.md (P7)',
+            severity: 'low',
         },
         {
             engagementId: SEED_ENG,
             target: SEED_FP,
-            vulnClass: "DNSSEC not enabled",
-            technique: "DNS posture review via DNS-over-HTTPS",
-            attackId: "T1590.002",
-            payloadPattern: "DoH DS + DNSKEY queries → NOERROR, no records, AD=false",
-            evidenceRef: "engagements/evidence/aggressive-battery-2026-10-01.md (P9)",
-            severity: "info",
+            vulnClass: 'DNSSEC not enabled',
+            technique: 'DNS posture review via DNS-over-HTTPS',
+            attackId: 'T1590.002',
+            payloadPattern: 'DoH DS + DNSKEY queries → NOERROR, no records, AD=false',
+            evidenceRef: 'engagements/evidence/aggressive-battery-2026-10-01.md (P9)',
+            severity: 'info',
         },
         {
             engagementId: SEED_ENG,
             target: SEED_FP,
-            vulnClass: "Obsolete TLS protocol support (1.0/1.1)",
-            technique: "SSL Labs assessment + handshake review",
-            payloadPattern: "SSL Labs grade B, capped on TLS 1.0/1.1 (BEAST on TLS 1.0 CBC); live handshakes negotiate TLS 1.3 cleanly",
-            evidenceRef: "engagements/evidence/scan-e78f4581-report.txt",
-            severity: "info",
+            vulnClass: 'Obsolete TLS protocol support (1.0/1.1)',
+            technique: 'SSL Labs assessment + handshake review',
+            payloadPattern: 'SSL Labs grade B, capped on TLS 1.0/1.1 (BEAST on TLS 1.0 CBC); live handshakes negotiate TLS 1.3 cleanly',
+            evidenceRef: 'engagements/evidence/scan-e78f4581-report.txt',
+            severity: 'info',
         },
         {
             engagementId: SEED_ENG,
             target: SEED_FP,
-            vulnClass: "robots.txt disclosure (comment admits past misconfiguration)",
-            technique: "Robots/sitemap review",
+            vulnClass: 'robots.txt disclosure (comment admits past misconfiguration)',
+            technique: 'Robots/sitemap review',
             payloadPattern: "5,984B robots.txt; comment references past AI-crawler access to dashboards/other users' reports (since fixed)",
-            evidenceRef: "engagements/evidence/aggressive-battery-2026-10-01.md (P6)",
-            severity: "info",
+            evidenceRef: 'engagements/evidence/aggressive-battery-2026-10-01.md (P6)',
+            severity: 'info',
         },
     ];
     for (const c of confirmed)

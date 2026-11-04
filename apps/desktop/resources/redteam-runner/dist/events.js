@@ -12,6 +12,13 @@ import { appendFileSync, mkdirSync, readFileSync, renameSync, writeFileSync, exi
 import { basename, join } from "node:path";
 import { maybeRotateLog } from "./safety/rotation.js";
 import { redact } from "./events/redact.js";
+/**
+ * Statuses that mean the run is over — the same set ui/store.ts defines
+ * for its live flag and ui/report-tools.ts for regeneration, exported
+ * from here because every record consumer already imports this module
+ * and writeEvent's phase guard below needs it too.
+ */
+export const TERMINAL_STATUSES = new Set(["complete", "halted", "blocked"]);
 export class EventLog {
     dir;
     engagementId;
@@ -120,7 +127,14 @@ export class EventLog {
         const mdLine = `| ${safe.ts} | ${safe.phase} | ${safe.actor} | ${safe.action}${safe.attackId ? ` (${safe.attackId})` : ""} | ${oneLine(safe.result)} |\n`;
         appendFileSync(join(this.dir, "engagement.md"), mdLine);
         this.state.eventCount = ev.seq;
-        this.state.phase = ev.phase;
+        // S2-H10: once the record is terminal, an appended event must not
+        // move its phase. The close paths stamp the terminal phase via
+        // updateState first; the bookkeeping events that follow (the halt
+        // report, the finally block's trajectory capture at phase "done")
+        // would otherwise clobber it, leaving a halted run at phase "done".
+        // The event itself is appended above exactly as before.
+        if (!TERMINAL_STATUSES.has(this.state.status))
+            this.state.phase = ev.phase;
         this.state.updatedAt = ev.ts;
         this.persistState();
         return ev;

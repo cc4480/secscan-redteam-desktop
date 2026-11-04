@@ -609,6 +609,9 @@ importers:
       '@electron/notarize':
         specifier: 2.5.0
         version: 2.5.0
+      '@secscan/redteam-llm-router':
+        specifier: workspace:~
+        version: link:../../packages/redteam/llm-router
       '@types/js-yaml':
         specifier: ^4.0.9
         version: 4.0.9
@@ -10063,7 +10066,11 @@ importers:
         specifier: link:../../../vendor/schemastery
         version: link:../../../vendor/schemastery
 
-  packages/redteam/llm-router: {}
+  packages/redteam/llm-router:
+    dependencies:
+      '@deepseek-ai/dsh-home-paths':
+        specifier: workspace:*
+        version: link:../../util/home-paths
 
   packages/runtime-diagnostics/invariants:
     dependencies:

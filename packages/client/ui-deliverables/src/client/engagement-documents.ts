@@ -42,6 +42,18 @@ export interface EngagementDocument {
   readonly copyable: boolean
 }
 
+/** The Scribe gate's outcome for a closing set, as the engagement_report result's `signoff` field carries it. */
+export interface EngagementSignoff {
+  /** Whether the Scribe signed the closing set. */
+  readonly signed: boolean
+  /** Review cycles the set went through, when the result names them. */
+  readonly cycles?: number
+  /** Why the set shipped unsigned (`defects` or `scribe_unavailable`), when unsigned. */
+  readonly reason?: string
+  /** Count of the final cycle's defects, when unsigned. */
+  readonly defectCount?: number
+}
+
 /** The parsed engagement_report result the card renders from. */
 export interface EngagementReportDocuments {
   /** Engagement id the documents belong to. */
@@ -52,6 +64,28 @@ export interface EngagementReportDocuments {
   readonly documents: readonly EngagementDocument[]
   /** Present deliverables exist (at least the Markdown report was named). */
   readonly ready: boolean
+  /** The Scribe gate's outcome, or null when the result carries no usable signoff field (older results). */
+  readonly signoff: EngagementSignoff | null
+}
+
+/**
+ * Read the result's `signoff` field: the Scribe outcome, present only
+ * when the field is an object carrying a boolean `signed`. An absent or
+ * malformed field yields null — never a fabricated signing.
+ * @param fields - the parsed tool-result fields.
+ * @returns the signoff, or null when none was recorded.
+ */
+function parseSignoff(fields: Record<string, unknown>): EngagementSignoff | null {
+  const raw = fields['signoff']
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null
+  const value = raw as Record<string, unknown>
+  if (typeof value['signed'] !== 'boolean') return null
+  return {
+    signed: value['signed'],
+    ...(typeof value['cycles'] === 'number' ? { cycles: value['cycles'] } : {}),
+    ...(typeof value['reason'] === 'string' && value['reason'] !== '' ? { reason: value['reason'] } : {}),
+    ...(typeof value['defectCount'] === 'number' ? { defectCount: value['defectCount'] } : {}),
+  }
 }
 
 /**
@@ -108,6 +142,7 @@ export function engagementDocumentsFromResult(text: string): EngagementReportDoc
     content: typeof fields['content'] === 'string' ? fields['content'] : '',
     documents,
     ready: true,
+    signoff: parseSignoff(fields),
   }
 }
 

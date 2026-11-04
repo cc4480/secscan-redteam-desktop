@@ -1,6 +1,6 @@
 # MCP services
 
-The fleet reaches the outside world through three MCP connections, composed into the harness profile by the desktop bundle (`packages/redteam/desktop-bundle`). Two are operator-keyed services — **SecScan** and **Seclayer** — and the third is the product's own runner. This document covers what each connection unlocks, where its key comes from, how the key is stored, and what happens when a key is missing or wrong.
+The fleet reaches the outside world through four MCP connections, composed into the harness profile by the desktop bundle (`packages/redteam/desktop-bundle`). Two are operator-keyed services — **SecScan** and **Seclayer** — the third is the product's own runner, and the fourth is **AlterEgo**, the bridge to the operator's own PC. This document covers what each connection unlocks, where its key comes from, how the key is stored, and what happens when a key is missing or wrong.
 
 Three similarly named things must not be confused:
 
@@ -38,6 +38,16 @@ Three similarly named things must not be confused:
 
 **The tools:** `start_engagement`, `get_engagement`, `get_feed`, `get_findings`, `get_proof`, `get_coverage`, `get_compliance`, `escalate`, `reverify`, `abort_engagement`, `watch_profiles`, `watch_trigger`. The chat profile additionally gets the narration-shaped trio `engagement_launch` / `engagement_status` / `engagement_report` over the same handlers. Every tool delegates to the same handler the console UI calls, so launch validation, tier rules, scope enforcement, and approval logging apply identically — the MCP row adds reach, not authority.
 
+## AlterEgo bridge — `mcp__alterego__*`
+
+**Connection:** Streamable HTTP to the bridge's local endpoint (`http://127.0.0.1:8765/mcp` by default; `PC_BRIDGE_URL` names the bridge's base address when it differs), authenticated with the paired bridge token. The desktop bundle composes this row as a fourth MCP client beside the three above, and the runner speaks to the same bridge inside engagements.
+
+**What it is:** [AlterEgo](https://github.com/cc4480/alterego) is a separate open-source project (MIT) that runs on the operator's own Windows PC and offers that machine as tools — 109 tools in the bridge's live registry, spanning screen capture, keyboard and mouse input, shell, files, and browser control. The client filters nothing: tools arrive namespaced `mcp__alterego__*`, and whatever the bridge's live registry offers is what appears.
+
+**What it unlocks:** the operator's actual desktop. During an engagement, the bridge reaches the PC the app runs on — its windows, its browser, its shell — beside the runner's own host tooling; during development, it is how the app's builders drive and inspect that same PC. The row adds reach, not authority: bridge operations carry the bridge's own gates, not the runner's.
+
+**Security posture:** the bridge accepts only its owner's paired client. Pairing exchanges a one-time pairing code for a revocable bearer token; the token is stored in a file on the PC, and this row reads it from that file when the profile composes — the value never appears in any composed configuration. The bridge server listens on loopback, and any reach beyond the PC goes through the owner's own tunnel or tailnet. Write and destructive operations pass the bridge's approval modes, in the default posture its native consent dialog on the PC, and every tool call is recorded in the bridge's event-sourced audit journal. The bridge's own security documentation — including the findings of an audit of the bridge on 2026-11-04 and the status of their remediation in that repository — is the bridge repo's [SECURITY.md](https://github.com/cc4480/alterego/blob/main/SECURITY.md). An unpaired, stopped, or uninstalled bridge never blocks startup: the row's connect fails, the failure is logged, and the `mcp__alterego__*` tools do not appear until the bridge is live and paired.
+
 ## Seating keys
 
 Keys are seated in exactly one place: the app's **welcome/settings MCP step**, which has a field for each service (SecScan token, Seclayer key) plus the Meta model key. Saving writes to the credential store (below). Environment variables are the supported alternative for headless or pre-seeded setups: `SECSCAN_MCP_TOKEN` and `SECLAYER_API_KEY` are read from the app's environment when the store has no value. The app's readiness checklist reports each key as a real, satisfiable item — present, absent, or rejected — never a vague warning.
@@ -54,5 +64,6 @@ Entered keys live in the app's per-user **credential store**, in the application
 | Seclayer key unset | The spawned server exits at startup; no `mcp__seclayer__*` tools appear. Nothing hunts for the key and nothing prompts mid-session. |
 | Key set but invalid/revoked | The connection's tools appear and the service answers with an authentication error, surfaced once, naming the service. No retry loop, no prompt loop. The fix is at the minting dashboard: revoke/re-mint there, then re-seat the new value. |
 | Runner console unreachable | The `mcp__redteam__*` tools are unavailable; in the desktop app a bundled console that fails to start is a visible startup failure. |
+| AlterEgo bridge down or unpaired | The row's connect fails and is logged; no `mcp__alterego__*` tools appear. The app, the fleet, and the other connections work normally. |
 
 Revocation is the kill switch and it lives at the service: revoke the token in the same account settings that minted it, and every seated copy stops working at the next call.

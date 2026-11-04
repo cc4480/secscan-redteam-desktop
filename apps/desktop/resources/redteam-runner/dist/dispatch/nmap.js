@@ -16,18 +16,43 @@
  *    sweep and a top-100 sweep would otherwise be equally reachable at Tier 0.
  *    The check is mechanical and the denial names the tier that would allow it.
  */
+import { execFileSync } from "node:child_process";
 import { BATTERY_CATEGORIES } from "../battery.js";
 import { isTargetId } from "../targets.js";
 import { techniqueAllowed } from "../gate.js";
 import { sleep } from "../util.js";
 import { noteCategoryCoverage, strListArg } from "./prelude.js";
-import { findProfile, NMAP_PROFILES } from "../nmap/index.js";
+import { findProfile, NMAP_PROFILES, NMAP_SETUP_INSTRUCTIONS } from "../nmap/index.js";
+import { resolveExternalBinary } from "../toolchain.js";
 import { validateHostTarget } from "../host-exec/common.js";
 function strArg(args, key) {
     const v = args[key];
     return typeof v === "string" && v.trim() ? v.trim() : undefined;
 }
-export async function handleNmapTools(ctx, _role, _phase, call, args) {
+/**
+ * Whether the resolved nmap binary is actually there — the same presence
+ * reading `binPresent` gives the xtool bridges (xtool/executor.ts): an
+ * explicit env value or a bundled payload counts only when the file exists
+ * (a stale REDTEAM_NMAP_BIN must not beat the working bundled copy and fail
+ * as "exited null" at spawn), and the neutral bare command name is left for
+ * the OS to find on PATH.
+ */
+function nmapPresent(env = process.env) {
+    const resolved = resolveExternalBinary("nmap", { env });
+    if (resolved.source !== "path")
+        return resolved.exists;
+    if (resolved.exists)
+        return true;
+    const cmd = process.platform === "win32" ? "where" : "which";
+    try {
+        execFileSync(cmd, ["nmap"], { stdio: "ignore", timeout: 5000 });
+        return true;
+    }
+    catch {
+        return false;
+    }
+}
+export async function handleNmapTools(ctx, _role, _phase, call, args, _seam, dispatchSignal) {
     if (call.name !== "nmap_exec")
         return null;
     const attackId = strArg(args, "attackId")?.toUpperCase();
@@ -78,9 +103,16 @@ export async function handleNmapTools(ctx, _role, _phase, call, args) {
             return { result: `DENIED by scope: ${scope.reason}`, attackId, target: host };
         }
     }
+    // Presence gate — after scope, before any spawn, mirroring the xtool
+    // bridges: a resolved-but-missing binary (above all a dead explicit
+    // REDTEAM_NMAP_BIN) is refused with the setup text instead of being
+    // spawned and surfacing as an opaque "exited null".
+    if (action === "scan" && !nmapPresent(process.env)) {
+        return { result: `UNAVAILABLE: ${NMAP_SETUP_INSTRUCTIONS}`, attackId, target: host };
+    }
     ctx.probesUsed++;
     noteCategoryCoverage(ctx, category, rawTp);
-    const ctrl = new AbortController();
+    const ctrl = { signal: dispatchSignal ?? new AbortController().signal };
     try {
         if (ctx.input.mode === "black")
             await sleep(Math.random() * 2500); // jitter

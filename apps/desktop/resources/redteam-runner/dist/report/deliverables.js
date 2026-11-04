@@ -39,10 +39,10 @@
  * publisher seat's signature) or artifactUnsigned (why the set shipped
  * unsigned) — exactly one of them on a completed close.
  */
-import { statSync, writeFileSync } from "node:fs";
+import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { gradeFindings } from "./grading.js";
-import { REPORT_PACKAGE_NAME } from "./package.js";
+import { emitReportPackage, REPORT_PACKAGE_NAME } from "./package.js";
 import { renderReportTxt } from "./text.js";
 export const REPORT_JSON_NAME = "report.json";
 export const REPORT_TXT_NAME = "report.txt";
@@ -224,5 +224,19 @@ export function finalizeDeliverables(ctx) {
         });
     }
     return outcome;
+}
+/** S6-H2c: re-merge the Scribe stamp recorded in state into a regenerated report.json — the same merge scribe.ts's stampReportJson performs at close — and re-fire the package zip so the shipped copy carries it too. Regeneration rebuilds the model from scratch (buildReportModel carries no signoff fields), so without this a signed set regenerates unsigned in report.json while state.json still claims the stamp. No stamp recorded → nothing is added; an unreadable report.json is left alone (finalizeDeliverables has already named the gap). */
+export function restampRecordedSignoff(ctx, recorded) {
+    if (!recorded.artifactSignoff && !recorded.artifactUnsigned)
+        return;
+    try {
+        const path = join(ctx.events.dir, REPORT_JSON_NAME);
+        const model = JSON.parse(readFileSync(path, "utf8"));
+        model.artifactSignoff = recorded.artifactSignoff ?? null;
+        model.artifactUnsigned = recorded.artifactUnsigned ?? null;
+        writeFileSync(path, renderReportJson(model));
+        emitReportPackage(ctx);
+    }
+    catch { /* the state record carries the stamp regardless */ }
 }
 //# sourceMappingURL=deliverables.js.map

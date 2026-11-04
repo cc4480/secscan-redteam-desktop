@@ -22,10 +22,10 @@
  *
  * The request function is injectable so tests run against a fake msfrpcd.
  */
-import { type MsfRequestFn } from "../protocol.js";
-import { MsfSessionManager } from "../sessions.js";
-import { type SessionCloseArgs, type SessionCommandArgs } from "./session-ops.js";
-import { type CredentialDumpArgs } from "./credential-dump.js";
+import { type MsfRequestFn } from '../protocol.js';
+import { MsfSessionManager } from '../sessions.js';
+import { type SessionCloseArgs, type SessionCommandArgs } from './session-ops.js';
+import { type CredentialDumpArgs } from './credential-dump.js';
 export interface MsfDeps {
     /** Injectable transport (default: HTTPS to the operator's msfrpcd). */
     request?: MsfRequestFn;
@@ -46,7 +46,7 @@ export interface MsfDeps {
 }
 export interface MsfResult {
     ok: boolean;
-    transport: "msf";
+    transport: 'msf';
     host: string;
     /** Redacted one-line summary for audit logs and events. */
     summary: string;
@@ -130,7 +130,7 @@ export declare class MsfExecutor {
     run(args: {
         host: string;
         scopeHosts: string[];
-        moduleType: "exploit" | "auxiliary";
+        moduleType: 'exploit' | 'auxiliary';
         module: string;
         /** Module datastore options (RHOSTS etc. derived from host — secrets never in here). */
         options?: Record<string, string>;

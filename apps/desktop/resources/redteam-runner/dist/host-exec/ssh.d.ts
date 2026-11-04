@@ -15,7 +15,7 @@
  * for onward authentication — that is analysis-only by design, documented
  * at both the transport and executor layers.
  */
-import { type HostCredentials } from "./common.js";
+import { type HostCredentials } from './common.js';
 export interface SshExecArgs {
     host: string;
     port?: number;

@@ -7,7 +7,10 @@
  * something the CLI would refuse.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
+import type { EngagementInput } from "../../types.js";
 import type { UiStore } from "../store.js";
+import type { UiLaunchRequest } from "../types.js";
+export declare function toEngagementInput(b: UiLaunchRequest): EngagementInput;
 /** POST /api/engagements — launch. Returns 202 { id }. */
 export declare function handleLaunch(store: UiStore, _req: IncomingMessage, res: ServerResponse, body: unknown): Promise<void>;
 /** GET /api/engagements — list all (live first, then history). */

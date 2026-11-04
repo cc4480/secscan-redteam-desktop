@@ -9,7 +9,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-E11D48" alt="License: MIT"></a>
   <a href="https://github.com/cc4480/secscan-redteam-desktop/actions/workflows/windows-installer.yml"><img src="https://github.com/cc4480/secscan-redteam-desktop/actions/workflows/windows-installer.yml/badge.svg" alt="Windows installer"></a>
-  <img src="https://img.shields.io/badge/version-0.1.7--rc.9-E11D48" alt="Version 0.1.7-rc.9">
+  <img src="https://img.shields.io/badge/version-0.1.7--rc.7-E11D48" alt="Version 0.1.7-rc.7">
   <img src="https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-E11D48" alt="Node ^22.19 || >=24">
   <img src="https://img.shields.io/badge/platform-Windows-E11D48" alt="Platform: Windows">
 </p>
@@ -31,6 +31,7 @@ Two rules shape everything the product does:
 | External engines | nmap, nuclei, ffuf, gobuster, sqlmap, nikto, and John the Ripper resolved through one toolchain, a Metasploit RPC integration, and a vendored tool payload in the desktop package | [Engines & coverage](docs/product/engines-and-coverage.md#external-engines) |
 | Anchored grading | One scoring voice: Seclayer's anchored engine under the SecScan name — confirmed findings deduct in full, heuristics are damped and capped, one confirmed critical anchors the grade at F | [Engines & coverage](docs/product/engines-and-coverage.md#grading-one-voice) |
 | Connected services | The SecScan MCP service (scans, domain verification, monitors) and the Seclayer MCP service (a second-opinion scanner) — each with your own key, stored in the app's encrypted credential store | [MCP services](docs/product/mcp-services.md) |
+| PC bridge (AlterEgo) | [AlterEgo](https://github.com/cc4480/alterego), a separate open-source MCP bridge to the operator's own Windows PC — the app's fourth MCP connection — exposes the bridge's 109 tools (screen, keyboard, shell, files, browser) on that machine, for engagements and for development | [MCP services](docs/product/mcp-services.md) |
 | Models | Muse Spark 1.3 on every fleet seat; Muse Wonder 1.0 for explicit small calls; a provider-resilience layer (classified failover, credential pool, cooldowns); a llama.cpp local-model manager | [Models](docs/product/models.md) |
 | Foundry | Real engagements capture sanitized cases into an in-app store; candidate tests run the Gold Loop (propose → prove → challenge → score → adjudicate → decide) before joining the battery | [Overview](docs/product/overview.md#foundry-the-self-improving-loop) |
 | Continuous watch | Watch profiles keep a baseline per target and report configuration drift between runs | [Engines & coverage](docs/product/engines-and-coverage.md#continuous-watch) |
@@ -39,7 +40,7 @@ Two rules shape everything the product does:
 
 ### Install the desktop app (Windows)
 
-Download the installer from the project's GitHub Releases and run it. The installer is unsigned by design in CI builds; Windows will ask you to confirm. The app opens straight to chat — no account, no login wall.
+A public installer is not published yet: the current build (0.1.7-rc.7) is in final verification, and the installer will be posted to the project's GitHub Releases when it passes. Until then, build from source using the developer quickstart below. When published, the installer will be unsigned by design in CI builds; Windows will ask you to confirm. The app opens straight to chat — no account, no login wall.
 
 On first run, the welcome flow asks for one required key and offers two optional ones:
 

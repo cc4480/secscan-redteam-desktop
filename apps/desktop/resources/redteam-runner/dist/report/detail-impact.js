@@ -1,3 +1,4 @@
+import { noFindingClause } from './completeness.js';
 import { AREA_IMPACT, SEVERITY_RANK, TIER_RANK, compareIds, plural, req, } from './detail-tables.js';
 /** §5 selection is worst-severity-first: the band names, and takes its
  * clause from, the most severe finding (tier, then F-id, break ties).
@@ -5,12 +6,17 @@ import { AREA_IMPACT, SEVERITY_RANK, TIER_RANK, compareIds, plural, req, } from 
  * governs the priority list only, never the impact clause's source. */
 const bySeverityFirst = (a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] ||
     TIER_RANK[a.tier] - TIER_RANK[b.tier] || compareIds(a.id, b.id);
-/** §5 — the impact band selects the first matching fixed statement. */
-export function buildImpact(actionable, areaOf) {
+/** §5 — the impact band selects the first matching fixed statement.
+ *
+ * The zero-finding band is coverage-aware (completeness.ts): "no material
+ * business risk" may only be said of a battery that actually concluded. An
+ * engagement that halted with items unverdicted says so instead — otherwise
+ * the report asserts safety from items nobody tested. */
+export function buildImpact(actionable, areaOf, coverage) {
     if (actionable.length === 0) {
         return {
             level: 'none',
-            text: 'No material business risk identified from this pass; continued monitoring is still recommended as the application evolves.',
+            text: noFindingClause(coverage),
         };
     }
     const ranked = [...actionable].sort(bySeverityFirst);

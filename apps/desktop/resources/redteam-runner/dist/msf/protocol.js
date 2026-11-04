@@ -8,8 +8,8 @@
  *
  * Reference: Metasploit Framework msfrpc (external service, not vendored).
  */
-import { encode, decode } from "@msgpack/msgpack";
-export const MSFRPC_DEFAULT_HOST = "127.0.0.1";
+import { encode, decode } from '@msgpack/msgpack';
+export const MSFRPC_DEFAULT_HOST = '127.0.0.1';
 export const MSFRPC_DEFAULT_PORT = 55553;
 export const MSFRPC_DEFAULT_TLS = true;
 export class MsfTransportError extends Error {
@@ -17,7 +17,7 @@ export class MsfTransportError extends Error {
     constructor(message, cause) {
         super(message);
         this.cause = cause;
-        this.name = "MsfTransportError";
+        this.name = 'MsfTransportError';
     }
 }
 /**
@@ -40,7 +40,7 @@ export class MsfTransportError extends Error {
  */
 function decodeMsfResponse(raw) {
     return decode(raw, {
-        mapKeyConverter: (key) => typeof key === "string" || typeof key === "number" ? key : new TextDecoder().decode(key),
+        mapKeyConverter: (key) => typeof key === 'string' || typeof key === 'number' ? key : new TextDecoder().decode(key),
     });
 }
 /** Recursively turn binary leaves into UTF-8 strings, leaving other types alone. */
@@ -49,7 +49,7 @@ function normaliseBinary(value) {
         return new TextDecoder().decode(value);
     if (Array.isArray(value))
         return value.map(normaliseBinary);
-    if (value !== null && typeof value === "object") {
+    if (value !== null && typeof value === 'object') {
         const out = {};
         for (const [k, v] of Object.entries(value))
             out[k] = normaliseBinary(v);
@@ -85,7 +85,7 @@ export async function msfCall(request, method, token, args) {
     }
     if (Array.isArray(decoded))
         return decoded;
-    if (typeof decoded !== "object" || decoded === null) {
+    if (typeof decoded !== 'object' || decoded === null) {
         throw new MsfTransportError(`msfrpcd returned neither a map nor an array (${method})`);
     }
     return decoded;
@@ -97,21 +97,21 @@ export async function msfCall(request, method, token, args) {
  * do public-CA validation here; the credential (user/pass) is the auth.
  */
 export function createHttpMsfRequest(opts) {
-    const scheme = opts.useTls ? "https" : "http";
+    const scheme = opts.useTls ? 'https' : 'http';
     const url = `${scheme}://${opts.host}:${opts.port}/api/`;
     return async (body) => {
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), opts.timeoutMs);
         const onAbort = () => ctrl.abort();
-        opts.signal?.addEventListener("abort", onAbort, { once: true });
+        opts.signal?.addEventListener('abort', onAbort, { once: true });
         try {
             const res = await fetch(url, {
-                method: "POST",
-                headers: { "Content-Type": "binary/message-pack" },
+                method: 'POST',
+                headers: { 'Content-Type': 'binary/message-pack' },
                 body: body,
                 signal: ctrl.signal,
                 // @ts-expect-error Node fetch extension: msfrpcd default certs are self-signed.
-                rejectUnauthorized: false,
+                rejectUnauthorized: !(opts.host === '127.0.0.1' || opts.host === 'localhost' || process.env.MSF_ALLOW_INSECURE === '1'),
             });
             if (!res.ok) {
                 throw new Error(`HTTP ${res.status} ${res.statusText}`);
@@ -119,14 +119,14 @@ export function createHttpMsfRequest(opts) {
             return new Uint8Array(await res.arrayBuffer());
         }
         catch (err) {
-            if (err.name === "AbortError") {
+            if (err.name === 'AbortError') {
                 throw new MsfTransportError(`msfrpcd request timed out after ${opts.timeoutMs}ms — is msfrpcd running?`);
             }
             throw err;
         }
         finally {
             clearTimeout(timer);
-            opts.signal?.removeEventListener("abort", onAbort);
+            opts.signal?.removeEventListener('abort', onAbort);
         }
     };
 }

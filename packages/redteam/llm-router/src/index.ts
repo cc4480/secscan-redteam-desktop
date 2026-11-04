@@ -23,6 +23,16 @@ export {
 export { LLM_PROVIDER_ENV, META_ROLE_MODEL_POLICY, ROLE_MODEL_POLICY, ROLE_ORDER, roleModelPolicy } from './policy.js'
 export { fleetConfigResolver, setFleetConfigResolver, type FleetConfigResolver } from './resolver.js'
 export {
+  FLEET_PROVIDER_FILENAME,
+  FLEET_PROVIDER_VERSION,
+  effectiveFleetProvider,
+  readFleetProviderRecord,
+  resolveFleetProviderPath,
+  writeFleetProviderRecord,
+  type FleetProviderSelection,
+  type PublishedFleetProvider,
+} from './fleet-provider-record.js'
+export {
   ProviderError,
   describeErrorCause,
   parseRateLimitResetHeader,

@@ -79,7 +79,13 @@ export class MetaProvider implements LlmProvider {
   }
 
   private apiKeyOrNull(): string | null {
-    return fleetValue(META_API_KEY_ENV) ?? fleetValue(META_API_KEY_FALLBACK_ENV) ?? null
+    // Resolved per call through the fleet resolver (launching environment
+    // by default, the app credentials store when the host installs one),
+    // so a key seated or rotated after startup reaches the next dispatch.
+    const primary = fleetValue(META_API_KEY_ENV)?.trim()
+    if (primary) return primary
+    const fallback = fleetValue(META_API_KEY_FALLBACK_ENV)?.trim()
+    return fallback ? fallback : null
   }
 
   private apiKey(options?: CompleteOptions): string {

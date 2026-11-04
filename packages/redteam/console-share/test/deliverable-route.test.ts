@@ -12,14 +12,18 @@ import { createHash } from 'node:crypto'
 import { createServer, get as httpGet, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { proxyToConsole, type ConsoleTarget } from '../src/proxy.js'
-import { deliverableFileRoute, isCopyableDeliverable, isDeliverableFileName } from '../src/shared.js'
+import { deliverableDisplayRoute, deliverableFileRoute, isCopyableDeliverable, isDeliverableFileName } from '../src/shared.js'
 
 const TOKEN = 'test-token-fixture'
+const DISPLAY_CSP = "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'self'; sandbox"
 const FILE_BYTES = Buffer.from('<!doctype html><title>proxied report</title>\n', 'utf8')
 let observedAuthorization: string | undefined
+let observedUrl: string | undefined
 let consoleServer: Server
 let frontServer: Server
 let frontPort: number
+
+type ObservedResponse = { status: number; headers: Record<string, unknown>; body: Buffer }
 
 function listen(server: Server): Promise<number> {
   return new Promise((resolve) => {
@@ -30,6 +34,17 @@ function listen(server: Server): Promise<number> {
 before(async () => {
   consoleServer = createServer((req, res) => {
     observedAuthorization = req.headers['authorization']
+    observedUrl = req.url
+    if (req.url === '/api/engagements/eng-1/deliverables/report.html?display=inline') {
+      res.writeHead(200, {
+        'content-type': 'text/html; charset=utf-8',
+        'content-disposition': 'inline; filename="report.html"',
+        'content-security-policy': DISPLAY_CSP,
+        'x-content-type-options': 'nosniff',
+      })
+      res.end(FILE_BYTES)
+      return
+    }
     if (req.url === '/api/engagements/eng-1/deliverables/report.html') {
       res.writeHead(200, {
         'content-type': 'text/html; charset=utf-8',
@@ -62,7 +77,7 @@ describe('deliverable route through the share proxy', () => {
   it('streams the exact bytes with the bearer attached and disposition intact', async () => {
     const route = deliverableFileRoute('eng-1', 'report.html')
     assert.equal(route, 'redteam-console/api/engagements/eng-1/deliverables/report.html')
-    const { status, headers, body } = await new Promise<{ status: number; headers: Record<string, unknown>; body: Buffer }>((resolve, reject) => {
+    const { status, headers, body } = await new Promise<ObservedResponse>((resolve, reject) => {
       httpGet(`http://127.0.0.1:${frontPort}/${route}`, (res) => {
         const chunks: Buffer[] = []
         res.on('data', (chunk: Buffer) => { chunks.push(chunk) })
@@ -73,6 +88,27 @@ describe('deliverable route through the share proxy', () => {
     })
     assert.equal(status, 200)
     assert.equal(headers['content-disposition'], 'attachment; filename="report.html"')
+    assert.equal(createHash('sha256').update(body).digest('hex'), createHash('sha256').update(FILE_BYTES).digest('hex'))
+    assert.equal(observedAuthorization, `Bearer ${TOKEN}`)
+  })
+
+  it('passes the display variant through: the query reaches upstream and the inline headers return verbatim (S6-H4b)', async () => {
+    const route = deliverableDisplayRoute('eng-1', 'report.html')
+    assert.equal(route, 'redteam-console/api/engagements/eng-1/deliverables/report.html?display=inline')
+    const { status, headers, body } = await new Promise<ObservedResponse>((resolve, reject) => {
+      httpGet(`http://127.0.0.1:${frontPort}/${route}`, (res) => {
+        const chunks: Buffer[] = []
+        res.on('data', (chunk: Buffer) => { chunks.push(chunk) })
+        res.on('end', () => {
+          resolve({ status: res.statusCode ?? 0, headers: res.headers as Record<string, unknown>, body: Buffer.concat(chunks) })
+        })
+      }).on('error', reject)
+    })
+    assert.equal(status, 200)
+    assert.equal(observedUrl, '/api/engagements/eng-1/deliverables/report.html?display=inline')
+    assert.equal(headers['content-disposition'], 'inline; filename="report.html"')
+    assert.equal(headers['content-security-policy'], DISPLAY_CSP)
+    assert.equal(headers['x-content-type-options'], 'nosniff')
     assert.equal(createHash('sha256').update(body).digest('hex'), createHash('sha256').update(FILE_BYTES).digest('hex'))
     assert.equal(observedAuthorization, `Bearer ${TOKEN}`)
   })

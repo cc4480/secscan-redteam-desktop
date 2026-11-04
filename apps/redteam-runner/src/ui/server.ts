@@ -122,28 +122,28 @@ async function route(store: UiStore, token: string, req: IncomingMessage, res: S
       if (body === BODY_REJECTED) return
       return handleLaunch(store, req, res, body)
     }
-    if (seg[1] === 'engagements' && seg[2] && method === 'GET' && seg.length === 3) return handleDetail(store, res, decodeURIComponent(seg[2]!))
+    if (seg[1] === 'engagements' && seg[2] && method === 'GET' && seg.length === 3) return handleDetail(store, res, decodeURIComponent(seg[2]))
     if (seg[1] === 'engagements' && seg[2] && seg[3] === 'events' && method === 'GET' && seg.length === 4) {
-      return handleFeed(store, req, res, decodeURIComponent(seg[2]!), url.searchParams)
+      return handleFeed(store, req, res, decodeURIComponent(seg[2]), url.searchParams)
     }
     if (seg[1] === 'engagements' && seg[2] && seg[3] === 'escalate' && method === 'POST' && seg.length === 4) {
       const body = await readJsonBody(req).catch(() => ({}))
-      return handleEscalate(store, res, decodeURIComponent(seg[2]!), body)
+      return handleEscalate(store, res, decodeURIComponent(seg[2]), body)
     }
     if (seg[1] === 'engagements' && seg[2] && seg[3] === 'deliverables' && seg[4] && (method === 'GET' || method === 'HEAD') && seg.length === 5) {
-      return handleDeliverable(store, req, res, decodeURIComponent(seg[2]!), decodeURIComponent(seg[4]!))
+      return handleDeliverable(store, req, res, decodeURIComponent(seg[2]), decodeURIComponent(seg[4]), url.searchParams)
     }
     if (seg[1] === 'engagements' && seg[2] && seg[3] === 'findings' && method === 'GET' && seg.length === 4) {
-      return handleFindings(store, res, decodeURIComponent(seg[2]!))
+      return handleFindings(store, res, decodeURIComponent(seg[2]))
     }
     if (seg[1] === 'engagements' && seg[2] && seg[3] === 'proof' && seg[4] && method === 'GET' && seg.length === 5) {
-      return handleProof(store, res, decodeURIComponent(seg[2]!), decodeURIComponent(seg[4]!))
+      return handleProof(store, res, decodeURIComponent(seg[2]), decodeURIComponent(seg[4]))
     }
     if (seg[1] === 'engagements' && seg[2] && seg[3] === 'coverage' && method === 'GET' && seg.length === 4) {
-      return handleCoverage(store, res, decodeURIComponent(seg[2]!))
+      return handleCoverage(store, res, decodeURIComponent(seg[2]))
     }
     if (seg[1] === 'engagements' && seg[2] && seg[3] === 'compliance' && method === 'GET' && seg.length === 4) {
-      return handleCompliance(store, res, decodeURIComponent(seg[2]!))
+      return handleCompliance(store, res, decodeURIComponent(seg[2]))
     }
     // Operator console (Phase 5) — read-only views over on-disk artifacts.
     if (seg[1] === 'console' && seg[2] === 'engagements' && method === 'GET' && seg.length === 3) return handleConsoleEngagements(store, res)
@@ -160,7 +160,7 @@ async function route(store: UiStore, token: string, req: IncomingMessage, res: S
       if (body === BODY_REJECTED) return
       return handleReverify(store, res, body)
     }
-    if (seg[1] === 'jobs' && seg[2] && method === 'GET' && seg.length === 3) return handleJob(store, res, decodeURIComponent(seg[2]!))
+    if (seg[1] === 'jobs' && seg[2] && method === 'GET' && seg.length === 3) return handleJob(store, res, decodeURIComponent(seg[2]))
     if (seg[1] === 'watch' && seg[2] === 'profiles' && method === 'GET' && seg.length === 3) return handleWatchProfiles(res, url.searchParams)
     if (seg[1] === 'watch' && seg[2] === 'trigger' && method === 'POST' && seg.length === 3) {
       const body = await readBodyOrReject(req, res)

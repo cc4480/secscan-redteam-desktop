@@ -1,67 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
-/** Monotonic schema version of the arsenal index; bump only with a migration step. */
-export declare const ARSENAL_SCHEMA_VERSION = 1;
-/** The `index_meta` stamp of one serving generation. */
-export interface ArsenalIndexMeta {
-    schemaVersion: number;
-    /** Monotonic build counter; the first successful build is generation 1. */
-    generation: number;
-    /** ISO timestamp of the build. */
-    builtAt: string;
-    sourceRepo: string;
-    /** Awesome Hacking HEAD commit the Level 1 census was read at ("" until a real refresh records one). */
-    sourceCommit: string;
-    entryCount: number;
-    collectionCount: number;
-    unparsedCount: number;
-    dupeCount: number;
-}
-/** One row of the spec §5 `collections` table, as ingest produces it. */
-export interface ArsenalCollectionRow {
-    slug: string;
-    name: string;
-    url: string;
-    description: string;
-    topic: string;
-    /** ISO timestamp of the Level 2 fetch; null when Level 2 has not ingested this collection. */
-    fetchedAt: string | null;
-    entryCount: number;
-    /** Last Level 2 failure reason; null on success. */
-    fetchError: string | null;
-}
-/** One row of the spec §5 `entries` table; the array facets are stored as JSON. */
-export interface ArsenalEntryRow {
-    name: string;
-    /** Normalized URL — the within-generation dedupe key (UNIQUE in the schema). */
-    url: string;
-    description: string;
-    collectionSlug: string;
-    tags: string[];
-    targets: string[];
-    battery: string[];
-}
-/** Everything one generation build needs; produced by ingest, consumed here. */
-export interface ArsenalBuildData {
-    sourceRepo: string;
-    sourceCommit: string;
-    /** ISO build timestamp; defaults to now. */
-    builtAt?: string;
-    collections: ArsenalCollectionRow[];
-    entries: ArsenalEntryRow[];
-    unparsedCount: number;
-    dupeCount: number;
-    /**
-     * Validation set: every slug must appear in `collections` and carry at
-     * least one entry, or the swap is blocked. Refresh passes the canonical
-     * priority list from `collections-map.ts`; the store itself holds no
-     * curation policy.
-     */
-    prioritySlugs: readonly string[];
-}
-/** A build was produced but failed validation; the serving generation is untouched. */
-export declare class ArsenalValidationError extends Error {
-    constructor(message: string);
-}
+import { type ArsenalBuildData, type ArsenalIndexMeta } from './index-schema.js';
+export { ARSENAL_SCHEMA_VERSION, ArsenalValidationError } from './index-schema.js';
+export type { ArsenalBuildData, ArsenalCollectionRow, ArsenalEntryRow, ArsenalIndexMeta } from './index-schema.js';
 /**
  * One-shot read of a database file's meta stamp (readiness, diagnostics).
  * Returns null when no file exists; throws loud on a newer schema version

@@ -10,7 +10,7 @@
  * All methods throw MsfTransportError / MsfAuthError on failure; callers
  * translate those into DENIED/failed results with redacted messages.
  */
-import { type MsfRequestFn } from "./protocol.js";
+import { type MsfRequestFn } from './protocol.js';
 export declare class MsfAuthError extends Error {
     constructor(message: string);
 }
@@ -72,7 +72,7 @@ export declare class MsfClient {
      * running module: destroying the console kills whatever it was doing.
      */
     runModuleConsole(args: {
-        moduleType: "exploit" | "auxiliary" | "post";
+        moduleType: 'exploit' | 'auxiliary' | 'post';
         fullname: string;
         options: Record<string, string>;
         payload?: string;

@@ -9,12 +9,12 @@
  *  - engagement.md — the human paper trail (Time | Phase | Actor | Action | Result).
  */
 
-import { appendFileSync, mkdirSync, readFileSync, renameSync, writeFileSync, existsSync } from "node:fs";
-import { basename, join } from "node:path";
-import type { EngagementEvent, EngagementMode, EngagementPhase, EngagementStatus, Finding, OperationPlan } from "./types.js";
-import type { BatteryCategory } from "./battery.js";
-import { maybeRotateLog, type LogRotationConfig } from "./safety/rotation.js";
-import { redact } from "./events/redact.js";
+import { appendFileSync, mkdirSync, readFileSync, renameSync, writeFileSync, existsSync } from 'node:fs'
+import { basename, join } from 'node:path'
+import type { EngagementEvent, EngagementMode, EngagementPhase, EngagementStatus, Finding, OperationPlan } from './types.js'
+import type { BatteryCategory } from './battery.js'
+import { maybeRotateLog, type LogRotationConfig } from './safety/rotation.js'
+import { redact } from './events/redact.js'
 
 /**
  * Statuses that mean the run is over — the same set ui/store.ts defines
@@ -22,101 +22,101 @@ import { redact } from "./events/redact.js";
  * from here because every record consumer already imports this module
  * and writeEvent's phase guard below needs it too.
  */
-export const TERMINAL_STATUSES = new Set(["complete", "halted", "blocked"]);
+export const TERMINAL_STATUSES = new Set(['complete', 'halted', 'blocked'])
 
 export interface LiveState {
-  engagementId: string;
-  target: string;
-  mode: EngagementMode;
-  objective: string;
-  status: EngagementStatus;
-  phase: EngagementPhase;
-  verified: boolean;
-  verificationTs?: string;
-  verificationProof?: string;
+  engagementId: string
+  target: string
+  mode: EngagementMode
+  objective: string
+  status: EngagementStatus
+  phase: EngagementPhase
+  verified: boolean
+  verificationTs?: string
+  verificationProof?: string
   /** The AUTHORIZE phase's attested scope (authorize.ts
    * stampVerifiedScope): the raw ROE entries whose hosts passed
    * authorization, persisted beside the proof so the record itself —
    * not just the in-memory Ctx — carries what was attested. Absent on
    * records written before this field existed. */
-  verifiedScope?: string[];
-  plan: OperationPlan | null;
-  findings: Finding[];
-  batteryCoverage?: Record<BatteryCategory, number>;
+  verifiedScope?: string[]
+  plan: OperationPlan | null
+  findings: Finding[]
+  batteryCoverage?: Record<BatteryCategory, number>
   /** The reporter's unified operation narrative (Megazord header for the console). */
-  operationNarrative?: string;
-  eventCount: number;
-  startedAt: string;
-  updatedAt: string;
+  operationNarrative?: string
+  eventCount: number
+  startedAt: string
+  updatedAt: string
   /** PID of the process driving this run; absent on pre-v0.33 records. */
-  ownerPid?: number;
-  blockedReason?: string;
+  ownerPid?: number
+  blockedReason?: string
   /** Q-DELIVERABLES-AUTOFIRE: absolute path per deliverable file verified
    * on disk at close, stamped by finalizeDeliverables. */
-  deliverables?: Record<string, string>;
+  deliverables?: Record<string, string>
   /** True when the closing deliverable set was incomplete. */
-  deliverableFailed?: boolean;
+  deliverableFailed?: boolean
   /** SCRIBE GATE: the publisher seat's sign-off on the closing set,
    * stamped by report/scribe.ts when the set was signed. */
-  artifactSignoff?: ArtifactSignoff | null;
-  /** SCRIBE GATE: why the closing set shipped unsigned (defects or the
-   * seat unavailable), stamped by report/scribe.ts; null when signed. */
-  artifactUnsigned?: ArtifactUnsigned | null;
+  artifactSignoff?: ArtifactSignoff | null
+  /** SCRIBE GATE: why the closing set shipped unsigned (defects, the
+   * seat unavailable, or a dry run), stamped by report/scribe.ts; null when signed. */
+  artifactUnsigned?: ArtifactUnsigned | null
 }
 
 /** One defect in the Scribe's review of the closing deliverable set. */
 export interface ScribeDefect {
   /** The artifact file the defect is in (e.g. "report.html"). */
-  file: string;
+  file: string
   /** accuracy = contradicts the record; completeness = a promised piece
    * missing; craft = below the locked design standard. */
-  class: "accuracy" | "completeness" | "craft";
+  class: 'accuracy' | 'completeness' | 'craft'
   /** What fails, concretely (the line, the count, the section). */
-  detail: string;
+  detail: string
   /** What "fixed" looks like. */
-  fix: string;
+  fix: string
 }
 
 /** The publisher seat's sign-off stamp on a closing deliverable set. */
 export interface ArtifactSignoff {
-  by: "scribe";
+  by: 'scribe'
   /** ISO timestamp of the signing review. */
-  at: string;
+  at: string
   /** Review cycles the set went through (1 = signed on first review). */
-  cycles: number;
+  cycles: number
 }
 
 /** The record of a closing set that shipped without the Scribe's
  * signature — the same honesty class as deliverableFailed: the set must
  * never read as approved when it was not. */
 export interface ArtifactUnsigned {
-  reason: "defects" | "scribe_unavailable";
+  reason: 'defects' | 'scribe_unavailable' | 'dry-run'
   /** The final cycle's defect list (empty when the seat never answered). */
-  defects: ScribeDefect[];
+  defects: ScribeDefect[]
   /** Review cycles spent before the set shipped unsigned. */
-  cycles: number;
+  cycles: number
   /** ISO timestamp of the unsigned stamp. */
-  at: string;
+  at: string
 }
 
 export class EventLog {
-  readonly dir: string;
-  readonly engagementId: string;
-  private state: LiveState;
+  readonly dir: string
+  readonly engagementId: string
+  private state: LiveState
   /**
    * v0.23.0: per-instance sequence counter. Previously module-global, which
    * corrupted seq numbering when two engagements ran concurrently in one
    * process (e.g. two UI-launched runs interleaving appends). Each log owns
    * its counter, seeded from its own file state on open.
    */
-  private seq = 0;
+  private seq = 0
   /**
    * v0.26.0: log rotation. The first seq number living in the CURRENT
    * events.jsonl (1 for a fresh log, N+1 after a rotation archived seqs
    * 1..N). Lets the `log_rotated` audit event name the archived range.
    */
-  private rotationBase = 1;
-  private readonly rotation?: LogRotationConfig;
+  private rotationBase = 1
+  private readonly rotation?: LogRotationConfig
 
   constructor(
     dir: string,
@@ -124,18 +124,18 @@ export class EventLog {
     init: { target: string; mode: EngagementMode; objective: string },
     rotation?: LogRotationConfig,
   ) {
-    this.dir = dir;
-    this.engagementId = engagementId;
-    this.rotation = rotation;
-    mkdirSync(dir, { recursive: true });
-    const now = new Date().toISOString();
+    this.dir = dir
+    this.engagementId = engagementId
+    this.rotation = rotation
+    mkdirSync(dir, { recursive: true })
+    const now = new Date().toISOString()
     this.state = {
       engagementId,
       target: init.target,
       mode: init.mode,
       objective: init.objective,
-      status: "authorizing",
-      phase: "authorize",
+      status: 'authorizing',
+      phase: 'authorize',
       verified: false,
       plan: null,
       findings: [],
@@ -148,34 +148,34 @@ export class EventLog {
       // lies until something marks it. Recording the owner makes the check
       // mechanical: if that pid is gone, the run is over, whatever the file says.
       ownerPid: process.pid,
-    };
-    writeFileSync(join(dir, "engagement.md"), `# Engagement ${engagementId}\n\n| Time | Phase | Actor | Action | Result |\n|------|-------|-------|--------|--------|\n`);
-    this.persistState();
+    }
+    writeFileSync(join(dir, 'engagement.md'), `# Engagement ${engagementId}\n\n| Time | Phase | Actor | Action | Result |\n|------|-------|-------|--------|--------|\n`)
+    this.persistState()
   }
 
   /** Reopen an existing engagement dir (for resume / inspection). */
   static open(dir: string): EventLog {
-    const statePath = join(dir, "state.json");
-    if (!existsSync(statePath)) throw new Error(`[events] no state.json in ${dir}`);
-    const raw = JSON.parse(readFileSync(statePath, "utf8")) as LiveState;
+    const statePath = join(dir, 'state.json')
+    if (!existsSync(statePath)) throw new Error(`[events] no state.json in ${dir}`)
+    const raw = JSON.parse(readFileSync(statePath, 'utf8')) as LiveState
     const log = Object.create(EventLog.prototype) as unknown as {
-      dir: string;
-      engagementId: string;
-      state: LiveState;
-      seq: number;
-    };
-    log.dir = dir;
-    log.engagementId = raw.engagementId;
-    log.state = raw;
-    log.seq = raw.eventCount;
-    return log as unknown as EventLog;
+      dir: string
+      engagementId: string
+      state: LiveState
+      seq: number
+    }
+    log.dir = dir
+    log.engagementId = raw.engagementId
+    log.state = raw
+    log.seq = raw.eventCount
+    return log as unknown as EventLog
   }
 
   append(
-    partial: Omit<EngagementEvent, "ts" | "seq" | "engagementId">,
+    partial: Omit<EngagementEvent, 'ts' | 'seq' | 'engagementId'>,
   ): EngagementEvent {
-    this.rotateIfNeeded();
-    return this.writeEvent(partial);
+    this.rotateIfNeeded()
+    return this.writeEvent(partial)
   }
 
   /**
@@ -186,66 +186,66 @@ export class EventLog {
    * across rotations — the audit trail is unbroken.
    */
   private rotateIfNeeded(): void {
-    if (!this.rotation) return;
-    const outcome = maybeRotateLog(join(this.dir, "events.jsonl"), this.rotation, {
+    if (!this.rotation) return
+    const outcome = maybeRotateLog(join(this.dir, 'events.jsonl'), this.rotation, {
       firstSeq: this.rotationBase,
       lastSeq: this.seq,
-    });
-    if (!outcome.rotated) return;
-    const mdOutcome = maybeRotateLog(join(this.dir, "engagement.md"), this.rotation);
-    if (mdOutcome.rotated) {
+    })
+    if (!outcome.rotated || outcome.archivePath === undefined) return
+    const mdOutcome = maybeRotateLog(join(this.dir, 'engagement.md'), this.rotation)
+    if (mdOutcome.rotated && mdOutcome.archivePath !== undefined) {
       writeFileSync(
-        join(this.dir, "engagement.md"),
+        join(this.dir, 'engagement.md'),
         `# Engagement ${this.engagementId}\n\n| Time | Phase | Actor | Action | Result |\n|------|-------|-------|--------|--------|\n` +
-          `| ${new Date().toISOString()} | ${this.state.phase} | runner | log rotated | prior rows archived to ${basename(mdOutcome.archivePath!)} |\n`,
-      );
+          `| ${new Date().toISOString()} | ${this.state.phase} | runner | log rotated | prior rows archived to ${basename(mdOutcome.archivePath)} |\n`,
+      )
     }
-    this.rotationBase = this.seq + 1;
+    this.rotationBase = this.seq + 1
     this.writeEvent({
       phase: this.state.phase,
-      actor: "runner",
-      action: "log_rotated",
-      result: `events.jsonl rotated to ${basename(outcome.archivePath!)} (seq ${outcome.firstSeq}-${outcome.lastSeq}); engagement.md rotated alongside`,
-    });
+      actor: 'runner',
+      action: 'log_rotated',
+      result: `events.jsonl rotated to ${basename(outcome.archivePath)} (seq ${outcome.firstSeq}-${outcome.lastSeq}); engagement.md rotated alongside`,
+    })
   }
 
   private writeEvent(
-    partial: Omit<EngagementEvent, "ts" | "seq" | "engagementId">,
+    partial: Omit<EngagementEvent, 'ts' | 'seq' | 'engagementId'>,
   ): EngagementEvent {
     const ev: EngagementEvent = {
       ts: new Date().toISOString(),
       seq: ++this.seq,
       engagementId: this.engagementId,
       ...partial,
-    };
+    }
     // Secrets must never reach the audit trail: redact both by secret-named key
     // and by known literal values before writing. The in-memory event keeps the
     // raw data for callers; only the persisted copies are redacted.
-    const safe = redact(ev);
-    appendFileSync(join(this.dir, "events.jsonl"), JSON.stringify(safe) + "\n");
-    const mdLine = `| ${safe.ts} | ${safe.phase} | ${safe.actor} | ${safe.action}${safe.attackId ? ` (${safe.attackId})` : ""} | ${oneLine(safe.result)} |\n`;
-    appendFileSync(join(this.dir, "engagement.md"), mdLine);
-    this.state.eventCount = ev.seq;
+    const safe = redact(ev)
+    appendFileSync(join(this.dir, 'events.jsonl'), JSON.stringify(safe) + '\n')
+    const mdLine = `| ${safe.ts} | ${safe.phase} | ${safe.actor} | ${safe.action}${safe.attackId ? ` (${safe.attackId})` : ''} | ${oneLine(safe.result)} |\n`
+    appendFileSync(join(this.dir, 'engagement.md'), mdLine)
+    this.state.eventCount = ev.seq
     // S2-H10: once the record is terminal, an appended event must not
     // move its phase. The close paths stamp the terminal phase via
     // updateState first; the bookkeeping events that follow (the halt
     // report, the finally block's trajectory capture at phase "done")
     // would otherwise clobber it, leaving a halted run at phase "done".
     // The event itself is appended above exactly as before.
-    if (!TERMINAL_STATUSES.has(this.state.status)) this.state.phase = ev.phase;
-    this.state.updatedAt = ev.ts;
-    this.persistState();
-    return ev;
+    if (!TERMINAL_STATUSES.has(this.state.status)) this.state.phase = ev.phase
+    this.state.updatedAt = ev.ts
+    this.persistState()
+    return ev
   }
 
   /** Merge fields into state.json (status transitions, plan, findings, proof). */
   updateState(patch: Partial<LiveState>): void {
-    Object.assign(this.state, patch, { updatedAt: new Date().toISOString() });
-    this.persistState();
+    Object.assign(this.state, patch, { updatedAt: new Date().toISOString() })
+    this.persistState()
   }
 
   get snapshot(): LiveState {
-    return { ...this.state, findings: [...this.state.findings] };
+    return { ...this.state, findings: [...this.state.findings] }
   }
 
   private persistState(): void {
@@ -255,44 +255,44 @@ export class EventLog {
     // then returns null and the engagement flickers out of listings) and
     // a crash mid-write leaves a permanently unparseable state. Rename
     // publishes the old state or the new one, never a partial file.
-    const path = join(this.dir, "state.json");
-    const tmp = `${path}.tmp-${process.pid}`;
-    writeFileSync(tmp, JSON.stringify(this.state, null, 2));
-    renameSync(tmp, path);
+    const path = join(this.dir, 'state.json')
+    const tmp = `${path}.tmp-${process.pid}`
+    writeFileSync(tmp, JSON.stringify(this.state, null, 2))
+    renameSync(tmp, path)
   }
 }
 
 function oneLine(s: string): string {
-  return s.replace(/\|/g, "\\|").replace(/\s+/g, " ").trim().slice(0, 300);
+  return s.replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim().slice(0, 300)
 }
 
 /** Read-only tail for the console: events after `afterSeq`. */
 export function readEvents(dir: string, afterSeq = 0, limit = 200): EngagementEvent[] {
-  const path = join(dir, "events.jsonl");
-  if (!existsSync(path)) return [];
-  const lines = readFileSync(path, "utf8").split("\n").filter(Boolean);
-  const out: EngagementEvent[] = [];
+  const path = join(dir, 'events.jsonl')
+  if (!existsSync(path)) return []
+  const lines = readFileSync(path, 'utf8').split('\n').filter(Boolean)
+  const out: EngagementEvent[] = []
   for (const line of lines) {
     try {
-      const ev = JSON.parse(line) as EngagementEvent;
+      const ev = JSON.parse(line) as EngagementEvent
       if (ev.seq > afterSeq) {
-        out.push(ev);
-        if (out.length >= limit) break;
+        out.push(ev)
+        if (out.length >= limit) break
       }
     } catch {
       // skip corrupt lines, keep tailing
     }
   }
-  return out;
+  return out
 }
 
 /** Read-only state snapshot for the console. */
 export function readState(dir: string): LiveState | null {
-  const path = join(dir, "state.json");
-  if (!existsSync(path)) return null;
+  const path = join(dir, 'state.json')
+  if (!existsSync(path)) return null
   try {
-    return JSON.parse(readFileSync(path, "utf8")) as LiveState;
+    return JSON.parse(readFileSync(path, 'utf8')) as LiveState
   } catch {
-    return null;
+    return null
   }
 }

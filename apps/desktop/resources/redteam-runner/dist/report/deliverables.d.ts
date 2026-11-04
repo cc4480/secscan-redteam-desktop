@@ -114,3 +114,8 @@ export declare function verifyDeliverables(dir: string): DeliverablesOutcome;
  * deliverable set, record the outcome as an event, and stamp the state
  * record the result and surfaces read. */
 export declare function finalizeDeliverables(ctx: Ctx): DeliverablesOutcome;
+/** S6-H2c: re-merge the Scribe stamp recorded in state into a regenerated report.json — the same merge scribe.ts's stampReportJson performs at close — and re-fire the package zip so the shipped copy carries it too. Regeneration rebuilds the model from scratch (buildReportModel carries no signoff fields), so without this a signed set regenerates unsigned in report.json while state.json still claims the stamp. No stamp recorded → nothing is added; an unreadable report.json is left alone (finalizeDeliverables has already named the gap). */
+export declare function restampRecordedSignoff(ctx: Ctx, recorded: {
+    artifactSignoff?: ArtifactSignoff | null;
+    artifactUnsigned?: ArtifactUnsigned | null;
+}): void;

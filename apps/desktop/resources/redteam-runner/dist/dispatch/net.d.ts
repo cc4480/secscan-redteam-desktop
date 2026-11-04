@@ -16,4 +16,4 @@ export declare function setNetExecutor(ctx: Ctx, exec: NetExecutor): void;
  * @param args - the call arguments.
  * @returns the result, or null when the call is not net_exec.
  */
-export declare function handleNetTools(ctx: Ctx, role: ActorRole, phase: EngagementPhase, call: ToolCallRequest, args: Record<string, unknown>): Promise<DispatchResult | null>;
+export declare function handleNetTools(ctx: Ctx, role: ActorRole, phase: EngagementPhase, call: ToolCallRequest, args: Record<string, unknown>, _seam?: unknown, dispatchSignal?: AbortSignal): Promise<DispatchResult | null>;

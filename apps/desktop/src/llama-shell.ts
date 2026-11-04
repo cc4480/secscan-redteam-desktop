@@ -35,7 +35,7 @@ import {
 import type { LlamaServerState } from './llama-api.ts'
 import { LlamaServer, type LlamaServerLocation, type LlamaServerOptions } from './llama-server.ts'
 import { writeServerState } from './llama-server-state.ts'
-import { effectiveFleetProvider, writeFleetProviderRecord } from './fleet-provider-record.ts'
+import { effectiveFleetProvider, writeFleetProviderRecord } from '@secscan/redteam-llm-router'
 import { openLlamaWindow } from './llama-window.ts'
 
 /** Path suffix of the manager renderer document; only that document owns the bridge. */
@@ -184,22 +184,7 @@ export function installLlamaShell(options: LlamaShellOptions): LlamaShell {
     }
   }
 
-  // A previous run can die without a clean stop, which skips restore(): the injected
-  // triple then stays in the environment every child process inherits, so the runner
-  // keeps choosing the local provider for a server that is not running — and, if the
-  // model file is gone, cannot start either. On install, clear a triple that only this
-  // process could have written: our own injection is always LOCAL_PROVIDER plus a base
-  // URL and model, so provider=local with no running server is stale, never an
-  // operator setting (an operator pointing at their own server sets a base URL too,
-  // and that is left alone). operatorOwnsProvider cannot gate this: it is true
-  // whenever the name is present, including when the present value is our own
-  // leftover injection.
-  if (server.state.status !== 'running'
-    && (environment[PROVIDER_ENVIRONMENT_NAME] ?? '').trim() === LOCAL_PROVIDER) {
-    Reflect.deleteProperty(environment, PROVIDER_ENVIRONMENT_NAME)
-    Reflect.deleteProperty(environment, BASE_URL_ENVIRONMENT_NAME)
-    Reflect.deleteProperty(environment, MODEL_ENVIRONMENT_NAME)
-  }
+
   /** Whether the bundled server is serving in the state the mirror engages: running, with an endpoint and a model. */
   const localServing = (): boolean => {
     const state = server.state

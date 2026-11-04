@@ -48,13 +48,32 @@ async function respectBlackout(ctx, phase) {
     }
     ctx.events.append({ phase, actor: 'runner', action: 'blackout_resume', result: 'Blackout window ended. Resuming.' });
 }
-function haltedByCaps(ctx) {
+/**
+ * Q-NOHALT — a SAFETY halt, and the only cap that may still throw.
+ *
+ * Three consecutive 5xx is evidence of production impact: continuing would
+ * keep hitting a service that is already failing, so the run stops
+ * deliberately and the report says why. Nothing else in this module halts.
+ */
+function safetyHalt(ctx) {
+    if (ctx.consecutive5xx >= 3)
+        return 'three consecutive 5xx responses — possible production impact, halting';
+    return null;
+}
+/**
+ * Q-NOHALT — a BUDGET stop, not a halt.
+ *
+ * The action and duration caps are configured limits, not target conditions.
+ * Hitting one means the engagement ran out of its allowance, so the phase
+ * closes with the work already done and the battery records what is still
+ * pending — the run finishes and reports. Throwing HaltError here used to
+ * discard a whole engagement because a clock or a counter expired.
+ */
+function budgetExhausted(ctx) {
     if (ctx.actions >= ctx.config.maxActions)
         return `action cap reached (${ctx.config.maxActions})`;
     if (Date.now() - ctx.startedAt >= ctx.config.maxDurationMs)
         return 'duration cap reached';
-    if (ctx.consecutive5xx >= 3)
-        return 'three consecutive 5xx responses — possible production impact, halting';
     return null;
 }
 /** Default tool-call repair budget per agentLoop invocation (RC Item 6). */
@@ -188,10 +207,18 @@ export async function agentLoop(ctx, role, phase, system, user, tools, maxTurns,
     };
     for (let turn = 0; turn < integrity.effectiveMaxTurns; turn++) {
         await respectBlackout(ctx, phase);
-        const cap = haltedByCaps(ctx);
-        if (cap) {
-            ctx.events.append({ phase, actor: 'runner', action: 'halt', result: `Halted: ${cap}.` });
-            throw new HaltError(cap);
+        // Q-NOHALT: only a safety condition halts. A spent budget closes the loop
+        // and lets the phase finish with the work it already has.
+        const safety = safetyHalt(ctx);
+        if (safety) {
+            ctx.events.append({ phase, actor: 'runner', action: 'halt', result: `Halted: ${safety}.` });
+            throw new HaltError(safety);
+        }
+        const spent = budgetExhausted(ctx);
+        if (spent) {
+            ctx.budgetExhausted = true;
+            ctx.events.append({ phase, actor: 'runner', action: 'budget_exhausted', result: `Loop closed: ${spent} — keeping completed work; the report records what is still pending.` });
+            break;
         }
         if (integrity.checkpoint(turn))
             break;
@@ -219,6 +246,21 @@ export async function agentLoop(ctx, role, phase, system, user, tools, maxTurns,
             if (cause !== undefined)
                 result += ` Cause: ${redactPii(cause)}`;
             ctx.events.append({ phase, actor: 'runner', action: 'llm_error', result });
+            if (err instanceof ResilienceError) {
+                // Q-NOHALT: a provider failure is an infrastructure limitation, not a
+                // reason to discard the engagement. Mark the fleet down so no further
+                // seat burns calls on a dead provider, then close this phase with the
+                // work already recorded — the report carries the provider's own words.
+                ctx.llmDown = true;
+                ctx.llmDownReason = result;
+                ctx.events.append({
+                    phase,
+                    actor: 'runner',
+                    action: 'llm_unavailable',
+                    result: 'Fleet provider unavailable — closing this phase with the work already recorded and finishing the report mechanically; the engine never halts for a provider outage.',
+                });
+                break;
+            }
             throw err;
         }
         // Harness2 P1a: the provider's usage is real; accumulate it per engagement.
@@ -356,11 +398,15 @@ export async function agentLoop(ctx, role, phase, system, user, tools, maxTurns,
                 else if (d.ok !== false)
                     batchSuccesses++;
                 ctx.deniedStreak = blocked ? ctx.deniedStreak + 1 : 0;
-                const capAfter = haltedByCaps(ctx);
+                const capAfter = safetyHalt(ctx);
                 if (capAfter) {
                     ctx.events.append({ phase, actor: 'runner', action: 'halt', result: `Halted: ${capAfter}.` });
                     throw new HaltError(capAfter);
                 }
+                // Q-NOHALT: a spent budget does NOT abort the batch mid-flight — the
+                // remaining calls in this batch were already dispatched and their work
+                // is real (item verdicts, recorded observations). The loop-top check
+                // stops the next turn, so nothing is lost and nothing overruns.
             }
         }
         // Reflect before redirecting (reflector.ts): a stuck batch first
@@ -373,9 +419,9 @@ export async function agentLoop(ctx, role, phase, system, user, tools, maxTurns,
                 content: `REFLECTION (${reflection.count}/${reflection.cap}) — verdict: ${reflection.verdict}: ${reflection.steering}`,
             });
         }
-        else if (phase === 'exploit' && ctx.deniedStreak >= 4 && ctx.redirects < 2) {
+        else if (phase === 'exploit' && ctx.deniedStreak >= 4 && ctx.wallRedirects < 2) {
             ctx.deniedStreak = 0;
-            ctx.redirects++;
+            ctx.wallRedirects++;
             const intel = await commanderRedirect(ctx, 'The exploiter hit a wall: 4+ consecutive probes denied, cooled-down, or OPSEC-signaled with no successful observation.');
             messages.push({ role: 'user', content: intel });
         }
@@ -425,12 +471,17 @@ export /**
  * Commander-ordered focused re-recon. Used when the exploiter hits a wall
  * (mechanical wall detection) or when the coordinator redirects the
  * recon→exploit handoff. Writes to the shared target map as it goes.
- */ async function commanderRedirect(ctx, reason) {
+ */ async function commanderRedirect(ctx, reason, redirectCount) {
+    // The count shown is the budget the caller just spent from: the wall
+    // counter for a mechanical wall redirect (the default — the wall path
+    // is this function's other caller), or the sign-off gate's own count
+    // when the coordinator's gate redirect ordered the re-recon (S2-H7).
+    const count = redirectCount ?? ctx.wallRedirects;
     ctx.events.append({
         phase: 'exploit',
         actor: 'coordinator',
         action: 'redirect_rerecon',
-        result: `Commander redirect (${ctx.redirects}/2): ${reason}`,
+        result: `Commander redirect (${count}/2): ${reason}`,
     });
     const mapLines = ctx.targetMap.map(t => `${t.method} ${t.area}${t.authState ? ` [${t.authState}]` : ''}`).join('; ');
     const intel = await agentLoop(ctx, 'recon', 'recon', reconPrompt(promptCtx(ctx)), `COMMANDER REDIRECT — focused re-recon, not a full re-scan. ${reason}\n` +
@@ -440,7 +491,7 @@ export /**
         'End with a 5-line brief of the new angles.', await withBridgeTools(ctx, 'recon', RECON_TOOLS), // Q-BRIDGE-TOOLS gate (bridge-gate.ts)
     6);
     ctx.events.append({ phase: 'recon', actor: 'recon', action: 'rerecon_brief', result: intel.slice(0, 800) });
-    return (`COMMANDER REDIRECT — re-recon complete (redirect ${ctx.redirects}/2 used). New angles:\n${intel.slice(0, 1200)}\n` +
+    return (`COMMANDER REDIRECT — re-recon complete (redirect ${count}/2 used). New angles:\n${intel.slice(0, 1200)}\n` +
         `The shared target map now has ${ctx.targetMap.length} entries (see [SHARED STATE]). Form fresh hypotheses from the new angles — do not re-probe cooled-down vectors.`);
 }
 //# sourceMappingURL=agents.js.map
