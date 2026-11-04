@@ -13,6 +13,15 @@
    title row, the tab strip's 10px margin, a 16px tab line, and its 9px bottom
    inset — so no row below may grow past its figure. */
 .header {
+  /* Above the body column: header-anchored popovers (the jobs list, the
+     schedule catalog) overflow this box downward over the thread, and the
+     header and the scroll body form sibling stacking contexts (the glass
+     backdrop-filter here and on .scrollBody; .titleRow containment inside),
+     so without an explicit level on the header the later thread context
+     paints over those popovers regardless of the z-index they carry inside
+     the header's context. */
+  position: relative;
+  z-index: 10;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   flex: none;
