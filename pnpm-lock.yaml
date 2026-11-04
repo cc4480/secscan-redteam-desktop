@@ -707,6 +707,9 @@ importers:
 
   apps/redteam-runner:
     dependencies:
+      '@deepseek-ai/dsh-credentials-local':
+        specifier: workspace:*
+        version: link:../../credentials/credentials-local
       '@marsaud/smb2':
         specifier: ^0.18.0
         version: 0.18.0

@@ -9,7 +9,8 @@
  * or mishandle those, so this provider sends the portable subset by default and
  * exposes thinking as an explicit opt-in.
  *
- * Configuration (environment, read at call time):
+ * Configuration (resolved at call time through the fleet configuration
+ * resolver — the launching environment by default; see ../resolver.ts):
  *   REDTEAM_LOCAL_BASE_URL         default http://127.0.0.1:8080/v1
  *   REDTEAM_LOCAL_API_KEY          optional; sent as a bearer token when set
  *   REDTEAM_LOCAL_ENABLE_THINKING  "1" to request the model's thinking trace
@@ -27,6 +28,7 @@
  */
 
 import type { ChatResult, CompleteOptions, LlmProvider } from '../types.js'
+import { fleetValue } from '../resolver.js'
 import { applyResponseFormat, fromWireToolCalls, toWireMessages, toWireTools } from './openai-wire.js'
 import { providerErrorFromResponse, providerTransportError } from '../errors.js'
 import { completionSignal, resolveCompletionTimeoutMs } from '../timeout.js'
@@ -68,7 +70,7 @@ export class LocalOpenAiProvider implements LlmProvider {
    */
   private resolveBaseUrl(): string {
     if (this.baseUrlOverride !== undefined) return this.baseUrlOverride
-    const fromEnv = process.env[LOCAL_BASE_URL_ENV]?.trim()
+    const fromEnv = fleetValue(LOCAL_BASE_URL_ENV)?.trim()
     return (fromEnv || LOCAL_BASE_URL).replace(/\/+$/, '')
   }
 
@@ -80,7 +82,7 @@ export class LocalOpenAiProvider implements LlmProvider {
   private apiKeyOrNull(options?: CompleteOptions): string | null {
     // The resilience pool's per-attempt credential wins over the env var.
     if (options?.apiKey !== undefined) return options.apiKey
-    const value = process.env[LOCAL_API_KEY_ENV]?.trim()
+    const value = fleetValue(LOCAL_API_KEY_ENV)?.trim()
     return value !== undefined && value.length > 0 ? value : null
   }
 
@@ -93,7 +95,7 @@ export class LocalOpenAiProvider implements LlmProvider {
     }
     // Thinking is opt-in for local runs: on a CPU-hosted model it multiplies
     // latency, and it is the feature most likely to differ between servers.
-    if (process.env[LOCAL_ENABLE_THINKING_ENV] === '1') {
+    if (fleetValue(LOCAL_ENABLE_THINKING_ENV) === '1') {
       body['enable_thinking'] = true
       const effort = toReasoningEffort(options.reasoningEffort)
       if (effort !== undefined) body['reasoning_effort'] = effort

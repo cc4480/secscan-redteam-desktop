@@ -8,10 +8,14 @@
  *
  *   redteam-runner watch [--queue <dir>]   # run queued console jobs
  *
- * Credentials via environment only: MODEL_API_KEY (Meta Model API — the
- * fleet's provider key; DEEPSEEK_API_KEY remains supported), QWEN_API_KEY
- * (optional since v0.6), SECSCAN_MCP_TOKEN + SECSCAN_MCP_URL (optional —
- * only the REDTEAM_VERIFY_VIA_SERVICE=1 verification opt-in reads them).
+ * Fleet credentials resolve per dispatch through the router's fleet
+ * configuration resolver: the launching environment first (MODEL_API_KEY
+ * — the fleet's Meta key; DEEPSEEK_API_KEY, QWEN_API_KEY likewise), then
+ * the app credentials store ($DSH_HOME/.credentials.yaml — the file the
+ * Secure Vault writes), so a key seated in the app reaches the next
+ * engagement without a restart. SECSCAN_MCP_TOKEN + SECSCAN_MCP_URL stay
+ * environment-only (only the REDTEAM_VERIFY_VIA_SERVICE=1 verification
+ * opt-in reads them).
  *
  * Local dev convenience: a .env file is loaded automatically (Node's
  * built-in process.loadEnvFile — no dotenv dependency). Checked in order:
@@ -44,6 +48,15 @@ function loadDotEnv(): void {
 }
 
 loadDotEnv();
+
+import { setFleetConfigResolver } from "@secscan/redteam-llm-router";
+import { createStoreFleetConfigResolver } from "./fleet-store-resolver.js";
+
+// The fleet resolves its provider keys and selection through the app
+// credentials store (environment override first) from here on: every
+// command path in this process dispatches through the router, and the
+// resolver is consulted per dispatch, so it is installed before main().
+setFleetConfigResolver(createStoreFleetConfigResolver());
 
 import { main } from "./cli/commands.js";
 

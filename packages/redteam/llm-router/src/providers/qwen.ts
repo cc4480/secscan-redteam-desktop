@@ -23,6 +23,7 @@ import type {
   LlmProvider,
 } from '../types.js'
 import { applyResponseFormat, fromWireToolCalls, toWireMessages, toWireTools } from './openai-wire.js'
+import { fleetValue } from '../resolver.js'
 import { providerErrorFromResponse, providerTransportError } from '../errors.js'
 import { completionSignal, resolveCompletionTimeoutMs } from '../timeout.js'
 
@@ -65,7 +66,7 @@ export class QwenProvider implements LlmProvider {
   }
 
   private apiKeyOrNull(): string | null {
-    return process.env[QWEN_API_KEY_ENV] ?? process.env[QWEN_API_KEY_FALLBACK_ENV] ?? null
+    return fleetValue(QWEN_API_KEY_ENV) ?? fleetValue(QWEN_API_KEY_FALLBACK_ENV) ?? null
   }
 
   private apiKey(options?: CompleteOptions): string {

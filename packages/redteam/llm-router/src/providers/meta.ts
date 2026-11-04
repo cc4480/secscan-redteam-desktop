@@ -34,6 +34,7 @@ import type {
   LlmProvider,
 } from '../types.js'
 import { applyResponseFormat, fromWireToolCalls, toWireMessages, toWireTools } from './openai-wire.js'
+import { fleetValue } from '../resolver.js'
 import { providerErrorFromResponse, providerTransportError } from '../errors.js'
 import { completionSignal, resolveCompletionTimeoutMs } from '../timeout.js'
 
@@ -78,9 +79,12 @@ export class MetaProvider implements LlmProvider {
   }
 
   private apiKeyOrNull(): string | null {
-    const primary = process.env[META_API_KEY_ENV]?.trim()
+    // Resolved per call through the fleet resolver (launching environment
+    // by default, the app credentials store when the host installs one),
+    // so a key seated or rotated after startup reaches the next dispatch.
+    const primary = fleetValue(META_API_KEY_ENV)?.trim()
     if (primary) return primary
-    const fallback = process.env[META_API_KEY_FALLBACK_ENV]?.trim()
+    const fallback = fleetValue(META_API_KEY_FALLBACK_ENV)?.trim()
     return fallback ? fallback : null
   }
 
