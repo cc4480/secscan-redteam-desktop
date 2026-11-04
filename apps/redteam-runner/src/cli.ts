@@ -13,7 +13,10 @@
  * — the fleet's Meta key; DEEPSEEK_API_KEY, QWEN_API_KEY likewise), then
  * the app credentials store ($DSH_HOME/.credentials.yaml — the file the
  * Secure Vault writes), so a key seated in the app reaches the next
- * engagement without a restart. SECSCAN_MCP_TOKEN + SECSCAN_MCP_URL stay
+ * engagement without a restart. The provider selection follows the same
+ * resolver, with the desktop's published fleet provider record
+ * ($DSH_HOME/fleet-provider.json) consulted after the store, so a
+ * provider change in the app reaches the fleet the same way. SECSCAN_MCP_TOKEN + SECSCAN_MCP_URL stay
  * environment-only (only the REDTEAM_VERIFY_VIA_SERVICE=1 verification
  * opt-in reads them).
  *
