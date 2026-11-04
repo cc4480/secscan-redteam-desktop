@@ -1,7 +1,8 @@
 /* Sidebar column (figma 133:7629): vertical stack, sidebar fill + 1px right
    border painted by the layout column. One spacing cadence governs the whole
-   menu stack in both states: 36px controls, 12px between every block and
-   every panel row, on the 4/8/12/16/24/32 token scale. Collapse is a
+   menu stack: 36px controls, 8px between every block and every panel row in
+   the expanded stack (the rail redeclares its own 12px rhythm below), on
+   the 4/8/12/16/24/32 token scale. Collapse is a
    slide + crossfade, not a morph: the content holds its frozen expanded
    layout (inline width set by the component) and fades in place (.fading)
    while the sliding column (AppFrame grid tracks) clips it; the rail layout
@@ -40,7 +41,7 @@
 /* The brand stays in the sidebar; fixed caption controls survive zero-width collapse. */
 :global([data-windows-titlebar]) .root .logoRow {
   height: 40px;
-  margin: 0 0 12px;
+  margin: 0 0 8px;
   padding: 0;
 }
 
@@ -228,18 +229,20 @@
   margin-top: -12px;
 }
 
-/* Logo row (figma pad (4,8,4,8)): expanded keeps the panel toggle at the
-   right edge; the rail gives every control the same base left anchor before
-   the shared entry translation is applied. */
+/* Logo row: the brand anchors the column top — the row hugs the 32px
+   lockup (4px breathing room) instead of floating it in a tall band.
+   Expanded keeps the panel toggle at the right edge; the rail gives every
+   control the same base left anchor before the shared entry translation
+   is applied. */
 .logoRow {
   flex: none;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  height: 60px;
-  padding: 8px 0 8px 4px;
-  margin-bottom: 12px;
+  height: 40px;
+  padding: 4px 0 4px 4px;
+  margin-bottom: 8px;
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -311,7 +314,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 24px;
+  height: 32px;
   min-width: 0;
 }
 
@@ -327,15 +330,15 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
-  height: 24px;
-  font-size: 18px;
+  height: 32px;
+  font-size: 20px;
   font-weight: 600;
-  line-height: 24px;
+  line-height: 32px;
   letter-spacing: 0.04em;
 }
 
 .fallbackBrandName {
-  font-size: 17px;
+  font-size: 18px;
   letter-spacing: 0px;
   white-space: nowrap;
 }
@@ -418,7 +421,7 @@
   gap: 6px;
   height: 36px;
   padding: 0 16px;
-  margin: 0 2px 12px;
+  margin: 0 2px 8px;
   box-sizing: border-box;
   border: 0.5px solid var(--dsw-alias-border-l3);
   border-radius: 12px;
@@ -491,9 +494,9 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   overflow-y: auto;
 }
 

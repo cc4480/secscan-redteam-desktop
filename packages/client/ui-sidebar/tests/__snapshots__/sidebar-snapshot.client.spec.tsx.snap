@@ -132,9 +132,9 @@ exports[`sidebar shell snapshots > renders Windows caption controls in expanded 
                 aria-hidden="true"
                 data-content="1bfdc891"
                 fill="none"
-                height="24"
+                height="32"
                 viewBox="0 0 100 100"
-                width="24"
+                width="32"
               />
             </div>
           </span>
@@ -370,9 +370,9 @@ exports[`sidebar shell snapshots > renders the expanded column (wordmark, capsul
                 aria-hidden="true"
                 data-content="1bfdc891"
                 fill="none"
-                height="24"
+                height="32"
                 viewBox="0 0 100 100"
-                width="24"
+                width="32"
               />
             </div>
           </span>
@@ -504,9 +504,9 @@ exports[`sidebar shell snapshots > renders the expanded column in the default lo
                 aria-hidden="true"
                 data-content="1bfdc891"
                 fill="none"
-                height="24"
+                height="32"
                 viewBox="0 0 100 100"
-                width="24"
+                width="32"
               />
             </div>
           </span>
