@@ -9,7 +9,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-E11D48" alt="License: MIT"></a>
   <a href="https://github.com/cc4480/secscan-redteam-desktop/actions/workflows/windows-installer.yml"><img src="https://github.com/cc4480/secscan-redteam-desktop/actions/workflows/windows-installer.yml/badge.svg" alt="Windows installer"></a>
-  <img src="https://img.shields.io/badge/version-0.1.7--rc.9-E11D48" alt="Version 0.1.7-rc.9">
+  <img src="https://img.shields.io/badge/version-0.1.7--rc.7-E11D48" alt="Version 0.1.7-rc.7">
   <img src="https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-E11D48" alt="Node ^22.19 || >=24">
   <img src="https://img.shields.io/badge/platform-Windows-E11D48" alt="Platform: Windows">
 </p>
@@ -39,7 +39,7 @@ Two rules shape everything the product does:
 
 ### Install the desktop app (Windows)
 
-Download the installer from the project's GitHub Releases and run it. The installer is unsigned by design in CI builds; Windows will ask you to confirm. The app opens straight to chat — no account, no login wall.
+A public installer is not published yet: the current build (0.1.7-rc.7) is in final verification, and the installer will be posted to the project's GitHub Releases when it passes. Until then, build from source using the developer quickstart below. When published, the installer will be unsigned by design in CI builds; Windows will ask you to confirm. The app opens straight to chat — no account, no login wall.
 
 On first run, the welcome flow asks for one required key and offers two optional ones:
 
