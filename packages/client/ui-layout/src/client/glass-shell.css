@@ -239,3 +239,25 @@ body[data-ds-dark-theme] {
     transform: translateX(110%);
   }
 }
+
+/* Brand watermark field — the SecScan RedTeam mark tiled across the shell
+   backdrop, so the brand is present behind every surface rather than only in
+   the sidebar seat and hero. Outline-only artwork in the mark's own two
+   colours (no ink tile), which reads on both themes and under the glass
+   panes. Purely decorative: never interactive, never announced.
+   One knob: --brand-watermark-size. */
+body {
+  --brand-watermark-size: 184px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='184' height='184' viewBox='0 0 1104 1104'%3E%3Cg transform='translate(40 32)' opacity='0.07'%3E%3Cpath d='M512 117L917 210L917 483L512 927L107 483L107 210Z' fill='none' stroke='%23cf2b4d' stroke-width='22' stroke-linejoin='round'/%3E%3Ccircle cx='512' cy='481' r='101' fill='none' stroke='%2338bdf8' stroke-width='22'/%3E%3Cg fill='%2338bdf8'%3E%3Crect x='501' y='342' width='22' height='103'/%3E%3Crect x='501' y='517' width='22' height='103'/%3E%3Crect x='373' y='470' width='103' height='22'/%3E%3Crect x='548' y='470' width='103' height='22'/%3E%3Ccircle cx='512' cy='481' r='18'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-position: center;
+  background-size: var(--brand-watermark-size) var(--brand-watermark-size);
+  background-attachment: fixed;
+}
+
+/* High contrast: decorative artwork drops out with the rest of the depth. */
+@media (forced-colors: active) {
+  body {
+    background-image: none;
+  }
+}

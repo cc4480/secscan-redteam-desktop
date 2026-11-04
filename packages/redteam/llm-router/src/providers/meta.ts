@@ -34,6 +34,7 @@ import type {
   LlmProvider,
 } from '../types.js'
 import { applyResponseFormat, fromWireToolCalls, toWireMessages, toWireTools } from './openai-wire.js'
+import { fleetValue } from '../resolver.js'
 import { providerErrorFromResponse, providerTransportError } from '../errors.js'
 import { completionSignal, resolveCompletionTimeoutMs } from '../timeout.js'
 
@@ -78,7 +79,7 @@ export class MetaProvider implements LlmProvider {
   }
 
   private apiKeyOrNull(): string | null {
-    return process.env[META_API_KEY_ENV] ?? process.env[META_API_KEY_FALLBACK_ENV] ?? null
+    return fleetValue(META_API_KEY_ENV) ?? fleetValue(META_API_KEY_FALLBACK_ENV) ?? null
   }
 
   private apiKey(options?: CompleteOptions): string {

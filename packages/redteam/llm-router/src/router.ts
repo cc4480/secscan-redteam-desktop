@@ -36,7 +36,10 @@ import type {
   RoleRoute,
 } from './types.js'
 import { validateResponseFormat } from './adapter.js'
-import { roleModelPolicy } from './policy.js'
+import { roleModelPolicy, LLM_PROVIDER_ENV } from './policy.js'
+import { CHARTER_ROUTE_ENV } from './charter/routing.js'
+import { LOCAL_MODEL_ENV } from './providers/local.js'
+import { fleetDispatchEnv } from './resolver.js'
 import type { CharterEngagement, CharterRole } from './charter/loader.js'
 import { assembleCharterMessages } from './charter/prompt.js'
 import { assertLocalOnlyRoute, resolveCharterRoute } from './charter/routing.js'
@@ -123,6 +126,16 @@ export async function complete(
   }
 }
 
+/** Environment names route resolution reads; the fleet resolver's current answers apply to each at dispatch time. */
+const DISPATCH_ENV_NAMES: readonly string[] = [
+  LLM_PROVIDER_ENV,
+  LOCAL_MODEL_ENV,
+  CHARTER_ROUTE_ENV['exploiter-operator'].provider,
+  CHARTER_ROUTE_ENV['exploiter-operator'].model,
+  CHARTER_ROUTE_ENV['exploiter-challenger'].provider,
+  CHARTER_ROUTE_ENV['exploiter-challenger'].model,
+]
+
 export async function completeForRole(
   role: AgentRole,
   messages: ChatMessage[],
@@ -134,7 +147,7 @@ export async function completeForRole(
     responseFormat?: ResponseFormat
   } = {},
 ): Promise<ChatResult> {
-  const route = roleModelPolicy()[role]
+  const route = roleModelPolicy(fleetDispatchEnv(DISPATCH_ENV_NAMES))[role]
   return complete(route.provider, {
     model: route.model,
     messages,
@@ -183,7 +196,7 @@ export interface CharterCompleteOptions {
  * @returns the provider's result for the assembled call
  */
 export async function completeWithCharter(opts: CharterCompleteOptions): Promise<ChatResult> {
-  const route = resolveCharterRoute(opts.role, process.env, opts.routeOverride)
+  const route = resolveCharterRoute(opts.role, fleetDispatchEnv(DISPATCH_ENV_NAMES), opts.routeOverride)
   assertLocalOnlyRoute(opts.engagement, route)
   const assembled = assembleCharterMessages(opts.engagement, opts.role, opts.messages, {
     anchor: opts.anchor,

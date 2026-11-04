@@ -30,8 +30,8 @@
 
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-import { join, relative, resolve } from 'node:path'
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { join, relative, resolve, sep } from 'node:path'
 
 const APP_ROOT = resolve(import.meta.dirname, '..')
 const REPOSITORY_ROOT = resolve(APP_ROOT, '..', '..')
@@ -207,13 +207,35 @@ export function copyDereferenced(from, to) {
   mkdirSync(to, { recursive: true })
   const source = realpathSync(from)
   const target = realpathSync(to)
+  // Workspace junctions can form cycles (two packages linking to each other);
+  // a dereferencing copy would recurse through the cycle until the OS refuses
+  // the path. Track the real path of every ancestor directory in the current
+  // traversal chain and prune a directory that re-enters one of them: the
+  // dependency closure copies every declared dependency flat, by name, so a
+  // pruned re-entry removes nothing the payload would otherwise provide.
+  const ancestorRealpaths = []
   cpSync(source, target, {
     recursive: true,
     dereference: true,
     force: true,
     filter: (path) => {
       const relativePath = relative(source, path)
-      return relativePath === '' || !isExcludedFromPayload(relativePath)
+      if (relativePath === '') return true
+      if (isExcludedFromPayload(relativePath)) return false
+      let stat
+      try {
+        stat = statSync(path)
+      } catch {
+        return false
+      }
+      if (stat.isDirectory()) {
+        const depth = relativePath.split(/[\\/]/).length
+        const real = realpathSync(path)
+        if (ancestorRealpaths.slice(0, depth).includes(real)) return false
+        ancestorRealpaths[depth] = real
+        ancestorRealpaths.length = depth + 1
+      }
+      return true
     },
   })
 }
@@ -398,7 +420,8 @@ export function placeCharterAssets(sourcePackageDirectory, destination) {
  * the same failure in the llm-router), so the assets are copied from
  * the source package's `skills/` and `prompts/` trees to the payload's
  * `node_modules/@secscan/redteam-fleet-skills/lib/fleet-skills/`,
- * preserving their relative layout (`skills/<name>/SKILL.md`,
+ * preserving their relative layout (`skills/<name>/` mirrored whole —
+ * SKILL.md plus its `references/` and `assets/` companions —,
  * `prompts/master.md`, `prompts/seats/*.md`, `prompts/souls/*.md`).
  * The bundle set is enumerated from the source tree rather than
  * hard-coded, so a skill added to the library ships without a second
@@ -434,7 +457,22 @@ export function placeFleetSkillsAssets(sourcePackageDirectory, destination) {
     throw new Error(`vendor-redteam-runner: fleet-skills skills directory ${skillsRoot} is empty; the payload would ship without the skill library`)
   }
   for (const name of skillNames) {
-    place(join(skillsRoot, name, 'SKILL.md'), `skills/${name}/SKILL.md`)
+    // Mirror the whole skill directory, not just SKILL.md: companion
+    // `references/` and `assets/` trees are runtime prompt context the
+    // loaders resolve beside the bundle. New companions ship with no
+    // second edit here, like new skills themselves.
+    const skillRoot = join(skillsRoot, name)
+    const walkSkill = (dir) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+        const full = join(dir, entry.name)
+        if (entry.isDirectory()) walkSkill(full)
+        else if (entry.isFile()) {
+          const rel = `skills/${name}/` + relative(skillRoot, full).split(sep).join('/')
+          place(full, rel)
+        }
+      }
+    }
+    walkSkill(skillRoot)
   }
 
   place(join(sourcePackageDirectory, 'prompts', 'master.md'), 'prompts/master.md')

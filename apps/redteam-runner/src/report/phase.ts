@@ -12,13 +12,9 @@ import { groupNotApplicable, renderNotApplicable } from './grouping.js'
 import { join } from 'node:path'
 import { publisherPrompt } from '../prompts.js'
 import { type Finding } from '../types.js'
-import { BATTERY_CATEGORIES } from '../battery.js'
-import { TARGET_PROFILES, activeTargets, targetCellStatus } from '../targets.js'
-import { ledgerSummary, serializeLedger } from '../coverage/items.js'
 import { type Ctx } from '../context.js'
 import { agentLoop, promptCtx } from '../agents.js'
 import { extractJsonBlock } from '../util.js'
-import { batteryStatusLine } from '../coverage/cells.js'
 import { PocBundle } from '../proof/index.js'
 import { resolveOperatorName } from '../accountability/index.js'
 import { countVariants, variantCountLine, variantProgressSuffix } from '../variants/index.js'
@@ -40,8 +36,9 @@ import { type DetailInput } from './detail.js'
 import { buildGradeSection, gradeFindings } from './grading.js'
 import { applyCellVerdicts, haltedFindingFromLive, mergeReporterFindings } from './cell-verdicts.js'
 import { incompleteEndHeader } from './incomplete-end.js'
-import { isCoverageComplete } from "./completeness.js";
+import { isCoverageComplete } from './completeness.js'
 import { peerDeferredPromptSection, peerVerdictSuffix, stampPeerVerdicts } from './peer-verdicts.js'
+import { computeBatteryStatus } from './phase-battery.js'
 
 export { applyCellVerdicts, haltedFindingFromLive, mergeReporterFindings } from './cell-verdicts.js'
 
@@ -51,71 +48,9 @@ export async function reportPhase(
   exploitSummary: string,
   opts: { haltedReason?: string; blockedReason?: string } = {},
 ): Promise<Finding[]> {
-  const selected = ctx.input.fullBattery ? activeTargets(ctx.input) : []
-  const fbCells = selected.flatMap(t => BATTERY_CATEGORIES.map(c => ({ t, c })))
-  const fbStatus = fbCells.map(({ t, c }) => ({ t, c, s: targetCellStatus(TARGET_PROFILES[t], c, ctx.targetCoverage.get(t)) }))
-  const fbDone = fbStatus.filter(x => x.s === 'done')
-  const fbBlocked = fbStatus.filter(x => x.s === 'blocked')
-  const fbMissing = fbStatus.filter(x => x.s === 'missing')
-  // Individual battery items carrying a `needs` prerequisite (v0.10.0: the
-  // only ones left are WS-064 [kerberos ticket material], WS-065 [human
-  // operator], LX-041 [privileged test client]). They execute when the
-  // prerequisite is met; the report names the prerequisite so the operator
-  // knows exactly what to supply. Nothing is plan-only anymore.
-  const fbPlanOnly = selected.flatMap(t =>
-    TARGET_PROFILES[t].battery.filter(b => !!b.needs).map(b => `${t}:${b.id} [needs: ${b.needs}]`),
-  )
-  // v0.18.0 per-item verdicts: the battery may not report complete while any
-  // selected item lacks a defensible disposition. Blocked/na items never
-  // force extra rounds — they are reported honestly, exactly like cells.
-  const lsum = ledgerSummary(ctx.itemLedger)
-  const pendingKeys = [...ctx.itemLedger.values()]
-    .filter(v => v.disposition === 'pending')
-    .map(v => v.key)
-  const nonCleanItems = [...ctx.itemLedger.values()].filter(
-    v => v.disposition !== 'executed-clean' && v.disposition !== 'pending',
-  )
-  try {
-    writeFileSync(
-      join(ctx.events.dir, 'item-verdicts.json'),
-      JSON.stringify(serializeLedger(ctx.itemLedger), null, 2),
-    )
-  } catch {
-    /* the ledger lives in memory too — a write failure must never break the report */
-  }
-  ctx.events.append({
-    phase: 'report',
-    actor: 'runner',
-    action: pendingKeys.length > 0 ? 'battery_incomplete_items' : 'battery_complete_items',
-    result:
-      `Item reconciliation: ${lsum.total} items — ${lsum.confirmed} confirmed, ${lsum.executedClean} executed-clean, ` +
-      `${lsum.killed} killed, ${lsum.blocked} blocked, ${lsum.na} na, ${lsum.pending} pending.` +
-      (pendingKeys.length > 0 ? ` NOT COMPLETE: ${pendingKeys.length} items still pending a verdict.` : ''),
-  })
-  const covered = BATTERY_CATEGORIES.filter(c => ctx.coverage.has(c))
-  const batteryLine = ctx.input.fullBattery
-    ? `Battery coverage (FULL BATTERY — 3 categories × ${selected.length} targets): ${fbDone.length}/${fbCells.length} cells probed ` +
-      `(${batteryStatusLine(ctx)}, ${ctx.probesUsed} probes total). ` +
-      (fbBlocked.length > 0
-        ? `BLOCKED (prerequisite not met — planned, not probed; see Honest limits): ${fbBlocked.map(({ t, c }) => `${t}:${c}`).join(', ')}. `
-        : '') +
-      (fbPlanOnly.length > 0
-        ? `Items with prerequisites (execute when met — see Honest limits): ${fbPlanOnly.join(', ')}. `
-        : '') +
-      (fbMissing.length > 0 || pendingKeys.length > 0
-        ? `NOT COVERED: ${[
-          ...fbMissing.map(({ t, c }) => `${t}:${c}`),
-          ...(pendingKeys.length > 0
-            ? [
-              `${pendingKeys.length} battery items pending a verdict ` +
-                    `(${pendingKeys.slice(0, 25).join(', ')}${pendingKeys.length > 25 ? '…' : ''})`,
-            ]
-            : []),
-        ].join('; ')} — list these under Honest limits.`
-        : `Full battery complete: all ${fbCells.length} cells probed or honestly blocked; all ${lsum.total} battery items carry a verdict.`)
-    : `Battery coverage: ${covered.length}/3 categories probed ` +
-      `(${covered.map(c => `${c}:${ctx.coverage.has(c) ? 'yes' : 'no'}`).join(', ')}, ${ctx.probesUsed} probes total). ` +
-      (covered.length < 3 ? `NOT COVERED: ${BATTERY_CATEGORIES.filter(c => !ctx.coverage.has(c)).join(', ')} — list these under Honest limits.` : 'Full battery complete.')
+
+  const { batteryLine, fbStatus, fbPlanOnly, lsum, nonCleanItems, pendingKeys } = computeBatteryStatus(ctx)
+
   let reportMd: string
   let findings: Finding[]
   if (opts.haltedReason || opts.blockedReason) {
@@ -144,7 +79,8 @@ export async function reportPhase(
     findings = mergeReporterFindings(ctx.liveFindings, Array.isArray(parsed?.findings) ? parsed.findings : [], (dropped) => {
       ctx.events.append({ phase: 'report', actor: 'runner', action: 'report_finding_dropped', result: `Reporter finding "${dropped.title}" matches no live finding — excluded from the record.` })
     })
-    for (const f of findings) { delete f.producer; delete f.peerReview } // attribution is runner-stamped by the joins below, never model-set
+    // Attribution is runner-stamped by the joins below, never model-set.
+    for (const f of findings) { delete f.producer; delete f.peerReview }
     // Q-PROVEN: join the parsed findings back to the live findings so the
     // cell verdict reaches the report (before the accountable stamp below).
     applyCellVerdicts(findings, ctx.liveFindings)
@@ -182,7 +118,8 @@ export async function reportPhase(
     pending: lsum.pending,
   }  // The engagement grade: the embedded Seclayer anchored scoring engine
   // is the runner's one grading voice (report/grading.ts) — deterministic,
-  // computed here from the final confirmed findings, never the model's — and never issued for a halted/blocked end (N/A, as the HTML cover renders).
+  // computed here from the final confirmed findings, never the model's —
+  // and never issued for a halted/blocked end (N/A, as the HTML cover renders).
   {
     const posture = gradeFindings(findings)
     reportMd += `\n---\n\n${(opts.haltedReason || opts.blockedReason || !isCoverageComplete(coverageTotals)) ? `## Security grade — SecScan (anchored scoring)\n\n**Grade N/A** — engagement ${opts.blockedReason ? 'blocked' : 'halted'}; no grade is issued for an incomplete engagement.\n` : buildGradeSection(findings)}`
@@ -299,8 +236,25 @@ export async function reportPhase(
     ctx.events.append({ phase: 'report', actor: 'runner', action: 'report_html_failed', result: `HTML report generation failed (report.md unaffected): ${(err as Error).message}` })
   }
   // Q-RP-2 + Q-RP-5 + Q-DELIVERABLES-AUTOFIRE + Q-REPORT-TEMPLATES: closing set — md/csv from the document, DOCX, twins, zip.
-  emitDeliverables(ctx, reportInput, { findings, totals: lsum, cells: fbStatus, haltedReason: opts.haltedReason, blockedReason: opts.blockedReason },
-    { legacyMd: reportMd, findings, bundles: pocBundleMap, annexes: { batteryLine, nucleiLine: ncAny || undefined, itemsMd: reportMd.slice(itemsMark), proofMd: proofData.markdown, integrationsMd } })
+  emitDeliverables(ctx, reportInput, {
+    findings,
+    totals: lsum,
+    cells: fbStatus,
+    haltedReason: opts.haltedReason,
+    blockedReason: opts.blockedReason,
+  },
+  {
+    legacyMd: reportMd,
+    findings,
+    bundles: pocBundleMap,
+    annexes: {
+      batteryLine,
+      nucleiLine: ncAny || undefined,
+      itemsMd: reportMd.slice(itemsMark),
+      proofMd: proofData.markdown,
+      integrationsMd,
+    },
+  })
   ctx.events.append({ phase: 'report', actor: 'reporter', action: 'report_written', result: `Report written (${findings.length} findings parsed).` })
   const safetyManifest = writeSafetyArtifacts(ctx)
   // The end status decides whether an attestation may be issued at all.

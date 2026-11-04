@@ -22,6 +22,7 @@ import type {
   CompleteOptions,
   LlmProvider,
 } from '../types.js'
+import { fleetValue } from '../resolver.js'
 import { providerErrorFromResponse, providerTransportError } from '../errors.js'
 import { applyResponseFormat, fromWireToolCalls, toWireMessages, toWireTools } from './openai-wire.js'
 import { completionSignal, resolveCompletionTimeoutMs } from '../timeout.js'
@@ -47,17 +48,19 @@ export class DeepSeekProvider implements LlmProvider {
   }
 
   isConfigured(): boolean {
-    return !!process.env[DEEPSEEK_API_KEY_ENV]
+    return !!fleetValue(DEEPSEEK_API_KEY_ENV)
   }
 
   private apiKey(options?: CompleteOptions): string {
-    // The resilience pool's per-attempt credential wins over the env var;
-    // the env var alone remains the path for unwrapped direct use.
-    const key = options?.apiKey ?? process.env[DEEPSEEK_API_KEY_ENV]
+    // The resilience pool's per-attempt credential wins over the resolved
+    // value; the fleet resolver (launching environment by default, the
+    // app credentials store when the host installs one) is consulted per
+    // call, so a key seated after startup reaches the next dispatch.
+    const key = options?.apiKey ?? fleetValue(DEEPSEEK_API_KEY_ENV)
     if (!key) {
       throw new Error(
         `[llm-router] ${DEEPSEEK_API_KEY_ENV} is not set. ` +
-          'Enter your DeepSeek API key via the Secure Vault (it lands in the environment), ' +
+          'Enter your DeepSeek API key via the Secure Vault, ' +
           `or export ${DEEPSEEK_API_KEY_ENV} before starting. The key is never stored in code or docs.`,
       )
     }

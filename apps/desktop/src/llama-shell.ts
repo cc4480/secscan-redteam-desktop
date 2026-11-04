@@ -11,7 +11,11 @@
  * without the operator exporting anything. The same state is published to
  * `server-state.json` beside the model store (see `llama-server-state.ts`)
  * so the runner's model catalog can offer the serving model to the chat
- * picker while the runner is already running.
+ * picker while the runner is already running, and the fleet's effective
+ * provider selection is published beside it (see `fleet-provider-record.ts`)
+ * so the runner's dispatch-time resolver seats the fleet on the provider
+ * this process is actually running — local while the bundled server
+ * serves, the operator's own selection when they made one.
  *
  * Keeping this here rather than in `main.ts` keeps that file's diff to an import,
  * one install call, one menu entry and one quit-time dispose, and keeps every
@@ -31,6 +35,7 @@ import {
 import type { LlamaServerState } from './llama-api.ts'
 import { LlamaServer, type LlamaServerLocation, type LlamaServerOptions } from './llama-server.ts'
 import { writeServerState } from './llama-server-state.ts'
+import { effectiveFleetProvider, writeFleetProviderRecord } from './fleet-provider-record.ts'
 import { openLlamaWindow } from './llama-window.ts'
 
 /** Path suffix of the manager renderer document; only that document owns the bridge. */
@@ -189,20 +194,50 @@ export function installLlamaShell(options: LlamaShellOptions): LlamaShell {
   // and that is left alone). operatorOwnsProvider cannot gate this: it is true
   // whenever the name is present, including when the present value is our own
   // leftover injection.
-  if (server.state.status !== "running"
-    && (environment[PROVIDER_ENVIRONMENT_NAME] ?? "").trim() === LOCAL_PROVIDER) {
+  if (server.state.status !== 'running'
+    && (environment[PROVIDER_ENVIRONMENT_NAME] ?? '').trim() === LOCAL_PROVIDER) {
     Reflect.deleteProperty(environment, PROVIDER_ENVIRONMENT_NAME)
     Reflect.deleteProperty(environment, BASE_URL_ENVIRONMENT_NAME)
     Reflect.deleteProperty(environment, MODEL_ENVIRONMENT_NAME)
   }
+  /** Whether the bundled server is serving in the state the mirror engages: running, with an endpoint and a model. */
+  const localServing = (): boolean => {
+    const state = server.state
+    return state.status === 'running' && state.baseUrl !== undefined && state.modelId !== undefined
+  }
+
+  /**
+   * Publish the fleet's effective provider selection for the runner's
+   * dispatch-time resolver, computed from the operator's own value —
+   * captured in `originals` before the mirror could write the same name —
+   * and whether the bundled server is serving. Unlike the state document,
+   * a failed write is logged: a missing record leaves the runner on its
+   * stored or default selection, and that divergence must be a stated
+   * fact, not a silence. The record carries a provider name only.
+   * @param serving - whether the local server counts as serving for this publication.
+   */
+  const publishFleetProvider = (serving: boolean): void => {
+    try {
+      writeFleetProviderRecord(
+        environment,
+        effectiveFleetProvider(originals.get(PROVIDER_ENVIRONMENT_NAME), serving),
+      )
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.warn(`desktop local models: the fleet provider selection could not be published: ${message}`)
+    }
+  }
+
   // `publish` sets the state before notifying, so a listener always reads the new one.
   const detachState = server.onState(() => {
     publishServerState()
+    publishFleetProvider(localServing())
     const target = attached
     if (target !== undefined) mirror(target)
   })
   // The document reflects this process from install, before any transition.
   publishServerState()
+  publishFleetProvider(localServing())
 
   /** Attach a runner environment and apply the state the server is in right now. */
   const attachRunnerEnvironment = (target: NodeJS.ProcessEnv): void => {
@@ -272,6 +307,7 @@ export function installLlamaShell(options: LlamaShellOptions): LlamaShell {
     // The state listener is already detached, so say it directly: after this
     // process exits nothing is serving, whatever the last transition claimed.
     publishServerState({ status: 'stopped' })
+    publishFleetProvider(false)
   }
 
   const shell: LlamaShell = { openWindow, attachRunnerEnvironment, startOnLaunch, dispose }

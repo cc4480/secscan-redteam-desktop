@@ -22,7 +22,7 @@
 import { useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
-  DiamondLogo, IconNewChatOutlineMedium, IconNewChatOutlineRegular, IconPanelLeftOutlineRegular, isDarwinDesktop, Tooltip,
+  DiamondLogo, IconNewChatOutlineRegular, IconPanelLeftOutlineRegular, isDarwinDesktop, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
@@ -208,23 +208,34 @@ export function SidebarRoot({
           traffic lights and keeps the toggle at the sidebar's top-right. */}
       {darwinDesktop && <div className={css.topStrip}>{toggle}</div>}
       <div className={css.logoRow}>
-        {/* Expanded, the brand doubles as a New Session shortcut — except on
-            macOS, where it stays part of the logo row's window-drag surface
-            (a button would subtract itself through the global no-drag rule).
-            Collapsed, the brand mark gets its own seat in this row instead:
-            a plain tile, never a control, with the toggle in its own row
-            below (or, on the Windows caption layout, the fixed caption tile
-            the CSS positions ahead of the caption controls). */}
+        {/* Collapsed, the brand mark gets its own plain tile seat in this row —
+            never a control. Expanded, the brand is NOT rendered here: it moves
+            down into the band that occupies the old New Session slot, at
+            display size, so the mark and name fill the column width. */}
         {!wide && (
           <span className={css.railBrand} aria-hidden="true">
             {renderSlot('sidebar.brand.mark', { size: 24 }, { fallback: <DiamondLogo size={24} /> })}
           </span>
         )}
-        {wide && (() => {
+        {/* The toggle rides the logo row while expanded — and on the Windows
+            caption layout, where the CSS fixes it into the caption strip
+            while collapsed. The plain rail gives it a row of its own below
+            the brand seat instead. */}
+        {!darwinDesktop && (wide || windowsTitlebar) && toggle}
+      </div>
+      {!darwinDesktop && !wide && !windowsTitlebar && <div className={css.toggleRow}>{toggle}</div>}
+
+      {/* Expanded, the New Session bar is deliberately gone: its slot carries
+          the brand lock-up at display size, filling the column width. The band
+          still starts a session (that was the bar's job), so no affordance is
+          lost — only the separate control. Collapsed, the rail keeps its
+          compact New Session icon. */}
+      {wide
+        ? (() => {
           const identity = (
             <span className={css.brandIdentity} aria-hidden="true">
               <span className={css.brandMark}>
-                {renderSlot('sidebar.brand.mark', { size: 24 }, { fallback: <DiamondLogo size={24} /> })}
+                {renderSlot('sidebar.brand.mark', { size: 44 }, { fallback: <DiamondLogo size={44} /> })}
               </span>
               <span className={css.brandName}>
                 {renderSlot('sidebar.brand.name', {}, {
@@ -241,42 +252,30 @@ export function SidebarRoot({
             </span>
           )
           return darwinDesktop
-            ? <span className={clsx(css.brand, css.wide)}>{identity}</span>
+            ? <span className={clsx(css.brand, css.brandBand)}>{identity}</span>
             : (
               <button
                 type="button"
-                className={clsx(css.brand, css.wide)}
+                className={clsx(css.brand, css.brandBand)}
                 aria-label={t('session.new.label')}
                 onClick={() => { startSession() }}
               >
                 {identity}
               </button>
             )
-        })()}
-        {/* The toggle rides the logo row while expanded — and on the Windows
-            caption layout, where the CSS fixes it into the caption strip
-            while collapsed. The plain rail gives it a row of its own below
-            the brand seat instead. */}
-        {!darwinDesktop && (wide || windowsTitlebar) && toggle}
-      </div>
-      {!darwinDesktop && !wide && !windowsTitlebar && <div className={css.toggleRow}>{toggle}</div>}
-
-      {/* Expanded, the button carries its own label — tooltip only on the rail. */}
-      <Tooltip label={t('session.new.label')} delayMs={500} disabled={wide} side={captionTooltipSide}>
-        <button
-          type="button"
-          className={css.newSession}
-          aria-label={t('session.new.label')}
-          onClick={() => { startSession() }}
-        >
-          {/* The rail draws Regular: Medium's 1.3px stroke scaled to the rail's
-              larger glyph reads visibly heavier than the neighboring 1px icons. */}
-          {wide
-            ? <IconNewChatOutlineMedium size={14} />
-            : <IconNewChatOutlineRegular size={windowsTitlebar ? 16 : 18} />}
-          {wide && <span className={clsx(css.newSessionLabel, css.wide)}>{t('session.new')}</span>}
-        </button>
-      </Tooltip>
+        })()
+        : (
+          <Tooltip label={t('session.new.label')} delayMs={500} side={captionTooltipSide}>
+            <button
+              type="button"
+              className={css.newSession}
+              aria-label={t('session.new.label')}
+              onClick={() => { startSession() }}
+            >
+              <IconNewChatOutlineRegular size={windowsTitlebar ? 16 : 18} />
+            </button>
+          </Tooltip>
+        )}
 
       {panels.length > 0 && (
         <nav className={css.panelList} aria-label={t('panels.label')}>
