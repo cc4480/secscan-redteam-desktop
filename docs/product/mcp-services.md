@@ -42,7 +42,7 @@ Three similarly named things must not be confused:
 
 **Connection:** Streamable HTTP to the bridge's local endpoint (`http://127.0.0.1:8765/mcp` by default; `PC_BRIDGE_URL` names the bridge's base address when it differs), authenticated with the paired bridge token. The desktop bundle composes this row as a fourth MCP client beside the three above, and the runner speaks to the same bridge inside engagements.
 
-**What it is:** [AlterEgo](https://github.com/cc4480/alterego) is a separate open-source project (MIT) that runs on the operator's own Windows PC and offers that machine as tools — 108 tools in the bridge's live registry, spanning screen capture, keyboard and mouse input, shell, files, and browser control. The client filters nothing: tools arrive namespaced `mcp__alterego__*`, and whatever the bridge's live registry offers is what appears.
+**What it is:** [AlterEgo](https://github.com/cc4480/alterego) is a separate open-source project (MIT) that runs on the operator's own Windows PC and offers that machine as tools — 109 tools in the bridge's live registry, spanning screen capture, keyboard and mouse input, shell, files, and browser control. The client filters nothing: tools arrive namespaced `mcp__alterego__*`, and whatever the bridge's live registry offers is what appears.
 
 **What it unlocks:** the operator's actual desktop. During an engagement, the bridge reaches the PC the app runs on — its windows, its browser, its shell — beside the runner's own host tooling; during development, it is how the app's builders drive and inspect that same PC. The row adds reach, not authority: bridge operations carry the bridge's own gates, not the runner's.
 
