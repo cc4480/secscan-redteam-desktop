@@ -38,6 +38,9 @@ const MODULE_DIR = dirname(fileURLToPath(import.meta.url))
 /** Assembled text per resolved directory, so one session prices the reads once. */
 const assembled = new Map<string, string>()
 
+/** Parsed index names per resolved directory. */
+const indexed = new Map<string, Set<string>>()
+
 /**
  * Candidate profile directories, nearest first: the operator's override, the
  * packaged copy inside this plugin, then the repository root for source runs.
@@ -116,4 +119,46 @@ function readProfile(directory: string): string {
 export function localProfileText(): string | undefined {
   const directory = resolveLocalProfileDir()
   return directory === undefined ? undefined : readProfile(directory)
+}
+
+/**
+ * Tool names the shipped stub index lists, parsed from its rendered entries.
+ * The index is the deferral manifest: a tool it documents is exactly a tool the
+ * local route declines to pay for, so the two cannot drift apart.
+ * @param directory - resolved profile directory.
+ * @returns the listed tool names, unprefixed as the index writes them.
+ */
+function readIndexedToolNames(directory: string): Set<string> {
+  const cached = indexed.get(directory)
+  if (cached !== undefined) return cached
+  const text = readFileSync(join(directory, 'tool-index.md'), 'utf8')
+  const names = new Set<string>()
+  for (const match of text.matchAll(/^-\s+`([a-z0-9_]+)`/gm)) {
+    if (match[1] !== undefined) names.add(match[1])
+  }
+  indexed.set(directory, names)
+  return names
+}
+
+/**
+ * Tool names the local route defers, or undefined when no profile is installed.
+ * @returns the indexed names, or undefined when the profile is absent.
+ */
+export function deferredToolNames(): ReadonlySet<string> | undefined {
+  const directory = resolveLocalProfileDir()
+  return directory === undefined ? undefined : readIndexedToolNames(directory)
+}
+
+/**
+ * Whether one schema belongs to a deferred tool. Schemas arrive namespaced by
+ * MCP server (`mcp__alterego__doctor`), while the index writes the bare tool
+ * name, so the comparison uses the last namespace segment.
+ * @param schemaName - tool name as the assembly sees it.
+ * @param deferred - names the index lists.
+ * @returns true when any namespace segment matches an indexed name.
+ */
+export function isDeferredTool(schemaName: string, deferred: ReadonlySet<string>): boolean {
+  const separator = schemaName.lastIndexOf('__')
+  const bare = separator === -1 ? schemaName : schemaName.slice(separator + 2)
+  return deferred.has(schemaName) || deferred.has(bare)
 }

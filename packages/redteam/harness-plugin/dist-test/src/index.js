@@ -56,7 +56,7 @@
 import { ROLE_MODEL_POLICY, defaultSoulText } from '@secscan/redteam-llm-router';
 import { installAuthGate } from './auth-gate.js';
 import { REDTEAM_PROFILE } from './redteam-profile.js';
-import { isLocalAssembly, localProfileText } from './local-profile.js';
+import { deferredToolNames, isDeferredTool, isLocalAssembly, localProfileText } from './local-profile.js';
 import { FleetBriefError, fleetBriefs } from './role-briefs.js';
 export const name = 'secscan-redteam';
 // 'tools' for the pre-execute hook surface, 'systemPrompt' for the section registry.
@@ -642,7 +642,7 @@ export function apply(ctx) {
         // Equal orders fall back to code-unit name order, and persona-suffix sits at
         // 10200 regardless.
         order: 117,
-        text: (context) => localProfile(context) ?? usageSection(),
+        text: context => localProfile(context) ?? usageSection(),
     });
     ctx.systemPrompt.section({
         name: 'secscan-redteam-soul',
@@ -652,7 +652,21 @@ export function apply(ctx) {
         order: 118,
         // The compact profile carries its own soul file, so the deployment soul
         // would duplicate it on the local route.
-        text: (context) => localProfile(context) === undefined ? defaultSoulText() : '',
+        text: context => localProfile(context) === undefined ? defaultSoulText() : '',
+    });
+    // Layer-1 deferral: the compact profile's stub index is the manifest of the
+    // tools the local route declines to pay for, so their schemas are not sent.
+    // This reduces model-visible input, the request header still records the tool
+    // list that actually went out, and the scan-facing schemas stay mounted.
+    ctx.on('system-prompt/assemble', async (assembly, context, next) => {
+        const resolved = await next();
+        if (!isLocalAssembly(context))
+            return resolved;
+        const deferred = deferredToolNames();
+        if (deferred === undefined || deferred.size === 0)
+            return resolved;
+        const kept = resolved.tools.filter(tool => !isDeferredTool(tool.name, deferred));
+        return kept.length === resolved.tools.length ? resolved : { ...resolved, tools: kept };
     });
 }
 export const plugin = { name, inject, apply };

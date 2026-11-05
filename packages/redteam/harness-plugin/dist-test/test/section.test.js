@@ -14,6 +14,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { defaultSoulText } from '@secscan/redteam-llm-router';
 import { apply } from '../src/index.js';
+import { isDeferredTool } from '../src/local-profile.js';
 /** Assembly context for a non-local route: no agent, so no local profile. */
 const REMOTE_CONTEXT = {};
 /** Assembly context whose routed request names the local provider. */
@@ -26,9 +27,11 @@ const LOCAL_CONTEXT = {
 function captureApply(context = REMOTE_CONTEXT) {
     const registered = [];
     const hooks = [];
+    const listeners = new Map();
     const ctx = {
-        on: (event) => {
+        on: (event, listener) => {
             hooks.push(event);
+            listeners.set(event, listener);
             return () => { };
         },
         systemPrompt: {
@@ -45,13 +48,14 @@ function captureApply(context = REMOTE_CONTEXT) {
             text: typeof section.text === 'function' ? section.text(context) : section.text,
         })),
         hooks,
+        listeners,
     };
 }
 const flat = (text) => text.replace(/\s+/g, ' ');
 describe('apply', () => {
     it('installs the auth gate hook and publishes the doctrine and SOUL sections', () => {
         const { sections, hooks } = captureApply();
-        assert.deepEqual(hooks, ['tools/pre-execute']);
+        assert.deepEqual(hooks, ['tools/pre-execute', 'system-prompt/assemble']);
         assert.equal(sections.length, 2);
         assert.equal(sections[0].name, 'secscan-redteam');
         assert.equal(sections[0].order, 117);
@@ -198,6 +202,28 @@ describe('apply', () => {
         // room for the conversation on the shipped Local Models default window.
         const priced = Math.ceil(text.length / 4);
         assert.ok(priced < 16_384, `local prompt priced at ${priced} tokens must stay under half the window`);
+    });
+    it('defers the indexed Layer-1 tool schemas from the local assembly only', async () => {
+        const { listeners } = captureApply();
+        const assemble = listeners.get('system-prompt/assemble');
+        assert.ok(assemble !== undefined, 'the assemble listener is registered');
+        const withTools = (tools) => ({ sections: [], contexts: [], tools });
+        const schemas = [
+            { name: 'mcp__alterego__doctor' },
+            { name: 'mcp__redteam__nmap_exec' },
+            { name: 'mcp__secscan__scan_url' },
+            { name: 'bash' },
+        ];
+        const local = await assemble(withTools(schemas), LOCAL_CONTEXT, async () => withTools(schemas));
+        assert.deepEqual(local.tools.map(tool => tool.name), ['mcp__redteam__nmap_exec', 'mcp__secscan__scan_url', 'bash']);
+        const remote = await assemble(withTools(schemas), REMOTE_CONTEXT, async () => withTools(schemas));
+        assert.deepEqual(remote.tools.map(tool => tool.name), schemas.map(tool => tool.name));
+    });
+    it('matches an indexed tool through its MCP namespace', () => {
+        assert.equal(isDeferredTool('mcp__alterego__doctor', new Set(['doctor'])), true);
+        assert.equal(isDeferredTool('doctor', new Set(['doctor'])), true);
+        assert.equal(isDeferredTool('mcp__redteam__doctor_jobs', new Set(['doctor'])), false);
+        assert.equal(isDeferredTool('bash', new Set(['doctor'])), false);
     });
     it('no longer teaches the service scan as the recon baseline', () => {
         const { sections } = captureApply();

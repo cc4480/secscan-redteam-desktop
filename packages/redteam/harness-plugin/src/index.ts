@@ -59,7 +59,7 @@ import type { AssembleContext } from '@deepseek-ai/dsh-system-prompt'
 import type { Context, PluginModule } from './harness-types.js'
 import { installAuthGate } from './auth-gate.js'
 import { REDTEAM_PROFILE } from './redteam-profile.js'
-import { isLocalAssembly, localProfileText } from './local-profile.js'
+import { deferredToolNames, isDeferredTool, isLocalAssembly, localProfileText } from './local-profile.js'
 import { FleetBriefError, fleetBriefs } from './role-briefs.js'
 
 export const name = 'secscan-redteam'
@@ -667,6 +667,19 @@ export function apply(ctx: Context): void {
     // The compact profile carries its own soul file, so the deployment soul
     // would duplicate it on the local route.
     text: context => localProfile(context) === undefined ? defaultSoulText() : '',
+  })
+
+  // Layer-1 deferral: the compact profile's stub index is the manifest of the
+  // tools the local route declines to pay for, so their schemas are not sent.
+  // This reduces model-visible input, the request header still records the tool
+  // list that actually went out, and the scan-facing schemas stay mounted.
+  ctx.on('system-prompt/assemble', async (assembly, context, next) => {
+    const resolved = await next()
+    if (!isLocalAssembly(context)) return resolved
+    const deferred = deferredToolNames()
+    if (deferred === undefined || deferred.size === 0) return resolved
+    const kept = resolved.tools.filter(tool => !isDeferredTool(tool.name, deferred))
+    return kept.length === resolved.tools.length ? resolved : { ...resolved, tools: kept }
   })
 }
 
