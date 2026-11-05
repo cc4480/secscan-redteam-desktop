@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-agent 可以在会话期间发现并加载 skill。在首次请求前，如果存在模型可调用 skill 且 `skill` 工具可见，agent 会收到一份持久目录，列出可用 skill 的名称与有长度上限的描述，并可用 `skill` 工具加载完整指令。用户可以用 `/name` 调用某个用户可调用的 skill，把相同的指令注入该步骤。目录变更会追加一份完整替换，其中空目录会停用旧名称；可配置 `catalogDescriptionMaxLength` 来限制每条描述的长度。
+agent 可以在会话期间发现并加载 skill。在首次请求前，如果存在模型可调用 skill 且 `skill` 工具可见，agent 会收到一份持久目录，列出可用 skill 的名称与有长度上限的描述，并可用 `skill` 工具加载完整指令。用户可以用 `/name` 调用某个用户可调用的 skill，把相同的指令注入该步骤。目录变更会追加一份完整替换，其中空目录会停用旧名称；可配置 `catalogDescriptionMaxLength` 来限制每条描述的长度，也可配置 `skipProviders` 在指定provider路由上完全不发布目录——这些路由的窗口无法容纳它。
 
 ## 目录
 
@@ -44,6 +44,7 @@ agent 可以在会话期间发现并加载 skill。在首次请求前，如果�
 | 字段 | 默认值 | 含义 |
 |---|---|---|
 | `catalogDescriptionMaxLength` | `500` | 会话目录中渲染的规范化描述最大长度；最小为 3 |
+| `skipProviders` | `[]` | 不发布会话目录的 provider 路由；`skill` 工具仍注册，只跳过目录注入 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-skill)是每个受支持字段的穷尽式真源。
 

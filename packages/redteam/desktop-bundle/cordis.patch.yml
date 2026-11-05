@@ -127,6 +127,17 @@
   config:
     maxActiveSubagents: 100
 
+# A local GGUF answers inside the operator's own llama-server window (Local
+# Models ships 32,768). The skill catalog is a per-request system-reminder of
+# roughly 31K tokens across the fleet bundle, which alone overruns that window
+# before the conversation starts, so the local route publishes no catalog. The
+# `skill` tool stays registered: only the catalog injection is skipped. The
+# compact deployment prompt for the same route is assembled by
+# @secscan/redteam-harness-plugin from local-prompt-profile/.
+- id: tool-skill
+  config:
+    skipProviders:
+      - local
 - insert:
     - id: mcp-secscan
       name: '@deepseek-ai/dsh-mcp-client'

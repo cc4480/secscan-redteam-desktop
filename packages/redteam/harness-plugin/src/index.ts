@@ -55,9 +55,11 @@
  */
 
 import { ROLE_MODEL_POLICY, defaultSoulText } from '@secscan/redteam-llm-router'
+import type { AssembleContext } from '@deepseek-ai/dsh-system-prompt'
 import type { Context, PluginModule } from './harness-types.js'
 import { installAuthGate } from './auth-gate.js'
 import { REDTEAM_PROFILE } from './redteam-profile.js'
+import { isLocalAssembly, localProfileText } from './local-profile.js'
 import { FleetBriefError, fleetBriefs } from './role-briefs.js'
 
 export const name = 'secscan-redteam'
@@ -636,6 +638,15 @@ workspace is one they will never find.
 export function apply(ctx: Context): void {
   installAuthGate(ctx)
 
+  // A local model answers inside the operator's own llama-server window, which
+  // cannot host this deployment prompt plus the skill catalog plus the
+  // conversation. The compact profile replaces the doctrine for that route only;
+  // every other route keeps the full text. A local route with no profile
+  // installed keeps the full doctrine too, so an unpacked profile degrades to
+  // the old prompt rather than to a deployment with no operating rules.
+  const localProfile = (context: AssembleContext): string | undefined =>
+    isLocalAssembly(context) ? localProfileText() : undefined
+
   ctx.systemPrompt.section({
     name: 'secscan-redteam',
     // 117 is deliberately not one of the host's SECTION_ORDERS: the doctrine is
@@ -644,7 +655,7 @@ export function apply(ctx: Context): void {
     // Equal orders fall back to code-unit name order, and persona-suffix sits at
     // 10200 regardless.
     order: 117,
-    text: usageSection(),
+    text: context => localProfile(context) ?? usageSection(),
   })
 
   ctx.systemPrompt.section({
@@ -653,7 +664,9 @@ export function apply(ctx: Context): void {
     // SOUL is deployment configuration, ahead of the harness's own
     // PLAN_POLICY (500) and TEAM_POLICY (600) sections.
     order: 118,
-    text: defaultSoulText(),
+    // The compact profile carries its own soul file, so the deployment soul
+    // would duplicate it on the local route.
+    text: context => localProfile(context) === undefined ? defaultSoulText() : '',
   })
 }
 

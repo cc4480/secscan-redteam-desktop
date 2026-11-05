@@ -46,6 +46,20 @@ declare module '@deepseek-ai/dsh-llm' {
   }
 }
 
+/**
+ * The provider route this agent's next request will use. The durable header
+ * wins once a request has been routed; before the first one, the agent's own
+ * options carry the same route, so a skipped provider is known from turn one.
+ * @param agent - agent whose session and options are consulted.
+ * @returns the routed provider route, or undefined when neither source names one.
+ */
+function routedProvider(agent: Agent): string | undefined {
+  const routed = agent.session.requestHeader()?.config.provider
+  if (routed !== undefined && routed.length > 0) return routed
+  const configured = agent.options.provider
+  return configured !== undefined && configured.length > 0 ? configured : undefined
+}
+
 /** Durable entry list mirroring the rendered catalog lines, for non-model consumers. */
 function catalogSourceEntries(
   skills: SkillSummary[],
@@ -61,11 +75,20 @@ function catalogSourceEntries(
 export interface Config {
   /** Maximum normalized description length rendered in the session catalog; minimum 3. */
   catalogDescriptionMaxLength?: number
+  /**
+   * Provider routes whose sessions publish no skill catalog. A catalog is a
+   * per-request system-reminder priced in the same window as the conversation;
+   * a route whose declared window cannot host it (a 32K local model, for
+   * example) turns it off here rather than paying for a prompt it cannot send.
+   * The `skill` tool stays registered: only the catalog injection is skipped.
+   */
+  skipProviders?: string[]
 }
 
 /** Validate and default the model-facing skill catalog configuration. */
 export const Config: z<Config> = z.object({
   catalogDescriptionMaxLength: z.number().default(DEFAULT_CATALOG_DESCRIPTION_MAX_LENGTH),
+  skipProviders: z.array(z.string()).default([]),
 })
 
 /**
@@ -77,6 +100,9 @@ export const Config: z<Config> = z.object({
 export function apply(ctx: Context, config: Config = {}): void {
   const catalogDescriptionMaxLength = config.catalogDescriptionMaxLength ?? DEFAULT_CATALOG_DESCRIPTION_MAX_LENGTH
   assertPositiveInteger('catalogDescriptionMaxLength', catalogDescriptionMaxLength, 3)
+  const skipProviders = new Set(
+    (config.skipProviders ?? []).map(provider => provider.trim()).filter(provider => provider.length > 0),
+  )
 
   const skillTool = defineTool({
     name: 'skill',
@@ -217,6 +243,10 @@ export function apply(ctx: Context, config: Config = {}): void {
     const decision = await next()
     if (decision.kind === 'reject') return decision
     signal.throwIfAborted()
+    if (skipProviders.size > 0) {
+      const provider = routedProvider(agent)
+      if (provider !== undefined && skipProviders.has(provider)) return decision
+    }
     const toolVisible = ctx.tools.get(skillTool.name, agent) === skillTool
     const snapshot = toolVisible
       ? await ctx.skills.snapshot({ cwd: agent.session.header.cwd, signal, scope: agent })

@@ -331,6 +331,37 @@ describe('dsh-tool-skill', () => {
     expect(renderPrompt(await ctx.systemPrompt.assemble({ agent: agentForCwd('/workspace') }))).not.toContain('<available_skills>')
   })
 
+  it('skips the catalog for a provider route configured out of it', async () => {
+    const home = await tempDir('tool-catalog-skip')
+    const ctx = await setup(home, { skipProviders: ['local'] })
+    ctx.skills.register({
+      name: 'a-skill',
+      description: 'A skill that would otherwise be published.',
+      source: 'runtime',
+      provider: 'runtime',
+      content: 'A body.',
+    })
+
+    // The route lives in the durable header once a request has been routed.
+    const local = agentForCwd('/workspace-local')
+    local.session.append('request/header', {
+      header: { config: { provider: 'local', model: 'qwen3-5-4b' } },
+      reason: 'initial',
+    })
+    expect(await composePrefixForAgent(ctx, local)).toEqual([])
+
+    // Before the first request the agent's own options carry the same route.
+    const pending = { ...agentForCwd('/workspace-pending'), options: { provider: 'local', model: 'qwen3-5-4b' } }
+    expect(await composePrefixForAgent(ctx, pending)).toEqual([])
+
+    // Every other provider keeps the catalog.
+    const remote = agentForCwd('/workspace-remote')
+    remote.session.append('request/header', {
+      header: { config: { provider: 'deepseek-official', model: 'deepseek-flash' } },
+      reason: 'initial',
+    })
+    expect(await composePrefixForAgent(ctx, remote)).toHaveLength(1)
+  })
   it('does not inject a catalog when no model-invocable skills are available', async () => {
     const home = await tempDir('tool-empty-catalog')
     const ctx = await setup(home)

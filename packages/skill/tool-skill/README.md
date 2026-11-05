@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Agents can discover and load skills during a session. Before the first request, when model-invocable skills exist and the `skill` tool is visible, they receive a durable catalog of available skill names and capped descriptions, and can use the `skill` tool to load full instructions. Users can invoke a user-invocable skill with `/name`, which injects the same instructions into that step. Catalog changes append a complete replacement, including an empty catalog that retires old names; configure `catalogDescriptionMaxLength` to limit each description.
+Agents can discover and load skills during a session. Before the first request, when model-invocable skills exist and the `skill` tool is visible, they receive a durable catalog of available skill names and capped descriptions, and can use the `skill` tool to load full instructions. Users can invoke a user-invocable skill with `/name`, which injects the same instructions into that step. Catalog changes append a complete replacement, including an empty catalog that retires old names; configure `catalogDescriptionMaxLength` to limit each description, and `skipProviders` to publish no catalog at all on named provider routes whose window cannot host it.
 
 ## Table of Contents
 
@@ -44,6 +44,7 @@ Load the plugin together with the skill registry and at least one provider. The 
 | Field | Default | Meaning |
 |---|---|---|
 | `catalogDescriptionMaxLength` | `500` | Maximum normalized description length rendered in the session catalog; minimum 3 |
+| `skipProviders` | `[]` | Provider routes that publish no session catalog; the `skill` tool stays registered, only the catalog injection is skipped |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-tool-skill) is the exhaustive source for every accepted field.
 

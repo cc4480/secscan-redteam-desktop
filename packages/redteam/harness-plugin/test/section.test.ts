@@ -15,14 +15,31 @@ import assert from 'node:assert/strict'
 import { defaultSoulText } from '@secscan/redteam-llm-router'
 import { apply } from '../src/index.js'
 
+interface RegisteredSection {
+  name: string
+  order: number
+  text: string | ((context: unknown) => string)
+}
+
 interface Section {
   name: string
   order: number
   text: string
 }
 
-function captureApply(): { sections: Section[]; hooks: string[] } {
-  const sections: Section[] = []
+/** Assembly context for a non-local route: no agent, so no local profile. */
+const REMOTE_CONTEXT = {}
+
+/** Assembly context whose routed request names the local provider. */
+const LOCAL_CONTEXT = {
+  agent: {
+    options: { provider: 'local' },
+    session: { requestHeader: () => ({ config: { provider: 'local' } }) },
+  },
+}
+
+function captureApply(context: unknown = REMOTE_CONTEXT): { sections: Section[]; hooks: string[] } {
+  const registered: RegisteredSection[] = []
   const hooks: string[] = []
   const ctx = {
     on: (event: string) => {
@@ -30,13 +47,20 @@ function captureApply(): { sections: Section[]; hooks: string[] } {
       return () => {}
     },
     systemPrompt: {
-      section: (s: Section) => {
-        sections.push(s)
+      section: (s: RegisteredSection) => {
+        registered.push(s)
       },
     },
   }
   apply(ctx as never)
-  return { sections, hooks }
+  return {
+    sections: registered.map(section => ({
+      name: section.name,
+      order: section.order,
+      text: typeof section.text === 'function' ? section.text(context) : section.text,
+    })),
+    hooks,
+  }
 }
 
 const flat = (text: string): string => text.replace(/\s+/g, ' ')
@@ -181,6 +205,27 @@ describe('apply', () => {
     }
   })
 
+  it('replaces the deployment prompt with the compact profile on the local route', () => {
+    const local = captureApply(LOCAL_CONTEXT)
+    const remote = captureApply()
+    // The local doctrine is the authored profile, far smaller than the deployment prompt.
+    assert.ok(local.sections[0]!.text.length > 0)
+    assert.ok(local.sections[0]!.text.length < remote.sections[0]!.text.length / 2)
+    assert.match(local.sections[0]!.text, /AGENTS\.md|operating rules|Deployment rules/i)
+    // The profile carries its own soul, so the deployment SOUL is suppressed.
+    assert.equal(local.sections[1]!.text, '')
+    // Every other route is untouched.
+    assert.equal(remote.sections[1]!.text, defaultSoulText())
+  })
+
+  it('keeps the local prompt inside a 32,768-token window', () => {
+    const local = captureApply(LOCAL_CONTEXT)
+    const text = local.sections.map(section => section.text).join('\n\n')
+    // The token meter prices four characters per token; the profile must leave
+    // room for the conversation on the shipped Local Models default window.
+    const priced = Math.ceil(text.length / 4)
+    assert.ok(priced < 16_384, `local prompt priced at ${priced} tokens must stay under half the window`)
+  })
   it('no longer teaches the service scan as the recon baseline', () => {
     const { sections } = captureApply()
     const text = flat(sections[0]!.text)

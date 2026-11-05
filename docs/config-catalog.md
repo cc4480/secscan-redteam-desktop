@@ -3624,10 +3624,18 @@ Requires: `agents` · `tools` · `skills`
 export interface Config {
   /** Maximum normalized description length rendered in the session catalog; minimum 3. */
   catalogDescriptionMaxLength?: number
+  /**
+   * Provider routes whose sessions publish no skill catalog. A catalog is a
+   * per-request system-reminder priced in the same window as the conversation;
+   * a route whose declared window cannot host it (a 32K local model, for
+   * example) turns it off here rather than paying for a prompt it cannot send.
+   * The `skill` tool stays registered: only the catalog injection is skipped.
+   */
+  skipProviders?: string[]
 }
 ```
 
-Source: [`packages/skill/tool-skill/src/index.ts:61`](../packages/skill/tool-skill/src/index.ts)
+Source: [`packages/skill/tool-skill/src/index.ts:75`](../packages/skill/tool-skill/src/index.ts)
 
 <a id="deepseek-aidsh-tool-str-replace-editor"></a>
 
