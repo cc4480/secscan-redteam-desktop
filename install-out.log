@@ -1,0 +1,109 @@
+native/system/packages/darwin-arm64      | [WARN] Unsupported platform: wanted: {"cpu":["arm64"],"os":["darwin"],"libc":["any"]} (current: {"os":"win32","cpu":"x64","libc":"unknown"})
+native/system/packages/darwin-x64        | [WARN] Unsupported platform: wanted: {"cpu":["x64"],"os":["darwin"],"libc":["any"]} (current: {"os":"win32","cpu":"x64","libc":"unknown"})
+native/system/packages/linux-arm64       | [WARN] Unsupported platform: wanted: {"cpu":["arm64"],"os":["linux"],"libc":["any"]} (current: {"os":"win32","cpu":"x64","libc":"unknown"})
+native/system/packages/linux-x64         | [WARN] Unsupported platform: wanted: {"cpu":["x64"],"os":["linux"],"libc":["any"]} (current: {"os":"win32","cpu":"x64","libc":"unknown"})
+Scope: all 341 workspace projects
+[WARN] There are cyclic workspace dependencies: C:\Users\Cho-zen\secscan-rebuild-test\apps\web, C:\Users\Cho-zen\secscan-rebuild-test\packages\test-support\client-runtime, C:\Users\Cho-zen\secscan-rebuild-test\packages\bundle\web-app; C:\Users\Cho-zen\secscan-rebuild-test\packages\api\remotes, C:\Users\Cho-zen\secscan-rebuild-test\packages\client\ui-plugin-manager, C:\Users\Cho-zen\secscan-rebuild-test\packages\client\ui-sidebar, C:\Users\Cho-zen\secscan-rebuild-test\packages\client\ui-workspace, C:\Users\Cho-zen\secscan-rebuild-test\packages\client\ui-conversation; C:\Users\Cho-zen\secscan-rebuild-test\packages\compaction\compaction-basic, C:\Users\Cho-zen\secscan-rebuild-test\packages\compaction\compaction-image-offload; C:\Users\Cho-zen\secscan-rebuild-test\packages\compaction\compaction-tool-result-pruner, C:\Users\Cho-zen\secscan-rebuild-test\packages\llm\token-meter, C:\Users\Cho-zen\secscan-rebuild-test\packages\llm\llm-retry, C:\Users\Cho-zen\secscan-rebuild-test\packages\llm\llm-deepseek, C:\Users\Cho-zen\secscan-rebuild-test\packages\llm\plugin-package-inventory-deepseek, C:\Users\Cho-zen\secscan-rebuild-test\packages\preset\agent-preset-registry, C:\Users\Cho-zen\secscan-rebuild-test\packages\preset\agent-preset; C:\Users\Cho-zen\secscan-rebuild-test\packages\core\agent-default-model, C:\Users\Cho-zen\secscan-rebuild-test\packages\settings\settings; C:\Users\Cho-zen\secscan-rebuild-test\packages\sandbox\sandbox-local, C:\Users\Cho-zen\secscan-rebuild-test\packages\sandbox\sandbox-windows-acl; C:\Users\Cho-zen\secscan-rebuild-test\packages\ssh\fs-ssh, C:\Users\Cho-zen\secscan-rebuild-test\packages\ssh\ssh; C:\Users\Cho-zen\secscan-rebuild-test\packages\subagent\subagent-spawn-in-process, C:\Users\Cho-zen\secscan-rebuild-test\packages\subagent\tool-subagent; C:\Users\Cho-zen\secscan-rebuild-test\vendor\cordis, C:\Users\Cho-zen\secscan-rebuild-test\vendor\include
+Recreating C:\Users\Cho-zen\secscan-rebuild-test\node_modules
+? Verifying lockfile against supply-chain policies (1693 entries)...
+Lockfile is up to date, resolution step is skipped
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +1400
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Progress: resolved 1400, reused 93, downloaded 0, added 0
+Progress: resolved 1400, reused 203, downloaded 0, added 0
+Progress: resolved 1400, reused 331, downloaded 0, added 0
+Progress: resolved 1400, reused 488, downloaded 0, added 0
+Progress: resolved 1400, reused 550, downloaded 0, added 0
+✓ Lockfile passes supply-chain policies (1693 entries in 6.7s)
+Progress: resolved 1400, reused 931, downloaded 0, added 0
+Progress: resolved 1400, reused 1304, downloaded 0, added 0
+Progress: resolved 1400, reused 1395, downloaded 0, added 59
+Progress: resolved 1400, reused 1395, downloaded 0, added 152
+Progress: resolved 1400, reused 1395, downloaded 0, added 196
+Progress: resolved 1400, reused 1395, downloaded 0, added 236
+Progress: resolved 1400, reused 1395, downloaded 0, added 333
+Progress: resolved 1400, reused 1395, downloaded 0, added 416
+Progress: resolved 1400, reused 1395, downloaded 0, added 447
+Progress: resolved 1400, reused 1395, downloaded 0, added 507
+Progress: resolved 1400, reused 1395, downloaded 0, added 565
+Progress: resolved 1400, reused 1395, downloaded 0, added 645
+Progress: resolved 1400, reused 1395, downloaded 0, added 734
+Progress: resolved 1400, reused 1395, downloaded 0, added 795
+Progress: resolved 1400, reused 1395, downloaded 0, added 856
+Progress: resolved 1400, reused 1395, downloaded 0, added 968
+Progress: resolved 1400, reused 1395, downloaded 0, added 990
+Progress: resolved 1400, reused 1395, downloaded 0, added 1050
+Progress: resolved 1400, reused 1395, downloaded 0, added 1085
+Progress: resolved 1400, reused 1395, downloaded 0, added 1121
+Progress: resolved 1400, reused 1395, downloaded 0, added 1152
+Progress: resolved 1400, reused 1395, downloaded 0, added 1167
+Progress: resolved 1400, reused 1395, downloaded 0, added 1179
+Progress: resolved 1400, reused 1395, downloaded 0, added 1268
+Progress: resolved 1400, reused 1395, downloaded 0, added 1316
+Progress: resolved 1400, reused 1395, downloaded 0, added 1385
+Progress: resolved 1400, reused 1395, downloaded 0, added 1400, done
+
+devDependencies:
++ @deepseek-ai/dsh-agent 0.1.7-rc.7 <- packages\core\agent
++ @deepseek-ai/dsh-browser-use 0.1.7-rc.7 <- packages\browser-use\browser-use
++ @deepseek-ai/dsh-computer-use 0.1.7-rc.7 <- packages\computer-use\computer-use
++ @deepseek-ai/dsh-experimental-browser-use-chrome-devtools-mcp 0.1.7-rc.7 <- packages\experimental\browser-use-chrome-devtools-mcp
++ @deepseek-ai/dsh-experimental-browser-use-playwright-mcp 0.1.7-rc.7 <- packages\experimental\browser-use-playwright-mcp
++ @deepseek-ai/dsh-experimental-browser-use-runtime 0.1.7-rc.7 <- packages\experimental\browser-use-runtime
++ @deepseek-ai/dsh-experimental-browser-use-stagehand-native 0.1.7-rc.7 <- packages\experimental\browser-use-stagehand-native
++ @deepseek-ai/dsh-experimental-computer-use-cua-driver-mcp 0.1.7-rc.7 <- packages\experimental\computer-use-cua-driver-mcp
++ @deepseek-ai/dsh-experimental-computer-use-cua-driver-native 0.1.7-rc.7 <- packages\experimental\computer-use-cua-driver-native
++ @deepseek-ai/dsh-llm-replay 0.1.7-rc.7 <- packages\test-support\llm-replay
++ @deepseek-ai/dsh-mcp-client 0.1.7-rc.7 <- packages\mcp\mcp-client
++ @deepseek-ai/dsh-skill-office 0.1.7-rc.7 <- packages\skill\skill-office
++ @deepseek-ai/dsh-tool-session-query 0.1.7-rc.7 <- packages\session-query\tool-session-query
++ @deepseek-ai/dsh-tool-workspace-dependencies 0.1.7-rc.7 <- packages\skill\tool-workspace-dependencies
++ @deepseek-ai/dsh-web-fetch-http 0.1.7-rc.7 <- packages\web\web-fetch-http
++ @stylistic/eslint-plugin 5.10.0
++ @testing-library/dom 10.4.2
++ @testing-library/react 16.3.2
++ @types/js-yaml 4.0.9
++ @types/jsdom 28.0.3
++ @types/mdast 4.0.4
++ @types/node 22.20.0
++ @types/spdx-expression-parse 4.0.0
++ @vitest/coverage-v8 4.1.8
++ @yao-pkg/pkg 6.21.0
++ @yarnpkg/cli-dist 4.17.1
++ eslint-plugin-sonarjs 4.1.0
++ execa 10.0.0
++ extract-zip 2.0.1
++ fast-check 4.8.0
++ fflate 0.8.3
++ istanbul-lib-report 3.0.1
++ js-yaml 4.2.0
++ jscpd 5.0.12
++ jsdom 29.1.1
++ lefthook 2.1.9
++ lightningcss 1.32.0
++ mdast-util-from-markdown 2.0.3
++ mdast-util-gfm 3.1.0
++ mermaid 11.16.0
++ micromark-extension-gfm 3.0.0
++ oxlint 1.76.0
++ oxlint-tsgolint 7.0.2001
++ pnpm 11.7.0
++ publint 0.3.21
++ smol-toml 1.7.1
++ spdx-expression-parse 5.0.0
++ tar 7.5.22
++ tsdown 0.22.2
++ tsx 4.22.4
++ typescript 6.0.3
++ vite-tsconfig-paths 6.1.1
++ vitest 4.1.8
+
+packages/subprocess/subprocess-local postinstall$ node scripts/ensure-spawn-helper.mjs
+packages/subprocess/subprocess-local postinstall: Done
+. postinstall$ node scripts/install-lefthook.mjs
+. postinstall: sync hooks: ✔️(pre-commit, pre-push, pre-merge-commit)
+. postinstall: (node:11140) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+. postinstall: (Use `node --trace-deprecation ...` to show where the warning was created)
+. postinstall: Done
+Done in 1m 19.4s using pnpm v11.7.0

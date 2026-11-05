@@ -1,0 +1,160 @@
+var __rewriteRelativeImportExtension = (this && this.__rewriteRelativeImportExtension) || function (path, preserveJsx) {
+    if (typeof path === "string" && /^\.\.?\//.test(path)) {
+        return path.replace(/\.(tsx)$|((?:\.d)?)((?:\.[^./]+?)?)\.([cm]?)ts$/i, function (m, tsx, d, ext, cm) {
+            return tsx ? preserveJsx ? ".jsx" : ".js" : d && (!ext || !cm) ? m : (d + ext + "." + cm.toLowerCase() + "js");
+        });
+    }
+    return path;
+};
+/**
+ * Fleet skill registry: discovery, shadowing, loading, and the Layer-1
+ * index block, exercised against the bundled skills and synthetic roots.
+ * All local — no network, no model calls.
+ */
+import assert from 'node:assert/strict';
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { describe, test } from 'node:test';
+import { parseSkillFrontmatter } from '../src/frontmatter.js';
+import { bundledSkillsRoot, discoverSkills, loadSkillBody, loadSkillBodyByName, skillIndexBlock } from '../src/registry.js';
+const BUNDLED_NAMES = [
+    'blackteam-adversary-emulation',
+    'browser-action-execution',
+    'deep-research-osint',
+    'exploit-coding-toolbuilding',
+    'findings-grading-reporting',
+    'html-report-design',
+    'redteam-ops-coordination',
+    'webapp-exploit',
+    'webapp-scan',
+];
+function writeSkill(root, name, description) {
+    const dir = join(root, name);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'SKILL.md'), `---\nname: ${name}\ndescription: "${description}"\n---\n\n# ${name}\n`);
+}
+describe('discoverSkills over the bundled root', () => {
+    test('finds all 9 bundled skills via bundledSkillsRoot()', () => {
+        const metas = discoverSkills([bundledSkillsRoot()]);
+        assert.deepEqual(metas.map(meta => meta.name).sort(), [...BUNDLED_NAMES].sort());
+        for (const meta of metas) {
+            assert.ok(meta.description.length > 0, `${meta.name} has a description`);
+            assert.equal(meta.dir, join(bundledSkillsRoot(), meta.name));
+            assert.equal(meta.skillFile, join(meta.dir, 'SKILL.md'));
+        }
+    });
+    test('forced load returns the full body containing the frontmatter name', () => {
+        const metas = discoverSkills([bundledSkillsRoot()]);
+        for (const meta of metas) {
+            const body = loadSkillBody(meta);
+            assert.ok(body.includes(`name: ${meta.name}`), `${meta.name} body carries its frontmatter name`);
+            assert.ok(body.length > meta.description.length, `${meta.name} body is more than its description`);
+        }
+    });
+    test('index block contains all 9 names under the fleet_skills_index header', () => {
+        const block = skillIndexBlock(discoverSkills([bundledSkillsRoot()]));
+        assert.ok(block.startsWith('<fleet_skills_index>'));
+        assert.ok(block.trimEnd().endsWith('</fleet_skills_index>'));
+        for (const name of BUNDLED_NAMES) {
+            assert.ok(block.includes(`- ${name}:`), `index block lists ${name}`);
+        }
+    });
+});
+describe('bundledSkillsRoot in the desktop payload layout', () => {
+    test('resolves lib/fleet-skills/skills beside the bundled module', async () => {
+        const base = mkdtempSync(join(tmpdir(), 'fleet-skills-payload-'));
+        try {
+            // Simulated payload tree, mirroring the desktop vendor layout
+            // (placeFleetSkillsAssets in apps/desktop/scripts/vendor-redteam-runner.mjs
+            // and the checked-in apps/desktop/resources payload): the package's
+            // bundled module sits in lib/, the package's own skills/ directory is
+            // not shipped, and the vendor step places the skill assets at
+            // lib/fleet-skills/skills/<name>/SKILL.md.
+            const libDir = join(base, 'payload', 'node_modules', '@secscan', 'redteam-fleet-skills', 'lib');
+            mkdirSync(libDir, { recursive: true });
+            const compiledSrcDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'src');
+            for (const file of ['registry.js', 'frontmatter.js']) {
+                cpSync(join(compiledSrcDir, file), join(libDir, file));
+            }
+            writeSkill(join(libDir, 'fleet-skills', 'skills'), 'webapp-scan', 'payload copy trigger');
+            const payloadRegistry = await import(__rewriteRelativeImportExtension(pathToFileURL(join(libDir, 'registry.js')).href));
+            const root = payloadRegistry.bundledSkillsRoot();
+            assert.equal(root, join(libDir, 'fleet-skills', 'skills'));
+            assert.deepEqual(payloadRegistry.discoverSkills([root]).map(meta => meta.name), ['webapp-scan']);
+        }
+        finally {
+            rmSync(base, { recursive: true, force: true });
+        }
+    });
+});
+describe('discoverSkills shadowing', () => {
+    test('an earlier root shadows a later root carrying the same skill name', () => {
+        const base = mkdtempSync(join(tmpdir(), 'fleet-skills-shadow-'));
+        try {
+            const earlier = join(base, 'earlier');
+            const later = join(base, 'later');
+            writeSkill(earlier, 'webapp-scan', 'earlier copy wins');
+            writeSkill(later, 'webapp-scan', 'later copy is shadowed');
+            writeSkill(later, 'webapp-exploit', 'only in the later root');
+            const metas = discoverSkills([earlier, later]);
+            assert.equal(metas.length, 2);
+            const scan = metas.find(meta => meta.name === 'webapp-scan');
+            assert.ok(scan);
+            assert.equal(scan.description, 'earlier copy wins');
+            assert.equal(scan.dir, join(earlier, 'webapp-scan'));
+            assert.ok(metas.some(meta => meta.name === 'webapp-exploit'));
+        }
+        finally {
+            rmSync(base, { recursive: true, force: true });
+        }
+    });
+});
+describe('parseSkillFrontmatter', () => {
+    test('rejects a skill whose frontmatter has no description', () => {
+        assert.throws(() => parseSkillFrontmatter('---\nname: webapp-scan\n---\n\n# No description\n'), /description/);
+    });
+    test('rejects a skill whose frontmatter has no name', () => {
+        assert.throws(() => parseSkillFrontmatter('---\ndescription: "present"\n---\n'), /name/);
+    });
+    test('rejects a name that is not kebab-case', () => {
+        assert.throws(() => parseSkillFrontmatter('---\nname: Webapp_Scan\ndescription: "present"\n---\n'), /kebab-case/);
+    });
+});
+describe('loadSkillBodyByName (Layer 2 by name)', () => {
+    test('loads a bundled skill by its index name, byte-identical to the meta path', () => {
+        const roots = [bundledSkillsRoot()];
+        const meta = discoverSkills(roots).find(m => m.name === 'webapp-scan');
+        assert.ok(meta);
+        const body = loadSkillBodyByName(roots, 'webapp-scan');
+        assert.equal(body, loadSkillBody(meta));
+        assert.ok(body.includes('name: webapp-scan'), 'frontmatter rides along');
+        assert.ok(body.includes('# Web App Scan — Fleet Skill'), 'full body, not a summary');
+    });
+    test('every bundled skill in the Layer-1 index is loadable by name', () => {
+        const roots = [bundledSkillsRoot()];
+        for (const name of BUNDLED_NAMES) {
+            const body = loadSkillBodyByName(roots, name);
+            assert.ok(body.length > 0, `${name} loads`);
+            assert.ok(body.includes(`name: ${name}`), `${name} body carries its frontmatter`);
+        }
+    });
+    test('an unknown name throws, naming the miss and listing what exists', () => {
+        assert.throws(() => loadSkillBodyByName([bundledSkillsRoot()], 'no-such-skill'), /no skill named "no-such-skill"; available: .*webapp-scan/);
+    });
+    test('earlier roots shadow later ones, exactly as discovery does', () => {
+        const first = mkdtempSync(join(tmpdir(), 'skill-first-'));
+        const second = mkdtempSync(join(tmpdir(), 'skill-second-'));
+        try {
+            writeSkill(first, 'webapp-scan', 'first copy');
+            writeSkill(second, 'webapp-scan', 'second copy');
+            const body = loadSkillBodyByName([first, second], 'webapp-scan');
+            assert.ok(body.includes('first copy'), 'the shadowing (earlier) root supplies the body');
+        }
+        finally {
+            rmSync(first, { recursive: true, force: true });
+            rmSync(second, { recursive: true, force: true });
+        }
+    });
+});

@@ -1,0 +1,5 @@
+$ tsx scripts/package-target.ts "--" "--unsigned"
+Error: desktop package: cannot read C:\Users\Cho-zen\secscan-rebuild-test\apps\desktop\.env.windows; copy C:\Users\Cho-zen\secscan-rebuild-test\apps\desktop\.env.windows.example and fill in the local settings
+    at loadDesktopPackageEnvironment (file:///C:/Users/Cho-zen/secscan-rebuild-test/apps/desktop/scripts/desktop-package-environment.mjs:36:11)
+    at main (file:///C:/Users/Cho-zen/secscan-rebuild-test/apps/desktop/scripts/package-target.ts:2:4430)
+    at file:///C:/Users/Cho-zen/secscan-rebuild-test/apps/desktop/scripts/package-target.ts:6:6196

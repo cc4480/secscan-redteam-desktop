@@ -1,0 +1,8 @@
+﻿TOTAL_LINES=3341
+TS_ERROR_COUNT=4
+L3312: packages/client/ui-settings-general/tests/settings-root.client.spec.tsx(129,5): error TS2322: Type 'Mock<RenderSlotFn<"settings.launcher" | "settings.trigger" | "settings.onboarding">>' is not assignable to type 'RenderSlotFn<"set
+L3318: packages/client/ui-settings-general/tests/settings-root.client.spec.tsx(457,60): error TS2367: This comparison appears to be unintentional because the types '"settings.launcher" | "settings.trigger" | "settings.onboarding"' and '"
+L3319: packages/client/ui-settings-general/tests/settings-root.client.spec.tsx(472,16): error TS2352: Conversion of type '((SettingsTriggerOwnerProps | SettingsOnboardingOwnerProps) & object) | undefined' to type '{ openOnboarding: (id: 
+L3321: packages/client/ui-settings-general/tests/settings-root.client.spec.tsx(483,16): error TS2352: Conversion of type '(SettingsTriggerOwnerProps | SettingsOnboardingOwnerProps) & object' to type '{ openSettings: () => void; }' may be
+FILES:
+  packages/client/ui-settings-general/tests/settings-root.client.spec.tsx
