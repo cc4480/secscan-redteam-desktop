@@ -5,6 +5,7 @@ import {
   createSystemMessage,
   createToolResultMessage,
   createUserMessage,
+  CONTEXT_WINDOW_EXCEEDED_CODE,
   LlmError,
   ToolCallId,
 } from '@deepseek-ai/dsh-llm'
@@ -228,6 +229,46 @@ describe('local adapter streaming', () => {
     const error = await rejectionOf(adapter.stream(options(ACTIVE_MODEL_ID)))
     assert.ok(error instanceof LlmError)
     assert.equal(error.failure.code, 'LOCAL_ENDPOINT_UNREACHABLE')
+  })
+})
+
+describe('local adapter context overflow', () => {
+  it('classifies the llama-server overflow body as the canonical context failure', async () => {
+    const directory = await createFixtureModelsDir()
+    await writeServerState(directory, { status: 'running', baseUrl: FIXTURE_BASE_URL, modelId: ACTIVE_MODEL_ID })
+    // The exact body llama-server answers with when the prompt outgrows the operator's Context length.
+    // llama.cpp refuses the oversized prompt before streaming, so this response is the only overflow signal the harness gets.
+    const overflow = '{"error":{"code":400,"message":"request (117282 tokens) exceeds the available context size (32768 tokens), try increasing it","type":"exceed_context_size_error","n_prompt_tokens":117282,"n_ctx":32768}}'
+    const { fetchImpl, requests } = fakeFetch(overflow, 400)
+    const adapter = new LocalLlamaAdapter({ modelsDir: directory, fetchImpl })
+    const error = await rejectionOf(adapter.stream(options(ACTIVE_MODEL_ID)))
+
+    assert.equal(requests.length, 1)
+    assert.ok(error instanceof LlmError)
+    assert.equal(error.failure.code, CONTEXT_WINDOW_EXCEEDED_CODE)
+    assert.equal(error.failure.status, 400)
+    // The harness recovers this code by compacting, so the message must name the operator's own fix.
+    assert.match(error.failure.message, /context window is full/)
+    assert.match(error.failure.message, /Raise the Context length in Local Models and restart the server, or start a new session/)
+    // The endpoint's own detail rides along: the token counts are the operator's evidence for raising the setting.
+    assert.match(error.failure.message, /117282 tokens/)
+  })
+
+  it('keeps a non-overflow bad request as a plain request failure', async () => {
+    const directory = await createFixtureModelsDir()
+    await writeServerState(directory, { status: 'running', baseUrl: FIXTURE_BASE_URL, modelId: ACTIVE_MODEL_ID })
+    // A 400 that names the context without overflowing it, so the classifier cannot fire on the word alone.
+    const rejected = '{"error":{"code":400,"message":"invalid request: context window size must be positive","type":"invalid_request_error"}}'
+    const { fetchImpl } = fakeFetch(rejected, 400)
+    const adapter = new LocalLlamaAdapter({ modelsDir: directory, fetchImpl })
+    const error = await rejectionOf(adapter.stream(options(ACTIVE_MODEL_ID)))
+
+    assert.ok(error instanceof LlmError)
+    assert.equal(error.failure.code, 'LOCAL_REQUEST_FAILED')
+    assert.equal(error.failure.status, 400)
+    // Not every bad request is a full window: a blanket classification here would compact a turn that cannot be fixed by compacting.
+    assert.doesNotMatch(error.failure.message, /context window is full/)
+    assert.match(error.failure.message, /answered HTTP 400/)
   })
 })
 

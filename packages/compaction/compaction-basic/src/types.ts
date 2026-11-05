@@ -8,9 +8,13 @@ import type { LlmCallConfig } from '@deepseek-ai/dsh-llm'
 
 /** Policy fields shared by the default policy and exact model overrides. */
 export interface CompactionPolicyConfig {
-  /** Window fraction for pressure; capped at context window minus reserved output and `headroomTokens`. Defaults to `0.8`. */
+  /** Window fraction for pressure; capped at context window minus reserved output and headroom. Defaults to `0.8`. */
   thresholdRatio?: number
-  /** Additional pressure headroom beyond the routed output reservation. Non-negative integer; defaults to `65536`. */
+  /**
+   * Additional pressure headroom beyond the routed output reservation.
+   * Non-negative integer; defaults to an eighth of the routed window, capped at
+   * `65536`, so a small window keeps a usable pressure budget.
+   */
   headroomTokens?: number
   /** Recent context retained as a fraction of context window minus reserved output tokens. Defaults to `0.16`. */
   retainRatio?: number
@@ -20,7 +24,11 @@ export interface CompactionPolicyConfig {
   summarizationProvider?: string
   /** Summary model; set together with `summarizationProvider`, or inherit the conversation target. */
   summarizationModel?: string
-  /** Provider generation cap for summarization. Defaults to the resolved `headroomTokens`; an explicit cap must be positive. */
+  /**
+   * Provider generation cap for summarization, including provider-counted
+   * reasoning tokens. Defaults to an eighth of the routed window, capped at
+   * `65536`; an explicit cap must be positive.
+   */
   maxTokens?: number
   /** Extra attempts after the first compaction when pressure remains above threshold. Defaults to `1`. */
   compactionRetries?: number
@@ -52,10 +60,12 @@ export type ResolvedRetention =
 /** Validated policy fields shared before and after exact-target matching. */
 interface ResolvedPolicyFields {
   readonly thresholdRatio: number
-  readonly headroomTokens: number
+  /** Configured headroom, or absent to derive it from the routed window. */
+  readonly headroomTokens?: number
   readonly summarizationProvider: string
   readonly summarizationModel: string
-  readonly maxTokens: number
+  /** Configured summary cap, or absent to derive it from the routed window. */
+  readonly maxTokens?: number
   readonly compactionRetries: number
   readonly maxOverflowRetries: number
 }
@@ -71,10 +81,15 @@ export type ResolvedTargetPolicy = ResolvedPolicyFields & ResolvedRetention & {
   readonly target: Pick<LlmCallConfig, 'provider' | 'model'>
 }
 
-/** One routed model's concrete pressure and retention budget. */
-export type ResolvedCompactSpec = Omit<ResolvedTargetPolicy, 'retainRatio' | 'retainTokens' | 'headroomTokens'> & {
+/** One routed model's concrete pressure, retention, and summary-capacity budget. */
+export type ResolvedCompactSpec = Omit<
+  ResolvedTargetPolicy,
+  'retainRatio' | 'retainTokens' | 'headroomTokens' | 'maxTokens'
+> & {
   /** Adapter-declared full window; token budgets below exclude reserved output tokens. */
   readonly contextWindow: number
   readonly thresholdTokens: number
   readonly retainTokens: number
+  /** Summary generation cap resolved for this window. */
+  readonly maxTokens: number
 }

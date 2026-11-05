@@ -599,9 +599,13 @@ export interface BasicCompactionConfig extends CompactionPolicyConfig {
 
 /** Policy fields shared by the default policy and exact model overrides. */
 export interface CompactionPolicyConfig {
-  /** Window fraction for pressure; capped at context window minus reserved output and `headroomTokens`. Defaults to `0.8`. */
+  /** Window fraction for pressure; capped at context window minus reserved output and headroom. Defaults to `0.8`. */
   thresholdRatio?: number
-  /** Additional pressure headroom beyond the routed output reservation. Non-negative integer; defaults to `65536`. */
+  /**
+   * Additional pressure headroom beyond the routed output reservation.
+   * Non-negative integer; defaults to an eighth of the routed window, capped at
+   * `65536`, so a small window keeps a usable pressure budget.
+   */
   headroomTokens?: number
   /** Recent context retained as a fraction of context window minus reserved output tokens. Defaults to `0.16`. */
   retainRatio?: number
@@ -611,7 +615,11 @@ export interface CompactionPolicyConfig {
   summarizationProvider?: string
   /** Summary model; set together with `summarizationProvider`, or inherit the conversation target. */
   summarizationModel?: string
-  /** Provider generation cap for summarization. Defaults to the resolved `headroomTokens`; an explicit cap must be positive. */
+  /**
+   * Provider generation cap for summarization, including provider-counted
+   * reasoning tokens. Defaults to an eighth of the routed window, capped at
+   * `65536`; an explicit cap must be positive.
+   */
   maxTokens?: number
   /** Extra attempts after the first compaction when pressure remains above threshold. Defaults to `1`. */
   compactionRetries?: number
@@ -628,7 +636,7 @@ export interface ModelCompactPolicyConfig extends CompactionPolicyConfig {
 }
 ```
 
-Source: [`packages/compaction/compaction-basic/src/types.ts:40`](../packages/compaction/compaction-basic/src/types.ts)
+Source: [`packages/compaction/compaction-basic/src/types.ts:48`](../packages/compaction/compaction-basic/src/types.ts)
 
 <a id="deepseek-aidsh-compaction-tool-result-pruner"></a>
 
@@ -4158,6 +4166,49 @@ export interface Config {
 ```
 
 Source: [`packages/redteam/console-share/src/index.ts:42`](../packages/redteam/console-share/src/index.ts)
+
+<a id="secscanredteam-llm-local"></a>
+
+## `@secscan/redteam-llm-local`
+
+Requires: `llm`
+
+```ts config-catalog
+/** Local-model plugin configuration. */
+export interface Config {
+  /**
+   * Explicit models directory. Deployment-varying: the desktop writes its
+   * models and state documents there. When unset, the directory resolves
+   * from `DSH_LOCAL_MODELS_DIR`, then the platform default
+   * (`%LOCALAPPDATA%\SecScan Red Team\models` on Windows,
+   * `~/.secscan-redteam/models` elsewhere) — the same resolution the
+   * desktop and the runner use.
+   */
+  modelsDir?: string
+}
+```
+
+Source: [`packages/redteam/llm-local/src/index.ts:37`](../packages/redteam/llm-local/src/index.ts)
+
+<a id="secscanredteam-llm-meta"></a>
+
+## `@secscan/redteam-llm-meta`
+
+Requires: `llm`
+
+```ts config-catalog
+/** Meta plugin configuration. */
+export interface Config {
+  /**
+   * Explicit Meta Model API base URL. Deployment-varying: when unset, the
+   * adapter resolves `META_BASE_URL`, then the default endpoint the
+   * router's Meta provider uses (`https://api.meta.ai/v1`).
+   */
+  baseUrl?: string
+}
+```
+
+Source: [`packages/redteam/llm-meta/src/index.ts:36`](../packages/redteam/llm-meta/src/index.ts)
 
 ## Loadable plugins with no config
 

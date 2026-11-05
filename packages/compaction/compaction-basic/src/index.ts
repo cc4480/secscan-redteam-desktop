@@ -32,6 +32,7 @@ import type { SummarizationInput, SummaryResult } from './summarizer.ts'
 import type {
   BasicCompactionConfig,
   ModelCompactPolicyConfig,
+  ResolvedCompactSpec,
   ResolvedConfig,
 } from './types.ts'
 
@@ -133,6 +134,8 @@ export class BasicCompactionEngine extends CompactionEngine {
   private readonly warnedPressureConfigTargets = new Set<string>()
   private readonly overflowRetries = new WeakMap<Agent, number>()
   private readonly overflowAgents = new WeakMap<Session, Agent>()
+  /** Last capacity-priced spec per agent, so summarization spends its cap. */
+  private readonly resolvedSpecs = new WeakMap<Agent, ResolvedCompactSpec>()
 
   constructor(ctx: Context, config: BasicCompactionConfig = {}) {
     super(ctx)
@@ -242,18 +245,21 @@ export class BasicCompactionEngine extends CompactionEngine {
    * @param input - replayed conversation prefix (system, tools, and leading messages) to condense.
    * @param agent - supplies routed-model history, fallback model, and session id.
    * @param signal - optional cancellation forwarded to the adapter.
+   * @param spec - the routed window's resolved spec when a pressure path priced
+   *   one; its cap is the single derivation of this call's output budget.
    * @returns safe text summary blocks and the exact auxiliary call envelope and output.
    */
   protected async summarize(
     input: SummarizationInput,
     agent: Agent,
     signal?: AbortSignal,
+    spec?: ResolvedCompactSpec,
   ): Promise<SummaryResult> {
     const target = conversationTarget(agent)
     const config = target === undefined
       ? this.config
       : resolveTargetPolicy(this.config, target)
-    return summarizeWithLlm(this.ctx, config, input, agent, signal)
+    return summarizeWithLlm(this.ctx, config, input, agent, signal, spec?.maxTokens)
   }
 
   /**
@@ -316,6 +322,7 @@ export class BasicCompactionEngine extends CompactionEngine {
       info.context.contextWindow,
       reservedCompletionTokens(agent, info.defaultMaxTokens),
     )
+    this.resolvedSpecs.set(agent, spec)
     if (measurement.totalTokens < spec.thresholdTokens) return null
 
     // Once pressure qualifies, land the model-free pass before choosing a
@@ -438,7 +445,12 @@ export class BasicCompactionEngine extends CompactionEngine {
   private regionDependencies(): Parameters<typeof compactSurfaceRegion>[0] {
     return {
       meter: this.ctx.tokenMeter,
-      summarize: (input, owner, abort) => this.summarize(input, owner, abort),
+      summarize: (input, owner, abort) => this.summarize(
+        input,
+        owner,
+        abort,
+        this.resolvedSpecs.get(owner),
+      ),
       recover: (error, agent, sourceEventSeqs, signal) => this.ctx.waterfall('compaction/summary-error', {
         session: agent.session,
         sourceEventSeqs,

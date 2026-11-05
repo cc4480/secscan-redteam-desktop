@@ -45,7 +45,11 @@ harness chunk vocabulary, with usage reported ahead of the finish.
 
 Token and context effects: the resolved model carries the operator's own
 context length from the llama settings as its context window, and the
-endpoint enforces it. Usage counts are the endpoint's own
+endpoint enforces it — a request llama-server rejects for outgrowing that
+window is classified as the harness's canonical context-window failure
+rather than a raw HTTP 400, so the turn recovers by compaction and the
+error names raising the Context length in Local Models as the operator's
+fix. Usage counts are the endpoint's own
 (`prompt_tokens` / `completion_tokens`), split into the harness's
 uncached-input / output fields.
 

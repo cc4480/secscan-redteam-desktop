@@ -312,11 +312,9 @@ describe('compact configuration and defaults', () => {
 
     expect(resolved).toEqual({
       thresholdRatio: 0.8,
-      headroomTokens: 65_536,
       retainRatio: 0.16,
       summarizationProvider: '',
       summarizationModel: '',
-      maxTokens: 65_536,
       compactionRetries: 1,
       maxOverflowRetries: 1,
       modelPolicies: [],
@@ -325,13 +323,14 @@ describe('compact configuration and defaults', () => {
     expect(Object.isFrozen(resolved)).toBe(true)
   })
 
-  it('defaults summary generation to headroom and preserves explicit caps', () => {
+  it('keeps configured non-prompt budgets and leaves unconfigured ones to the routed window', () => {
     const target = { provider: MODEL, model: MODEL }
-    expect(resolveConfig({ headroomTokens: 16_384 }).maxTokens).toBe(16_384)
+    expect(resolveConfig({ headroomTokens: 16_384 }).headroomTokens).toBe(16_384)
+    expect(resolveConfig({ headroomTokens: 16_384 }).maxTokens).toBeUndefined()
     expect(resolveConfig({ headroomTokens: 0, maxTokens: 32 }).maxTokens).toBe(32)
     expect(resolveTargetPolicy(resolveConfig({
       modelPolicies: [{ ...target, headroomTokens: 16_384 }],
-    }), target).maxTokens).toBe(16_384)
+    }), target).headroomTokens).toBe(16_384)
     expect(resolveTargetPolicy(resolveConfig({
       maxTokens: 512,
       modelPolicies: [{ ...target, headroomTokens: 0 }],
@@ -342,11 +341,15 @@ describe('compact configuration and defaults', () => {
     }), target).maxTokens).toBe(32)
   })
 
-  it('rejects a zero summary cap inherited from headroom', () => {
-    expect(() => resolveConfig({ headroomTokens: 0 })).toThrow(/maxTokens.*positive integer/)
-    expect(() => resolveConfig({
-      modelPolicies: [{ provider: MODEL, model: MODEL, headroomTokens: 0 }],
-    })).toThrow(/modelPolicies\[0\].maxTokens.*positive integer/)
+  it('derives a positive summary cap for zero configured headroom', () => {
+    const target = { provider: MODEL, model: MODEL }
+    const zeroHeadroom = resolveTargetPolicy(resolveConfig({ headroomTokens: 0 }), target)
+
+    expect(resolveCompactSpec(zeroHeadroom, 32_768, 0)).toMatchObject({
+      thresholdTokens: 26_214,
+      maxTokens: 4_096,
+    })
+    expect(() => resolveConfig({ maxTokens: 0 })).toThrow(/maxTokens.*positive integer/)
   })
 
   it('resolves threshold and retention overrides independently', () => {
@@ -440,6 +443,20 @@ describe('compact configuration and defaults', () => {
       contextWindow: window,
       thresholdTokens: threshold,
       retainTokens: retained,
+    })
+  })
+
+  it.each([
+    [32_768, 0, 26_214, 5_242, 4_096],
+    [1_000_000, 0, 800_000, 160_000, 65_536],
+  ])('scales default budgets to a %i-token window', (window, output, threshold, retained, cap) => {
+    const policy = resolveTargetPolicy(resolveConfig({}), { provider: MODEL, model: MODEL })
+
+    expect(resolveCompactSpec(policy, window, output)).toMatchObject({
+      contextWindow: window,
+      thresholdTokens: threshold,
+      retainTokens: retained,
+      maxTokens: cap,
     })
   })
 
@@ -589,6 +606,18 @@ describe('pressure measurement and retention', () => {
     await expect(compact.compactIfNeeded(agent(session, MODEL), 'pressure', SIGNAL))
       .resolves.toBeNull()
     expect(compact.calls).toHaveLength(0)
+  })
+
+  it('compacts a small window with the capacity-scaled default headroom', async () => {
+    const ctx = createContext(1_000)
+    const compact = new TestCompactionEngine(ctx, { auto: false })
+    const session = conversation(8)
+    // The default headroom is an eighth of this window, so the trigger is the
+    // 80% window fraction rather than more headroom than the window holds.
+    expect(ctx.tokenMeter.measure(session).totalTokens).toBeGreaterThan(800)
+
+    await expect(compactIfNeeded(compact, session)).resolves.not.toBeNull()
+    expect(compact.calls).toHaveLength(1)
   })
 
   it('meters an unlisted model when its provider adapter supplies context metadata', async () => {
@@ -1329,8 +1358,18 @@ class ScriptedAdapter extends LlmAdapter {
   constructor(
     private readonly blocks: readonly ContentBlock[],
     private readonly finish: (StreamChunk & { type: 'finish' })['reason'] = { kind: 'stop' },
+    private readonly contextWindow?: number,
   ) {
     super()
+  }
+
+  override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+    return Promise.resolve({
+      provider,
+      id: model,
+      name: model,
+      ...this.contextWindow === undefined ? {} : { context: { contextWindow: this.contextWindow } },
+    })
   }
 
   override async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
@@ -1372,12 +1411,13 @@ async function summarizerHarness(
   finish?: (StreamChunk & { type: 'finish' })['reason'],
   model = MODEL,
   config: BasicCompactionConfig = { auto: false },
+  contextWindow?: number,
 ): Promise<{ ctx: Context; adapter: ScriptedAdapter; compact: ExposedCompactionEngine }> {
   const ctx = new Context()
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionProjectionRegistry)
   void new TokenMeter(ctx)
-  const adapter = new ScriptedAdapter(blocks, finish)
+  const adapter = new ScriptedAdapter(blocks, finish, contextWindow)
   ctx.llm.registerAdapter([model], adapter)
   const compact = new ExposedCompactionEngine(ctx, config)
   return { ctx, adapter, compact }
@@ -1457,6 +1497,39 @@ describe('default one-shot summarizer', () => {
     })
     const instruction = adapter.lastOptions?.messages.at(-1)?.content[0]
     expect(instruction?.type === 'text' ? instruction.text : '').toContain('## Primary Request and Intent')
+  })
+
+  it('spends the resolved cap on the summary request of a pressure compaction', async () => {
+    const { ctx, adapter, compact } = await summarizerHarness(
+      [{ type: 'text', text: 'summary' }],
+      undefined,
+      MODEL,
+      { auto: false },
+      32_768,
+    )
+    const session = conversation(8, 'fixture '.repeat(2_000))
+    // Premise: this history already crosses the small window's resolved trigger.
+    expect(ctx.tokenMeter.measure(session).totalTokens).toBeGreaterThan(26_214)
+
+    await expect(compact.compactIfNeeded(agent(session, MODEL), 'pressure', SIGNAL))
+      .resolves.not.toBeNull()
+
+    // One derivation: the spec's cap for this 32,768-token window, not a second guess.
+    expect(adapter.lastOptions?.maxTokens).toBe(4_096)
+  })
+
+  it('keeps the fixed cap when no capacity was priced for the route', async () => {
+    const { adapter, compact } = await summarizerHarness([{ type: 'text', text: 'summary' }])
+    const session = conversation(3)
+    session.append('request/header', {
+      header: { config: { provider: MODEL, model: MODEL } },
+      reason: 'resume',
+    })
+    const nodes = [...session.surface.nodes]
+
+    await compact.compactRegion(nodes[0]!, nodes[1]!, agent(session, MODEL), SIGNAL)
+
+    expect(adapter.lastOptions?.maxTokens).toBe(65_536)
   })
 
   it('replays the conversation prefix and appends the instruction as the final message', async () => {

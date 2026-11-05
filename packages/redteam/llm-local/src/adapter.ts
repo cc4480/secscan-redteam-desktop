@@ -18,6 +18,8 @@
 import { existsSync } from 'node:fs'
 import {
   attributionHeaders,
+  CONTEXT_WINDOW_EXCEEDED_CODE,
+  isContextWindowExceededError,
   LlmAdapter,
   LlmError,
   ToolCallId,
@@ -358,6 +360,18 @@ export class LocalLlamaAdapter extends LlmAdapter {
 
     if (!response.ok) {
       const detail = (await response.text().catch(() => '')).slice(0, 500)
+      // llama-server refuses an oversized prompt before it streams anything, so
+      // this response is the only place a local context overflow can enter the
+      // harness. Classifying it as the canonical overflow failure lets compaction
+      // recover the turn instead of aborting it on a raw HTTP status.
+      if (isContextWindowExceededError(detail)) {
+        throw new LlmError(
+          `The local model's context window is full${detail === '' ? '' : `: ${detail}`} `
+          + 'Raise the Context length in Local Models and restart the server, or start a new session.',
+          CONTEXT_WINDOW_EXCEEDED_CODE,
+          { status: response.status },
+        )
+      }
       throw new LlmError(
         `The local model endpoint answered HTTP ${response.status}${detail === '' ? '' : `: ${detail}`}`,
         'LOCAL_REQUEST_FAILED',
