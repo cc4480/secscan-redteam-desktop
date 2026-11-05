@@ -1,0 +1,113 @@
+# Tool index (Layer-1 stubs)
+
+Rule: this index is ALL that rides in the prompt. A tool's full schema is
+loaded only at the moment an agent calls it (Layer-2), then dropped.
+
+- `active_window` — Foreground window: hwnd, title, pid, process.
+- `answer_elicitation` — Answer a pending elicitation with one of its options.
+- `arbitrate_tool` — Rank candidate tool sequences by risk.
+- `batch` — Run up to 20 tool calls in one roundtrip.
+- `browser` — Edge tab as one tool: operation snapshot | navigate | click |     fill | eval, args are the member tool's args.
+- `browser_click` — Click the element containing text in the Edge tab.
+- `browser_eval` — Run JavaScript in the Edge tab.
+- `browser_fill` — Fill the field matching label in the Edge tab.
+- `browser_navigate` — Navigate the Edge tab to a URL.
+- `browser_snapshot` — List interactive elements of the live Edge tab (no approval).
+- `cdp` — Chrome CDP session as one tool: operation launch | connect |     targets | navigate | snapshot | click | type | evaluate | readback |    ....
+- `cdp_click` — Click an element by CSS selector or visible text (never     coordinates); returns the landing readback.
+- `cdp_close` — End the CDP session: a launched browser is closed gracefully via     Browser.close; an attached browser is only detached.
+- `cdp_connect` — Attach the CDP session to a Chrome already serving a debug port     (no process ownership).
+- `cdp_evaluate` — Run JavaScript in the CDP session tab.
+- `cdp_launch` — Launch Chrome on the prepared presentation profile with a CDP     debug port and attach the session.
+- `cdp_navigate` — Navigate the CDP session tab to a URL and verify the landing     (url + title readback; hard timeout, never a silent hang).
+- `cdp_readback` — Read back the session page's url, title, ready_state and active     element — verify a landing without acting (no approval).
+- `cdp_snapshot` — Compact index of the page's interactive elements with stable CSS     selectors — the addressing/verification primitive (no approval).
+- `cdp_targets` — List the session browser's page targets; switches the active     target when target_id is given (no approval).
+- `cdp_type` — Type into a field addressed by selector or label via CDP     Input.insertText; success requires value readback equality.
+- `clipboard` — Clipboard as one tool: operation get | set, args are the member     tool's args.
+- `clipboard_get` — Read text from the Windows clipboard (no approval).
+- `clipboard_set` — Put text on the Windows clipboard.
+- `close_window` — Gracefully close a window (like clicking X).
+- `complete_arg` — Complete an argument value from live state: window titles or     profile-relative paths.
+- `copy_file` — Copy a file (metadata preserved).
+- `create_dir` — Create a directory (parents too).
+- `dashboard` — Bridge status summary for the MCP Apps widget (same data as     text for clients without Apps).
+- `delete_file` — Permanently delete a file.
+- `desktop_state` — One call: windows, focused window, its UI elements, screenshot.
+- `dns_query` — Resolve DNS records (A AAAA CNAME MX NS TXT DNSKEY SOA).
+- `doctor` — Bridge health check: Python, port, Defender, Startup, tunnel, disk.
+- `edit_file` — Replace old_text with new_text.
+- `elicit_input` — Ask a structured question with a pick-list instead of failing     or guessing.
+- `exec` — Shell execution as one tool: operation shell | pwsh | background |     status | cancel, args are the member tool's args.
+- `exec_background` — Start a long-running shell command in the background.
+- `exec_cancel` — Kill a running background job started with exec_background.
+- `exec_status` — Check on a background job started with exec_background.
+- `file` — Files as one tool: operation read | read_range | write | edit |     delete | list | copy | move | create_dir | info | search |     search....
+- `file_info` — Size and timestamps for a file or directory (no approval).
+- `focus_window` — Bring a window to the foreground.
+- `hot_reload` — Hot reload: status | enable | disable | trigger.
+- `hotkey` — Press a key combo: 'enter', 'esc', 'tab', 'ctrl+c', 'alt+f4', 'win+r'.
+- `http_headers` — GET a URL, return status + response headers.
+- `idle_seconds` — Seconds since last keyboard/mouse input.
+- `job_cancel` — Cancel a queued or running job; a running job's process tree is     fenced (only that job's processes are killed).
+- `job_result` — Job result (when terminal) from the journal / blob store.
+- `job_status` — Job state + elapsed time + progress from the journal.
+- `keyboard` — Keyboard as one tool: operation type | hotkey | paste, args are     the member tool's args.
+- `kill_process` — Terminate a process by PID.
+- `list_dir` — List a directory.
+- `list_elicitations` — Pending/answered/all elicitations, newest first.
+- `list_processes` — Running processes (pid + exe).
+- `list_watches` — Registered watches with last fingerprints.
+- `list_windows` — List visible windows: handle, pid, title.
+- `macro_delete` — Delete a recorded macro.
+- `macro_list` — Recorded macros, sorted by name, with their steps.
+- `macro_record` — Record a named macro: 1-20 tool calls replayed as one call with     macro_replay.
+- `macro_replay` — Replay a recorded macro as one call through the batch layer.
+- `maximize_window` — Maximize a window.
+- `memory_recall` — Search the on-PC memory archive (transcripts + subjects).
+- `minimize_window` — Minimize a window.
+- `mouse` — Mouse as one tool: operation move | click | scroll, args are the     member tool's args.
+- `mouse_click` — Click at screen coordinates.
+- `mouse_move` — Move the cursor to screen coordinates.
+- `mouse_scroll` — Scroll the wheel under the cursor.
+- `move_file` — Move/rename a file.
+- `notify` — Windows tray balloon notification.
+- `paste_text` — Paste text into the focused window (reliable for long text).
+- `poll_changes` — Change journal entries after a sequence cursor.
+- `power` — lock | sleep | restart | shutdown.
+- `process` — Processes as one tool: operation list | kill, args are the member     tool's args.
+- `query_events` — Search the event-sourced operation log: filter by tool name, event     type, session, and time window (5m/1h/24h/7d/30d or ISO).
+- `read_file` — Read a UTF-8 text file (<=1MB).
+- `read_file_range` — Read 1-indexed line range (end_line=0 → start+50).
+- `record_audio` — Record microphone audio to a WAV clip (1-30s).
+- `replay_session` — Full causal transcript of one operator session — verify reported     operations against the log.
+- `screenshot` — Capture the primary monitor as PNG (base64).
+- `search_filenames` — Find files by name glob under a dir.
+- `search_files` — Content search (regex) under a dir.
+- `search_tools` — Find tools by keyword over names, docs, and groups — use this     instead of reading all tool schemas.
+- `server_reload` — Restart the bridge server via the supervisor (fresh code, same tunnel and tokens).
+- `set_volume` — Set master volume 0-100.
+- `shell_exec` — Run a command in cmd.exe.
+- `shell_pwsh` — Run a PowerShell script directly (no cmd.exe wrapping).
+- `speak` — Speak text aloud through the PC speakers.
+- `submit_job` — Submit a tool call as a background job; returns {job_id, state}     immediately.
+- `supervisor_status` — Supervisor health: running, child pid, restarts, heartbeat age.
+- `system_info` — OS, host, user, CPU/memory.
+- `task_checkpoint` — Append a signed checkpoint to a task.
+- `task_create` — Create a signed task record with a step plan.
+- `task_status` — Get a task's verified status, or list all tasks.
+- `tcp_check` — TCP connect check across ports (open/closed/filtered).
+- `tls_info` — TLS handshake: version, cipher, cert subject/issuer/expiry.
+- `tool_finder` — Find tools by keyword — plain-name alias for search_tools.
+- `type_text` — Type text into the focused window.
+- `uia` — UI Automation as one tool: operation find | click | set_text,     args are the member tool's args.
+- `uia_click` — Click a UI element by name via UI Automation.
+- `uia_find` — Find UI elements in a window via UI Automation (no screenshot).
+- `uia_set_text` — Set text of a UI element via UI Automation.
+- `unwatch_path` — Drop a watched file.
+- `wait_for` — Poll until target appears; found=false on timeout, never an error.
+- `watch_path` — Register a file to watch for changes.
+- `web_fetch` — Fetch a URL, return its readable text.
+- `web_search` — Search the web without an API key (DuckDuckGo/Bing scraping,     optional self-hosted SearXNG).
+- `window` — Windows as one tool: operation list | active | focus | close |     minimize | maximize, args are the member tool's args.
+- `write_file` — Create/overwrite a UTF-8 text file.
