@@ -27,6 +27,45 @@ const PROFILE_FILES = [
     'tool-index.md',
 ];
 /** Directory candidates for the authored profile, nearest first. */
+/** The single-file brief used when the routed window cannot host the full profile. */
+const TIGHT_PROFILE_FILE = 'tight.md';
+/**
+ * Windows at or below this size get the tight brief instead of the profile:
+ * a 4K-class local model fits ~520 prompt tokens plus a little history, where
+ * the full profile's 9,255 would leave nothing for the conversation.
+ */
+/**
+ * Tools a window that small can still afford. Everything else is dropped from
+ * the assembly: at 4K the prompt plus one schema is already most of the window,
+ * so only the engagement path and the two tools needed to inspect the result
+ * stay modelled.
+ */
+const TINY_TOOL_NAMES = [
+    'mcp__redteam__engagement_launch',
+    'mcp__redteam__engagement_status',
+    'mcp__redteam__engagement_report',
+    'read',
+    'bash',
+];
+/**
+ * Whether a routed window is small enough to get the tight brief and the tiny
+ * tool set.
+ * @param contextWindow - the routed window, when known.
+ * @returns true when the window is at or below the tight-profile ceiling.
+ */
+export function isTightWindow(contextWindow) {
+    return contextWindow !== undefined && contextWindow <= TIGHT_PROFILE_MAX_WINDOW;
+}
+/**
+ * The tool names the tight window keeps.
+ * @returns the allowlist the assembly filters against.
+ */
+export function tinyToolNames() {
+    return new Set(TINY_TOOL_NAMES);
+}
+const TIGHT_PROFILE_MAX_WINDOW = 8_192;
+/** Forces the tight brief regardless of window (`tight`); anything else auto-selects. */
+const PROFILE_MODE_ENV = 'SECSCAN_LOCAL_PROFILE';
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 /** Assembled text per resolved directory, so one session prices the reads once. */
 const assembled = new Map();
@@ -101,14 +140,38 @@ function readProfile(directory) {
     return text;
 }
 /**
- * The compact local prompt, or undefined when no complete profile is
- * installed — the caller then keeps the full deployment prompt rather than
- * sending a deployment with no operating rules at all.
- * @returns the profile text, or undefined when the profile is absent.
+ * Read one profile file, cached per path.
+ * @param path - absolute file path.
+ * @returns the trimmed file contents.
  */
-export function localProfileText() {
+function readFileCached(path) {
+    const cached = assembled.get(path);
+    if (cached !== undefined)
+        return cached;
+    const text = readFileSync(path, 'utf8').trim();
+    assembled.set(path, text);
+    return text;
+}
+/**
+ * The local prompt for one routed window: the tight brief when the window is
+ * small (or the operator forces it), otherwise the full profile. Undefined when
+ * no complete profile is installed — the caller then keeps the full deployment
+ * prompt rather than sending a deployment with no operating rules at all.
+ * @param contextWindow - the routed window, when the session recorded one.
+ * @returns the prompt text, or undefined when the profile is absent.
+ */
+export function localProfileText(contextWindow) {
     const directory = resolveLocalProfileDir();
-    return directory === undefined ? undefined : readProfile(directory);
+    if (directory === undefined)
+        return undefined;
+    const forced = process.env[PROFILE_MODE_ENV]?.trim().toLowerCase() === 'tight';
+    const tight = forced || isTightWindow(contextWindow);
+    if (tight) {
+        const path = join(directory, TIGHT_PROFILE_FILE);
+        if (existsSync(path))
+            return readFileCached(path);
+    }
+    return readProfile(directory);
 }
 /**
  * Tool names the shipped stub index lists, parsed from its rendered entries.

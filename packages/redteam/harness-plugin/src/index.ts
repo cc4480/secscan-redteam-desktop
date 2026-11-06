@@ -59,7 +59,7 @@ import type { AssembleContext } from '@deepseek-ai/dsh-system-prompt'
 import type { Context, PluginModule } from './harness-types.js'
 import { installAuthGate } from './auth-gate.js'
 import { REDTEAM_PROFILE } from './redteam-profile.js'
-import { deferredToolNames, isDeferredTool, isLocalAssembly, localProfileText } from './local-profile.js'
+import { deferredToolNames, isDeferredTool, isLocalAssembly, isTightWindow, localProfileText, tinyToolNames } from './local-profile.js'
 import { FleetBriefError, fleetBriefs } from './role-briefs.js'
 
 export const name = 'secscan-redteam'
@@ -644,8 +644,12 @@ export function apply(ctx: Context): void {
   // every other route keeps the full text. A local route with no profile
   // installed keeps the full doctrine too, so an unpacked profile degrades to
   // the old prompt rather than to a deployment with no operating rules.
-  const localProfile = (context: AssembleContext): string | undefined =>
-    isLocalAssembly(context) ? localProfileText() : undefined
+  // The routed window decides which brief rides: a 4K-class local model gets the
+  // tight one, anything roomier gets the full profile.
+  const localProfile = (context: AssembleContext): string | undefined => {
+    if (!isLocalAssembly(context)) return undefined
+    return localProfileText(context.agent?.session.requestContext()?.contextWindow)
+  }
 
   ctx.systemPrompt.section({
     name: 'secscan-redteam',
@@ -676,6 +680,13 @@ export function apply(ctx: Context): void {
   ctx.on('system-prompt/assemble', async (assembly, context, next) => {
     const resolved = await next()
     if (!isLocalAssembly(context)) return resolved
+    const window = context.agent?.session.requestContext()?.contextWindow
+    // A window that small cannot host a tool surface at all, so it keeps only
+    // the engagement path plus the two inspection tools.
+    if (isTightWindow(window)) {
+      const tiny = tinyToolNames()
+      return { ...resolved, tools: resolved.tools.filter(tool => tiny.has(tool.name)) }
+    }
     const deferred = deferredToolNames()
     if (deferred === undefined || deferred.size === 0) return resolved
     const kept = resolved.tools.filter(tool => !isDeferredTool(tool.name, deferred))

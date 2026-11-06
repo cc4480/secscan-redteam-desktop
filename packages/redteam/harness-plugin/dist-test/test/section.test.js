@@ -17,11 +17,34 @@ import { apply } from '../src/index.js';
 import { isDeferredTool } from '../src/local-profile.js';
 /** Assembly context for a non-local route: no agent, so no local profile. */
 const REMOTE_CONTEXT = {};
+/** Assembly context for a small local window (4K-class model). */
+const SMALL_LOCAL_CONTEXT = {
+    agent: {
+        options: { provider: 'local' },
+        session: {
+            requestHeader: () => ({ config: { provider: 'local' } }),
+            requestContext: () => ({ provider: 'local', model: 'qwen', contextWindow: 4_096 }),
+        },
+    },
+};
+/** Assembly context for a roomy local window. */
+const ROOMY_LOCAL_CONTEXT = {
+    agent: {
+        options: { provider: 'local' },
+        session: {
+            requestHeader: () => ({ config: { provider: 'local' } }),
+            requestContext: () => ({ provider: 'local', model: 'qwen', contextWindow: 32_768 }),
+        },
+    },
+};
 /** Assembly context whose routed request names the local provider. */
 const LOCAL_CONTEXT = {
     agent: {
         options: { provider: 'local' },
-        session: { requestHeader: () => ({ config: { provider: 'local' } }) },
+        session: {
+            requestHeader: () => ({ config: { provider: 'local' } }),
+            requestContext: () => ({ provider: 'local', model: 'qwen', contextWindow: 32_768 }),
+        },
     },
 };
 function captureApply(context = REMOTE_CONTEXT) {
@@ -224,6 +247,56 @@ describe('apply', () => {
         assert.equal(isDeferredTool('doctor', new Set(['doctor'])), true);
         assert.equal(isDeferredTool('mcp__redteam__doctor_jobs', new Set(['doctor'])), false);
         assert.equal(isDeferredTool('bash', new Set(['doctor'])), false);
+    });
+    it('gives a small local window the tight brief, and a roomy one the full profile', () => {
+        const small = captureApply(SMALL_LOCAL_CONTEXT);
+        const roomy = captureApply(ROOMY_LOCAL_CONTEXT);
+        const tightChars = small.sections[0].text.length;
+        const fullChars = roomy.sections[0].text.length;
+        assert.match(small.sections[0].text, /compact operating brief/);
+        assert.ok(tightChars < fullChars / 5, `tight brief (${tightChars}) must be far smaller than the profile (${fullChars})`);
+        // Under 2,000 tokens at the token meter's four-characters-per-token price.
+        assert.ok(Math.ceil(tightChars / 4) <= 2_000, 'tight brief stays under the 2,000-token ceiling');
+        // The hard rule survives the compression: scans are engagements, never service scans.
+        assert.match(small.sections[0].text, /mcp__redteam__engagement_launch/);
+        assert.match(small.sections[0].text, /never a SecScan or Seclayer\s+service scan/);
+        // Roomier local windows keep the full authored profile.
+        assert.match(roomy.sections[0].text, /AGENTS\.md|operating rules/i);
+    });
+    it('keeps only the engagement tools on a window too small for a tool surface', async () => {
+        const { listeners } = captureApply();
+        const assemble = listeners.get('system-prompt/assemble');
+        assert.ok(assemble !== undefined);
+        const withTools = (tools) => ({ sections: [], contexts: [], tools });
+        const schemas = [
+            { name: 'mcp__redteam__engagement_launch' },
+            { name: 'mcp__redteam__engagement_status' },
+            { name: 'mcp__redteam__engagement_report' },
+            { name: 'read' },
+            { name: 'bash' },
+            { name: 'mcp__alterego__doctor' },
+            { name: 'mcp__secscan__scan_url' },
+            { name: 'write' },
+        ];
+        const small = await assemble(withTools(schemas), SMALL_LOCAL_CONTEXT, async () => withTools(schemas));
+        assert.deepEqual(small.tools.map(tool => tool.name), [
+            'mcp__redteam__engagement_launch',
+            'mcp__redteam__engagement_status',
+            'mcp__redteam__engagement_report',
+            'read',
+            'bash',
+        ]);
+        // A roomy local window keeps everything except the deferred Layer-1 set.
+        const roomy = await assemble(withTools(schemas), ROOMY_LOCAL_CONTEXT, async () => withTools(schemas));
+        assert.deepEqual(roomy.tools.map(tool => tool.name), [
+            'mcp__redteam__engagement_launch',
+            'mcp__redteam__engagement_status',
+            'mcp__redteam__engagement_report',
+            'read',
+            'bash',
+            'mcp__secscan__scan_url',
+            'write',
+        ]);
     });
     it('no longer teaches the service scan as the recon baseline', () => {
         const { sections } = captureApply();
