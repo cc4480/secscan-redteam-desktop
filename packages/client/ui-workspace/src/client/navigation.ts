@@ -317,20 +317,22 @@ class UiWorkspaceService extends Service implements UiWorkspace {
 
   private async restoreSelection(workspaces: WorkspaceSnapshot, sessions: SessionListState): Promise<void> {
     const saved = this.selection.getSnapshot()
-    if (saved.subagentAddress !== undefined) {
-      this.replaceMain(saved.subagentAddress, this.lifetime.signal, 'preserve')
-      return
-    }
     const summary = saved.sessionId === undefined ? undefined : sessions.byId[saved.sessionId]
     const workspace = summary === undefined ? undefined
       : workspaces.items.find(item => item.sessionIds.includes(summary.id))
-    if (summary !== undefined && (!summary.blank || workspace === undefined)) {
+    // Startup lands on the home start state, not inside the previous
+    // Session: only a saved blank — the Session the home is staged on —
+    // is selected directly. A saved Session with history, grouped or
+    // not, and a saved subagent address stay unselected here; the
+    // Session remains in its Workspace list and on the home's Continue
+    // panel, and startup stages the home on a blank in its Workspace.
+    if (summary !== undefined && summary.blank && workspace === undefined) {
       this.replaceMain(summary.id, this.lifetime.signal, 'preserve')
       return
     }
     const navigation = AbortSignal.any([this.ctx.layout.beginNavigation(), this.lifetime.signal])
     let sessionId: SessionId | undefined
-    if (summary !== undefined && workspace !== undefined && summary.cwd === workspace.path
+    if (summary !== undefined && summary.blank && workspace !== undefined && summary.cwd === workspace.path
       && !workspaces.archivedSessionIds.includes(summary.id)) {
       sessionId = await this.reuseBlank(workspace.workspaceId, summary.id)
     }
