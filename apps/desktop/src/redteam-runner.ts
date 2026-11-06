@@ -33,8 +33,8 @@ export const REDTEAM_RUNNER_LOOPBACK = '127.0.0.1'
 /** Server name the console reports in its MCP `initialize` reply, which is what readiness means. */
 export const REDTEAM_RUNNER_SERVER_NAME = 'secscan-redteam-runner'
 
-/** Deadline for the console to answer its first MCP request. */
-export const REDTEAM_RUNNER_READY_TIMEOUT_MS = 20_000
+/** Deadline for the console to answer its first MCP request; generous for cold starts on a loaded box. */
+export const REDTEAM_RUNNER_READY_TIMEOUT_MS = 120_000
 
 /** Deadline for the child to exit after each termination signal. */
 export const REDTEAM_RUNNER_EXIT_TIMEOUT_MS = 5_000
