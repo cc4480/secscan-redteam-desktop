@@ -35,7 +35,7 @@ import {
 import type { LlamaServerState } from './llama-api.ts'
 import { LlamaServer, type LlamaServerLocation, type LlamaServerOptions } from './llama-server.ts'
 import { writeServerState } from './llama-server-state.ts'
-import { effectiveFleetProvider, writeFleetProviderRecord } from '@secscan/redteam-llm-router'
+import { effectiveFleetProvider, readSavedModelSelectionProvider, writeFleetProviderRecord } from '@secscan/redteam-llm-router'
 import { openLlamaWindow } from './llama-window.ts'
 
 /** Path suffix of the manager renderer document; only that document owns the bridge. */
@@ -205,7 +205,11 @@ export function installLlamaShell(options: LlamaShellOptions): LlamaShell {
     try {
       writeFleetProviderRecord(
         environment,
-        effectiveFleetProvider(originals.get(PROVIDER_ENVIRONMENT_NAME), serving),
+        effectiveFleetProvider(
+          originals.get(PROVIDER_ENVIRONMENT_NAME),
+          serving,
+          readSavedModelSelectionProvider(environment),
+        ),
       )
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)

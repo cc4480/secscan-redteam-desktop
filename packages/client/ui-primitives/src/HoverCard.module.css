@@ -22,6 +22,12 @@
   box-shadow: var(--dsw-shadow-lv3);
 }
 
+/* Dark theme only: the figma surface above is the flat gray removed
+ * app-wide; dark windows wear the maroon-black family gradient. */
+:global(body[data-ds-dark-theme]) .card {
+  --dsw-hovercard-bg: linear-gradient(180deg, rgb(66, 37, 46) 0%, rgb(54, 31, 39) 30%, rgb(45, 28, 34) 55%, rgb(28, 15, 21) 82%, rgb(20, 8, 16) 100%);
+}
+
 .copyable {
   cursor: pointer;
 }

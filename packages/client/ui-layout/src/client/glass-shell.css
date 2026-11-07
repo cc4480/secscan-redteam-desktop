@@ -68,6 +68,12 @@ body {
      motion collapse below zeroes the effect without touching rules. */
   --tilt-x: 1.1deg;
   --tilt-y: -1.1deg;
+  /* Stand-up tilt for small interactive surfaces (nav rows, chips,
+     cards, guide rows): the shell tracker writes --lx/--ly (-1..1) on
+     the hovered [data-tilt] element and the consuming hover rules
+     multiply by this angle. Zeroed by the reduced-motion collapse
+     below, like the tilt pair above. */
+  --stand-tilt: 1.5deg;
 
   /* Brand tokens: the SecScan RedTeam mark's own colors, verbatim from
      apps/desktop/resources/icon.svg (diamond red, crosshair blue, the
@@ -99,10 +105,24 @@ body[data-ds-dark-theme] {
   --glass-blur-float: blur(14px) saturate(140%);
   --glass-solid: #0d0d10;
   /* The solid card plane inside a glass panel: one lightness step above
-     the panel's composited tone, no backdrop filter of its own. */
-  --glass-card-solid: #232329;
+     the panel's composited tone, no backdrop filter of its own. Maroon-
+     black, not neutral gray (Carlos, 2026-11-07): the composer's card,
+     the session composer seat, TodoPanel, QueueDock and the shared
+     Glass primitive all ride this one token, so the whole app's solid
+     plane wears the panels' family. */
+  --glass-card-solid: #2d1c22;
   --glass-top-light: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02) 42%, rgba(255, 255, 255, 0) 72%);
   --glass-hero-glow: radial-gradient(closest-side, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0));
+  /* Living sheen (pointer-tracked light; AppFrame's SheenTracker writes
+     --px/--py on each [data-sheen-panel] occupant): the pool's colour
+     stops. The wide pool is a warm white core falling into the brand
+     red; the hot stop is mixed in by --sheen-hot (registered below, so
+     a panel's hover boost transitions instead of flipping). The module
+     sheets write the gradients; the colours live here so forced colors
+     can zero them in one place. */
+  --sheen-pool-core: rgba(255, 243, 228, 0.26);
+  --sheen-pool-halo: rgba(207, 43, 77, 0.10);
+  --sheen-hot-core: rgba(255, 246, 232, 0.30);
   /* Specular rim: the top edge catches roughly twice the light of the
      sides, the bottom bounces a step less; equal edges read as an
      outline, not as glass. The last layer is the pane's inner glow. */
@@ -119,14 +139,24 @@ body[data-ds-dark-theme] {
     inset -1px 0 1px rgba(255, 255, 255, 0.2),
     inset 0 0 24px rgba(255, 255, 255, 0.04);
   --shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
-  --shadow-lift: 0 22px 48px rgba(0, 0, 0, 0.55);
+  --shadow-lift: 0 28px 60px rgba(0, 0, 0, 0.62);
   /* Layered elevation tiers (contact / mid / ambient falloff): one heavy
      shadow cannot be both crisp at the contact edge and soft at range. */
-  --shadow-panel: 0 4px 8px rgba(0, 0, 0, 0.4), 0 12px 24px rgba(0, 0, 0, 0.35), 0 24px 48px rgba(0, 0, 0, 0.22);
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
-  --shadow-float: 0 8px 16px rgba(0, 0, 0, 0.45), 0 20px 40px rgba(0, 0, 0, 0.4), 0 40px 80px rgba(0, 0, 0, 0.28);
-  --shadow-tile: 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 10px rgba(0, 0, 0, 0.28);
+  --shadow-panel: 0 6px 12px rgba(0, 0, 0, 0.5), 0 18px 36px rgba(0, 0, 0, 0.46), 0 44px 88px rgba(0, 0, 0, 0.38);
+  --shadow-card: 0 2px 4px rgba(0, 0, 0, 0.42), 0 8px 18px rgba(0, 0, 0, 0.32);
+  --shadow-float: 0 10px 20px rgba(0, 0, 0, 0.52), 0 30px 60px rgba(0, 0, 0, 0.48), 0 64px 128px rgba(0, 0, 0, 0.38);
+  --shadow-tile: 0 2px 4px rgba(0, 0, 0, 0.42), 0 8px 18px rgba(0, 0, 0, 0.34);
   --shadow-well: inset 0 2px 4px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(0, 0, 0, 0.35);
+}
+
+/* The sheen hover boost is a registered custom property so the panel
+   rules can transition it (an unregistered custom property flips
+   discretely). Inherits: false — a panel's boost is its own hover
+   state, never inherited by a nested panel. */
+@property --sheen-hot {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
 }
 
 /* Reduced motion by construction: the token collapse lands every animated
@@ -146,6 +176,7 @@ body[data-ds-dark-theme] {
     --lift: 0px;
     --tilt-x: 0deg;
     --tilt-y: 0deg;
+    --stand-tilt: 0deg;
   }
 }
 
@@ -162,9 +193,9 @@ body[data-ds-dark-theme] {
   }
 
   body[data-ds-dark-theme] {
-    --glass: rgba(24, 24, 28, 0.97);
-    --glass-hi: rgba(24, 24, 28, 0.98);
-    --glass-strong: rgba(24, 24, 28, 0.99);
+    --glass: rgba(29, 17, 23, 0.97);
+    --glass-hi: rgba(29, 17, 23, 0.98);
+    --glass-strong: rgba(29, 17, 23, 0.99);
     --glass-blur: none;
     --glass-blur-float: none;
   }
@@ -184,9 +215,9 @@ body[data-ds-dark-theme] {
   }
 
   body[data-ds-dark-theme] {
-    --glass: #111114;
-    --glass-hi: #17171a;
-    --glass-strong: #1e1e22;
+    --glass: #14090f;
+    --glass-hi: #1c0f15;
+    --glass-strong: #2d1c22;
     --glass-blur: none;
     --glass-blur-float: none;
   }
@@ -210,6 +241,9 @@ body[data-ds-dark-theme] {
     --glass-blur-float: none;
     --glass-top-light: none;
     --glass-hero-glow: none;
+    --sheen-pool-core: transparent;
+    --sheen-pool-halo: transparent;
+    --sheen-hot-core: transparent;
     --shadow: none;
     --shadow-lift: none;
     --shadow-panel: none;
@@ -259,5 +293,24 @@ body {
 @media (forced-colors: active) {
   body {
     background-image: none;
+  }
+}
+
+/* The living sheen's thread-plane layer is fixed-positioned and keys
+   off the panel's backdrop-filter establishing its containing block;
+   where the blur chain is off (reduced transparency, no-filter
+   engines) that anchor is gone, so the decorative pools drop out
+   entirely instead of escaping their panels. Same for the absolute
+   pools: the glass is flattened there, and flattened glass carries
+   no travelling light. */
+@media (prefers-reduced-transparency: reduce) {
+  [data-sheen-panel]::after {
+    display: none;
+  }
+}
+
+@supports not (backdrop-filter: blur(14px)) {
+  [data-sheen-panel]::after {
+    display: none;
   }
 }

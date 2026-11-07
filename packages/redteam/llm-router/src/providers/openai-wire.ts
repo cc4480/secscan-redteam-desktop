@@ -137,6 +137,12 @@ export const RESPONSE_FORMAT_SUPPORT: Record<string, Record<ResponseFormat['type
   deepseek: { json_object: 'send', json_schema: 'refuse', regex: 'refuse' },
   qwen: { json_object: 'send-unverified', json_schema: 'degrade', regex: 'refuse' },
   local: { json_object: 'send', json_schema: 'send', regex: 'refuse' },
+  // OpenAI's Chat Completions carries both JSON modes natively (docs);
+  // 'send' flips to live-verified only on a keyed call, like every row.
+  openai: { json_object: 'send-unverified', json_schema: 'send-unverified', regex: 'refuse' },
+  xai: { json_object: 'send-unverified', json_schema: 'degrade', regex: 'refuse' },
+  zai: { json_object: 'send-unverified', json_schema: 'degrade', regex: 'refuse' },
+  gemini: { json_object: 'send-unverified', json_schema: 'degrade', regex: 'refuse' },
 }
 
 const GENERIC_OPENAI_SUPPORT: Record<ResponseFormat['type'], ResponseFormatSupport> = {

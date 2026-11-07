@@ -529,13 +529,14 @@ button.crumb:hover {
 .heroWorkspaceRow {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 2px;
   min-width: 0;
   margin-top: 4px;
-  /* figma drew px 8; left nudged +12 so the chip's folder glyph lines up
-     closer to the card's inner controls below; right keeps the trailing
-     preset seat off the card edge. */
-  padding: 0 16px 0 20px;
+  /* Operator order: the workspace chip + mode row centers on the panel
+     midline with the rest of the hero block (it was left-anchored so the
+     chip's folder glyph lined up with the card's inner controls). */
+  padding: 0 16px;
 }
 
 /* Hero: the composer sits inside the session scroll body; center there so
@@ -653,6 +654,13 @@ button.crumb:hover {
   grid-template-columns: minmax(0, 1fr) 304px;
   gap: 16px;
   align-content: start;
+  /* Rows size to their content, never to the scroll body's height: the
+     guide panels carry overflow: hidden, so their automatic minimum
+     size is 0 and plain auto rows shrink-wrap to the body instead of
+     the panels — clipping everything under each panel's header and
+     leaving the sections as dead bars. Max-content rows give every
+     panel its full height; the body scrolls past them as designed. */
+  grid-auto-rows: max-content;
   width: 100%;
   max-width: 1560px;
   margin: 0 auto;
@@ -662,6 +670,32 @@ button.crumb:hover {
   .root[data-phase='hero'] .scrollBodyHome {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* Home start state: the header reserves a band above the panels, but on
+   this page it carries no title or tabs — its only visible occupant is
+   the corner seat (the right panel's expand toggle) — so the band reads
+   as dead space and the home panels start a header's height below the
+   sidebar panel. The header leaves the flow and overlays the panels'
+   top edge: the hero panel and the side panel start at the root's top
+   line, level with the sidebar panel, and the corner toggle lands on
+   the side panel's top-right corner, the same seat the sidebar's own
+   toggle holds on its panel. The header keeps its box, stacking, and
+   clickable controls; the active phase keeps its in-flow header. */
+.root[data-phase='hero'] .header {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+}
+
+/* The hero seat shares the panels' bottom line: stretched to the
+   scrollport's published height (the seat's own ResizeObserver,
+   ConversationContent), so its bottom edge lands level with the
+   sidebar panel's and the side panel's instead of ending wherever the
+   hero content ends. Taller content still grows the seat. */
+.root[data-phase='hero'] .scrollBodyHome .composerSeat {
+  min-height: var(--dsh-conversation-viewport-height, 0px);
 }
 
 /* Light theme: the hero panel is a bordered surface on the base field. */
@@ -692,3 +726,59 @@ button.crumb:hover {
   border-radius: 18px;
   box-shadow: var(--glass-rim), var(--shadow-panel);
 }
+
+/* Living sheen + stand-up (dark): the shell tracker (AppFrame) writes
+   --px/--py on each painted plane as the pointer moves; the pools are
+   plain gradients — no blur, no new filtered surfaces. On hover the
+   plane stands: the house lift, the shadow stepping from the panel
+   tier to the lift tier, and --sheen-hot mixing the tight hot pool in
+   at the pointer (registered in glass-shell.css, so the boost
+   transitions instead of flipping). The hero seat's and the thread
+   plane's layers are fixed: each plane's own backdrop-filter makes it
+   the containing block, so the light stays glued to the glass while
+   the transcript scrolls under it. */
+:global([data-ds-dark-theme]) .root:not([data-phase='active']):not([data-phase='hero']),
+:global([data-ds-dark-theme]) .root[data-phase='hero'] .composerSeat,
+:global([data-ds-dark-theme]) .root[data-phase='active'] .header,
+:global([data-ds-dark-theme]) .root[data-phase='active'] .scrollBody {
+  transition:
+    transform var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    --sheen-hot var(--dur-base) var(--ease-out);
+}
+
+:global([data-ds-dark-theme]) .root:not([data-phase='active']):not([data-phase='hero'])::after,
+:global([data-ds-dark-theme]) .root[data-phase='active'] .header::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(320px circle at var(--px, -999px) var(--py, -999px), color-mix(in srgb, var(--sheen-hot-core) calc(var(--sheen-hot, 0) * 100%), transparent), transparent 70%),
+    radial-gradient(760px circle at var(--px, -999px) var(--py, -999px), var(--sheen-pool-core), var(--sheen-pool-halo) 48%, transparent 72%);
+}
+
+:global([data-ds-dark-theme]) .root[data-phase='hero'] .composerSeat::after,
+:global([data-ds-dark-theme]) .root[data-phase='active'] .scrollBody::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(320px circle at var(--px, -999px) var(--py, -999px), color-mix(in srgb, var(--sheen-hot-core) calc(var(--sheen-hot, 0) * 100%), transparent), transparent 70%),
+    radial-gradient(760px circle at var(--px, -999px) var(--py, -999px), var(--sheen-pool-core), var(--sheen-pool-halo) 48%, transparent 72%);
+}
+
+:global([data-ds-dark-theme]) .root:not([data-phase='active']):not([data-phase='hero']):hover,
+:global([data-ds-dark-theme]) .root[data-phase='hero'] .composerSeat:hover,
+:global([data-ds-dark-theme]) .root[data-phase='active'] .header:hover,
+:global([data-ds-dark-theme]) .root[data-phase='active'] .scrollBody:hover {
+  transform: translateY(var(--lift));
+  box-shadow: var(--glass-rim), var(--shadow-lift);
+  --sheen-hot: 1;
+}
+

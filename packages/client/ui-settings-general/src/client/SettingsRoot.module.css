@@ -282,3 +282,10 @@
     min-height: 0;
   }
 }
+
+
+/* Dark theme: this window wears the maroon-black family gradient
+ * (maroon above, black pooled at the bottom) over its surface token. */
+:global(body[data-ds-dark-theme]) .panel {
+  background-image: linear-gradient(180deg, rgb(66, 37, 46) 0%, rgb(54, 31, 39) 30%, rgb(45, 28, 34) 55%, rgb(28, 15, 21) 82%, rgb(20, 8, 16) 100%);
+}

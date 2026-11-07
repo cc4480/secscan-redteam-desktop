@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ReactNode } from 'react'
 import type {
-  SidebarFooterActionOwnerProps, SidebarRootComponentProps, SidebarSectionOwnerProps,
+  SidebarFooterActionOwnerProps, SidebarPanelMetadata, SidebarRootComponentProps, SidebarSectionOwnerProps,
   SidebarSettingsOwnerProps,
 } from '../src/client/contract/slots.ts'
 import { HeaderLeadingControls, type HeaderLeadingControlsProps } from '../src/client/HeaderLeadingControls.tsx'
@@ -36,7 +35,7 @@ type AttentionSnapshot = Parameters<Parameters<SidebarRootComponentProps['useSes
 const noAttention: AttentionSnapshot = new Map()
 const useSessionStatus: SidebarRootComponentProps['useSessionStatus'] = selector => selector(noAttention)
 
-function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; width?: number } = {}) {
+function mountShell({ collapsed = false, width = 300, panels = [] }: { collapsed?: boolean; width?: number; panels?: readonly SidebarPanelMetadata[] } = {}) {
   const startSession = vi.fn()
   const toggleSidebar = vi.fn()
   let regionOwner: SidebarSectionOwnerProps | undefined
@@ -49,7 +48,7 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
     <SidebarRoot
       collapsed={current.collapsed} width={current.width}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
-      usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])}
+      usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector(panels)}
       useResource={useResource} useWorkspaces={neverHook}
       startSession={startSession} toggleSidebar={toggleSidebar} t={t}
       renderSlot={((
@@ -96,71 +95,32 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
 }
 
 describe('SidebarRoot shell', () => {
-  it('routes New Session (capsule + wordmark) and the column toggle', () => {
+  it('routes the column toggle and renders no brand in the sidebar', () => {
     const b = mountShell()
-    expect(screen.getByTestId('custom-brand-mark')).toBeTruthy()
-    expect(screen.getByTestId('custom-brand-name')).toBeTruthy()
-    // Expanded, both the wordmark and the capsule start a session.
-    const starters = screen.getAllByRole('button', { name: 'New session' })
-    expect(starters).toHaveLength(2)
-    for (const button of starters) fireEvent.click(button)
-    expect(b.startSession).toHaveBeenCalledTimes(2)
+    expect(screen.queryByTestId('custom-brand-mark')).toBeNull()
+    expect(screen.queryByTestId('custom-brand-name')).toBeNull()
+    // No brand band: expanded, SidebarRoot itself offers no New Session
+    // button (the workspaces region carries its own control).
+    expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }))
     expect(b.toggleSidebar).toHaveBeenCalledOnce()
   })
 
-  it('renders generic brand fallbacks when no package fills the slots', () => {
-    vi.stubEnv('DSH_CLIENT_COMMIT_HASH', '0123456')
-    vi.stubEnv('DSH_CLIENT_GIT_DIRTY', 'true')
-    vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3-rc.4')
-    const { container } = render(<SidebarRoot
-      collapsed={false} width={300}
-      useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
-      usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])}
-      useResource={useResource} useWorkspaces={neverHook}
-      startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
-      renderSlot={((_key: string, _owner: unknown, options?: { fallback?: ReactNode }) =>
-        options?.fallback ?? null) as SidebarRootComponentProps['renderSlot']}
-    />)
-
-    expect(screen.getByText('SecScan RedTeam')).toBeTruthy()
-    expect(screen.getByText('1.2.3-rc.4-0123456-dirty')).toBeTruthy()
-    expect(container.querySelector('svg')).not.toBeNull()
+  it('seats the Application row above the panel rows and bridges its click to the shell', () => {
+    mountShell({ panels: [{ id: 'plugins', order: 0, label: 'Plugins' } as SidebarPanelMetadata] })
+    const navigation = screen.getByRole('navigation')
+    const rows = within(navigation).getAllByRole('button')
+    expect(rows.map(row => row.getAttribute('aria-label'))).toEqual(['Application', 'Plugins'])
+    const application = rows[0]!
+    expect(application.getAttribute('aria-haspopup')).toBe('menu')
+    expect(application.getAttribute('aria-current')).toBeNull()
+    const requests: CustomEvent[] = []
+    const listener = (event: Event): void => { requests.push(event as CustomEvent) }
+    document.addEventListener('dsh:application-menu', listener)
+    try { fireEvent.click(application) } finally { document.removeEventListener('dsh:application-menu', listener) }
+    expect(requests).toHaveLength(1)
+    expect(requests[0]!.detail).toEqual({ x: 0, y: 0 })
   })
-
-  it.each([
-    [{ DSH_CLIENT_VERSION: '1.2.3' }, '1.2.3'],
-    [{ DSH_CLIENT_COMMIT_HASH: 'abcdef0', DSH_CLIENT_VERSION: '1.2.3' }, '1.2.3-abcdef0'],
-  ])('omits unavailable build-version suffixes from %j', (environment, expected) => {
-    for (const [name, value] of Object.entries(environment)) vi.stubEnv(name, value)
-    render(<SidebarRoot
-      collapsed={false} width={300}
-      useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
-      usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])}
-      useResource={useResource} useWorkspaces={neverHook}
-      startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
-      renderSlot={((_key: string, _owner: unknown, options?: { fallback?: ReactNode }) =>
-        options?.fallback ?? null) as SidebarRootComponentProps['renderSlot']}
-    />)
-
-    expect(screen.getByText('SecScan RedTeam')).toBeTruthy()
-    expect(screen.getByText(expected)).toBeTruthy()
-  })
-
-  it('retains the local-build fallback without complete build metadata', () => {
-    render(<SidebarRoot
-      collapsed={false} width={300}
-      useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
-      usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])}
-      useResource={useResource} useWorkspaces={neverHook}
-      startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
-      renderSlot={((_key: string, _owner: unknown, options?: { fallback?: ReactNode }) =>
-        options?.fallback ?? null) as SidebarRootComponentProps['renderSlot']}
-    />)
-
-    expect(screen.getByText('SecScan RedTeam')).toBeTruthy()
-  })
-
   it('hands the region its wide flag and clamps expandSidebar to the collapsed state', () => {
     const b = mountShell()
     expect(b.regionOwner().wide).toBe(true)
@@ -193,14 +153,12 @@ describe('SidebarRoot shell', () => {
     expect(screen.getByRole('button', { name: 'Open sidebar' })).toBeTruthy()
   })
 
-  it('seats the collapsed brand in its own tile, apart from the toggle', () => {
-    mountShell({ collapsed: true })
-    const mark = screen.getByTestId('custom-brand-mark')
-    const toggle = screen.getByRole('button', { name: 'Open sidebar' })
-    // The mark is not inside the toggle, and its seat precedes the toggle's
-    // own row in the column.
-    expect(toggle.contains(mark)).toBe(false)
-    expect(mark.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  it('seats no brand in the collapsed rail; the toggle and New Session icon ride it', () => {
+    const b = mountShell({ collapsed: true })
+    expect(screen.queryByTestId('custom-brand-mark')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Open sidebar' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'New session' }))
+    expect(b.startSession).toHaveBeenCalledOnce()
   })
 
   it('shows only the badge bubble while the rail badge is hovered inside the toggle', () => {
@@ -212,7 +170,7 @@ describe('SidebarRoot shell', () => {
       useResource={useResource} useWorkspaces={neverHook}
       startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
       renderSlot={((key: string) => key === 'sidebar.toggle.badge'
-        ? <Tooltip label="Update — V1.2.3"><span data-testid="badge" /></Tooltip>
+        ? <Tooltip label="Update Ã¢â‚¬â€ V1.2.3"><span data-testid="badge" /></Tooltip>
         : null) as SidebarRootComponentProps['renderSlot']}
     />)
     const toggle = screen.getByRole('button', { name: 'Open sidebar' })
@@ -223,7 +181,7 @@ describe('SidebarRoot shell', () => {
     // even after the toggle's longer hover delay has elapsed.
     fireEvent.mouseEnter(screen.getByTestId('badge'))
     act(() => { vi.advanceTimersByTime(500) })
-    expect(screen.getAllByRole('tooltip').map(bubble => bubble.textContent)).toEqual(['Update — V1.2.3'])
+    expect(screen.getAllByRole('tooltip').map(bubble => bubble.textContent)).toEqual(['Update Ã¢â‚¬â€ V1.2.3'])
     fireEvent.mouseLeave(screen.getByTestId('badge'), { relatedTarget: toggle })
     expect(screen.getByRole('tooltip').textContent).toBe('Open sidebar')
     fireEvent.mouseLeave(toggle)
@@ -236,11 +194,10 @@ it('keeps the macOS sidebar toggle in its top strip', () => {
   const shell = mountShell()
   fireEvent.click(screen.getByRole('button', { name: en['toggle.collapse'] }))
   expect(shell.toggleSidebar).toHaveBeenCalledOnce()
-  // The brand stays part of the logo row's window-drag surface: no button
-  // role (the global no-drag rule would subtract it); only the dedicated
-  // New Session capsule starts a session.
-  expect(screen.getAllByRole('button', { name: 'New session' })).toHaveLength(1)
-  expect(screen.getByTestId('custom-brand-mark')).toBeTruthy()
+  // No brand rides the sidebar on darwin either, and no New Session button
+  // renders in the expanded column.
+  expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
+  expect(screen.queryByTestId('custom-brand-mark')).toBeNull()
 })
 
 it('wires the shell.leading controls to the shared sidebar actions', () => {
@@ -256,7 +213,7 @@ it('wires the shell.leading controls to the shared sidebar actions', () => {
   expect(startSession).toHaveBeenCalledOnce()
 })
 
-describe('Windows caption tooltips', () => {
+describe('Windows tooltip sides', () => {
   afterEach(() => { document.documentElement.removeAttribute('data-windows-titlebar') })
 
   const hover = (button: HTMLElement): void => {
@@ -265,22 +222,22 @@ describe('Windows caption tooltips', () => {
   }
 
   it.each([false, true])(
-    'drops the sidebar toggle bubble below the caption (collapsed=%s)',
+    'points the toggle bubble below the caption expanded, beside the rail collapsed (collapsed=%s)',
     (collapsed) => {
       vi.useFakeTimers()
       document.documentElement.setAttribute('data-windows-titlebar', '')
-      mountShell({ collapsed, width: collapsed ? 0 : 300 })
+      mountShell({ collapsed, width: collapsed ? 56 : 300 })
       hover(screen.getByRole('button', { name: collapsed ? 'Open sidebar' : 'Collapse sidebar' }))
-      expect(screen.getByRole('tooltip').getAttribute('data-side')).toBe('bottom')
+      expect(screen.getByRole('tooltip').getAttribute('data-side')).toBe(collapsed ? 'right' : 'bottom')
     },
   )
 
-  it('drops the collapsed New Session bubble below the caption as well', () => {
+  it('keeps the collapsed New Session bubble beside its rail anchor', () => {
     vi.useFakeTimers()
     document.documentElement.setAttribute('data-windows-titlebar', '')
-    mountShell({ collapsed: true, width: 0 })
+    mountShell({ collapsed: true, width: 56 })
     hover(screen.getByRole('button', { name: 'New session' }))
-    expect(screen.getByRole('tooltip').getAttribute('data-side')).toBe('bottom')
+    expect(screen.getByRole('tooltip').getAttribute('data-side')).toBe('right')
   })
 
   it('keeps the ordinary Web bubble beside its anchor', () => {

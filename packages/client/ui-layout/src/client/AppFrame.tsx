@@ -64,6 +64,126 @@ function ConversationMarker({ usePanelInfo, frameRef }: Pick<PropsRuntime<'root'
 }
 
 /**
+ * Living sheen tracker: one pointer listener on the frame keeps a soft
+ * light pool glued to the cursor across the shell's glass panels, like
+ * light moving over glass. It writes CSS custom properties directly on
+ * DOM nodes — the frame gets --mx/--my (frame-relative), every
+ * [data-sheen-panel] occupant gets --px/--py (panel-relative and
+ * scroll-compensated, so the module sheets' ::after pool renders at the
+ * pointer), and the hovered [data-tilt] element gets --lx/--ly (-1..1)
+ * for the stand-up tilt. A panel marked data-sheen-panel="fixed" (the
+ * thread plane, whose pool layer is fixed inside its backdrop-filter
+ * containing block) skips the scroll compensation. No React state rides
+ * the pointer path: a re-render per mousemove would repaint the shell.
+ * rAF-throttled throughout; the whole effect stays inert without a fine
+ * pointer or under reduced motion (the sheets park the pool on the
+ * unset-property fallback, so nothing renders).
+ */
+function SheenTracker({ frameRef }: { frameRef: React.RefObject<HTMLDivElement | null> }) {
+  useEffect(() => {
+    const frame = frameRef.current
+    /* v8 ignore next -- the ref is attached by effect time: the tracker renders inside the frame div. */
+    if (frame === null) return
+    /* Environments without matchMedia (embedded test DOMs) leave the
+       tracker inert rather than throwing inside the frame's effect. */
+    if (typeof window.matchMedia !== 'function') return
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    if (!window.matchMedia('(pointer: fine)').matches) return
+    let raf: number | null = null
+    let disposed = false
+    let clientX = 0
+    let clientY = 0
+    let target: EventTarget | null = null
+    let panels: HTMLElement[] = []
+    let panelsDirty = true
+    let tiltEl: HTMLElement | null = null
+    const refreshPanels = () => {
+      panels = Array.from(frame.querySelectorAll<HTMLElement>('[data-sheen-panel]'))
+      panelsDirty = false
+    }
+    const clearTilt = () => {
+      if (tiltEl === null) return
+      tiltEl.style.removeProperty('--lx')
+      tiltEl.style.removeProperty('--ly')
+      tiltEl = null
+    }
+    const apply = () => {
+      raf = null
+      if (disposed) return
+      if (panelsDirty) refreshPanels()
+      const frameRect = frame.getBoundingClientRect()
+      frame.style.setProperty('--mx', `${clientX - frameRect.left}px`)
+      frame.style.setProperty('--my', `${clientY - frameRect.top}px`)
+      for (const panel of panels) {
+        if (!panel.isConnected) {
+          panelsDirty = true
+          continue
+        }
+        const rect = panel.getBoundingClientRect()
+        const fixed = panel.dataset.sheenPanel === 'fixed'
+        panel.style.setProperty('--px', `${clientX - rect.left + (fixed ? 0 : panel.scrollLeft)}px`)
+        panel.style.setProperty('--py', `${clientY - rect.top + (fixed ? 0 : panel.scrollTop)}px`)
+      }
+      const nextTilt = target instanceof Element
+        ? target.closest<HTMLElement>('[data-tilt]')
+        : null
+      if (nextTilt !== tiltEl) {
+        clearTilt()
+        tiltEl = nextTilt
+      }
+      if (tiltEl !== null) {
+        const rect = tiltEl.getBoundingClientRect()
+        if (rect.width > 0 && rect.height > 0) {
+          const lx = Math.max(-1, Math.min(1, ((clientX - rect.left) / rect.width) * 2 - 1))
+          const ly = Math.max(-1, Math.min(1, ((clientY - rect.top) / rect.height) * 2 - 1))
+          tiltEl.style.setProperty('--lx', lx.toFixed(3))
+          tiltEl.style.setProperty('--ly', ly.toFixed(3))
+        }
+      }
+    }
+    const schedule = () => { raf ??= requestAnimationFrame(apply) }
+    const onPointerMove = (event: PointerEvent) => {
+      if (event.pointerType !== 'mouse' && event.pointerType !== 'pen') return
+      clientX = event.clientX
+      clientY = event.clientY
+      target = event.target
+      schedule()
+    }
+    /* Panel-internal scrolls move the pool's content under a still
+       cursor; re-apply with the last pointer position so the light
+       stays glued. Capture phase: scroll does not bubble. */
+    const onScroll = () => { schedule() }
+    const onPointerLeave = () => {
+      clearTilt()
+      frame.style.setProperty('--mx', '-999px')
+      frame.style.setProperty('--my', '-999px')
+      for (const panel of panels) {
+        panel.style.setProperty('--px', '-999px')
+        panel.style.setProperty('--py', '-999px')
+      }
+    }
+    /* Occupants mount and unmount as panels switch; a mutation only
+       flags the cached list stale, and the next pointer frame pays the
+       one query. */
+    const observer = new MutationObserver(() => { panelsDirty = true })
+    observer.observe(frame, { childList: true, subtree: true })
+    frame.addEventListener('pointermove', onPointerMove)
+    frame.addEventListener('scroll', onScroll, true)
+    frame.addEventListener('pointerleave', onPointerLeave)
+    return () => {
+      disposed = true
+      observer.disconnect()
+      frame.removeEventListener('pointermove', onPointerMove)
+      frame.removeEventListener('scroll', onScroll, true)
+      frame.removeEventListener('pointerleave', onPointerLeave)
+      if (raf !== null) cancelAnimationFrame(raf)
+      clearTilt()
+    }
+  }, [frameRef])
+  return null
+}
+
+/**
  * Right column grid item. Zero-width unless the occupant asked for a track; the
  * occupant's panel is positioned against the column's right edge, which never
  * moves, so it can hang over the centre when there is no track.
@@ -184,11 +304,16 @@ export function AppFrame({
     ? 0
     : layoutInfo.sidebar === 0 ? SIDEBAR_DEFAULT : layoutInfo.sidebar
   const rightbarPreference = layoutInfo.rightbar ?? viewport * RIGHTBAR_DEFAULT_RATIO
-  // Desktop reopen controls occupy the frame's shell.leading seat (macOS) or
-  // the Windows caption row; neither platform keeps an icon rail.
+  // Only macOS hides the collapsed column entirely: its reopen controls
+  // occupy the frame's shell.leading seat. Every other layout — the
+  // Windows caption layout included — keeps the slim icon rail, whose own
+  // toggle reopens it. (The old Windows caption-seat design stranded the
+  // operator with no sidebar at all: those seats are fixed-position
+  // descendants of the sidebar root, whose dark-theme backdrop-filter makes
+  // it their containing block, so a zero-width overflow-hidden column
+  // clipped them out of existence.)
   const darwin = document.documentElement.dataset.platform === 'darwin'
-  const collapsedWidth = darwin
-    || document.documentElement.hasAttribute('data-windows-titlebar') ? 0 : SIDEBAR_COLLAPSED
+  const collapsedWidth = darwin ? 0 : SIDEBAR_COLLAPSED
   // Opening on a narrow frame collapses the left sidebar. Eligibility must
   // include that space before the occupant's first shown report arrives.
   const normal = computeColumns(viewport, !layoutInfo.rightbarShown && narrow ? 0 : sidebarPreference, rightbarPreference, collapsedWidth)
@@ -298,6 +423,7 @@ export function AppFrame({
           from this band. */}
       {darwin && <div className={css.leadingBand} data-shell-leading-band />}
       <ConversationMarker usePanelInfo={usePanelInfo} frameRef={frameRef} />
+      <SheenTracker frameRef={frameRef} />
       <DocumentTitle
         productTitle={productTitle}
         useSessions={useSessions}

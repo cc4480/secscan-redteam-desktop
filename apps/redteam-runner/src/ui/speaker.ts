@@ -15,8 +15,8 @@
  * wire existed.
  *
  * The seat names are the fleet cast (prompts/fleet-assembly.ts
- * SOUL_BY_ROLE): the coordinator seat is MORPHEUS, recon is OPERATOR,
- * the exploiter is NEO, and both review/report seats are ARCHITECT.
+ * SOUL_BY_ROLE): the coordinator seat is MORPHEUS, recon is TANK,
+ * the exploiter is NEO, and the review and report seats are AGENT SMITH and TRINITY.
  * The role word is the client chip's vocabulary: the coordinator maps
  * to `lead`; the remaining seats keep their runner role names.
  */
@@ -33,10 +33,10 @@ export interface SpeakerStamp {
 
 const STAMP_BY_ACTOR: Partial<Record<ActorRole, SpeakerStamp>> = {
   coordinator: { name: "MORPHEUS", role: "lead" },
-  recon: { name: "OPERATOR", role: "recon" },
+  recon: { name: "TANK", role: "recon" },
   exploiter: { name: "NEO", role: "exploiter" },
-  reporter: { name: "ARCHITECT", role: "reporter" },
-  architect: { name: "ARCHITECT", role: "architect" },
+  reporter: { name: "TRINITY", role: "reporter" },
+  architect: { name: "AGENT SMITH", role: "architect" },
 };
 
 /**

@@ -102,6 +102,43 @@ export const HOME_COMMANDS_BY_ID: ReadonlyMap<string, HomeCommand> = new Map(
   HOME_COMMAND_GROUPS.flatMap(group => group.commands.map(command => [command.id, command] as const)),
 )
 
+/** Locale keys carrying one most-used row's plain-language scan-type label. */
+export type HomeCommandKindKey =
+  | 'home.cmd.deepscan.kind' | 'home.cmd.scan.kind' | 'home.cmd.pcscan.kind'
+  | 'home.cmd.nmap.kind' | 'home.cmd.nuclei.kind' | 'home.cmd.metasploit.kind'
+  | 'home.cmd.status.kind' | 'home.cmd.report.kind'
+
+/** One row of the home Most-used panel: a catalog command plus its scan-type label key. */
+export interface HomeMostUsedCommand {
+  /** The catalog entry itself — token, args, and launch kind stay the catalog's own. */
+  readonly command: HomeCommand
+  /** Locale key of the row's plain-language scan-type label. */
+  readonly kindKey: HomeCommandKindKey
+}
+
+const MOST_USED_ORDER: readonly (readonly [string, HomeCommandKindKey])[] = [
+  ['deepscan', 'home.cmd.deepscan.kind'],
+  ['scan', 'home.cmd.scan.kind'],
+  ['pcscan', 'home.cmd.pcscan.kind'],
+  ['nmap', 'home.cmd.nmap.kind'],
+  ['nuclei', 'home.cmd.nuclei.kind'],
+  ['metasploit', 'home.cmd.metasploit.kind'],
+  ['status', 'home.cmd.status.kind'],
+  ['report', 'home.cmd.report.kind'],
+]
+
+/**
+ * The home Most-used panel's curated rows: the scan family first (deep,
+ * standard, this-workstation, then the single-tool bridges), then the
+ * two engagement follow-ups. Entries resolve through the catalog map,
+ * so the panel can never drift from the catalog's tokens or launches;
+ * the full catalog stays one keystroke away in the composer's `/` menu.
+ */
+export const HOME_MOST_USED_COMMANDS: readonly HomeMostUsedCommand[] = MOST_USED_ORDER.flatMap(([id, kindKey]) => {
+  const command = HOME_COMMANDS_BY_ID.get(id)
+  return command === undefined ? [] : [{ command, kindKey }]
+})
+
 /** Every pinnable identity: the New Session action plus every catalog command. */
 export const PINNABLE_IDS: readonly string[] = [
   NEW_SESSION_PIN_ID,

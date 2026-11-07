@@ -22,7 +22,13 @@
  * With pool persistence on (the default; REDTEAM_LLM_POOL_PERSIST=off
  * disables it), that state also survives the process: every pool restores
  * from the one shared state document at construction (see pool-store.ts
- * for path resolution) and writes its mutations through.
+ * for path resolution) and writes its mutations through. Construction is
+ * not the pool's last word on its key set: before every dispatch and
+ * every poolSnapshots() read, each pool reconciles against the keys the
+ * fleet resolver currently answers (CredentialPool.refreshKeys), so a
+ * key seated or rotated in the app's credentials store reaches the fleet
+ * — and a re-seated valid key revives a provider whose old key died —
+ * with no process restart.
  */
 
 import type {
@@ -39,16 +45,21 @@ import { validateResponseFormat } from './adapter.js'
 import { roleModelPolicy, LLM_PROVIDER_ENV } from './policy.js'
 import { CHARTER_ROUTE_ENV } from './charter/routing.js'
 import { LOCAL_MODEL_ENV } from './providers/local.js'
-import { fleetDispatchEnv } from './resolver.js'
+import { fleetDispatchEnv, fleetValue } from './resolver.js'
 import type { CharterEngagement, CharterRole } from './charter/loader.js'
 import { assembleCharterMessages } from './charter/prompt.js'
 import { assertLocalOnlyRoute, resolveCharterRoute } from './charter/routing.js'
 import { DeepSeekProvider, DEEPSEEK_API_KEY_ENV } from './providers/deepseek.js'
-import { MetaProvider, META_API_KEY_ENV } from './providers/meta.js'
-import { QwenProvider, QWEN_API_KEY_ENV } from './providers/qwen.js'
+import { MetaProvider, META_API_KEY_ENV, META_API_KEY_FALLBACK_ENV } from './providers/meta.js'
+import { QwenProvider, QWEN_API_KEY_ENV, QWEN_API_KEY_FALLBACK_ENV } from './providers/qwen.js'
+import { OpenAiProvider, OPENAI_API_KEY_ENV } from './providers/openai.js'
+import { AnthropicProvider, ANTHROPIC_API_KEY_ENV } from './providers/anthropic.js'
+import { XaiProvider, XAI_API_KEY_ENV } from './providers/xai.js'
+import { ZaiProvider, ZAI_API_KEY_ENV } from './providers/zai.js'
+import { GeminiProvider, GEMINI_API_KEY_ENV } from './providers/gemini.js'
 import { LocalOpenAiProvider } from './providers/local.js'
 import { ResilienceError } from './executor.js'
-import { CredentialPool, type PoolEntrySnapshot } from './pool.js'
+import { CredentialPool, collectCredentialEnv, type PoolEntrySnapshot } from './pool.js'
 import { FilePoolStateStore } from './pool-store.js'
 import {
   ResilientProvider,
@@ -248,24 +259,70 @@ export interface PoolSnapshot {
 /**
  * Snapshots of the router's live credential pools — the operator-visibility
  * surface the runner's readiness report renders from. Empty when
- * resilience is off (no pools are built then).
+ * resilience is off (no pools are built then). Each pool first
+ * reconciles with the keys the fleet resolver currently answers, so a
+ * snapshot (and the runner's dead-credential gate that reads it) sees a
+ * key seated or rotated in the app on the very next read — the revival
+ * path that needs no restart.
  * @returns One snapshot per pooled provider, in registration order.
  */
 export function poolSnapshots(): PoolSnapshot[] {
+  for (const refresh of poolRefreshers.values()) refresh()
   return [...livePools.entries()].map(([providerId, pool]) => ({ providerId, entries: pool.snapshot() }))
+}
+
+/** Pool refresh callbacks by provider id, registered alongside each live pool. */
+const poolRefreshers = new Map<string, () => void>()
+
+/** Numbered sibling depth for pool keys, matching collectCredentialEnv's default. */
+const POOL_KEY_SIBLINGS = 8
+
+/**
+ * The keys the fleet resolver currently answers for one provider: the
+ * primary credential ref and its numbered siblings, plus the fallback
+ * ref's family when the provider has one (Meta's META_API_KEY, Qwen's
+ * DASHSCOPE_API_KEY), deduplicated in priority order. Resolved through
+ * the fleet resolver — never process.env directly — so the app's
+ * credentials store is a first-class source, exactly as it is for the
+ * providers' own per-call key reads.
+ * @param keyEnv - The provider's primary credential ref name.
+ * @param fallbackKeyEnv - The provider's fallback credential ref name, when it has one.
+ * @returns The current key set for the provider's pool.
+ */
+function resolvedPoolKeys(keyEnv: string, fallbackKeyEnv?: string): string[] {
+  const envLike: NodeJS.ProcessEnv = {}
+  const primaries = fallbackKeyEnv !== undefined ? [keyEnv, fallbackKeyEnv] : [keyEnv]
+  for (const name of primaries) {
+    for (let i = 1; i <= POOL_KEY_SIBLINGS + 1; i += 1) {
+      const candidate = i === 1 ? name : `${name}_${i}`
+      const value = fleetValue(candidate)
+      if (value !== undefined) envLike[candidate] = value
+    }
+  }
+  const keys = collectCredentialEnv(envLike, keyEnv)
+  if (fallbackKeyEnv !== undefined) {
+    for (const key of collectCredentialEnv(envLike, fallbackKeyEnv)) {
+      if (!keys.includes(key)) keys.push(key)
+    }
+  }
+  return keys
 }
 
 /**
  * Wrap a built-in provider in the resilience layer, with a credential pool
  * built from its key env var (+ numbered siblings) when it has one.
- * Resilience off (REDTEAM_LLM_RESILIENCE=off) returns the provider raw.
+ * The pool's key set is resolved through the fleet resolver and kept
+ * current by a refresh callback (see resolvedPoolKeys): the wrapper
+ * refreshes before every call, and poolSnapshots() refreshes before
+ * every read. Resilience off (REDTEAM_LLM_RESILIENCE=off) returns the
+ * provider raw.
  */
-function resilient(provider: LlmProvider, keyEnv?: string): LlmProvider {
+function resilient(provider: LlmProvider, keyEnv?: string, fallbackKeyEnv?: string): LlmProvider {
   if (!resilienceConfig.enabled) return provider
   const pool = keyEnv
-    ? CredentialPool.fromEnv(provider.id, keyEnv, process.env, { store: poolStateStore() })
+    ? new CredentialPool(provider.id, resolvedPoolKeys(keyEnv, fallbackKeyEnv), { store: poolStateStore() })
     : undefined
-  if (pool !== undefined) {
+  if (pool !== undefined && keyEnv !== undefined) {
     livePools.set(provider.id, pool)
     const report = pool.restoreReport
     if (
@@ -279,13 +336,28 @@ function resilient(provider: LlmProvider, keyEnv?: string): LlmProvider {
           (report.droppedLapsed > 0 ? `, ${report.droppedLapsed} lapsed dropped` : ''),
       )
     }
+    const refresh = (): void => {
+      pool.refreshKeys(resolvedPoolKeys(keyEnv, fallbackKeyEnv))
+    }
+    poolRefreshers.set(provider.id, refresh)
+    return new ResilientProvider(provider, { pool, config: resilienceConfig, refreshPool: refresh })
   }
   return new ResilientProvider(provider, { pool, config: resilienceConfig })
 }
 
 registerProvider(resilient(new DeepSeekProvider(), DEEPSEEK_API_KEY_ENV))
-registerProvider(resilient(new QwenProvider(), QWEN_API_KEY_ENV))
+registerProvider(resilient(new QwenProvider(), QWEN_API_KEY_ENV, QWEN_API_KEY_FALLBACK_ENV))
 // Meta Model API: routed for all roles when REDTEAM_LLM_PROVIDER=meta (see policy.ts).
-registerProvider(resilient(new MetaProvider(), META_API_KEY_ENV))
+registerProvider(resilient(new MetaProvider(), META_API_KEY_ENV, META_API_KEY_FALLBACK_ENV))
+// OpenAI (ChatGPT): routed for all roles when REDTEAM_LLM_PROVIDER=openai (see policy.ts).
+registerProvider(resilient(new OpenAiProvider(), OPENAI_API_KEY_ENV))
+// Anthropic (Claude): the one native-wire provider; routed when REDTEAM_LLM_PROVIDER=anthropic.
+registerProvider(resilient(new AnthropicProvider(), ANTHROPIC_API_KEY_ENV))
+// xAI (Grok): routed for all roles when REDTEAM_LLM_PROVIDER=xai (see policy.ts).
+registerProvider(resilient(new XaiProvider(), XAI_API_KEY_ENV))
+// Z.ai (GLM): routed for all roles when REDTEAM_LLM_PROVIDER=zai (see policy.ts).
+registerProvider(resilient(new ZaiProvider(), ZAI_API_KEY_ENV))
+// Gemini via Google's OpenAI-compatible endpoint: routed when REDTEAM_LLM_PROVIDER=gemini.
+registerProvider(resilient(new GeminiProvider(), GEMINI_API_KEY_ENV))
 // Offline/self-hosted route: selected by REDTEAM_LLM_PROVIDER=local (see policy.ts).
 registerProvider(resilient(new LocalOpenAiProvider()))

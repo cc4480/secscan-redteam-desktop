@@ -123,17 +123,17 @@ describe('fleet resolver: provider selection', () => {
       return completionResponse('ok')
     })
 
-    // No selection anywhere: the default Meta seat table serves, with
-    // the store-seated Meta key.
+    // No selection anywhere: the DeepSeek default seat table serves,
+    // with the store-seated DeepSeek key.
     await completeForRole('recon', [{ role: 'user', content: 'map it' }])
-    assert.deepEqual(calls, ['https://api.meta.ai/v1/chat/completions :: muse-spark-1.3 :: Bearer meta-key'])
+    assert.deepEqual(calls, ['https://api.deepseek.com/v1/chat/completions :: deepseek-flash :: Bearer deepseek-key'])
 
-    // The operator selects DeepSeek in the app: the next dispatch follows.
-    values.set(LLM_PROVIDER_ENV, 'deepseek')
+    // The operator selects Meta in the app: the next dispatch follows.
+    values.set(LLM_PROVIDER_ENV, 'meta')
     await completeForRole('recon', [{ role: 'user', content: 'map it' }])
     assert.deepEqual(calls, [
-      'https://api.meta.ai/v1/chat/completions :: muse-spark-1.3 :: Bearer meta-key',
       'https://api.deepseek.com/v1/chat/completions :: deepseek-flash :: Bearer deepseek-key',
+      'https://api.meta.ai/v1/chat/completions :: muse-spark-1.3 :: Bearer meta-key',
     ])
 
     // Local likewise: its model name arrives through the same resolver.
@@ -141,8 +141,8 @@ describe('fleet resolver: provider selection', () => {
     values.set(LOCAL_MODEL_ENV, 'local-test-model')
     await completeForRole('recon', [{ role: 'user', content: 'map it' }])
     assert.deepEqual(calls, [
-      'https://api.meta.ai/v1/chat/completions :: muse-spark-1.3 :: Bearer meta-key',
       'https://api.deepseek.com/v1/chat/completions :: deepseek-flash :: Bearer deepseek-key',
+      'https://api.meta.ai/v1/chat/completions :: muse-spark-1.3 :: Bearer meta-key',
       'http://127.0.0.1:8080/v1/chat/completions :: local-test-model :: ',
     ])
   })

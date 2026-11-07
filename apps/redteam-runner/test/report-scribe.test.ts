@@ -511,7 +511,7 @@ describe('fleet assembly — the publisher seat', () => {
   it("(6b) the other seats' packs are unchanged by the new seat", () => {
     const reporter = reporterPrompt(fleetCtx())
     assert.ok(reporter.includes('# The ARCHITECT'), 'the reporter still wears the architect soul')
-    assert.ok(reporter.includes('# Reporter — the ARCHITECT'), 'the reporter seat delta is untouched')
+    assert.ok(reporter.includes('# Reporter — TRINITY'), 'the reporter seat delta is untouched')
     assert.ok(!reporter.includes('# The SCRIBE'), 'no scribe soul leaks into the reporter pack')
     assert.ok(!publisherPrompt(fleetCtx()).includes('# The ARCHITECT'), 'no architect soul leaks into the publisher pack')
   })

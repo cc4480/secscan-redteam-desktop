@@ -4,7 +4,7 @@
  */
 
 export { runNativeCommand } from './runner.ts'
-export type { NativeCommandRunner } from './runner.ts'
+export type { NativeCommandRunner, NativeCommandRunOptions } from './runner.ts'
 export {
   canOpenNativePath,
   nativeFileManager,

@@ -267,7 +267,8 @@ export function poolRefusalFailure(
       causeMessage:
         `[llm-router] provider '${providerId}' cannot serve '${model}': ` +
         `every pooled credential is DEAD — ${segments.join('; ')}. ` +
-        'Re-seat a valid key and restart: the provider rejected the key — not a rate limit, no bench lifts it.',
+        'Re-seat a valid key in Settings → Models: the provider rejected the key itself — ' +
+        'not a rate limit, no bench lifts it. A re-seated key takes effect on the next call; no restart is needed.',
     }
   }
   if (refusal?.kind === 'model-benched' && refusal.benchUntilMs !== undefined) {
@@ -300,6 +301,13 @@ export interface ResilientProviderOptions {
   onEvent?: RetryEventSink
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>
   now?: () => number
+  /**
+   * Reconcile the pool with the credentials the resolver currently
+   * answers (router wiring; see CredentialPool.refreshKeys). Invoked
+   * before the pool is consulted on each call, so a key seated or
+   * rotated in the app reaches this provider without a restart.
+   */
+  refreshPool?: () => void
 }
 
 export class ResilientProvider implements LlmProvider {
@@ -311,12 +319,14 @@ export class ResilientProvider implements LlmProvider {
   private readonly onEvent?: RetryEventSink
   private readonly sleep?: (ms: number, signal?: AbortSignal) => Promise<void>
   private readonly now: () => number
+  private readonly refreshPool?: () => void
 
   constructor(inner: LlmProvider, opts: ResilientProviderOptions = {}) {
     this.inner = inner
     this.id = inner.id
     this.label = inner.label
     this.pool = opts.pool
+    this.refreshPool = opts.refreshPool
     // Normalized however the config arrived (env resolver or a literal):
     // the bench-wait invariant holds by construction, not by convention.
     this.config = normalizeResilienceConfig(opts.config ?? resilienceConfigFromEnv())
@@ -468,6 +478,9 @@ export class ResilientProvider implements LlmProvider {
 
   async complete(options: CompleteOptions): Promise<ChatResult> {
     if (!this.config.enabled) return this.inner.complete(options)
+    // A key seated or rotated since the last call enters the pool here,
+    // before acquire reads it — revival without a restart.
+    if (this.pool) this.refreshPool?.()
     const pool = this.pool
     const initial: Omit<AttemptContext, 'attempt'> = { providerId: this.inner.id, model: options.model }
     if (pool && pool.size > 0) {

@@ -776,7 +776,7 @@ describe('desktop main startup', () => {
     expect(harness.menu.setApplicationMenu).toHaveBeenCalledOnce()
   })
 
-  it('maps Windows caption menus to localized native commands and rejects foreign popup requests', async () => {
+  it('maps the Windows Application popup to localized native commands and rejects foreign and Edit popup requests', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     await import('../src/main.ts')
     await harness.preparing.promise
@@ -797,23 +797,12 @@ describe('desktop main startup', () => {
     expect(harness.popup.mock.lastCall![0].callback).toBeTypeOf('function')
     harness.popup.mock.lastCall![0].callback!()
     await application
-    const edit = handler(event, 'edit', 104, 34)
-    expect(harness.menu.buildFromTemplate.mock.lastCall![0].map(item => item.label ?? item.type)).toEqual([
-      '撤销', '重做', 'separator', '剪切', '复制', '粘贴', '删除', 'separator', '全选',
-    ])
-    const commands = harness.menu.buildFromTemplate.mock.lastCall![0].filter(item => item.type !== 'separator')
-    for (const [index, keyCode] of ['Z', 'Y', 'X', 'C', 'V', 'Delete', 'A'].entries()) {
-      const click = commands[index]!.click as () => void
-      click()
-      const modifiers = keyCode === 'Delete' ? [] : ['control']
-      expect(window.webContents.sendInputEvent).toHaveBeenNthCalledWith(index * 2 + 1, { type: 'keyDown', keyCode, modifiers })
-      expect(window.webContents.sendInputEvent).toHaveBeenNthCalledWith(index * 2 + 2, { type: 'keyUp', keyCode, modifiers })
-    }
-    harness.popup.mock.lastCall![0].callback!()
-    await edit
+    // The Edit menu is gone entirely: the handler rejects every popup name
+    // but 'application' before any native menu is built.
+    expect(() => handler(event, 'edit', 104, 34)).toThrow('invalid popup request')
   })
 
-  it.each(['darwin', 'linux'] as const)('adds the standard macOS window commands only on macOS (%s)', async (platform) => {
+  it.each(['darwin', 'linux'] as const)('seats the Application menu beside macOS-only file and window menus, with no Edit menu (%s)', async (platform) => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
     await import('../src/main.ts')
     await harness.preparing.promise
@@ -821,11 +810,12 @@ describe('desktop main startup', () => {
       item.role ?? (item.type === 'separator' ? 'separator' : item.label)
     const template = harness.menu.buildFromTemplate.mock.calls
       .map(call => call[0])
-      .find(items => items.some(item => item.role === 'editMenu'))
+      .find(items => Array.isArray(items[0]?.submenu))
     if (template === undefined) throw new Error('application menu missing')
     expect(template.map(describeItem)).toEqual(platform === 'darwin'
-      ? ['Desktop test', 'fileMenu', 'editMenu', 'windowMenu']
-      : ['Application', 'editMenu'])
+      ? ['Desktop test', 'fileMenu', 'windowMenu']
+      : ['Application'])
+    expect(template.map(describeItem)).not.toContain('editMenu')
     const application = template[0]!.submenu as MenuItemConstructorOptions[]
     expect(application.filter(item => item.visible !== false).map(describeItem)).toEqual(platform === 'darwin'
       ? ['about', 'separator', en.checkUpdatesMenu, en.mcpSettingsMenu, 'Local models...', 'separator', 'hide', 'hideOthers', 'unhide', 'separator', 'quit']

@@ -64,7 +64,7 @@ describe('elevation tokens', () => {
       .flatMap(rule => rule.declarations)
       .findLast(([property]) => property === '--dsw-specific-menu')?.[1]
     expect(value('body')).toBe('rgba(248, 249, 250, 0.58)')
-    expect(value('body[data-ds-dark-theme]')).toBe('rgba(48, 49, 54, 0.5)')
+    expect(value('body[data-ds-dark-theme]')).toBe('rgba(45, 28, 34, 0.5)')
   })
 })
 

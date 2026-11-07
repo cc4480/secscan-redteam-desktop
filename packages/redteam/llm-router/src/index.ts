@@ -20,13 +20,29 @@ export {
   type CharterCompleteOptions,
   type PoolSnapshot,
 } from './router.js'
-export { LLM_PROVIDER_ENV, META_ROLE_MODEL_POLICY, ROLE_MODEL_POLICY, ROLE_ORDER, roleModelPolicy } from './policy.js'
+export {
+  ANTHROPIC_ROLE_MODEL_POLICY,
+  GEMINI_ROLE_MODEL_POLICY,
+  LLM_PROVIDER_ENV,
+  META_ROLE_MODEL_POLICY,
+  OPENAI_ROLE_MODEL_POLICY,
+  QWEN_ROLE_MODEL_POLICY,
+  ROLE_MODEL_POLICY,
+  ROLE_ORDER,
+  XAI_ROLE_MODEL_POLICY,
+  ZAI_ROLE_MODEL_POLICY,
+  providerKeyEnvLabel,
+  roleModelPolicy,
+} from './policy.js'
 export { fleetConfigResolver, setFleetConfigResolver, type FleetConfigResolver } from './resolver.js'
 export {
   FLEET_PROVIDER_FILENAME,
+  FLEET_PROVIDER_SELECTIONS,
   FLEET_PROVIDER_VERSION,
   effectiveFleetProvider,
+  fleetProviderFamilyForProvider,
   readFleetProviderRecord,
+  readSavedModelSelectionProvider,
   resolveFleetProviderPath,
   writeFleetProviderRecord,
   type FleetProviderSelection,
@@ -123,6 +139,47 @@ export {
   META_BASE_URL,
   META_MODELS,
 } from './providers/meta.js'
+export {
+  OpenAiProvider,
+  OPENAI_PROVIDER_ID,
+  OPENAI_API_KEY_ENV,
+  OPENAI_BASE_URL_ENV,
+  OPENAI_BASE_URL,
+  OPENAI_MODELS,
+} from './providers/openai.js'
+export {
+  AnthropicProvider,
+  ANTHROPIC_PROVIDER_ID,
+  ANTHROPIC_API_KEY_ENV,
+  ANTHROPIC_BASE_URL_ENV,
+  ANTHROPIC_BASE_URL,
+  ANTHROPIC_MODELS,
+  ANTHROPIC_VERSION,
+} from './providers/anthropic.js'
+export {
+  XaiProvider,
+  XAI_PROVIDER_ID,
+  XAI_API_KEY_ENV,
+  XAI_BASE_URL_ENV,
+  XAI_BASE_URL,
+  XAI_MODELS,
+} from './providers/xai.js'
+export {
+  ZaiProvider,
+  ZAI_PROVIDER_ID,
+  ZAI_API_KEY_ENV,
+  ZAI_BASE_URL_ENV,
+  ZAI_BASE_URL,
+  ZAI_MODELS,
+} from './providers/zai.js'
+export {
+  GeminiProvider,
+  GEMINI_PROVIDER_ID,
+  GEMINI_API_KEY_ENV,
+  GEMINI_BASE_URL_ENV,
+  GEMINI_BASE_URL,
+  GEMINI_MODELS,
+} from './providers/gemini.js'
 export {
   CharterError,
   CHARTER_ROLES,

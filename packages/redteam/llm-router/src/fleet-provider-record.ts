@@ -1,7 +1,8 @@
 /**
  * Published fleet provider selection: the one document another process
  * reads to learn which provider family the engagement fleet dispatches
- * on — `meta`, `deepseek`, or `local`.
+ * on — one of the registered fleet families (see
+ * FLEET_PROVIDER_SELECTIONS).
  *
  * The fleet's runner is a child process spawned once; the environment
  * mirror in `llama-shell.ts` can only speak to a spawn that happens
@@ -25,7 +26,7 @@
  *
  *   {
  *     "version": 1,
- *     "provider": "meta" | "deepseek" | "local",
+ *     "provider": <one of FLEET_PROVIDER_SELECTIONS>,
  *     "updatedAt": number  // milliseconds since the epoch
  *   }
  */
@@ -42,10 +43,46 @@ export const FLEET_PROVIDER_FILENAME = 'fleet-provider.json'
 export const FLEET_PROVIDER_VERSION = 1
 
 /** The provider families the fleet selection names, in the router's vocabulary. */
-export type FleetProviderSelection = 'meta' | 'deepseek' | 'local'
+export type FleetProviderSelection =
+  | 'meta'
+  | 'deepseek'
+  | 'local'
+  | 'qwen'
+  | 'openai'
+  | 'anthropic'
+  | 'xai'
+  | 'zai'
+  | 'gemini'
 
 /** Every selection the record may carry; a value outside this list is not a record this build wrote. */
-const FLEET_PROVIDER_SELECTIONS: readonly FleetProviderSelection[] = ['meta', 'deepseek', 'local']
+export const FLEET_PROVIDER_SELECTIONS: readonly FleetProviderSelection[] = [
+  'meta',
+  'deepseek',
+  'local',
+  'qwen',
+  'openai',
+  'anthropic',
+  'xai',
+  'zai',
+  'gemini',
+]
+
+/**
+ * Provider ids under which a fleet family also travels: chat route ids
+ * and common aliases for the SAME provider (the chat stack's DeepSeek
+ * route is `deepseek-official`; pi-ai's Gemini route is `google`; GLM
+ * is Z.ai's `zai`). An alias maps to its own provider only — it never
+ * substitutes a different provider.
+ */
+const FLEET_PROVIDER_ALIASES: Readonly<Record<string, FleetProviderSelection>> = {
+  'deepseek-official': 'deepseek',
+  'google': 'gemini',
+  'glm': 'zai',
+  'claude': 'anthropic',
+  'grok': 'xai',
+  'chatgpt': 'openai',
+  'dashscope': 'qwen',
+}
 
 /** One published fleet provider record, as written and as read back. */
 export interface PublishedFleetProvider {
@@ -72,23 +109,37 @@ export function resolveFleetProviderPath(environment: NodeJS.ProcessEnv = proces
  * desktop owns: the operator's own selector value, captured before any
  * mirror wrote into the environment, and whether the bundled local
  * server is serving. The mapping mirrors the router's policy exactly: an
- * explicit `local` or `meta` names itself, any other explicit value
- * reaches the explicit-selector (DeepSeek) table, and with no explicit
- * value a serving local server selects `local` while anything else
- * leaves the fleet on its Meta default.
+ * explicit value names its own fleet family (aliases included); an
+ * explicit value that names NO fleet family is an operator error and
+ * throws — it is never silently converted to DeepSeek. With no explicit
+ * value a serving local server selects `local`, else the operator's
+ * saved model selection names the fleet through its family, and an
+ * operator who has never chosen leaves the fleet on its DeepSeek
+ * default (operator ruling, 2026-11-07: DeepSeek is the fleet's
+ * default; every other provider is an option, never the default).
  * @param operatorValue - the operator's own `REDTEAM_LLM_PROVIDER` value, or undefined when they never set one.
  * @param localServing - whether the bundled local server is serving (running, with an endpoint and a model).
+ * @param selectedProvider - provider id of the operator's saved model selection (the agent-default-model profile entry the model picker writes), or undefined when the operator has never saved one. Consulted only when neither an explicit selector nor a serving local server names the fleet: the operator's own pick outranks the DeepSeek fallback, which is the default for an operator who has never chosen.
  * @returns the selection to publish.
+ * @throws When the explicit selector names no fleet family.
  */
 export function effectiveFleetProvider(
   operatorValue: string | undefined,
   localServing: boolean,
+  selectedProvider?: string,
 ): FleetProviderSelection {
   const explicit = (operatorValue ?? '').trim().toLowerCase()
-  if (explicit === 'local') return 'local'
-  if (explicit === 'meta') return 'meta'
-  if (explicit !== '') return 'deepseek'
-  return localServing ? 'local' : 'meta'
+  if (explicit !== '') {
+    const family = fleetProviderFamilyForProvider(explicit)
+    if (family !== undefined) return family
+    throw new Error(
+      `[llm-router] REDTEAM_LLM_PROVIDER names '${explicit}', which is not a fleet provider. ` +
+        `Known fleet providers: ${FLEET_PROVIDER_SELECTIONS.join(', ')}. ` +
+        'Name one of those, or unset REDTEAM_LLM_PROVIDER to follow the saved model selection.',
+    )
+  }
+  if (localServing) return 'local'
+  return fleetProviderFamilyForProvider(selectedProvider) ?? 'deepseek'
 }
 
 /**
@@ -99,6 +150,66 @@ export function effectiveFleetProvider(
  *   usable: no document, an unparseable document, a foreign schema
  *   version, or a document whose fields do not validate.
  */
+/**
+ * Map a provider id from the operator's saved model selection onto the
+ * fleet provider family it names. Every registered fleet family names
+ * itself; the aliases in FLEET_PROVIDER_ALIASES name the same provider
+ * under its chat-route id. An id that names no fleet family (a
+ * chat-only provider, a typo) yields undefined — the pick names no
+ * fleet selection, and NO other provider is substituted for it.
+ * @param providerId - provider id from the saved selection, or undefined.
+ * @returns the fleet provider family, or undefined when the id names no fleet family.
+ */
+export function fleetProviderFamilyForProvider(
+  providerId: string | undefined,
+): FleetProviderSelection | undefined {
+  const normalized = (providerId ?? '').trim().toLowerCase()
+  if (normalized === '') return undefined
+  if ((FLEET_PROVIDER_SELECTIONS as readonly string[]).includes(normalized)) {
+    return normalized as FleetProviderSelection
+  }
+  return FLEET_PROVIDER_ALIASES[normalized]
+}
+
+/**
+ * Read the provider id of the operator's saved model selection: the
+ * `agent-default-model` entry the model picker saves into the desktop
+ * profile's patch document, which lives in the same Harness home as the
+ * fleet provider record (`profiles/desktop/cordis.patch.yml` under it).
+ * The document is machine-written in a stable entry format; the read is
+ * a line scan for that entry's `provider` value, not a YAML parse. Best
+ * effort by design: a missing document, a missing entry, or no provider
+ * value yields undefined (no saved selection), never a thrown error,
+ * because this read sits on the fleet's publication and dispatch paths.
+ * @param environment - environment holding the Harness home override.
+ * @returns the saved selection's provider id, or undefined.
+ */
+export function readSavedModelSelectionProvider(
+  environment: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  let text: string
+  try {
+    text = readFileSync(
+      join(dirname(resolveFleetProviderPath(environment)), 'profiles', 'desktop', 'cordis.patch.yml'),
+      'utf8',
+    )
+  } catch {
+    return undefined
+  }
+  let inEntry = false
+  for (const line of text.split(/\r?\n/)) {
+    if (/^\s*-\s*id:\s*agent-default-model\s*$/.test(line)) {
+      inEntry = true
+      continue
+    }
+    if (!inEntry) continue
+    if (/^\s*-\s*id:/.test(line)) return undefined
+    const match = /^\s+provider:\s*"?([^"\s]+)"?\s*$/.exec(line)
+    if (match) return match[1]
+  }
+  return undefined
+}
+
 export function readFleetProviderRecord(
   environment: NodeJS.ProcessEnv = process.env,
 ): PublishedFleetProvider | undefined {

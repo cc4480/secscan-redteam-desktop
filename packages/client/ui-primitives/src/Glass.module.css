@@ -30,7 +30,7 @@
 /* The card plane: a solid step inside a glass panel — no backdrop filter
    of its own, the rim and the card elevation carry its separation. */
 .card {
-  background: var(--glass-card-solid, #232329);
+  background: var(--glass-card-solid, #2d1c22);
   border-radius: var(--glass-radius, 16px);
   box-shadow:
     var(--glass-rim, inset 0 1px 0 rgba(255, 255, 255, 0.14)),

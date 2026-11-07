@@ -21,13 +21,14 @@
   overflow: visible;
 }
 
-/* Mark + word group on one line while they fit; squeezed, the word
-   group wraps under the mark. No breakpoint. */
+/* The home lockup stacks on the panel midline: mark, then the word
+   group under it, both centered (operator order). No breakpoint. */
 .home .headline {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 22px;
+  gap: 20px;
   min-width: 0;
 }
 
@@ -123,6 +124,12 @@
   min-width: 0;
 }
 
+/* Home lockup only (the session header keeps its left-anchored group):
+   wordmark and tagline text center on the same midline as the mark. */
+.home .wordGroup {
+  text-align: center;
+}
+
 /* 37px wordmark; the tail rides the mark's diamond red — the brand
    lock: the logo's own colors carry the hero. */
 .wordmark {
@@ -131,6 +138,7 @@
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--dsw-alias-label-primary);
+  text-shadow: 0 3px 6px rgba(0, 0, 0, 0.55), 0 12px 28px rgba(140, 16, 40, 0.35);
 }
 
 .wordmarkTail {
