@@ -12,6 +12,7 @@
 .head {
   display: flex;
   align-items: baseline;
+  justify-content: center;
   gap: 10px;
   margin-bottom: 11px;
 }
@@ -33,6 +34,7 @@
 .row {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 8px;
 }
 
@@ -52,13 +54,15 @@
   transition:
     transform var(--dur-fast) var(--ease-out),
     background var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out);
+    color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
 }
 
 .chip:hover:not(:disabled) {
-  transform: translateY(var(--lift));
+  transform: translateY(var(--lift)) perspective(640px) rotateX(calc(var(--ly, 0) * var(--stand-tilt) * -1)) rotateY(calc(var(--lx, 0) * var(--stand-tilt)));
   background: var(--glass-strong);
   color: var(--dsw-alias-label-primary);
+  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow-tile);
 }
 
 .chip:disabled {

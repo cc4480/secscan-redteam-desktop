@@ -73,6 +73,10 @@ export class DeepSeekProvider implements LlmProvider {
       messages: toWireMessages(options.messages),
       temperature: options.temperature ?? 0.2,
     }
+    // Fleet thinking gate (the A/B switch): REDTEAM_DEEPSEEK_THINKING=off
+    // disables thinking on every fleet dispatch, in the plugin path's wire
+    // form. Any other value, or the name unset, leaves the body unchanged.
+    if (fleetValue('REDTEAM_DEEPSEEK_THINKING') === 'off') body['thinking'] = { type: 'disabled' }
     if (options.maxTokens) body['max_tokens'] = options.maxTokens
     const wireTools = toWireTools(options.tools)
     if (wireTools) body['tools'] = wireTools

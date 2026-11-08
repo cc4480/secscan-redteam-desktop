@@ -1,0 +1,156 @@
+/* Landing page: the first screen of a launch, in front of home. The
+   centre column wears the home panel's own glass (top light, panel
+   tokens, rim, panel shadow) over the frame's maroon-black backdrop, so
+   it reads as the same room home lives in. The living sheen rides it
+   like the panels: the shell tracker writes --px/--py on the
+   [data-sheen-panel] root, the pool layers are plain gradients (no
+   blur, no new filtered surfaces), and hover stands it up on the house
+   lift. */
+
+/* The page fills the conversation column and centres its stack. */
+.root {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 32px 24px;
+  overflow-y: auto;
+  background: var(--glass-top-light), var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-line);
+  border-radius: 18px;
+  box-shadow: var(--glass-rim), var(--shadow-panel);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  width: 100%;
+  max-width: 720px;
+}
+
+/* The fleet line: the live glance pair, no model named. */
+.fleetLine {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  line-height: 20px;
+}
+
+.fleetKey {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.fleetValue {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+}
+
+/* Enter: the maroon glass send recipe (InputBar .primary, Carlos
+   2026-11-07) at button scale — top light over the deepened
+   brand-red gradient, specular rim, tile elevation, static top glint,
+   and the 900 ms sheen sweep on hover. The info fill is the light
+   theme's honest fallback, exactly as the send button keeps it. */
+.enter {
+  position: relative;
+  overflow: hidden;
+  padding: 13px 52px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  background: var(--glass-top-light), var(--dsw-alias-button-info-fill);
+  box-shadow: var(--glass-rim), var(--shadow-tile);
+  transition:
+    box-shadow var(--dur-fast) var(--ease-out),
+    filter var(--dur-fast) var(--ease-out);
+}
+
+.enter::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 90% at 50% -10%, rgba(255, 255, 255, 0.52), rgba(255, 255, 255, 0) 55%);
+  pointer-events: none;
+}
+
+.enter::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(115deg, transparent 18%, rgba(255, 255, 255, 0.10) 34%, rgba(255, 255, 255, 0.50) 50%, rgba(255, 255, 255, 0.10) 66%, transparent 82%);
+  transform: translateX(-130%);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+  pointer-events: none;
+}
+
+.enter:hover:not(:disabled) {
+  filter: brightness(1.12);
+  box-shadow: var(--glass-rim), var(--shadow-card);
+}
+
+.enter:hover:not(:disabled)::after {
+  transform: translateX(130%);
+  opacity: 1;
+  transition:
+    transform 900ms var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out);
+}
+
+.enter:focus-visible {
+  outline: 2px solid var(--dsw-alias-label-primary);
+  outline-offset: 2px;
+}
+
+:global([data-ds-dark-theme]) .enter {
+  background:
+    var(--glass-top-light),
+    linear-gradient(165deg, #8e1a30 0%, #5f1121 52%, #420b17 100%);
+}
+
+:global([data-ds-dark-theme]) .enter:hover:not(:disabled) {
+  background:
+    var(--glass-top-light),
+    linear-gradient(165deg, #8e1a30 0%, #5f1121 52%, #420b17 100%);
+}
+
+/* Living sheen + stand-up (dark): the pool layer the panels ride,
+   written by the shell tracker on this root. The tracker stays inert
+   under reduced motion, and the lift collapses to 0px there, so the
+   page stills the same way the panels do. */
+:global([data-ds-dark-theme]) .root {
+  transition:
+    transform var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    --sheen-hot var(--dur-base) var(--ease-out);
+}
+
+:global([data-ds-dark-theme]) .root::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(320px circle at var(--px, -999px) var(--py, -999px), color-mix(in srgb, var(--sheen-hot-core) calc(var(--sheen-hot, 0) * 100%), transparent), transparent 70%),
+    radial-gradient(760px circle at var(--px, -999px) var(--py, -999px), var(--sheen-pool-core), var(--sheen-pool-halo) 48%, transparent 72%);
+}
+
+:global([data-ds-dark-theme]) .root:hover {
+  transform: translateY(var(--lift));
+  box-shadow: var(--glass-rim), var(--shadow-lift);
+  --sheen-hot: 1;
+}

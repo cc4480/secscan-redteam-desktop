@@ -287,3 +287,10 @@
   height: 12px;
   color: var(--dsw-alias-label-tertiary);
 }
+
+
+/* Dark theme: this window wears the maroon-black family gradient
+ * (maroon above, black pooled at the bottom) over its surface token. */
+:global(body[data-ds-dark-theme]) .menu {
+  background-image: linear-gradient(180deg, rgba(66, 37, 46, 0.55) 0%, rgba(45, 28, 34, 0.6) 55%, rgba(20, 8, 16, 0.66) 100%);
+}

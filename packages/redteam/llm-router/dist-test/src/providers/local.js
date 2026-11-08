@@ -1,0 +1,142 @@
+/**
+ * Local provider — a llama.cpp `llama-server` (or Ollama, vLLM, LM Studio)
+ * endpoint speaking the OpenAI-compatible `POST {baseURL}/chat/completions`
+ * shape, served on this machine with no cloud API.
+ *
+ * Why it exists: the engagement engine must be able to run fully offline. The
+ * hosted Qwen provider targets Alibaba DashScope and always enables
+ * DashScope-only `enable_thinking`/`reasoning_effort`; a local server may reject
+ * or mishandle those, so this provider sends the portable subset by default and
+ * exposes thinking as an explicit opt-in.
+ *
+ * Configuration (resolved at call time through the fleet configuration
+ * resolver — the launching environment by default; see ../resolver.ts):
+ *   REDTEAM_LOCAL_BASE_URL         default http://127.0.0.1:8080/v1
+ *   REDTEAM_LOCAL_API_KEY          optional; sent as a bearer token when set
+ *   REDTEAM_LOCAL_ENABLE_THINKING  "1" to request the model's thinking trace
+ *   REDTEAM_LLM_PROVIDER=local     routes every agent role here (see policy.ts)
+ *   REDTEAM_LOCAL_MODEL            the model name the server exposes
+ *
+ * The base URL is resolved on every call, not captured at construction: the
+ * desktop app starts its bundled llama-server on an ephemeral loopback port
+ * and publishes the live endpoint (through this variable) only once the
+ * server is up, which can be long after this provider was constructed. A
+ * base URL passed to the constructor still wins over the environment.
+ *
+ * The endpoint is assumed reachable; a down or unloaded server fails at request
+ * time with the URL and the HTTP status, never with a credential.
+ */
+import { fleetValue } from '../resolver.js';
+import { applyResponseFormat, fromWireToolCalls, toWireMessages, toWireTools } from './openai-wire.js';
+import { providerErrorFromResponse, providerTransportError } from '../errors.js';
+import { completionSignal, resolveCompletionTimeoutMs } from '../timeout.js';
+/** Stable routing key for this provider. */
+export const LOCAL_PROVIDER_ID = 'local';
+export const LOCAL_BASE_URL_ENV = 'REDTEAM_LOCAL_BASE_URL';
+export const LOCAL_API_KEY_ENV = 'REDTEAM_LOCAL_API_KEY';
+export const LOCAL_ENABLE_THINKING_ENV = 'REDTEAM_LOCAL_ENABLE_THINKING';
+/** The model name the local server exposes (required when the local provider is selected). */
+export const LOCAL_MODEL_ENV = 'REDTEAM_LOCAL_MODEL';
+/** llama.cpp llama-server's default OpenAI-compatible root. */
+export const LOCAL_BASE_URL = 'http://127.0.0.1:8080/v1';
+/** Router hint → the model template's reasoning_effort vocabulary. */
+function toReasoningEffort(hint) {
+    if (hint === 'high')
+        return 'xhigh';
+    if (hint === 'medium')
+        return 'medium';
+    if (hint === 'low')
+        return 'low';
+    return undefined;
+}
+export class LocalOpenAiProvider {
+    id = LOCAL_PROVIDER_ID;
+    label = 'Local model (OpenAI-compatible)';
+    /** Constructor-pinned endpoint; wins over the environment when set. */
+    baseUrlOverride;
+    constructor(baseUrl) {
+        const pinned = baseUrl?.trim();
+        this.baseUrlOverride = pinned ? pinned.replace(/\/+$/, '') : undefined;
+    }
+    /**
+     * The endpoint for this call: the constructor value when pinned, else
+     * `REDTEAM_LOCAL_BASE_URL` read now, else the llama.cpp default root.
+     * @returns the base URL, without a trailing slash.
+     */
+    resolveBaseUrl() {
+        if (this.baseUrlOverride !== undefined)
+            return this.baseUrlOverride;
+        const fromEnv = fleetValue(LOCAL_BASE_URL_ENV)?.trim();
+        return (fromEnv || LOCAL_BASE_URL).replace(/\/+$/, '');
+    }
+    /** A local endpoint needs no credential; reachability is a per-request failure. */
+    isConfigured() {
+        return true;
+    }
+    apiKeyOrNull(options) {
+        // The resilience pool's per-attempt credential wins over the env var.
+        if (options?.apiKey !== undefined)
+            return options.apiKey;
+        const value = fleetValue(LOCAL_API_KEY_ENV)?.trim();
+        return value !== undefined && value.length > 0 ? value : null;
+    }
+    async complete(options) {
+        const baseUrl = this.resolveBaseUrl();
+        const body = {
+            model: options.model,
+            messages: toWireMessages(options.messages),
+            temperature: options.temperature ?? 0.2,
+        };
+        // Thinking is opt-in for local runs: on a CPU-hosted model it multiplies
+        // latency, and it is the feature most likely to differ between servers.
+        if (fleetValue(LOCAL_ENABLE_THINKING_ENV) === '1') {
+            body['enable_thinking'] = true;
+            const effort = toReasoningEffort(options.reasoningEffort);
+            if (effort !== undefined)
+                body['reasoning_effort'] = effort;
+        }
+        if (options.maxTokens !== undefined)
+            body['max_tokens'] = options.maxTokens;
+        const wireTools = toWireTools(options.tools);
+        if (wireTools !== undefined)
+            body['tools'] = wireTools;
+        applyResponseFormat(body, this.id, options);
+        const headers = { 'Content-Type': 'application/json' };
+        const key = this.apiKeyOrNull(options);
+        if (key !== null)
+            headers['Authorization'] = `Bearer ${key}`;
+        let res;
+        try {
+            res = await fetch(`${baseUrl}/chat/completions`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(body),
+                signal: completionSignal(options.signal, options.timeoutMs ?? resolveCompletionTimeoutMs()),
+            });
+        }
+        catch (err) {
+            throw providerTransportError(this.id, `[llm-router] local model request to ${baseUrl} failed`, err);
+        }
+        if (!res.ok) {
+            throw await providerErrorFromResponse(this.id, 'local model', res);
+        }
+        const data = (await res.json());
+        const choice = data.choices?.[0] ?? {};
+        const message = choice.message ?? {};
+        return {
+            text: message.content ?? '',
+            reasoning: message.reasoning_content ?? undefined,
+            toolCalls: fromWireToolCalls(message),
+            usage: data.usage
+                ? {
+                    promptTokens: data.usage.prompt_tokens,
+                    completionTokens: data.usage.completion_tokens,
+                    totalTokens: data.usage.total_tokens,
+                }
+                : undefined,
+            provider: this.id,
+            model: options.model,
+            requestBody: body,
+        };
+    }
+}

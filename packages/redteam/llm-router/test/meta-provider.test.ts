@@ -13,7 +13,7 @@ import {
   MetaProvider,
 } from '../src/providers/meta.js'
 import { META_ROLE_MODEL_POLICY, ROLE_ORDER, roleModelPolicy } from '../src/policy.js'
-import { DEEPSEEK_MODELS } from '../src/providers/deepseek.js'
+import { DEEPSEEK_API_KEY_ENV, DEEPSEEK_BASE_URL, DEEPSEEK_MODELS } from '../src/providers/deepseek.js'
 import { completeForRole } from '../src/router.js'
 
 const realFetch = globalThis.fetch
@@ -256,11 +256,11 @@ describe('Meta seat policy', () => {
     assert.equal(policy.recon.reasoningEffort, 'low')
   })
 
-  test('an unset selector with an empty env seats Meta on all five roles (G8 default)', () => {
+  test('an unset selector with an empty env seats DeepSeek on all five roles (the standing default)', () => {
     const policy = roleModelPolicy({})
     for (const role of ROLE_ORDER) {
-      assert.equal(policy[role].provider, 'meta')
-      assert.equal(policy[role].model, META_MODELS.spark)
+      assert.equal(policy[role].provider, 'deepseek')
+      assert.equal(policy[role].model, role === 'exploiter' ? DEEPSEEK_MODELS.pro : DEEPSEEK_MODELS.flash)
     }
     assert.equal(policy.exploiter.reasoningEffort, 'high')
     assert.equal(policy.recon.reasoningEffort, 'low')
@@ -271,21 +271,21 @@ describe('Meta seat policy', () => {
     assert.deepEqual(roleModelPolicy({}), roleModelPolicy({ META_API_KEY: 'test-key' }))
   })
 
-  test('a configured MODEL_API_KEY seats the fleet on Meta with no selector set', () => {
+  test('a configured MODEL_API_KEY no longer seats the fleet on Meta with no selector set', () => {
     const policy = roleModelPolicy({ MODEL_API_KEY: 'test-key' })
     for (const role of ROLE_ORDER) {
-      assert.equal(policy[role].provider, 'meta')
-      assert.equal(policy[role].model, META_MODELS.spark)
+      assert.equal(policy[role].provider, 'deepseek')
+      assert.equal(policy[role].model, role === 'exploiter' ? DEEPSEEK_MODELS.pro : DEEPSEEK_MODELS.flash)
     }
     assert.equal(policy.exploiter.reasoningEffort, 'high')
-    // The provider those seats dispatch to posts to the Meta Model API.
-    assert.equal(META_BASE_URL, 'https://api.meta.ai/v1')
+    // The provider those seats dispatch to posts to the DeepSeek API.
+    assert.equal(DEEPSEEK_BASE_URL, 'https://api.deepseek.com/v1')
   })
 
-  test('the META_API_KEY fallback name also seats Meta by default', () => {
+  test('the META_API_KEY fallback name does not seat Meta by default either', () => {
     const policy = roleModelPolicy({ META_API_KEY: 'test-key' })
-    assert.equal(policy.coordinator.provider, 'meta')
-    assert.equal(policy.exploiter.model, META_MODELS.spark)
+    assert.equal(policy.coordinator.provider, 'deepseek')
+    assert.equal(policy.exploiter.model, DEEPSEEK_MODELS.pro)
   })
 
   test('an explicit selector wins over a configured Meta key', () => {
@@ -303,27 +303,31 @@ describe('Meta seat policy', () => {
     assert.equal(policy.coordinator.model, DEEPSEEK_MODELS.flash)
   })
 
-  test('a blank MODEL_API_KEY still seats Meta (the policy layer does not inspect the key)', () => {
+  test('a blank MODEL_API_KEY still seats DeepSeek (the policy layer does not inspect the key)', () => {
     const policy = roleModelPolicy({ MODEL_API_KEY: '   ' })
-    assert.equal(policy.coordinator.provider, 'meta')
-    assert.equal(policy.exploiter.provider, 'meta')
+    assert.equal(policy.coordinator.provider, 'deepseek')
+    assert.equal(policy.exploiter.provider, 'deepseek')
   })
 })
 
 describe('Keyless fleet dispatch (G8)', () => {
-  test('completeForRole with no selector and no key fails at the router gate, never seating DeepSeek', async () => {
+  test('completeForRole with no selector and no key seats DeepSeek and fails at the router gate on its missing key', async () => {
     const savedSelector = process.env['REDTEAM_LLM_PROVIDER']
+    const savedDeepSeekKey = process.env[DEEPSEEK_API_KEY_ENV]
     delete process.env['REDTEAM_LLM_PROVIDER']
     delete process.env[META_API_KEY_ENV]
     delete process.env[META_API_KEY_FALLBACK_ENV]
+    delete process.env[DEEPSEEK_API_KEY_ENV]
     try {
       await assert.rejects(
         completeForRole('coordinator', [{ role: 'user', content: 'hi' }]),
-        /provider 'meta' is registered but not configured/,
+        /provider 'deepseek' is registered but not configured/,
       )
     } finally {
       if (savedSelector === undefined) delete process.env['REDTEAM_LLM_PROVIDER']
       else process.env['REDTEAM_LLM_PROVIDER'] = savedSelector
+      if (savedDeepSeekKey === undefined) delete process.env[DEEPSEEK_API_KEY_ENV]
+      else process.env[DEEPSEEK_API_KEY_ENV] = savedDeepSeekKey
     }
   })
 })

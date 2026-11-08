@@ -1,0 +1,188 @@
+/**
+ * OpenAI-compatible wire translation shared by every provider that speaks the
+ * `POST {baseUrl}/chat/completions` shape: the hosted Qwen (DashScope) provider
+ * and the local llama.cpp / Ollama provider.
+ *
+ * Kept in one place so the two providers cannot drift on the tool-call
+ * round-trip, which is the part that breaks agent loops when it is wrong.
+ */
+/**
+ * Enforce the tool-pairing invariant on an outgoing conversation: every
+ * `tool` message answers a tool call declared by the assistant message
+ * whose group it sits in, and every declared call in a closed group has
+ * its answer. A violation is not hypothetical — context compaction once
+ * severed a group (call summarized away, later results kept) and the
+ * provider rejected the request (400, param messages[].tool_call_id),
+ * halting the engagement. Orphaned tool messages are dropped and
+ * unanswered calls pruned; both are reported in the return value and
+ * logged by the caller-side translation below, never silently absorbed.
+ * A group still open at the end of the list (the loop's next turn is
+ * expected to answer it) is left untouched.
+ */
+export function sanitizeToolPairing(messages) {
+    const out = [];
+    const droppedToolCallIds = [];
+    const prunedToolCallIds = [];
+    // The currently open group: the assistant copy already in `out`, plus
+    // per-call answered state. Tool messages may only answer this group.
+    let open = null;
+    const closeGroup = (trailing) => {
+        if (!open)
+            return;
+        if (!trailing) {
+            const unanswered = [...open.answered.entries()].filter(([, a]) => !a).map(([id]) => id);
+            if (unanswered.length > 0) {
+                prunedToolCallIds.push(...unanswered);
+                open.assistant.toolCalls = (open.assistant.toolCalls ?? []).filter(tc => !unanswered.includes(tc.id));
+            }
+        }
+        open = null;
+    };
+    for (const m of messages) {
+        if (m.role === 'tool') {
+            const id = m.toolCallId;
+            if (id !== undefined && open !== null && open.answered.get(id) === false) {
+                open.answered.set(id, true);
+                out.push(m);
+            }
+            else {
+                droppedToolCallIds.push(id ?? '(missing toolCallId)');
+            }
+            continue;
+        }
+        closeGroup(false);
+        if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+            const calls = m.toolCalls;
+            const copy = { ...m, toolCalls: [...calls] };
+            out.push(copy);
+            open = { assistant: copy, answered: new Map(calls.map(tc => [tc.id, false])) };
+        }
+        else {
+            out.push(m);
+        }
+    }
+    closeGroup(true);
+    return { messages: out, droppedToolCallIds, prunedToolCallIds };
+}
+/** Translate router messages into the OpenAI wire form. */
+export function toWireMessages(messages) {
+    const repair = sanitizeToolPairing(messages);
+    if (repair.droppedToolCallIds.length > 0 || repair.prunedToolCallIds.length > 0) {
+        console.warn(`[llm-router] tool-pairing repair before send: dropped ${repair.droppedToolCallIds.length} orphaned tool message(s) ` +
+            `[${repair.droppedToolCallIds.join(', ')}]; pruned ${repair.prunedToolCallIds.length} unanswered tool call(s) ` +
+            `[${repair.prunedToolCallIds.join(', ')}]`);
+    }
+    return repair.messages.map((m) => {
+        if (m.role === 'tool') {
+            return { role: 'tool', tool_call_id: m.toolCallId ?? '', content: m.content };
+        }
+        // Assistant tool-call turns must round-trip their tool_calls, or the
+        // following tool messages are rejected by the OpenAI-compatible API.
+        if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+            return {
+                role: 'assistant',
+                content: m.content ?? '',
+                tool_calls: m.toolCalls.map(tc => ({
+                    id: tc.id,
+                    type: 'function',
+                    function: { name: tc.name, arguments: JSON.stringify(tc.arguments ?? {}) },
+                })),
+            };
+        }
+        return { role: m.role, content: m.content };
+    });
+}
+/** Translate router tools into the OpenAI `tools` array, or undefined when there are none. */
+export function toWireTools(tools) {
+    if (!tools || tools.length === 0)
+        return undefined;
+    return tools.map(t => ({
+        type: 'function',
+        function: {
+            name: t.name,
+            description: t.description,
+            parameters: t.parameters,
+        },
+    }));
+}
+export const RESPONSE_FORMAT_SUPPORT = {
+    meta: { json_object: 'send-unverified', json_schema: 'degrade', regex: 'refuse' },
+    deepseek: { json_object: 'send', json_schema: 'refuse', regex: 'refuse' },
+    qwen: { json_object: 'send-unverified', json_schema: 'degrade', regex: 'refuse' },
+    local: { json_object: 'send', json_schema: 'send', regex: 'refuse' },
+    // OpenAI's Chat Completions carries both JSON modes natively (docs);
+    // 'send' flips to live-verified only on a keyed call, like every row.
+    openai: { json_object: 'send-unverified', json_schema: 'send-unverified', regex: 'refuse' },
+    xai: { json_object: 'send-unverified', json_schema: 'degrade', regex: 'refuse' },
+    zai: { json_object: 'send-unverified', json_schema: 'degrade', regex: 'refuse' },
+    gemini: { json_object: 'send-unverified', json_schema: 'degrade', regex: 'refuse' },
+};
+const GENERIC_OPENAI_SUPPORT = {
+    json_object: 'send-unverified',
+    json_schema: 'degrade',
+    regex: 'refuse',
+};
+/**
+ * Translate the caller's structured-output constraint into the body's
+ * `response_format` field, per RESPONSE_FORMAT_SUPPORT. Mutates `body`.
+ * No-ops when the call carries no format, and when it carries tools — the
+ * recipe's constraint selection: with tools present, the tool block is the
+ * constraint and no response_format is sent. Throws (before any fetch) when
+ * the provider's recorded support for the requested format is 'refuse', and
+ * for `regex`, which has no OpenAI-compatible wire form in this translation.
+ */
+export function applyResponseFormat(body, providerId, options) {
+    const format = options.responseFormat;
+    if (!format)
+        return;
+    if (options.tools && options.tools.length > 0)
+        return;
+    const support = (RESPONSE_FORMAT_SUPPORT[providerId] ?? GENERIC_OPENAI_SUPPORT)[format.type];
+    if (support === 'refuse') {
+        throw new Error(`[llm-router] provider '${providerId}' does not support response_format ${format.type}. ` +
+            'Choose another constraint (tool block > JSON > schema > regex) or another provider.');
+    }
+    if (format.type === 'json_object') {
+        body['response_format'] = { type: 'json_object' };
+        return;
+    }
+    if (format.type === 'json_schema') {
+        if (support === 'degrade') {
+            body['response_format'] = { type: 'json_object' };
+            return;
+        }
+        body['response_format'] = {
+            type: 'json_schema',
+            json_schema: {
+                name: format.name,
+                schema: format.schema,
+                ...(format.strict !== undefined ? { strict: format.strict } : {}),
+            },
+        };
+        return;
+    }
+    // format.type === 'regex': every recorded state is 'refuse' today, so this
+    // is unreachable with the shipped table; it guards a future 'send' entry
+    // from silently becoming json_object.
+    throw new Error(`[llm-router] provider '${providerId}' has no wire form for response_format regex in this translation. ` +
+        'Choose another constraint (tool block > JSON > schema > regex) or another provider.');
+}
+/** Read tool calls out of one OpenAI-compatible choice message. */
+export function fromWireToolCalls(choice) {
+    const calls = choice['tool_calls'] ?? [];
+    return calls.map((c, i) => {
+        const fn = c['function'] ?? {};
+        let args = {};
+        try {
+            args = JSON.parse(fn['arguments'] ?? '{}');
+        }
+        catch {
+            args = { _raw: fn['arguments'] };
+        }
+        return {
+            id: c['id'] ?? `call_${i}`,
+            name: fn['name'] ?? 'unknown',
+            arguments: args,
+        };
+    });
+}

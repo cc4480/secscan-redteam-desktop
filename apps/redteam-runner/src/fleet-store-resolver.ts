@@ -31,7 +31,7 @@ import {
   parseCredentialsDocument,
   resolveSpec,
 } from '@deepseek-ai/dsh-credentials-local'
-import { LLM_PROVIDER_ENV } from '@secscan/redteam-llm-router'
+import { fleetProviderFamilyForProvider, LLM_PROVIDER_ENV, readSavedModelSelectionProvider } from '@secscan/redteam-llm-router'
 import type { FleetConfigResolver } from '@secscan/redteam-llm-router'
 
 /** Basename of the desktop's published fleet provider record inside the harness home. */
@@ -40,8 +40,18 @@ const FLEET_PROVIDER_FILENAME = 'fleet-provider.json'
 /** Schema version of the fleet provider record this build reads. */
 const FLEET_PROVIDER_VERSION = 1
 
-/** Provider values the record may name; anything else is not a record the desktop wrote. */
-const FLEET_PROVIDERS: ReadonlySet<string> = new Set(['meta', 'deepseek', 'local'])
+/** Provider values the record may name; anything else is not a record the desktop wrote. Mirrors FLEET_PROVIDER_SELECTIONS in the router's fleet-provider-record.ts. */
+const FLEET_PROVIDERS: ReadonlySet<string> = new Set([
+  'meta',
+  'deepseek',
+  'local',
+  'qwen',
+  'openai',
+  'anthropic',
+  'xai',
+  'zai',
+  'gemini',
+])
 
 /**
  * Create the store-backed fleet resolver over the app credentials store.
@@ -153,7 +163,19 @@ export function createStoreFleetConfigResolver(
       if (fromEnv !== undefined && fromEnv !== '') return fromEnv
       const stored = load().get(name)
       if (stored !== undefined) return stored
-      if (name === LLM_PROVIDER_ENV) return loadRecord()
+      if (name === LLM_PROVIDER_ENV) {
+        // A serving local server is the operator's live action and the
+        // published record is its only witness, so a local record
+        // outranks the saved selection. Any other record value is a
+        // fallback statement the desktop computed without the saved
+        // selection, so the operator's own saved model selection (the
+        // agent-default-model profile entry the model picker writes)
+        // wins over it; with no saved selection the record stands.
+        const published = loadRecord()
+        if (published === 'local') return published
+        const selected = fleetProviderFamilyForProvider(readSavedModelSelectionProvider(env))
+        return selected ?? published
+      }
       return undefined
     },
   }

@@ -12,6 +12,7 @@ import {
   RemoteError, SlotTestRuntime, usePinnedBrowserLanguages, stubConfigForm,
 } from '@deepseek-ai/dsh-client-test-runtime'
 import { InputHub } from '../src/client/input/hub.ts'
+import { dismissLanding } from '../src/client/skeleton/LandingPage.tsx'
 import { apply, inject, type EmptyWorkspaceOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
@@ -41,6 +42,7 @@ afterEach(() => {
 })
 beforeEach(() => {
   localStorage.clear()
+  dismissLanding()
   vi.stubGlobal('ResizeObserver', ResizeObserverStub)
 })
 

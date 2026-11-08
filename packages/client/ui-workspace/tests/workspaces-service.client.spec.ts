@@ -966,18 +966,18 @@ describe('UiWorkspaceService', () => {
     expect(navigation.aborted).toBe(false)
   })
 
-  it('keeps a chosen panel when the saved target becomes discoverable', () => {
+  it('keeps a chosen panel and does not restore the saved Session when it becomes discoverable', () => {
     const saved = sid('saved')
     persistSelection({ sessionId: saved })
     const b = bench({ workspaces: workspaceState(), sessions: sessionState([], 'pending') })
     const panel = 'other-panel' as MainPanelId
     b.layout.selectPanel(panel)
     b.sessions.list.set(sessionState([summary('saved')]))
-    expect(b.sessions.retained[0]!.reference.sessionId).toBe(saved)
+    expect(b.sessions.retained).toHaveLength(0)
     expect(b.selectPanel.mock.calls).toEqual([[panel]])
   })
 
-  it('restores a persisted subagent address without a parent catalog', () => {
+  it('does not restore a persisted subagent address at startup', () => {
     const address: SubagentAddress = {
       parentSessionId: sid('parent'),
       childSessionId: sid('child'),
@@ -990,8 +990,36 @@ describe('UiWorkspaceService', () => {
       sessions: sessionState(),
     })
 
-    expect(b.sessions.retain).toHaveBeenCalledExactlyOnceWith(address, { source: 'mainView' })
+    expect(b.sessions.retain).not.toHaveBeenCalled()
     expect(b.sessions.refreshProjections).not.toHaveBeenCalled()
+  })
+
+  it('stages the home on a new blank in the saved Session Workspace at startup', async () => {
+    persistSelection({ sessionId: sid('saved') })
+    const b = bench({
+      sessions: sessionState([summary('saved', { cwd: '/w/a', updatedAt: 5 })]),
+      workspaces: workspaceState([workspace('a', [sid('saved')])]),
+    })
+    await vi.waitFor(() => {
+      expect(b.sessions.retain).toHaveBeenCalledExactlyOnceWith(sid('created-a'), { source: 'mainView' })
+    })
+    expect(b.sessions.create).toHaveBeenCalledExactlyOnceWith({ workspaceId: wid('a') })
+    expect(b.sessions.list.getSnapshot().byId[sid('saved')]).toBeDefined()
+  })
+
+  it('stages the home on an existing blank in the saved Session Workspace at startup', async () => {
+    persistSelection({ sessionId: sid('saved') })
+    const b = bench({
+      sessions: sessionState([
+        summary('saved', { cwd: '/w/a', updatedAt: 5 }),
+        summary('blank', { blank: true, cwd: '/w/a' }),
+      ]),
+      workspaces: workspaceState([workspace('a', [sid('saved'), sid('blank')])]),
+    })
+    await vi.waitFor(() => {
+      expect(b.sessions.retain).toHaveBeenCalledExactlyOnceWith(sid('blank'), { source: 'mainView' })
+    })
+    expect(b.sessions.create).toHaveBeenCalledExactlyOnceWith({ workspaceId: wid('a'), sessionId: sid('blank') })
   })
 
   it('persists a catalog-resolved address after string subagent navigation', () => {
@@ -1013,27 +1041,23 @@ describe('UiWorkspaceService', () => {
     })
   })
 
-  it('reports and retries a failed persisted Session restoration', async () => {
-    const failure = new Error('restore failed')
+  it('does not attempt to restore a persisted Session with history at startup', async () => {
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const sessions = sessionState([summary('saved')])
     persistSelection({ sessionId: sid('saved') })
     const b = bench({
       workspaces: workspaceState(),
       sessions,
-      configureSessions: (face) => {
-        face.retain.mockImplementationOnce(() => { throw failure })
-      },
     })
 
-    await vi.waitFor(() => {
-      expect(warning).toHaveBeenCalledWith('initial Session restoration failed:', failure)
-    })
+    await setImmediate()
     b.sessions.list.set(sessions)
+    await setImmediate()
 
-    expect(b.sessions.retain).toHaveBeenCalledTimes(2)
-    expect(b.sessions.retained).toHaveLength(1)
-    expect(b.sessions.retained[0]!.reference.sessionId).toBe(sid('saved'))
+    expect(warning).not.toHaveBeenCalled()
+    expect(b.sessions.retain).not.toHaveBeenCalled()
+    expect(b.sessions.retained).toHaveLength(0)
+    expect(b.sessions.list.getSnapshot().byId[sid('saved')]).toBeDefined()
   })
 
   it('clears a selected Session when an external archive snapshot arrives', () => {

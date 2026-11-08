@@ -567,6 +567,57 @@ export class CredentialPool {
     }
   }
 
+  /**
+   * Reconcile the pool's key set with the keys the resolver currently
+   * answers for this provider — the live-revival seam. Pools are built
+   * once at module load, but keys are seated and rotated in the app's
+   * credentials store while the process runs; without a refresh, a key
+   * killed by a 402 would gate every later engagement until a restart,
+   * even after the operator re-seated a valid key (the dead-key trap).
+   * Matching is by fingerprint, exactly like restore: a surviving key
+   * keeps its bookkeeping (dead marks and benches included), a removed
+   * key's entry drops, and a newly seated key enters ALIVE — then the
+   * persisted state is re-applied, so a key whose fingerprint carries
+   * a recorded death in the shared document is pronounced dead again
+   * rather than resurrected by the refresh.
+   * @param keys - The provider's current keys, in priority order.
+   * @returns True when the key set changed (entries added, removed, or reordered).
+   */
+  refreshKeys(keys: string[]): boolean {
+    const wanted = keys.map(apiKey => fingerprintOf(apiKey))
+    const current = this.entries.map(entry => entry.fingerprint)
+    if (
+      wanted.length === current.length &&
+      wanted.every((fingerprint, i) => fingerprint === current[i])
+    ) {
+      return false
+    }
+    const byFingerprint = new Map(this.entries.map(entry => [entry.fingerprint, entry]))
+    const next: PoolEntry[] = keys.map((apiKey, keyId) => {
+      const existing = byFingerprint.get(fingerprintOf(apiKey))
+      if (existing !== undefined) {
+        existing.keyId = keyId
+        existing.apiKey = apiKey
+        return existing
+      }
+      return {
+        keyId,
+        apiKey,
+        fingerprint: fingerprintOf(apiKey),
+        dead: false,
+        benches: new Map(),
+      }
+    })
+    this.entries.length = 0
+    this.entries.push(...next)
+    // A key (re)entering the pool picks up any persisted bookkeeping
+    // for its fingerprint; the save converges the shared document onto
+    // the reconciled set (dropped keys' state prunes with them).
+    if (this.store !== undefined) this.restore(this.store)
+    this.save()
+    return true
+  }
+
   /** Number of distinct keys in the pool. */
   get size(): number {
     return this.entries.length

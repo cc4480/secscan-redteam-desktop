@@ -399,6 +399,70 @@
   cursor: default;
 }
 
+/* Maroon glass send (dark; Carlos, 2026-11-07): the blue info fill stuck
+   out against the maroon-black shell. The button is now a piece of the
+   same glass, tinted maroon a step lighter than the backdrop: the locked
+   top light over a deepened brand-red gradient, the specular rim, the
+   tile elevation. No backdrop filter of its own (glass never nests on
+   glass); the frost is the top light + rim. The white arrow is unchanged.
+   A sheen band (::after) sweeps once on hover — transform/opacity only,
+   on the house slow token, which the reduced-motion collapse stills —
+   and a static top glint (::before) is the idle light in the glass. Retuned
+   2026-11-07 after live testing: the first band (peak 0.30, 480ms)
+   was imperceptible on the 34px circle - widened, peak 0.50, slowed
+   to 900ms, glint raised to 0.38, then to 0.52 (Carlos, 2026-11-07: no visible shimmer at rest; sweep timing untouched). Visible is the bar. */
+:global([data-ds-dark-theme]) .primary {
+  position: relative;
+  overflow: hidden;
+  background:
+    var(--glass-top-light),
+    linear-gradient(165deg, #8e1a30 0%, #5f1121 52%, #420b17 100%);
+  box-shadow: var(--glass-rim), var(--shadow-tile);
+  transition:
+    box-shadow var(--dur-fast) var(--ease-out),
+    filter var(--dur-fast) var(--ease-out);
+}
+
+:global([data-ds-dark-theme]) .primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 90% at 50% -10%, rgba(255, 255, 255, 0.52), rgba(255, 255, 255, 0) 55%);
+  pointer-events: none;
+}
+
+:global([data-ds-dark-theme]) .primary::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(115deg, transparent 18%, rgba(255, 255, 255, 0.10) 34%, rgba(255, 255, 255, 0.50) 50%, rgba(255, 255, 255, 0.10) 66%, transparent 82%);
+  transform: translateX(-130%);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+  pointer-events: none;
+}
+
+:global([data-ds-dark-theme]) .primary:hover:not(:disabled) {
+  background:
+    var(--glass-top-light),
+    linear-gradient(165deg, #8e1a30 0%, #5f1121 52%, #420b17 100%);
+  filter: brightness(1.12);
+  box-shadow: var(--glass-rim), var(--shadow-card);
+}
+
+:global([data-ds-dark-theme]) .primary:hover:not(:disabled)::after {
+  transform: translateX(130%);
+  opacity: 1;
+  transition:
+    transform 900ms var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out);
+}
+
+:global([data-ds-dark-theme]) .primary:focus-visible {
+  outline: 2px solid var(--dsw-alias-label-primary);
+  outline-offset: 2px;
+}
+
 .retry {
   margin-left: 8px;
   padding: 1px 8px;

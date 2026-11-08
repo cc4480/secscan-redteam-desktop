@@ -185,7 +185,10 @@ describe('createStoreFleetConfigResolver — desktop fleet provider record', () 
 
   it('fails loud at creation on a record naming an unknown provider', () => {
     const { env, file } = tempHome()
-    writeRecord(file, 'qwen')
+    // 'groq' names no fleet family. (This example used 'qwen' until
+    // provider universality made Qwen a fleet provider in its own
+    // right; the contract — an unknown name fails loud — is unchanged.)
+    writeRecord(file, 'groq')
     assert.throws(() => createStoreFleetConfigResolver(env))
   })
 

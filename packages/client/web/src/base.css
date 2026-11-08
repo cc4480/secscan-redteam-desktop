@@ -49,7 +49,7 @@ html[data-platform='darwin'] body {
 }
 
 html[data-platform='darwin'] body[data-ds-dark-theme] {
-  --dsw-specific-menu: rgba(48, 49, 54, 0.94);
+  --dsw-specific-menu: rgba(45, 28, 34, 0.94);
 }
 
 /* macOS desktop: the app frame publishes window drag bands, and Electron

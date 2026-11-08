@@ -77,13 +77,15 @@ Host 与 Client 保持两个 aggregate program，是因为两侧在相同键下�
 
 ```sh
 tsc -b tsconfig.host.json
-tsdown --env.DSH_BUILD_FACE host
+tsdown --env.DSH_BUILD_FACE host --env.DSH_BUILD_PHASE vendor
+tsdown --env.DSH_BUILD_FACE host --env.DSH_BUILD_PHASE workspace
 tsc -b tsconfig.client.json
-tsdown --env.DSH_BUILD_FACE client
+tsdown --env.DSH_BUILD_FACE client --env.DSH_BUILD_PHASE vendor
+tsdown --env.DSH_BUILD_FACE client --env.DSH_BUILD_PHASE workspace
 pnpm run build:web
 ```
 
-两次 tsdown 都使用同一组完整 workspace 匹配，不扫描构建产物来发现 Client 包，也不维护 Host/Client 包过滤表。包内 tsdown 配置根据 `DSH_BUILD_FACE` 决定当前阶段的入口：普通 Client 插件在 Client 阶段同时生成 Node loader 与 browser bundle；`api-remotes` 通过 `hostPhase: true` 提前生成 Host 入口，再在 Client 阶段只生成 browser bundle。tsdown 只消费 `lib/types` 中由前置 tsc 发射的 JavaScript。
+每个 face 运行两次 tsdown，两次合起来使用同一组完整 workspace 匹配，按 `DSH_BUILD_PHASE` 拆分：先构建 vendor 包，再构建其余 workspace。vendor 一遍先行，是因为打包 vendored 包的 consumer 会读取该包的 `lib/` 输出，而该包自身的构建会就地重写同一批文件；让 vendor 一遍在任何 consumer 开始之前完成，即可消除这种边读边写的竞态。两次 tsdown 都不扫描构建产物来发现 Client 包，也不维护 Host/Client 包过滤表。包内 tsdown 配置根据 `DSH_BUILD_FACE` 决定当前阶段的入口：普通 Client 插件在 Client 阶段同时生成 Node loader 与 browser bundle；`api-remotes` 通过 `hostPhase: true` 提前生成 Host 入口，再在 Client 阶段只生成 browser bundle。tsdown 只消费 `lib/types` 中由前置 tsc 发射的 JavaScript。
 
 Typert 只在 Host tsdown 中以 `tsconfig.host.json` 为种子运行。它分析 Host 类型并生成 Host 反射产物及 Host-for-Client Remote 投影；Client tsdown 不启动 Typert。`pnpm run typecheck` 因此先执行完整 Host lib 阶段，再运行 Client tsc；`pnpm run build` 继续执行 Client tsdown 和 Web 构建。
 

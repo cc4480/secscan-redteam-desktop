@@ -1,0 +1,516 @@
+/* Home guide panel + side panel in the hero scroll body's home
+   grid (ConversationRoot sheet owns the grid; this sheet owns
+   placement and the panels' insides). The guide area is ONE glass
+   panel holding the Quick start, Most-used commands, and Continue
+   sub-blocks; the side panel rides the solid card plane (see
+   .aside). Inner cards are plane-2 solid fills — never their own
+   backdrop-filter — and every value rides the shell tokens, so home
+   and chat stay one glass language. */
+
+/* The glass primitive, token form: top light over the tint, the locked
+   blur recipe, the specular rim, the layered panel elevation. */
+.panel {
+  position: relative;
+  overflow: hidden;
+  padding: 26px 28px;
+  background: var(--glass-top-light), var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-line);
+  border-radius: 20px;
+  box-shadow: var(--glass-rim), var(--shadow-panel);
+}
+
+/* One sheen pass across each major panel on load — settles, never loops. */
+.sheen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, 0.055) 50%, transparent 58%);
+  transform: translateX(-110%);
+  animation: dsh-sheen var(--dur-hero) var(--ease-out) var(--stagger) forwards;
+}
+
+/* Entrance: per-item --i × --stagger, transform/opacity only. */
+.rise {
+  animation: dsh-rise var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: calc(var(--i, 0) * var(--stagger));
+}
+
+.section {
+  grid-column: 1;
+  min-width: 0;
+}
+
+/* The one guide panel's sub-blocks: Quick start, Most-used commands,
+   and Continue stacked in the panel's own column, evenly spaced and
+   divided by the panel's edge line — sub-headings and content only,
+   no panel chrome of their own. The blocks keep the old sections'
+   element ids, and the scroll margin keeps a scrolled-to block clear
+   of the panel's top edge. */
+.guideBlocks {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.guideBlock {
+  scroll-margin-top: 8px;
+}
+
+.guideBlock + .guideBlock {
+  padding-top: 24px;
+  border-top: 1px solid var(--glass-edge);
+}
+
+/* The side panel spans the center column's full height and sticks
+   while the guide panel scrolls past it. It rides the solid card
+   plane — the de-blurred treatment TodoPanel and QueueDock already
+   use — not the glass plane: the shell budget is five
+   backdrop-filtered surfaces per viewport, and the populated home
+   state carries three without it (sidebar, hero seat, the one guide
+   panel). The sticky rail also stays off the scroll path's re-blur
+   cost; its boundary comes from the panel rim and shadow, as on the
+   solid surfaces. */
+.aside {
+  grid-column: 2;
+  grid-row: 1 / span 12;
+  align-self: start;
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 18px;
+  /* Maroon tint with the siblings' vertical shading (Carlos, 2026-11-07):
+     the brand red so the rail reads in the same maroon-black family as
+     the glass panels over the lit backdrop; still a solid (no blur). */
+  background: var(--glass-top-light),
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--glass-card-solid) 76%, var(--brand-red) 24%) 0%,
+      color-mix(in srgb, var(--glass-card-solid) 84%, var(--brand-red) 16%) 38%,
+      color-mix(in srgb, var(--glass-card-solid) 88%, var(--brand-red) 9%) 68%,
+      color-mix(in srgb, var(--brand-red) 13%, #0d0408 87%) 100%);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* The rail is a full-height panel like the sidebar's, not a card that
+   ends where its content ends: at least the scrollport's published
+   height (--dsh-conversation-viewport-height, published on the scroll
+   body by the composer seat's ResizeObserver), so its bottom edge
+   lands on the panels' shared bottom line. Taller content still grows
+   the panel, and the sticky seat above keeps it pinned while the guide
+   column scrolls past. */
+.aside {
+  min-height: var(--dsh-conversation-viewport-height, 0px);
+}
+
+.panelHead {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.panelTitle {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--dsw-alias-label-primary);
+}
+
+.panelSub {
+  font-size: 12.5px;
+  color: var(--dsw-alias-label-caption);
+}
+
+/* Plane-2 card: a solid step inside a glass panel. */
+.card {
+  background: var(--glass-hi);
+  border: 1px solid var(--glass-line);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 var(--glass-edge);
+}
+
+.mono {
+  font-family: var(--ds-font-family-code);
+  font-size: 11.5px;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* ---- Quick start ---- */
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+/* The step cards are buttons: the command steps launch through the
+   input faces and the first step focuses the composer, so the card
+   carries the button resets and the shared lift hover. */
+.steps .card {
+  padding: 18px 18px 16px;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.steps .card:hover:not(:disabled) {
+  transform: translateY(var(--lift));
+  background: var(--glass-strong);
+  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow-lift);
+}
+
+.steps .card:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.stepN {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-bottom: 11px;
+  border: 1px solid color-mix(in srgb, var(--brand-blue) 35%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--brand-blue) 9%, transparent);
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--brand-blue);
+}
+
+.stepTitle {
+  display: block;
+  margin: 0 0 5px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.stepBody {
+  display: block;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* ---- Commands ---- */
+
+.cmdGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cmd {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  padding: 12px 15px;
+  border: 1px solid var(--glass-edge);
+  border-radius: 10px;
+  background: var(--glass);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.cmd:hover {
+  background: var(--glass-hi);
+  transform: translateY(var(--lift));
+}
+
+.cmdMain {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cmdMain:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.cmdName {
+  font-family: var(--ds-font-family-code);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--brand-blue);
+}
+
+.cmdArgs {
+  font-weight: 400;
+  color: var(--dsw-alias-label-caption);
+}
+
+.cmdKind {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--dsw-alias-label-primary);
+}
+
+.cmdDesc {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.starBtn {
+  display: grid;
+  flex: none;
+  align-self: center;
+  place-items: center;
+  padding: 2px;
+  border: 0;
+  background: none;
+  color: var(--dsw-alias-label-dimmed);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.starBtn:hover {
+  color: var(--brand-blue);
+}
+
+.starOn {
+  color: var(--brand-blue);
+}
+
+/* ---- Continue ---- */
+
+.contRow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cont {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 18px;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.cont:hover {
+  transform: translateY(var(--lift));
+  background: var(--glass-strong);
+  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow-lift);
+}
+
+.contMark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--glass-line);
+  border-radius: 9px;
+  background: var(--glass);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.contText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.contTitle {
+  overflow: hidden;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contResume {
+  flex: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand-blue);
+}
+
+.contEmpty {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.contMeta {
+  margin-top: 1px;
+  overflow: hidden;
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  color: var(--dsw-alias-label-caption);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contState {
+  flex: none;
+  margin-left: auto;
+  padding: 3px 10px;
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+  background: var(--glass);
+  font-family: var(--ds-font-family-code);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* ---- Side panel ---- */
+
+.sideTitle {
+  margin: 0 0 10px;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--dsw-alias-label-caption);
+}
+
+.kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--glass-edge);
+  font-size: 12.5px;
+}
+
+.kv:last-child {
+  border-bottom: 0;
+}
+
+.k {
+  color: var(--dsw-alias-label-caption);
+}
+
+.v {
+  font-family: var(--ds-font-family-code);
+  font-size: 11.5px;
+  text-align: right;
+  overflow-wrap: anywhere;
+  color: var(--dsw-alias-label-primary);
+}
+
+.seat {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--glass-edge);
+  font-size: 12.5px;
+}
+
+.seat:last-child {
+  border-bottom: 0;
+}
+
+.seatName {
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.seatRole {
+  margin-left: auto;
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  text-align: right;
+  color: var(--dsw-alias-label-caption);
+}
+
+.guideLink {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 6px 0;
+  border: none;
+  border-bottom: 1px solid var(--glass-edge);
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.guideLink:last-child {
+  border-bottom: 0;
+}
+
+.guideLink:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+.guideArrow {
+  display: grid;
+  place-items: center;
+  margin-left: auto;
+  color: var(--dsw-alias-label-dimmed);
+}
+
+.note {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--dsw-alias-label-dimmed);
+}
+
+/* Narrow shell: the side panel drops below the guide panel, the
+   steps go two-across, and the command grid stacks — the sample's
+   responsive steps, keyed on the viewport as the sample keys them. */
+@media (max-width: 1100px) {
+  .aside {
+    grid-column: 1;
+    grid-row: auto;
+    position: static;
+  }
+
+  .steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cmdGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

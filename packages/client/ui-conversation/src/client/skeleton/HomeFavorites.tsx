@@ -54,6 +54,7 @@ export function HomeFavorites({
                 key={id}
                 type="button"
                 className={css.chip}
+                data-tilt
                 onClick={() => { onStartNewSession() }}
               >
                 <span className={css.pin}><IconPinFillRegular size={12} /></span>
@@ -69,6 +70,7 @@ export function HomeFavorites({
               key={id}
               type="button"
               className={css.chip}
+              data-tilt
               disabled={chipDisabled}
               onClick={() => {
                 if (inputActions !== undefined) runHomeCommand(command, inputActions, focusComposer)

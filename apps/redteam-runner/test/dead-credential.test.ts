@@ -63,9 +63,32 @@ describe('deadCredentialHaltReason (FIX-DEADKEY)', () => {
     assert.match(reason, /invalid_api_key/)
     assert.match(reason, new RegExp(new Date(DEAD_AT).toISOString().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
     assert.match(reason, /not a rate limit/)
-    assert.match(reason, /Re-seat a valid provider key \(MODEL_API_KEY\)/)
+    assert.match(reason, /Re-seat a valid meta key in Settings → Models/)
+    assert.match(reason, /credential ref MODEL_API_KEY/)
+    assert.match(reason, /no restart/)
     assert.doesNotMatch(reason, /benched/)
     assert.doesNotMatch(reason, /rate_limit/)
+  })
+
+  it('names the dying provider’s own credential ref in the remedy', () => {
+    const reason = deadCredentialHaltReason(
+      [{
+        providerId: 'anthropic',
+        entries: [{
+          keyId: 0,
+          fingerprint: 'deadbeef',
+          dead: true,
+          deadReason: 'billing',
+          deadStatus: 402,
+          benchedModels: [],
+        }],
+      }],
+      'anthropic',
+    )
+    assert.ok(reason)
+    assert.match(reason, /provider 'anthropic'/)
+    assert.match(reason, /HTTP 402/)
+    assert.match(reason, /credential ref ANTHROPIC_API_KEY/)
   })
 
   it('still halts honestly when the death record predates the evidence fields', () => {

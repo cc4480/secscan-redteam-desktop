@@ -5,6 +5,7 @@ import type { ConversationContentProps, ConversationViewsProps, InputZone } from
 import { HeroShell, WorkspaceChip, workspaceLabel } from './EmptyHero.tsx'
 import { HomeFavorites } from './HomeFavorites.tsx'
 import { HomeSections } from './HomeSections.tsx'
+import { dismissLanding, isLandingDismissed, LandingPage } from './LandingPage.tsx'
 import css from './ConversationRoot.module.css'
 
 function ConversationSessionView({ renderSlot }: ConversationViewsProps) {
@@ -44,6 +45,17 @@ export function ConversationContent(props: ConversationContentProps) {
   // panel plus guide sections compose the start page there. Embedded
   // occurrences keep the compact centered hero.
   const home = hero && props.variant === 'main'
+
+  // The landing page: the first screen of a launch, in front of home.
+  // Shown only on the main occurrence's hero phase; dismissed for the
+  // rest of the launch. The flag is module-lifetime, not component
+  // state alone: the conversation slot unmounts when another panel is
+  // selected, and state alone would re-show the landing on the way back.
+  const [landing, setLanding] = useState(() => !isLandingDismissed())
+  const enterHome = useCallback(() => {
+    dismissLanding()
+    setLanding(false)
+  }, [])
 
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pendingWorkspaceId, setPendingWorkspaceId] = useState<WorkspaceId | undefined>()
@@ -198,10 +210,26 @@ export function ConversationContent(props: ConversationContentProps) {
   // on the fallback alone would leave a business-owned takeover at the content
   // end off-screen when the user is not pinned to the floor.
   const composerSeat = (
-    <div ref={seatResizeRef} className={css.composerSeat} data-composer-seat="">
+    <div ref={seatResizeRef} className={css.composerSeat} data-composer-seat="" data-sheen-panel="">
       {composer}
     </div>
   )
+
+  // The landing replaces the whole start page until the owner enters:
+  // no composer, no guide sections, no session views behind it.
+  if (landing && home) {
+    return (
+      <div
+        ref={setBody}
+        className={clsx(css.body, props.variant === 'embedded' && css.embeddedBody)}
+        data-conversation-content=""
+        data-content-phase={phase}
+      >
+        <LandingPage t={t} renderSlot={renderSlot} onEnter={enterHome} />
+        <WidthControls container={body} phase={phase} />
+      </div>
+    )
+  }
 
   return (
     <div
@@ -213,6 +241,7 @@ export function ConversationContent(props: ConversationContentProps) {
       <div
         className={clsx(css.scrollBody, home && css.scrollBodyHome)}
         data-conversation-scroll=""
+        data-sheen-panel="fixed"
       >
         {sessionId === undefined ? null : <Views />}
         {composerSeat}

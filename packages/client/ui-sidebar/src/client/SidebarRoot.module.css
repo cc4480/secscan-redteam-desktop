@@ -12,6 +12,7 @@
 .root {
   --dsh-sidebar-inline-padding: 12px;
   display: flex;
+  position: relative;
   flex-direction: column;
   height: 100%;
   padding: 8px var(--dsh-sidebar-inline-padding);
@@ -38,50 +39,25 @@
   padding: 16px 10px 8px;
 }
 
-/* The brand stays in the sidebar; fixed caption controls survive zero-width collapse. */
-:global([data-windows-titlebar]) .root .logoRow {
+/* The brand stays in the sidebar. Expanded, the logo row matches the
+   caption strip's height; collapsed, the rail's own logo-row geometry
+   (the shared .collapsed rules) applies, same as every other layout. */
+:global([data-windows-titlebar]) .root:not(.collapsed) .logoRow {
   height: 40px;
   margin: 0 0 8px;
   padding: 0;
 }
 
-:global([data-windows-titlebar]) .toggle {
-  position: fixed;
-  top: calc((var(--dsh-windows-titlebar-height) - 28px) / 2);
-  left: 12px;
-  z-index: 30;
-  -webkit-app-region: no-drag;
-}
+/* No fixed caption seats on this layout anymore: the toggle, brand tile,
+   and New Session all ride in flow (logo row expanded, rail rows
+   collapsed), exactly like every other layout. The fixed seats were
+   clipped out of existence by the collapsed column — .root carries a
+   backdrop-filter in the dark theme, which makes it the containing block
+   for fixed descendants, and the zero-width overflow-hidden column hid
+   them — stranding the operator with no way to reopen the sidebar. */
 
-/* Expanded, the toggle leaves the caption strip and takes the logo row's
-   right edge — its seat on every other layout. The fixed caption position
-   shares the brand glyph's x-column and reads as a control sitting on top
-   of the logo; only the collapsed state (and the collapse fade, before the
-   rail settles) keeps it in the strip, ahead of the caption brand tile. */
-:global([data-windows-titlebar]) .root:not(.collapsed):not(.fading) .toggle {
-  position: static;
-}
-
-/* Collapsed, the caption strip hosts three fixed seats in a row — the brand
-   tile, the toggle, New Session — each in its own 28px box on the same 8px
-   cadence the expanded strip uses (toggle at 12px, menus from 48px). */
-:global([data-windows-titlebar]) .collapsed .railBrand {
-  position: fixed;
-  top: calc((var(--dsh-windows-titlebar-height) - 28px) / 2);
-  left: 12px;
-  width: 28px;
-  height: 28px;
-  z-index: 30;
-  -webkit-app-region: no-drag;
-}
-
-:global([data-windows-titlebar]) .collapsed .toggle {
-  left: 48px;
-}
-
-:global([data-windows-titlebar]) .root.collapsed .logoRow {
-  height: 0;
-}
+/* (The caption-seat rules that used to sit here are gone with the seats
+   themselves; the rail geometry below is shared by every layout.) */
 
 :global([data-windows-titlebar]) .root:not(.collapsed) .brand {
   padding-left: 4px;
@@ -99,47 +75,18 @@
   font-weight: 400;
 }
 
-:global([data-windows-titlebar]) .root.collapsed {
-  padding: 0;
-}
-
-:global([data-windows-titlebar]) .collapsed .panelList,
-:global([data-windows-titlebar]) .collapsed .regionArea,
-:global([data-windows-titlebar]) .collapsed .footArea {
-  display: none;
-}
-
-/* Collapsed caption seats end at 112px (brand 12 + toggle 48 + New Session
-   84, three 28px boxes on an 8px cadence); the caption menus and the main
-   column's collapsed clearance start after them. */
-:global(html[data-windows-titlebar]:has([data-sidebar-collapsed='true'])) {
-  --dsh-windows-menu-start: 120px;
-}
-
-:global([data-windows-titlebar]) .collapsed .newSession {
-  position: fixed;
-  top: calc((var(--dsh-windows-titlebar-height) - 28px) / 2);
-  left: 84px;
-  margin: 0;
-  padding: 0;
-  border: none;
-  z-index: 30;
-  -webkit-app-region: no-drag;
-}
+/* The collapsed rail keeps the panel list, region area, and foot area
+   mounted as icon rows on Windows too — the shared .collapsed rules
+   govern them. With the caption seats gone, the caption menus keep the
+   preload's default start (48px) in both sidebar states, and New Session
+   rides the rail in flow at the shared icon-button geometry. */
 
 :global([data-windows-titlebar]) .railIn .iconButton,
 :global([data-windows-titlebar]) .railIn .newSession {
   animation: none;
 }
 
-:global([data-windows-titlebar]) .collapsed .toggle,
-:global([data-windows-titlebar]) .collapsed .newSession {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  corner-shape: round;
-  color: var(--dsw-alias-label-secondary);
-}
+/* Rail controls keep the shared 36px icon-button geometry (above). */
 
 /* Scrollbars in the column are a pointer affordance: the shell adds this
    class whenever the pointer is not inside (SidebarRoot.tsx owns the linger),
@@ -256,8 +203,8 @@
 
 /* Rail brand seat: the mark's own 36px tile at the rail top — a plain seat,
    never a control — with the toggle in its own row below it, so the collapse
-   control no longer carries or covers the logo. On the Windows caption
-   layout the seat becomes the fixed caption tile (see the titlebar rules). */
+   control no longer carries or covers the logo. Every layout, Windows
+   included: the seat rides this row in flow, never a fixed caption tile. */
 .railBrand {
   flex: none;
   display: inline-flex;
@@ -290,7 +237,7 @@
    emphasis only). A button only in behavior (New Session shortcut): the
    pointer cursor is the sole affordance — no hover chrome on the mark. */
 .brand {
-  flex: 1;
+  flex: none;
   min-width: 0;
   display: inline-flex;
   align-items: center;
@@ -310,7 +257,9 @@
 
 /* Brand band — the brand occupies the slot the New Session bar used to hold,
    at display size. The mark and the wordmark scale to fill the column width
-   rather than sitting as a 24px tile; this is the sidebar's identity row. */
+   rather than sitting as a 24px tile; this is the sidebar's identity row.
+   The lock-up sits bare on the sidebar surface: no fill, radius, or hover
+   chrome behind it — the logo is the top of the sidebar, not a card on it. */
 .brandBand {
   width: 100%;
   min-height: 60px;
@@ -318,14 +267,29 @@
   padding: 10px 12px;
   margin: 0 2px 12px;
   gap: 14px;
-  border-radius: 12px;
-  background: var(--dsw-alias-bg-layer-1, transparent);
-  transition: background 120ms ease-out;
+  background: transparent;
 }
 
-.brandBand:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+/* Wide non-darwin only (SidebarRoot adds the class): the brand rides the
+   logo row itself instead of a band below it, so the lock-up hugs the panel
+   top — only the root padding and this band's 4px sit above the mark. The
+   toggle keeps the row's right edge; the nav stack rises with the brand.
+   Collapsed and darwin never carry the class. */
+.logoRowWithBrand {
+  height: auto;
+  justify-content: flex-start;
+  padding: 0;
+  margin-bottom: 8px;
 }
+
+.logoRowWithBrand .brandBand {
+  flex: 1 1 auto;
+  width: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 4px 8px 4px 4px;
+}
+
 
 .brandBand .brandIdentity {
   gap: 14px;
@@ -535,15 +499,18 @@
   max-width: 0;
 }
 
-/* Panel list: the column's upper scroll region. It shares the column's
-   leftover height with the browsing region below (both flex: 1 with
-   min-height: 0), so when the registered panels outgrow their share the
-   list scrolls internally instead of pushing rows past the column's edge,
+/* Panel list: the column's upper scroll region. It hugs its rows directly
+   under the brand (flex: 0 1 auto) — the browsing region below takes the
+   column's leftover height alone (flex: 1), so free space pools at the
+   column's foot instead of spreading between the brand, the list, and
+   the region. With min-height: 0 the list still shrinks and scrolls
+   internally when the registered panels outgrow the height left to it,
+   instead of pushing rows past the column's edge,
    unreachable. Its scrollbar rides the column's ui-theme indirection (the
    .root thumb vars and the .quietBars rebinding), the same pattern as the
    workspace list's scroll region. */
 .panelList {
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -574,10 +541,14 @@
   line-height: 22px;
   text-align: left;
   cursor: pointer;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
 }
 
 .panelRow:hover {
   background: var(--dsw-alias-interactive-bg-hover);
+  transform: translateY(var(--lift)) perspective(640px) rotateX(calc(var(--ly, 0) * var(--stand-tilt) * -1)) rotateY(calc(var(--lx, 0) * var(--stand-tilt)));
 }
 
 .panelRow.panelActive {
@@ -704,10 +675,9 @@
 
 /* Collapsed, the brand seat rests as a glass tile (the sample's rail
    tile): the card plane inside the rail panel — a solid step, no blur of
-   its own, with the rim and the tile elevation. Scoped away from the
-   Windows caption layout, whose fixed 28px caption seats keep their
-   own geometry. */
-:global(html:not([data-windows-titlebar])) :global([data-ds-dark-theme]) .collapsed .railBrand {
+   its own, with the rim and the tile elevation. Every layout, Windows
+   included, now that the rail replaced the fixed caption seats. */
+:global([data-ds-dark-theme]) .collapsed .railBrand {
   background: var(--glass-top-light), var(--glass-hi);
   border: 1px solid var(--glass-line);
   border-radius: 11px;
@@ -719,9 +689,44 @@
    the hairline ring. */
 :global([data-ds-dark-theme]) .panelRow:hover {
   background: var(--glass-hi);
+  transform: translateY(var(--lift)) perspective(640px) rotateX(calc(var(--ly, 0) * var(--stand-tilt) * -1)) rotateY(calc(var(--lx, 0) * var(--stand-tilt)));
+  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow-card);
 }
 
 :global([data-ds-dark-theme]) .panelRow.panelActive {
   background: var(--glass-strong);
   box-shadow: inset 0 1px 0 var(--glass-edge-hi), inset 0 0 0 1px var(--glass-line);
 }
+
+/* Living sheen + stand-up (dark): the shell tracker (AppFrame) writes
+   --px/--py on this panel as the pointer moves; the pool is plain
+   gradients — no blur, no new filtered surface. On hover the panel
+   stands: the house lift, the shadow stepping from the panel tier to
+   the lift tier, and --sheen-hot mixing the tight hot pool in at the
+   pointer (registered in glass-shell.css, so the boost transitions
+   instead of flipping). */
+:global([data-ds-dark-theme]) .root {
+  transition:
+    transform var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    --sheen-hot var(--dur-base) var(--ease-out);
+}
+
+:global([data-ds-dark-theme]) .root::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(320px circle at var(--px, -999px) var(--py, -999px), color-mix(in srgb, var(--sheen-hot-core) calc(var(--sheen-hot, 0) * 100%), transparent), transparent 70%),
+    radial-gradient(760px circle at var(--px, -999px) var(--py, -999px), var(--sheen-pool-core), var(--sheen-pool-halo) 48%, transparent 72%);
+}
+
+:global([data-ds-dark-theme]) .root:hover {
+  transform: translateY(var(--lift));
+  box-shadow: var(--glass-rim), var(--shadow-lift);
+  --sheen-hot: 1;
+}
+

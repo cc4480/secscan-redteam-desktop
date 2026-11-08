@@ -42,10 +42,10 @@ function ev(over: Partial<EngagementEvent>): EngagementEvent {
 describe("speakerForActor", () => {
   it("maps every fleet seat to its cast name and chip role", () => {
     assert.deepEqual(speakerForActor("coordinator"), { name: "MORPHEUS", role: "lead" });
-    assert.deepEqual(speakerForActor("recon"), { name: "OPERATOR", role: "recon" });
+    assert.deepEqual(speakerForActor("recon"), { name: "TANK", role: "recon" });
     assert.deepEqual(speakerForActor("exploiter"), { name: "NEO", role: "exploiter" });
-    assert.deepEqual(speakerForActor("reporter"), { name: "ARCHITECT", role: "reporter" });
-    assert.deepEqual(speakerForActor("architect"), { name: "ARCHITECT", role: "architect" });
+    assert.deepEqual(speakerForActor("reporter"), { name: "TRINITY", role: "reporter" });
+    assert.deepEqual(speakerForActor("architect"), { name: "AGENT SMITH", role: "architect" });
   });
 
   it("names no speaker for engine records or absent actors", () => {
@@ -73,7 +73,7 @@ describe("currentSeatSpeaker", () => {
       ev({ seq: 2, actor: "coordinator", action: "abort_engagement" }),
       ev({ seq: 3, actor: "coordinator", action: "task_spawn" }),
     ];
-    assert.deepEqual(currentSeatSpeaker(events), { name: "OPERATOR", role: "recon" });
+    assert.deepEqual(currentSeatSpeaker(events), { name: "TANK", role: "recon" });
   });
 
   it("returns undefined when only runner-stamped loop actions exist", () => {
@@ -88,7 +88,7 @@ describe("reportAuthorSpeaker", () => {
       ev({ seq: 1, actor: "exploiter", action: "reasoning" }),
       ev({ seq: 2, actor: "reporter", action: "reasoning", phase: "report" }),
     ];
-    assert.deepEqual(reportAuthorSpeaker(events), { name: "ARCHITECT", role: "reporter" });
+    assert.deepEqual(reportAuthorSpeaker(events), { name: "TRINITY", role: "reporter" });
   });
 
   it("names no author for a mechanical (halted/blocked) report", () => {
@@ -112,7 +112,7 @@ describe("findingSpeakers", () => {
     ] as Finding[];
     assert.deepEqual(findingSpeakers(findings), {
       "F-1": { name: "NEO", role: "exploiter" },
-      "F-4": { name: "OPERATOR", role: "recon" },
+      "F-4": { name: "TANK", role: "recon" },
     });
   });
 });

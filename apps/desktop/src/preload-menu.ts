@@ -1,35 +1,28 @@
-/** Windows caption menu labels and native popup anchors, isolated from the Web client. */
+/** Windows Application menu bridge, isolated from the Web client. */
 import { ipcRenderer } from 'electron'
 import { DESKTOP_IPC } from './ipc.ts'
-import { resolveDesktopLocale } from './locale.ts'
 
 /**
- * Mount the Windows caption menubar without moving focus out of the active editor.
+ * Document event the in-app sidebar dispatches to open the native
+ * Application menu: the detail carries the anchor point (the sidebar
+ * row's bottom-left) in CSS pixels, the same anchor the caption
+ * buttons used before the menu moved into the sidebar.
+ */
+const APPLICATION_MENU_EVENT = 'dsh:application-menu'
+
+/**
+ * Bridge the sidebar's Application row to the native popup without moving
+ * focus out of the active editor: the editor's selection is remembered on
+ * focus-out and restored once the popup closes. There is no caption
+ * menubar anymore — the Application menu's only seat is the sidebar row
+ * above the panel list, and the Edit menu is gone entirely.
  * @returns Language refresh and document teardown operations.
  */
 export function installWindowsMenu(): { update(): void; dispose(): void } {
-  const host = document.createElement('div')
-  host.dataset.windowsMenu = ''
-  const shadow = host.attachShadow({ mode: 'open' })
-  const style = document.createElement('style')
-  style.textContent = `
-    :host { position: fixed; top: 0; left: var(--dsh-windows-menu-start, 48px); z-index: 1100;
-      height: var(--dsh-windows-titlebar-height); display: flex; align-items: center;
-      font-family: var(--dsw-font-family); -webkit-app-region: no-drag; }
-    [role=menubar] { display: flex; gap: 2px; }
-    button { height: 28px; padding: 0 10px; border: 0; border-radius: 6px;
-      background: transparent; color: var(--dsw-alias-label-secondary);
-      font: inherit; font-size: 14px; cursor: default; }
-    button:hover, button[aria-expanded=true] { background: var(--dsw-alias-interactive-bg-hover);
-      color: var(--dsw-alias-label-primary); }
-    button:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: -2px; }
-  `
-  const bar = document.createElement('div')
-  bar.setAttribute('role', 'menubar')
   let restoreEditor = (): void => {}
   const rememberEditor = (event: FocusEvent): void => {
     const target = event.composedPath()[0]
-    if (!(target instanceof HTMLElement) || target === host || shadow.contains(target)) return
+    if (!(target instanceof HTMLElement)) return
     if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLTextAreaElement)
       && !target.matches('[contenteditable="true"]')) return
     const selection = document.getSelection()
@@ -49,64 +42,32 @@ export function installWindowsMenu(): { update(): void; dispose(): void } {
     }
   }
   document.addEventListener('focusout', rememberEditor, true)
-  const createButton = (name: 'application' | 'edit', index: 0 | 1): HTMLButtonElement => {
-    const button = document.createElement('button')
-    button.type = 'button'
-    button.setAttribute('role', 'menuitem')
-    button.setAttribute('aria-haspopup', 'menu')
-    button.setAttribute('aria-expanded', 'false')
-    button.tabIndex = index === 0 ? 0 : -1
-    button.addEventListener('pointerdown', (event) => { event.preventDefault() })
-    button.addEventListener('mousedown', (event) => { event.preventDefault() })
-    const open = async (): Promise<void> => {
-      if (button.getAttribute('aria-expanded') === 'true') return
-      const rect = button.getBoundingClientRect()
-      button.setAttribute('aria-expanded', 'true')
-      if (document.activeElement === host) restoreEditor()
-      try { await ipcRenderer.invoke(DESKTOP_IPC.windowsMenu, name, rect.left, rect.bottom) }
-      catch (error) { console.error('Desktop caption menu failed', error) }
-      finally { button.setAttribute('aria-expanded', 'false') }
+  let popupOpen = false
+  const openApplicationMenu = async (x: number, y: number): Promise<void> => {
+    if (popupOpen) return
+    popupOpen = true
+    try { await ipcRenderer.invoke(DESKTOP_IPC.windowsMenu, 'application', x, y) }
+    catch (error) { console.error('Desktop application menu failed', error) }
+    finally {
+      popupOpen = false
+      restoreEditor()
     }
-    button.addEventListener('click', () => { void open() })
-    button.addEventListener('keydown', (event) => {
-      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-        event.preventDefault()
-        const next = buttons[index === 0 ? 1 : 0]
-        button.tabIndex = -1
-        next.tabIndex = 0
-        next.focus()
-      } else if (event.key === 'ArrowDown') {
-        event.preventDefault()
-        void open()
-      }
-    })
-    bar.append(button)
-    return button
   }
-  const buttons = [createButton('application', 0), createButton('edit', 1)] as const
-  shadow.append(style, bar)
-  const mount = (): void => {
-    // AppFrame owns this seat; boot readiness alone precedes the rendered application.
-    if (document.querySelector('[data-shell-overlay]') === null) return
-    document.body.append(host)
-    observer.disconnect()
+  const onMenuRequest = (event: Event): void => {
+    const detail = (event as CustomEvent<{ x?: unknown; y?: unknown }>).detail
+    const x = detail?.x
+    const y = detail?.y
+    if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) return
+    void openApplicationMenu(x, y)
   }
-  const observer = new MutationObserver(mount)
-  observer.observe(document.body, { childList: true, subtree: true })
-  mount()
-  const update = (): void => {
-    const { messages } = resolveDesktopLocale(document.documentElement.lang)
-    bar.setAttribute('aria-label', messages.menuBar)
-    buttons[0].textContent = messages.application
-    buttons[1].textContent = messages.edit
-  }
-  update()
+  document.addEventListener(APPLICATION_MENU_EVENT, onMenuRequest)
   return {
-    update,
+    // No caption labels remain to refresh: the menu's only seat is the
+    // sidebar row, which the client renders and labels itself.
+    update: () => {},
     dispose: () => {
-      observer.disconnect()
       document.removeEventListener('focusout', rememberEditor, true)
-      host.remove()
+      document.removeEventListener(APPLICATION_MENU_EVENT, onMenuRequest)
     },
   }
 }

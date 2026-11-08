@@ -86,30 +86,40 @@ describe('SidebarRoot.module.css', () => {
     expect(css).not.toContain('.collapsed .toggle .panelIcon')
   })
 
-  it('keeps the Windows caption seats clear of the expanded brand column', () => {
-    // Expanded: the toggle returns to the logo row (static, right edge).
-    expect(
-      declarations(':global([data-windows-titlebar]) .root:not(.collapsed):not(.fading) .toggle')?.get('position'),
-    ).toBe('static')
-    // Collapsed: brand tile, toggle, New Session — three fixed seats in a row.
-    const brand = declarations(':global([data-windows-titlebar]) .collapsed .railBrand')
-    expect(brand?.get('position')).toBe('fixed')
-    expect(brand?.get('left')).toBe('12px')
-    expect(brand?.get('width')).toBe('28px')
-    expect(declarations(':global([data-windows-titlebar]) .collapsed .toggle')?.get('left')).toBe('48px')
-    expect(declarations(':global([data-windows-titlebar]) .collapsed .newSession')?.get('left')).toBe('84px')
+  it('keeps the Windows sidebar in flow: no fixed caption seats remain', () => {
+    // The caption-seat design stranded the operator: the seats were fixed
+    // descendants of .root, whose dark-theme backdrop-filter makes it
+    // their containing block, so the zero-width collapsed column clipped
+    // them away. The rail replaced them — nothing in this sheet is fixed.
+    expect(css).not.toContain('position: fixed')
+    expect(declarations(':global([data-windows-titlebar]) .collapsed .railBrand')).toBeUndefined()
+    expect(declarations(':global([data-windows-titlebar]) .collapsed .toggle')).toBeUndefined()
+    expect(declarations(':global([data-windows-titlebar]) .collapsed .newSession')).toBeUndefined()
     expect(
       declarations(":global(html[data-windows-titlebar]:has([data-sidebar-collapsed='true']))")
         ?.get('--dsh-windows-menu-start'),
-    ).toBe('120px')
+    ).toBeUndefined()
+    // Expanded, the logo row still matches the caption strip's height, and
+    // the collapsed brand seat takes the shared dark glass tile.
+    expect(
+      declarations(':global([data-windows-titlebar]) .root:not(.collapsed) .logoRow')?.get('height'),
+    ).toBe('40px')
+    expect(
+      declarations(':global([data-ds-dark-theme]) .collapsed .railBrand')?.get('border-radius'),
+    ).toBe('11px')
   })
 
-  it('makes the panel list a scroll region sharing the column height', () => {
-    // Both regions grow into the leftover height and may shrink to zero
-    // (flex: 1, min-height: 0); the panel list scrolls internally, so
-    // every registered panel row stays reachable.
+  it('top-anchors the brand and panel list, pooling free space in the region area', () => {
+    // Layout contract (operator order): the brand hugs the top of the
+    // column (flex: none) and the panel list hugs its rows directly
+    // under it (flex: 0 1 auto) while still shrinking and scrolling
+    // internally (min-height: 0, overflow-y: auto), so every registered
+    // panel row stays reachable. The region area is the sole grower
+    // (flex: 1, min-height: 0): all leftover height pools below the
+    // nav, at the bottom of the sidebar.
+    expect(declarations('.brand')?.get('flex')).toBe('none')
     const list = declarations('.panelList')
-    expect(list?.get('flex')).toBe('1')
+    expect(list?.get('flex')).toBe('0 1 auto')
     expect(list?.get('min-height')).toBe('0')
     expect(list?.get('overflow-y')).toBe('auto')
     expect(declarations('.regionArea')?.get('flex')).toBe('1')

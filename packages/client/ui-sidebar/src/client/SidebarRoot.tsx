@@ -2,11 +2,11 @@
  * Sidebar shell: column geometry and global panel navigation.
  * Collapse is a slide plus crossfade:
  * content freezes at its expanded width (inline style) and fades out in place
- * while the sliding column (AppFrame grid tracks) clips it — nothing reflows
+ * while the sliding column (AppFrame grid tracks) clips it â€” nothing reflows
  * mid-slide. At settle the wide-only content unmounts and the upper
  * controls enter the 56px rail from the same horizontal offset (one icon each,
  * same top-down order) on one fade that ends with the slide. The rail's top
- * seat is the brand mark alone — a plain tile, never a control — and the
+ * seat is the brand mark alone â€” a plain tile, never a control â€” and the
  * collapse toggle takes its own row below it, so the control never carries
  * or covers the logo in either state. The bottom-pinned
  * settings control only fades. The workspace/session browsing region between
@@ -19,10 +19,10 @@
  * scrollbar indirection away while it is elsewhere, so a list the user is not
  * pointing at carries no bar.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import clsx from 'clsx'
 import {
-  DiamondLogo, IconNewChatOutlineRegular, IconPanelLeftOutlineRegular, isDarwinDesktop, Tooltip,
+  IconNewChatOutlineRegular, IconPanelLeftOutlineRegular, IconSettingsOutlineRegular, isDarwinDesktop, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
@@ -37,19 +37,9 @@ const COLLAPSE_SETTLE_MS = 150
  * How long the column's scrollbars stay drawn after the pointer leaves it.
  * The bar is a pointer affordance here, and hiding it on the leave event
  * itself makes it blink out while the pointer is only crossing the column's
- * edge — on the way to the conversation, or around a portalled menu.
+ * edge â€” on the way to the conversation, or around a portalled menu.
  */
 const SCROLLBAR_LINGER_MS = 2000
-
-/** Format complete-build metadata for the local brand badge. */
-function localBuildVersion(): string | undefined {
-  const version = process.env.DSH_CLIENT_VERSION
-  if (version === undefined) return undefined
-  const commit = process.env.DSH_CLIENT_COMMIT_HASH
-  return version
-    + (commit === undefined ? '' : `-${commit}`)
-    + (process.env.DSH_CLIENT_GIT_DIRTY === 'true' ? '-dirty' : '')
-}
 
 type PanelRowProps =
   Pick<SidebarPanelMetadata, 'id' | 'label'>
@@ -66,12 +56,52 @@ function PanelRow({ id, label, wide, usePanelInfo, selectPanel, renderSlot }: Pa
       <button
         type="button"
         className={clsx(css.panelRow, active && css.panelActive)}
+        data-tilt
         aria-label={label}
         aria-current={active ? 'page' : undefined}
         onClick={() => { selectPanel(id) }}
       >
         <span className={css.panelGlyph} aria-hidden="true">
           {renderSlot('sidebar.panellist', { size: wide ? 16 : 18, active }, { only: id })}
+        </span>
+        {wide && (
+          <span className={clsx(css.panelTitle, css.wide)}>
+            {label}
+          </span>
+        )}
+      </button>
+    </Tooltip>
+  )
+}
+
+/**
+ * The Application menu's seat in the sidebar, directly above the panel
+ * rows (Plugins first among them). It is not a panel and never takes the
+ * active seat: the desktop shell owns the native popup, so the row asks
+ * it to open anchored to the row itself â€” preload-menu bridges the
+ * document event to the windowsMenu IPC. The label matches the desktop
+ * caption menu it replaces.
+ */
+function ApplicationRow({ wide }: Pick<SidebarSectionOwnerProps, 'wide'>) {
+  const label = 'Application'
+  const openMenu = (event: ReactMouseEvent<HTMLButtonElement>): void => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    document.dispatchEvent(new CustomEvent('dsh:application-menu', {
+      detail: { x: rect.left, y: rect.bottom },
+    }))
+  }
+  return (
+    <Tooltip label={label} delayMs={500} disabled={wide}>
+      <button
+        type="button"
+        className={css.panelRow}
+        data-tilt
+        aria-label={label}
+        aria-haspopup="menu"
+        onClick={openMenu}
+      >
+        <span className={css.panelGlyph} aria-hidden="true">
+          <IconSettingsOutlineRegular size={wide ? 16 : 18} />
         </span>
         {wide && (
           <span className={clsx(css.panelTitle, css.wide)}>
@@ -109,11 +139,15 @@ export function SidebarRoot({
     return () => { window.clearTimeout(timer) }
   }, [collapsed])
   const windowsTitlebar = document.documentElement.hasAttribute('data-windows-titlebar')
-  const wide = windowsTitlebar ? !collapsed : !collapsed || !settled
-  // The Windows caption menus occupy the strip to the right of these controls
-  // (that is what --dsh-windows-menu-start reserves), so a right-side bubble
-  // lands under their text. Below the caption is the only clear side.
-  const captionTooltipSide = windowsTitlebar ? 'bottom' : 'right'
+  // Every layout now collapses to the same slim rail (the Windows
+  // caption-seat design hid the sidebar entirely â€” see AppFrame), so wide
+  // content stays mounted through the fade on Windows too.
+  const wide = !collapsed || !settled
+  // In the expanded Windows layout the caption strip shares the row with
+  // these controls, so a right-side bubble can land under the caption
+  // controls; below the caption is the only clear side. In the rail the
+  // bubble rides beside its anchor, like every other layout.
+  const captionTooltipSide = windowsTitlebar && wide ? 'bottom' : 'right'
 
   // Freeze the content at its expanded width while it fades out (collapsed
   // && wide): the sliding column then clips it instead of reflowing it. The
@@ -147,7 +181,7 @@ export function SidebarRoot({
   // Leaving is decided by the column's BOX, not by DOM containment, and only
   // while the bars are drawn. ui-settings renders its full-viewport panel as a
   // fixed-position DESCENDANT of this column, so a pointer moved onto that
-  // panel — or onto the conversation once it closes — fires no `pointerleave`
+  // panel â€” or onto the conversation once it closes â€” fires no `pointerleave`
   // here, and the bars would stay drawn over a column nobody is pointing at.
   // The element's own leave stays as the one signal geometry cannot give: a
   // pointer that leaves the window emits no further moves.
@@ -169,12 +203,10 @@ export function SidebarRoot({
     }
   }, [pointerInside])
 
-  const buildVersion = localBuildVersion()
-
   const darwinDesktop = isDarwinDesktop()
-  // The toggle is only ever the panel icon: the brand mark has its own seat
-  // (the rail tile in the logo row, or the Windows caption tile), so this
-  // control never carries or covers the logo in either sidebar state.
+  // The toggle is only ever the panel icon. The sidebar carries no brand
+  // mark in either state (the centre panel hero lock-up is the brand), so
+  // this control never carries or covers a logo.
   const toggle = (
     <Tooltip label={collapsed ? t('toggle.open') : t('toggle.collapse')} delayMs={500} side={captionTooltipSide}>
       <button
@@ -184,15 +216,15 @@ export function SidebarRoot({
         onClick={() => { toggleSidebar() }}
       >
         {/* Rail icons render at 18 (figma rail spec); expanded keeps the glyph-native sizes. */}
-        <IconPanelLeftOutlineRegular className={css.panelIcon} size={wide || windowsTitlebar ? 16 : 18} />
+        <IconPanelLeftOutlineRegular className={css.panelIcon} size={wide ? 16 : 18} />
         {!wide && renderSlot('sidebar.toggle.badge', {})}
       </button>
     </Tooltip>
   )
-
   return (
     <div
       ref={column}
+      data-sheen-panel=""
       className={clsx(
         css.root, !wide && css.collapsed, !wide && everWide.current && css.railIn,
         collapsed && wide && css.fading, !pointerInside && css.quietBars,
@@ -207,64 +239,19 @@ export function SidebarRoot({
       {/* macOS hiddenInset titlebar: the strip shares the row with the
           traffic lights and keeps the toggle at the sidebar's top-right. */}
       {darwinDesktop && <div className={css.topStrip}>{toggle}</div>}
+      {/* No brand rides the sidebar: this row carries only the collapse
+          toggle, right-aligned while expanded. The brand lock-up lives
+          in the centre panel hero; the collapsed rail gives the toggle
+          a row of its own below (toggleRow). */}
       <div className={css.logoRow}>
-        {/* Collapsed, the brand mark gets its own plain tile seat in this row —
-            never a control. Expanded, the brand is NOT rendered here: it moves
-            down into the band that occupies the old New Session slot, at
-            display size, so the mark and name fill the column width. */}
-        {!wide && (
-          <span className={css.railBrand} aria-hidden="true">
-            {renderSlot('sidebar.brand.mark', { size: 24 }, { fallback: <DiamondLogo size={24} /> })}
-          </span>
-        )}
-        {/* The toggle rides the logo row while expanded — and on the Windows
-            caption layout, where the CSS fixes it into the caption strip
-            while collapsed. The plain rail gives it a row of its own below
-            the brand seat instead. */}
-        {!darwinDesktop && (wide || windowsTitlebar) && toggle}
+        {!darwinDesktop && wide && toggle}
       </div>
-      {!darwinDesktop && !wide && !windowsTitlebar && <div className={css.toggleRow}>{toggle}</div>}
+      {!darwinDesktop && !wide && <div className={css.toggleRow}>{toggle}</div>}
 
-      {/* Expanded, the New Session bar is deliberately gone: its slot carries
-          the brand lock-up at display size, filling the column width. The band
-          still starts a session (that was the bar's job), so no affordance is
-          lost — only the separate control. Collapsed, the rail keeps its
-          compact New Session icon. */}
-      {wide
-        ? (() => {
-          const identity = (
-            <span className={css.brandIdentity} aria-hidden="true">
-              <span className={css.brandMark}>
-                {renderSlot('sidebar.brand.mark', { size: 32 }, { fallback: <DiamondLogo size={32} /> })}
-              </span>
-              <span className={css.brandName}>
-                {renderSlot('sidebar.brand.name', {}, {
-                  fallback: buildVersion === undefined
-                    ? <span className={css.fallbackBrandName}>{t('brand.localBuild')}</span>
-                    : (
-                      <span className={css.localBuildBrand}>
-                        <span className={css.localBuildTitle}>{t('brand.localBuild')}</span>
-                        <span className={css.buildVersion}>{buildVersion}</span>
-                      </span>
-                    ),
-                })}
-              </span>
-            </span>
-          )
-          return darwinDesktop
-            ? <span className={clsx(css.brand, css.brandBand)}>{identity}</span>
-            : (
-              <button
-                type="button"
-                className={clsx(css.brand, css.brandBand)}
-                aria-label={t('session.new.label')}
-                onClick={() => { startSession() }}
-              >
-                {identity}
-              </button>
-            )
-        })()
-        : (
+      {/* Expanded, the New Session bar is deliberately gone: the workspaces
+          region below carries its own New Session control. Collapsed, the
+          rail keeps its compact New Session icon. */}
+      {!wide && (
           <Tooltip label={t('session.new.label')} delayMs={500} side={captionTooltipSide}>
             <button
               type="button"
@@ -272,26 +259,25 @@ export function SidebarRoot({
               aria-label={t('session.new.label')}
               onClick={() => { startSession() }}
             >
-              <IconNewChatOutlineRegular size={windowsTitlebar ? 16 : 18} />
+              <IconNewChatOutlineRegular size={18} />
             </button>
           </Tooltip>
         )}
 
-      {panels.length > 0 && (
-        <nav className={css.panelList} aria-label={t('panels.label')}>
-          {panels.map(({ id, label }) => (
-            <PanelRow
-              key={id}
-              id={id}
-              label={label}
-              wide={wide}
-              usePanelInfo={usePanelInfo}
-              selectPanel={selectPanel}
-              renderSlot={renderSlot}
-            />
-          ))}
-        </nav>
-      )}
+      <nav className={css.panelList} aria-label={t('panels.label')}>
+        <ApplicationRow wide={wide} />
+        {panels.map(({ id, label }) => (
+          <PanelRow
+            key={id}
+            id={id}
+            label={label}
+            wide={wide}
+            usePanelInfo={usePanelInfo}
+            selectPanel={selectPanel}
+            renderSlot={renderSlot}
+          />
+        ))}
+      </nav>
 
       {/* The browsing region fills the column between the controls and the
           foot in both states; its rail icon column rides the same slot. */}

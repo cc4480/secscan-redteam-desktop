@@ -383,7 +383,7 @@ describe('speaker stamps', () => {
     const out = await tool('engagement_report').run(store, { id })
     assert.equal(out.status, 200)
     const b = out.body as Record<string, unknown>
-    assert.deepEqual(b['speaker'], { name: 'ARCHITECT', role: 'reporter' })
+    assert.deepEqual(b['speaker'], { name: 'TRINITY', role: 'reporter' })
     assert.deepEqual(b['findingSpeakers'], { 'F-1': { name: 'NEO', role: 'exploiter' } })
   })
 
@@ -408,7 +408,7 @@ describe('speaker stamps', () => {
       await rpc(base, srv.token, 'initialize', { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'test', version: '0' } })
       const stamped = await rpc(base, srv.token, 'tools/call', { name: 'engagement_status', arguments: { id: 'eng-2026-10-28-spe5' } })
       const stampedResult = stamped['result'] as { structuredContent?: Record<string, unknown> }
-      assert.deepEqual(stampedResult.structuredContent?.['speaker'], { name: 'OPERATOR', role: 'recon' })
+      assert.deepEqual(stampedResult.structuredContent?.['speaker'], { name: 'TANK', role: 'recon' })
       const plain = await rpc(base, srv.token, 'tools/call', { name: 'engagement_status', arguments: { id: 'eng-2026-10-28-spe6' } })
       const plainResult = plain['result'] as { structuredContent?: unknown }
       assert.equal('structuredContent' in plainResult, false)

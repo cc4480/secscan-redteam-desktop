@@ -302,7 +302,7 @@ describe('entry-point plumbing', () => {
 
   test('completeForRole forwards responseFormat to the seated provider', async () => {
     delete process.env['REDTEAM_LLM_PROVIDER']
-    process.env[META_API_KEY_ENV] = 'test-key'
+    process.env[DEEPSEEK_API_KEY_ENV] = 'test-key'
     const seen = capturingFetch()
     await completeForRole('coordinator', [{ role: 'user', content: 'hi' }], {
       responseFormat: { type: 'json_object' },
@@ -313,7 +313,7 @@ describe('entry-point plumbing', () => {
 
   test('completeWithCharter forwards responseFormat to the seated provider', async () => {
     delete process.env['REDTEAM_LLM_PROVIDER']
-    process.env[META_API_KEY_ENV] = 'test-key'
+    process.env[DEEPSEEK_API_KEY_ENV] = 'test-key'
     const seen = capturingFetch()
     await completeWithCharter({
       role: 'coordinator',

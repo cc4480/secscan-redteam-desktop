@@ -1,0 +1,16 @@
+OK  CF4EF39525C3CFC5FE803E17D306950B3884938C26BBB4AC9F3436071848123F  packages\client\ui-layout\src\client\AppFrame.tsx
+OK  202CA29977DF33E2923E5E2A6AF42DD6B63E4742541FD8828DD09103936143D1  packages\client\ui-layout\src\client\glass-shell.css
+OK  2AD7DD264EDAF73398EFA290305FB5EC5BF9A5B5B45A770C16A8C9C870AFC317  packages\client\ui-sidebar\src\client\SidebarRoot.tsx
+OK  8AA41DAC52809989AF3F4138E075C0D6678837A1070F37B5AA299BC50362AB1D  packages\client\ui-sidebar\src\client\SidebarRoot.module.css
+OK  8079942F608F4E9DAA70AF6A05A25D8B79D08811ABD30276FEAA91E5FCD873E9  packages\client\ui-conversation\src\client\skeleton\ConversationMainPanel.tsx
+OK  0F09451577D8EDA4EF5ACC4461D13415439EFF8E2E3796DC2082A9F2B5C4AECB  packages\client\ui-conversation\src\client\skeleton\ConversationContent.tsx
+OK  57AB5475A9D33B710D3C749F47813B08CF4189176E04D91061CFEA21D87FA9E6  packages\client\ui-conversation\src\client\skeleton\ConversationHeader.tsx
+OK  D6FEFAA2C14B332BA07363CA4781209E0E947DFE7BB7BC415757FB9A3A1734AB  packages\client\ui-conversation\src\client\skeleton\ConversationRoot.module.css
+OK  37AB128176EE800239F46C5DBD7275BD1EEF750258C5E54F671C6BD8F451F582  packages\client\ui-conversation\src\client\skeleton\HomeSections.tsx
+OK  1221AA972A84F8EAF73E5B52B7278865953AA6E2868F5D6C7EAA94716B6C8E1F  packages\client\ui-conversation\src\client\skeleton\HomeSections.module.css
+OK  F962AF349659ED80F32704716571ABEE30A5C3B98062853BC9D8CA6E4EA44072  packages\client\ui-conversation\src\client\skeleton\HomeFavorites.tsx
+OK  E32ED20E0B0AAE6014769EFCF29731EA864666CA546C8EAD5AF9D50B38C955BF  packages\client\ui-conversation\src\client\skeleton\HomeFavorites.module.css
+packages\client\ui-conversation\src\client\skeleton\InputBar.module.css 86FE3EB978EE6C5B7A93A12AAD2FEB22DA2C2A720D5A4482C605DF7849BFBD3C
+packages\client\ui-sidebar\tests\__snapshots__\sidebar-snapshot.client.spec.tsx.snap 2735040629D861E20F894A08CA175AF102162E1C0C2E7CEE0A9A44AB506466B4
+packages\client\ui-primitives\src\Glass.module.css 7E55E798734D146FEC90496E77AA198B22A65BDED03AFE1395EF8B3A9D7619F1
+packages\client\ui-primitives\lib\Glass.module.css 7E55E798734D146FEC90496E77AA198B22A65BDED03AFE1395EF8B3A9D7619F1

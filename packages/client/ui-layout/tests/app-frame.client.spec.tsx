@@ -225,15 +225,15 @@ describe('AppFrame', () => {
     expect(getByTestId('rightbar-content')).toBeTruthy()
   })
 
-  it('keeps Windows caption controls mounted with a zero-width collapsed column', () => {
+  it('keeps the Windows sidebar mounted at its 56px rail when collapsed', () => {
     document.documentElement.setAttribute('data-windows-titlebar', '')
     try {
       const { frame, instance, sidebarOwner, getByTestId, queryByTestId } = mountFrame()
       act(() => { instance.actions.toggleSidebar() })
-      expect(tracks(frame)[0]).toBe(0)
-      expect(sidebarOwner()).toMatchObject({ collapsed: true, width: 0 })
+      expect(tracks(frame)[0]).toBe(56)
+      expect(sidebarOwner()).toMatchObject({ collapsed: true, width: 56 })
       expect(getByTestId('sidebar-content')).toBeTruthy()
-      // The caption row keeps the reopen controls; the darwin-only
+      // The rail carries its own reopen toggle; the darwin-only
       // shell.leading seat must not mount a duplicate set.
       expect(queryByTestId('shell.leading-content')).toBeNull()
     } finally {

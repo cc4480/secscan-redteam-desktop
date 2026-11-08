@@ -25,7 +25,7 @@ test('pools are built with the shared store and visible via poolSnapshots(); con
     const snapshots = router.poolSnapshots()
     assert.deepEqual(
       snapshots.map(snap => snap.providerId),
-      ['deepseek', 'qwen', 'meta'],
+      ['deepseek', 'qwen', 'meta', 'openai', 'anthropic', 'xai', 'zai', 'gemini'],
       'every keyed provider has a live pool; the keyless local provider has none',
     )
     const deepseek = snapshots[0]

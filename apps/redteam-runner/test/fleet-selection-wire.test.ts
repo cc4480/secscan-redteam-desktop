@@ -11,6 +11,13 @@
  * purpose: it is the exact module the desktop ships, and it carries no
  * Electron dependency, so this test exercises the production write
  * path rather than a copy of it.
+ *
+ * Provider universality (Stage 2): every registered fleet family —
+ * deepseek, meta, qwen, openai, anthropic, xai, zai, gemini, local —
+ * travels this wire by its own name. An explicit selector naming no
+ * family throws at publication instead of silently publishing DeepSeek,
+ * and the no-selection default is DeepSeek (operator ruling,
+ * 2026-11-07), never Meta.
  */
 
 import { describe, it, afterEach } from 'node:test'
@@ -57,17 +64,32 @@ describe("effectiveFleetProvider — the desktop's selection computation", () =>
     assert.equal(effectiveFleetProvider('meta', true), 'meta')
     assert.equal(effectiveFleetProvider('deepseek', true), 'deepseek')
     assert.equal(effectiveFleetProvider('local', false), 'local')
+    assert.equal(effectiveFleetProvider('anthropic', true), 'anthropic')
+    assert.equal(effectiveFleetProvider('gemini', false), 'gemini')
   })
 
-  it("any other explicit value reaches the explicit-selector family, as the router's policy maps it", () => {
-    assert.equal(effectiveFleetProvider('qwen', false), 'deepseek')
+  it('every registered family names itself as an explicit value', () => {
+    for (const family of ['qwen', 'openai', 'anthropic', 'xai', 'zai', 'gemini']) {
+      assert.equal(effectiveFleetProvider(family, false), family)
+    }
+    // Chat-route ids resolve to the same provider's family.
+    assert.equal(effectiveFleetProvider('google', false), 'gemini')
+    assert.equal(effectiveFleetProvider('deepseek-official', false), 'deepseek')
   })
 
-  it('with no explicit value, a serving local server selects local and anything else leaves the Meta default', () => {
+  it('an explicit value naming no fleet family throws — never a silent DeepSeek publication', () => {
+    assert.throws(() => effectiveFleetProvider('groq', false), /not a fleet provider/)
+    assert.throws(() => effectiveFleetProvider('not-a-provider', true), /not a fleet provider/)
+  })
+
+  it('with no explicit value, a serving local server selects local and anything else leaves the DeepSeek default', () => {
     assert.equal(effectiveFleetProvider(undefined, true), 'local')
-    assert.equal(effectiveFleetProvider(undefined, false), 'meta')
+    assert.equal(effectiveFleetProvider(undefined, false), 'deepseek')
     assert.equal(effectiveFleetProvider('', true), 'local')
-    assert.equal(effectiveFleetProvider('  ', false), 'meta')
+    assert.equal(effectiveFleetProvider('  ', false), 'deepseek')
+    // A saved pick names the fleet through its family.
+    assert.equal(effectiveFleetProvider(undefined, false, 'anthropic'), 'anthropic')
+    assert.equal(effectiveFleetProvider(undefined, false, 'google'), 'gemini')
   })
 })
 
@@ -102,8 +124,8 @@ describe('desktop write path → runner resolver → router policy', () => {
       return selection === undefined ? { ...env } : { ...env, [LLM_PROVIDER_ENV]: selection }
     }
 
-    // Nothing published: the router's own default (Meta) governs.
-    assertAllRolesRouteTo(dispatchEnv(), 'meta')
+    // Nothing published: the router's own default (DeepSeek) governs.
+    assertAllRolesRouteTo(dispatchEnv(), 'deepseek')
 
     // The desktop publishes DeepSeek (the operator flipped the app to it).
     writeFleetProviderRecord(env, 'deepseek')
@@ -121,10 +143,30 @@ describe('desktop write path → runner resolver → router policy', () => {
       'local',
     )
 
-    // And back to Meta (the server stopped; no operator value seated).
+    // And back to Meta (the server stopped; the operator picked Meta).
     writeFleetProviderRecord(env, 'meta')
     assert.equal(resolver.valueFor(LLM_PROVIDER_ENV), 'meta')
     assertAllRolesRouteTo(dispatchEnv(), 'meta')
+  })
+
+  it('the universality families travel the wire by name, in both directions', () => {
+    const env = tempHome()
+    const resolver = createStoreFleetConfigResolver(env)
+    const dispatchEnv = (): NodeJS.ProcessEnv => {
+      const selection = resolver.valueFor(LLM_PROVIDER_ENV)
+      return selection === undefined ? { ...env } : { ...env, [LLM_PROVIDER_ENV]: selection }
+    }
+
+    for (const family of ['anthropic', 'openai', 'xai', 'zai', 'gemini', 'qwen'] as const) {
+      writeFleetProviderRecord(env, family)
+      assert.equal(resolver.valueFor(LLM_PROVIDER_ENV), family, `record ${family} must resolve`)
+      assertAllRolesRouteTo(dispatchEnv(), family)
+    }
+
+    // And back home: a DeepSeek publication re-seats every role.
+    writeFleetProviderRecord(env, 'deepseek')
+    assert.equal(resolver.valueFor(LLM_PROVIDER_ENV), 'deepseek')
+    assertAllRolesRouteTo(dispatchEnv(), 'deepseek')
   })
 
   it('the launching environment still wins over a desktop-published selection', () => {

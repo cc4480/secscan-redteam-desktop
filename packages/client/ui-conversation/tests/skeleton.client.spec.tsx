@@ -26,6 +26,7 @@ import { ConversationMainPanel } from '../src/client/skeleton/ConversationMainPa
 import { ConversationSession, ConversationSessionHeader } from '../src/client/skeleton/ConversationSession.tsx'
 import { conversationPhase } from '../src/client/contract/snapshot.ts'
 import { HeroShell } from '../src/client/skeleton/EmptyHero.tsx'
+import { dismissLanding } from '../src/client/skeleton/LandingPage.tsx'
 import type { HeroShellProps } from '../src/client/skeleton/EmptyHero.tsx'
 import './control-row-dom.ts'
 import { InputBar } from '../src/client/skeleton/InputBar.tsx'
@@ -377,6 +378,10 @@ function mount(
   }
   const props: ConversationSlotProps = { ...runtimeProps, renderSlot, renderFactorySlot }
   const view = render(<ConversationMainPanel {...props} />)
+  // The landing is the first screen of a launch; these cases assert the
+  // home/session behaviour behind it, so they start past it. The gate
+  // itself is covered by landing-page.client.spec.tsx.
+  dismissLanding()
   return {
     view, store, wiring, sink, retargetWorkspace, session, conversation, slotCalls, lineageOwners, seatOwners, open,
     pickerOwner: () => pickerOwner,

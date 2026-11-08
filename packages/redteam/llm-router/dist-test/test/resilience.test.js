@@ -1,0 +1,403 @@
+/**
+ * ResilientProvider end-to-end with a scripted fake provider and fake keys:
+ * rotation on 429, DEAD keys on billing/auth, stay-on-primary, upstream
+ * model fallback, compress surfacing, and the disabled passthrough.
+ */
+import assert from 'node:assert/strict';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { describe, test } from 'node:test';
+import { ProviderError, providerErrorFromResponse } from '../src/errors.js';
+import { ResilienceError } from '../src/executor.js';
+import { CredentialPool, COOLDOWN_BASE_MS } from '../src/pool.js';
+import { ResilientProvider, DEFAULT_MAX_BENCH_WAIT_MS, normalizeResilienceConfig, resilienceConfigFromEnv, } from '../src/resilience.js';
+function ok(model) {
+    return { text: 'ok', toolCalls: [], provider: 'fake', model };
+}
+function http(status, body, extra = {}) {
+    return new ProviderError({
+        provider: 'fake',
+        message: `[llm-router] Fake HTTP ${status}: ${body}`,
+        status,
+        ...extra,
+    });
+}
+class FakeProvider {
+    id = 'fake';
+    label = 'Fake';
+    seen = [];
+    script;
+    constructor(script) {
+        this.script = [...script];
+    }
+    isConfigured() {
+        return true;
+    }
+    async complete(options) {
+        this.seen.push({ model: options.model, apiKey: options.apiKey });
+        const next = this.script.shift();
+        if (next === undefined)
+            throw new Error('fake provider script exhausted');
+        if (next instanceof Error)
+            throw next;
+        return next;
+    }
+}
+function config(overrides = {}) {
+    return {
+        enabled: true,
+        maxAttempts: 3,
+        stayOnPrimaryResetMs: 0,
+        maxDelayMs: 30_000,
+        maxBenchWaitMs: 240_000,
+        fallbackModels: {},
+        fallbackProviders: {},
+        logPath: null,
+        ...overrides,
+    };
+}
+function harness(script, opts = {}) {
+    const inner = new FakeProvider(script);
+    const events = [];
+    const sleeps = [];
+    const pool = new CredentialPool('fake', opts.keys ?? ['key-a', 'key-b']);
+    const provider = new ResilientProvider(inner, {
+        pool,
+        config: config(opts.config),
+        onEvent: e => events.push(e),
+        sleep: async (ms) => {
+            sleeps.push(ms);
+        },
+    });
+    const call = (model = 'model-a') => provider.complete({ model, messages: [{ role: 'user', content: 'hi' }] });
+    return { inner, events, sleeps, pool, provider, call };
+}
+describe('ResilientProvider', () => {
+    test('no failure: one call on the first pooled key, no events', async () => {
+        const h = harness([ok('model-a')]);
+        const res = await h.call();
+        assert.equal(res.text, 'ok');
+        assert.deepEqual(h.inner.seen, [{ model: 'model-a', apiKey: 'key-a' }]);
+        assert.deepEqual(h.events, []);
+    });
+    test('429 rotates to the next key instead of killing the run', async () => {
+        const h = harness([http(429, 'rate limit exceeded'), ok('model-a')]);
+        const res = await h.call();
+        assert.equal(res.text, 'ok');
+        assert.deepEqual(h.inner.seen.map(s => s.apiKey), ['key-a', 'key-b']);
+        const scheduled = h.events.find(e => e.kind === 'retry-scheduled');
+        assert.equal(scheduled?.reason, 'rate_limit');
+        assert.equal(scheduled?.delayMs, 0, 'rotation does not wait');
+    });
+    test('401 marks the key DEAD: the next call starts on the surviving key', async () => {
+        const h = harness([http(401, 'invalid api key'), ok('model-a'), ok('model-a')]);
+        await h.call();
+        await h.call();
+        assert.deepEqual(h.inner.seen.map(s => s.apiKey), ['key-a', 'key-b', 'key-b']);
+        assert.equal(h.pool.snapshot()[0]?.dead, true);
+    });
+    test('402 billing kills the key and rotates', async () => {
+        const h = harness([http(402, 'insufficient balance'), ok('model-a')]);
+        await h.call();
+        assert.equal(h.pool.snapshot()[0]?.deadReason, 'billing');
+        assert.deepEqual(h.inner.seen.map(s => s.apiKey), ['key-a', 'key-b']);
+    });
+    test('single key + Retry-After: waits the published delay on the same key', async () => {
+        const h = harness([http(429, 'slow down', { retryAfterMs: 250 }), ok('model-a')], {
+            keys: ['key-a'],
+        });
+        const res = await h.call();
+        assert.equal(res.text, 'ok');
+        assert.deepEqual(h.sleeps, [250]);
+        assert.deepEqual(h.inner.seen.map(s => s.apiKey), ['key-a', 'key-a']);
+    });
+    test('stay-on-primary: a reset sooner than the threshold beats rotation', async () => {
+        const h = harness([http(429, 'slow down', { retryAfterMs: 2_000 }), ok('model-a')], {
+            config: { stayOnPrimaryResetMs: 60_000 },
+        });
+        await h.call();
+        assert.deepEqual(h.inner.seen.map(s => s.apiKey), ['key-a', 'key-a'], 'no rotation when the reset is near');
+        assert.deepEqual(h.sleeps, [2_000]);
+    });
+    test('upstream 429 falls back to the configured model on the SAME key', async () => {
+        const h = harness([http(429, 'Upstream model provider is temporarily unavailable'), ok('model-flash')], { config: { fallbackModels: { fake: { 'model-pro': 'model-flash' } } } });
+        const res = await h.call('model-pro');
+        assert.equal(res.model, 'model-flash');
+        assert.deepEqual(h.inner.seen.map(s => `${s.apiKey}:${s.model}`), ['key-a:model-pro', 'key-a:model-flash']);
+        assert.equal(h.pool.snapshot()[0]?.benchedModels.length, 0, 'key never benched');
+    });
+    test('entitlement rotates: another account may hold the model', async () => {
+        const h = harness([http(403, 'model_not_supported', { code: 'model_not_supported' }), ok('model-pro')]);
+        await h.call('model-pro');
+        assert.deepEqual(h.inner.seen.map(s => s.apiKey), ['key-a', 'key-b']);
+    });
+    test('context overflow surfaces the compress hint after exactly one attempt', async () => {
+        const h = harness([http(400, 'prompt is too long', { code: 'context_length_exceeded' })]);
+        await assert.rejects(h.call(), (err) => err instanceof ResilienceError &&
+            err.classified.reason === 'context_overflow' &&
+            err.classified.hints.compress === true &&
+            err.attempts === 1);
+        assert.equal(h.inner.seen.length, 1);
+    });
+    test('content policy gives up on the route with a provider-fallback hint', async () => {
+        const h = harness([http(400, 'rejected', { code: 'content_filter' })]);
+        await assert.rejects(h.call(), (err) => err instanceof ResilienceError &&
+            err.classified.reason === 'content_policy' &&
+            err.classified.hints.fallbackProvider === true);
+        assert.equal(h.inner.seen.length, 1);
+    });
+    test('server errors retry the same key on the default backoff ladder', async () => {
+        const h = harness([http(500, 'boom'), http(500, 'boom'), ok('model-a')]);
+        const res = await h.call();
+        assert.equal(res.text, 'ok');
+        assert.deepEqual(h.sleeps, [500, 1000]);
+        assert.deepEqual(h.inner.seen.map(s => s.apiKey), ['key-a', 'key-a', 'key-a']);
+    });
+    test('exhausted attempts throw a classified ResilienceError (fallback hints intact)', async () => {
+        const h = harness([http(500, 'boom'), http(500, 'boom'), http(500, 'boom')]);
+        await assert.rejects(h.call(), (err) => err instanceof ResilienceError &&
+            err.attempts === 3 &&
+            err.classified.reason === 'server_error' &&
+            err.classified.hints.fallbackProvider === true);
+    });
+    test('disabled: the raw provider error propagates untouched, one call, no events', async () => {
+        const raw = http(500, 'boom');
+        const h = harness([raw], { config: { enabled: false } });
+        await assert.rejects(h.call(), (err) => err === raw);
+        assert.equal(h.inner.seen.length, 1);
+        assert.deepEqual(h.events, []);
+    });
+});
+describe('resilienceConfigFromEnv', () => {
+    test('defaults: on, 4 attempts, stay-on-primary off', () => {
+        const c = resilienceConfigFromEnv({});
+        assert.equal(c.enabled, true);
+        assert.equal(c.maxAttempts, 4);
+        assert.equal(c.stayOnPrimaryResetMs, 0);
+    });
+    test('bench-wait ceiling: default covers the base bench; below-floor values are raised, never honored', () => {
+        const dflt = resilienceConfigFromEnv({});
+        assert.equal(dflt.maxBenchWaitMs, DEFAULT_MAX_BENCH_WAIT_MS);
+        assert.ok(dflt.maxBenchWaitMs >= COOLDOWN_BASE_MS, 'default ceiling covers the base bench');
+        const envLow = resilienceConfigFromEnv({ REDTEAM_LLM_MAX_BENCH_WAIT_MS: '1000' });
+        assert.equal(envLow.maxBenchWaitMs, COOLDOWN_BASE_MS, 'env below the base bench clamps up to it');
+        const envHigh = resilienceConfigFromEnv({ REDTEAM_LLM_MAX_BENCH_WAIT_MS: '300000' });
+        assert.equal(envHigh.maxBenchWaitMs, 300_000, 'env above the floor is honored');
+        const overrideLow = resilienceConfigFromEnv({}, { maxBenchWaitMs: 5 });
+        assert.equal(overrideLow.maxBenchWaitMs, COOLDOWN_BASE_MS, 'code overrides clamp the same way');
+        const literal = normalizeResilienceConfig({ ...dflt, maxBenchWaitMs: 1 });
+        assert.equal(literal.maxBenchWaitMs, COOLDOWN_BASE_MS, 'a raw literal config normalizes identically');
+        assert.throws(() => resilienceConfigFromEnv({ REDTEAM_LLM_MAX_BENCH_WAIT_MS: 'soon' }));
+    });
+    test('REDTEAM_LLM_RESILIENCE=off disables', () => {
+        const c = resilienceConfigFromEnv({ REDTEAM_LLM_RESILIENCE: 'off' });
+        assert.equal(c.enabled, false);
+    });
+    test('fallback maps parse', () => {
+        const c = resilienceConfigFromEnv({
+            REDTEAM_LLM_FALLBACK_MODELS: 'deepseek:deepseek-v4-pro>deepseek-flash',
+            REDTEAM_LLM_FALLBACK_PROVIDERS: 'deepseek>qwen:qwen3.8-max',
+        });
+        assert.equal(c.fallbackModels['deepseek']?.['deepseek-v4-pro'], 'deepseek-flash');
+        assert.deepEqual(c.fallbackProviders['deepseek'], { provider: 'qwen', model: 'qwen3.8-max' });
+    });
+    test('malformed values fail loud', () => {
+        assert.throws(() => resilienceConfigFromEnv({ REDTEAM_LLM_MAX_ATTEMPTS: 'soon' }));
+        assert.throws(() => resilienceConfigFromEnv({ REDTEAM_LLM_FALLBACK_MODELS: 'deepseek-v4-pro' }));
+    });
+});
+describe('trajectory log cause fields (Q-HALT Item 1)', () => {
+    test('a failed completion writes http_status, error_code, and cause_excerpt to the JSONL record', async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'resilience-log-'));
+        const logPath = join(dir, 'trajectories.jsonl');
+        const inner = new FakeProvider([http(400, 'rejected', { code: 'content_filter' })]);
+        const provider = new ResilientProvider(inner, {
+            pool: new CredentialPool('fake', ['key-a']),
+            config: config({ logPath }),
+            sleep: async () => { },
+        });
+        await assert.rejects(provider.complete({ model: 'model-a', messages: [{ role: 'user', content: 'hi' }] }), (err) => err instanceof ResilienceError);
+        const lines = readFileSync(logPath, 'utf8').trim().split('\n');
+        const failed = lines
+            .map(line => JSON.parse(line))
+            .find(record => record['kind'] === 'llm/attempt-failed');
+        assert.ok(failed, 'an attempt-failed record was written');
+        assert.equal(failed['http_status'], 400);
+        assert.equal(failed['error_code'], 'content_filter');
+        assert.ok(String(failed['cause_excerpt']).includes('provider=fake'), String(failed['cause_excerpt']));
+    });
+});
+describe('pool refusal honesty (FIX-DEADKEY)', () => {
+    test('a dead key refuses as DEAD — never as rate_limit — with the death evidence and remedy', async () => {
+        const h = harness([http(401, 'invalid api key', { code: 'invalid_api_key' })], { keys: ['key-a'] });
+        // First call: the provider rejects the key; the pool records the death.
+        await assert.rejects(h.call(), (err) => err instanceof ResilienceError && err.classified.reason === 'auth_dead' && err.attempts === 1);
+        // Second call: the pool refuses before any attempt. The give-up must
+        // name the death — reason, status, code, recorded time — not a bench.
+        const err = await h.call().then(() => null, (e) => e);
+        assert.ok(err instanceof ResilienceError);
+        assert.equal(err.attempts, 0);
+        assert.equal(err.classified.reason, 'auth_dead');
+        assert.equal(err.classified.detail, 'all-credentials-dead');
+        assert.equal(err.classified.status, 401);
+        assert.equal(err.classified.code, 'invalid_api_key');
+        assert.equal(err.classified.hints.fallbackProvider, true, 'provider cascade still allowed');
+        assert.doesNotMatch(err.message, /rate_limit/);
+        assert.doesNotMatch(err.message, /all-credentials-benched/);
+        assert.match(err.message, /DEAD/);
+        assert.match(err.message, /auth_dead/);
+        assert.match(err.message, /HTTP 401/);
+        assert.match(err.message, /invalid_api_key/);
+        assert.match(err.message, /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/, 'the recorded death time is named');
+        assert.match(err.message, /Re-seat a valid key/);
+        assert.match(err.message, /not a rate limit/);
+        const refusal = h.events.find(e => e.kind === 'attempt-failed' && e.attempt === 0);
+        assert.equal(refusal?.reason, 'auth_dead');
+        assert.equal(refusal?.status, 401);
+        assert.equal(refusal?.code, 'invalid_api_key');
+        assert.deepEqual(h.sleeps, [], 'a dead key never waits: no bench-wait sleep on either call');
+    });
+    test('a genuinely benched key keeps its bench wording and expiry', async () => {
+        const h = harness([http(429, 'slow down', { retryAfterMs: 3_600_000 })], { keys: ['key-a'] });
+        await assert.rejects(h.call(), (err) => err instanceof ResilienceError && err.classified.reason === 'rate_limit' && err.attempts === 1);
+        const err = await h.call().then(() => null, (e) => e);
+        assert.ok(err instanceof ResilienceError);
+        assert.equal(err.attempts, 0);
+        assert.equal(err.classified.reason, 'rate_limit');
+        assert.equal(err.classified.detail, 'all-credentials-benched');
+        assert.match(err.message, /benched/);
+        assert.match(err.message, /until \d{4}-\d{2}-\d{2}T/, 'the bench expiry is named');
+        assert.doesNotMatch(err.message, /DEAD/);
+    });
+    test('a pool-wide model bench refuses as a bench with its expiry', async () => {
+        const h = harness([ok('model-a')], { keys: ['key-a', 'key-b'] });
+        h.pool.benchModel('model-a', 60_000);
+        const err = await h.call().then(() => null, (e) => e);
+        assert.ok(err instanceof ResilienceError);
+        assert.equal(err.attempts, 0);
+        assert.equal(err.classified.reason, 'rate_limit');
+        assert.equal(err.classified.detail, 'model-benched');
+        assert.match(err.message, /benched pool-wide/);
+        assert.match(err.message, /until \d{4}-\d{2}-\d{2}T/);
+    });
+    test('the refusal reaches the trajectory log with NO custom sink configured', async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'resilience-refusal-log-'));
+        const logPath = join(dir, 'trajectories.jsonl');
+        const inner = new FakeProvider([http(401, 'invalid api key', { code: 'invalid_api_key' })]);
+        const provider = new ResilientProvider(inner, {
+            pool: new CredentialPool('fake', ['key-a']),
+            config: config({ logPath }),
+            sleep: async () => { },
+        });
+        const call = () => provider.complete({ model: 'model-a', messages: [{ role: 'user', content: 'hi' }] });
+        await assert.rejects(call(), (err) => err instanceof ResilienceError);
+        await assert.rejects(call(), (err) => err instanceof ResilienceError && err.attempts === 0);
+        const records = readFileSync(logPath, 'utf8')
+            .trim()
+            .split('\n')
+            .map(line => JSON.parse(line));
+        const refusal = records.find(r => r['kind'] === 'llm/attempt-failed' && r['attempt'] === 0);
+        assert.ok(refusal, 'the attempt-0 refusal was written to the trajectory log');
+        assert.equal(refusal['reason'], 'auth_dead');
+        assert.equal(refusal['detail'], 'all-credentials-dead');
+        assert.equal(refusal['http_status'], 401);
+        assert.equal(refusal['error_code'], 'invalid_api_key');
+    });
+});
+describe('rate-limit survival (FIX-DEADKEY scope expansion)', () => {
+    /** Pool + provider on one fake clock; sleeping advances the clock. */
+    function clockHarness(script, opts = {}) {
+        let nowMs = opts.startMs ?? 1_000_000;
+        const now = () => nowMs;
+        const sleeps = [];
+        const events = [];
+        const inner = new FakeProvider(script);
+        const pool = new CredentialPool('fake', opts.keys ?? ['key-a'], { now });
+        const provider = new ResilientProvider(inner, {
+            pool,
+            config: config(opts.config),
+            now,
+            sleep: async (ms) => {
+                sleeps.push(ms);
+                nowMs += ms;
+            },
+            onEvent: e => events.push(e),
+        });
+        const call = (model = 'model-a') => provider.complete({ model, messages: [{ role: 'user', content: 'hi' }] });
+        return { inner, pool, provider, call, sleeps, events };
+    }
+    test('SURVIVAL: a 429 benches the only key — the SAME call waits out the bench and succeeds', async () => {
+        const h = clockHarness([http(429, 'rate limit exceeded'), ok('model-a')]);
+        const res = await h.call();
+        assert.equal(res.text, 'ok', 'the call survived the rate limit with no operator intervention');
+        assert.deepEqual(h.sleeps, [COOLDOWN_BASE_MS], 'waited exactly the base bench, on the same call');
+        assert.deepEqual(h.inner.seen.map(s => s.apiKey), ['key-a', 'key-a'], 'the retry rode the same credential after its bench lapsed');
+        const scheduled = h.events.find(e => e.kind === 'retry-scheduled');
+        assert.equal(scheduled?.reason, 'rate_limit');
+        assert.equal(scheduled?.delayMs, COOLDOWN_BASE_MS);
+        assert.equal(h.pool.snapshot()[0]?.benchedModels.length, 0, 'success cleared the bench');
+    });
+    test('SURVIVAL at call start: a call arriving during a finite bench waits it out, then serves', async () => {
+        const h = clockHarness([ok('model-a')]);
+        // An earlier call's failure benched the only key for the base cooldown.
+        h.pool.reportFailure(0, 'model-a', {
+            reason: 'rate_limit',
+            hints: { retryable: true, rotateCredential: true, fallbackModel: false, fallbackProvider: true, compress: false },
+            detail: 'test-bench',
+        });
+        const res = await h.call();
+        assert.equal(res.text, 'ok');
+        assert.deepEqual(h.sleeps, [COOLDOWN_BASE_MS], 'waited the remaining bench before the first attempt');
+        assert.deepEqual(h.inner.seen.map(s => s.apiKey), ['key-a'], 'exactly one provider attempt, after the wait');
+        const scheduled = h.events.find(e => e.kind === 'retry-scheduled' && e.attempt === 0);
+        assert.equal(scheduled?.delayMs, COOLDOWN_BASE_MS);
+    });
+    test('SURVIVAL under a below-floor configured ceiling: normalization raises it, the bench is still waited out', async () => {
+        const h = clockHarness([http(429, 'rate limit exceeded'), ok('model-a')], {
+            config: { maxBenchWaitMs: 1 },
+        });
+        const res = await h.call();
+        assert.equal(res.text, 'ok');
+        assert.deepEqual(h.sleeps, [COOLDOWN_BASE_MS], 'the 1ms ceiling was normalized to the base bench');
+    });
+    test('a bench past the ceiling gives up honestly: bench wording, expiry, no wait', async () => {
+        const h = harness([http(429, 'slow down', { retryAfterMs: 600_000 })], { keys: ['key-a'] });
+        const err = await h.call().then(() => null, (e) => e);
+        assert.ok(err instanceof ResilienceError);
+        assert.equal(err.attempts, 1, 'the attempt count survives the re-expression');
+        assert.equal(err.classified.reason, 'rate_limit');
+        assert.equal(err.classified.detail, 'all-credentials-benched');
+        assert.match(err.message, /benched/);
+        assert.match(err.message, /until \d{4}-\d{2}-\d{2}T/, 'the bench expiry is named');
+        assert.doesNotMatch(err.message, /DEAD/);
+        assert.deepEqual(h.sleeps, [], 'a 600s bench is beyond the 240s ceiling: no wait was attempted');
+    });
+    test('a permanent (entitlement) bench never waits and gives up as permanent', async () => {
+        const h = harness([http(403, 'model_not_supported', { code: 'model_not_supported' })], { keys: ['key-a'] });
+        await assert.rejects(h.call(), (err) => err instanceof ResilienceError && err.classified.reason === 'entitlement');
+        const err = await h.call().then(() => null, (e) => e);
+        assert.ok(err instanceof ResilienceError);
+        assert.equal(err.attempts, 0);
+        assert.equal(err.classified.detail, 'all-credentials-benched');
+        assert.match(err.message, /permanent \(entitlement\)/);
+        assert.match(err.message, /never lifts/);
+        assert.deepEqual(h.sleeps, [], 'no wait was attempted for a permanent bench');
+    });
+});
+describe('safety-rejection fixture (Q-HALT brief §8, router leg)', () => {
+    test('a safety_blocked 400 surfaces content_policy with the cause on the attempt-failed event', async () => {
+        const body = '{"error":{"code":"safety_blocked","message":"Request blocked by the safety system: the submitted content may violate policy."}}';
+        const fixture = await providerErrorFromResponse('fake', 'Fake', new Response(body, { status: 400 }));
+        const h = harness([fixture]);
+        await assert.rejects(h.call(), (err) => err instanceof ResilienceError &&
+            err.classified.reason === 'content_policy' &&
+            err.classified.hints.fallbackProvider === true &&
+            err.attempts === 1);
+        assert.equal(h.inner.seen.length, 1);
+        const failed = h.events.find(e => e.kind === 'attempt-failed');
+        assert.equal(failed?.status, 400);
+        assert.equal(failed?.code, 'safety_blocked');
+        assert.ok(failed?.causeExcerpt?.includes('safety system'), failed?.causeExcerpt);
+    });
+});

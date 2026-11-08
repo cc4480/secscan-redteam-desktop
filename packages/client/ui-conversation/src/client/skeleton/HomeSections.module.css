@@ -1,22 +1,23 @@
-/* Home guide sections + side panel in the hero scroll body's home
+/* Home guide panel + side panel in the hero scroll body's home
    grid (ConversationRoot sheet owns the grid; this sheet owns
-   placement and the panels' insides). The sections are glass panels;
-   the side panel rides the solid card plane (see .aside). Inner
-   cards are plane-2 solid fills — never their own backdrop-filter —
-   and every value rides the shell tokens, so home and chat stay one
-   glass language. */
+   placement and the panels' insides). The guide area is ONE glass
+   panel holding the Quick start, Most-used commands, and Continue
+   sub-blocks; the side panel rides the solid card plane (see
+   .aside). Inner cards are plane-2 solid fills — never their own
+   backdrop-filter — and every value rides the shell tokens, so home
+   and chat stay one glass language. */
 
 /* The glass primitive, token form: top light over the tint, the locked
    blur recipe, the specular rim, the layered panel elevation. */
 .panel {
   position: relative;
   overflow: hidden;
-  padding: 22px 24px;
+  padding: 26px 28px;
   background: var(--glass-top-light), var(--glass);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-line);
-  border-radius: 18px;
+  border-radius: 20px;
   box-shadow: var(--glass-rim), var(--shadow-panel);
 }
 
@@ -43,15 +44,36 @@
   min-width: 0;
 }
 
+/* The one guide panel's sub-blocks: Quick start, Most-used commands,
+   and Continue stacked in the panel's own column, evenly spaced and
+   divided by the panel's edge line — sub-headings and content only,
+   no panel chrome of their own. The blocks keep the old sections'
+   element ids, and the scroll margin keeps a scrolled-to block clear
+   of the panel's top edge. */
+.guideBlocks {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.guideBlock {
+  scroll-margin-top: 8px;
+}
+
+.guideBlock + .guideBlock {
+  padding-top: 24px;
+  border-top: 1px solid var(--glass-edge);
+}
+
 /* The side panel spans the center column's full height and sticks
-   while the sections scroll past it. It rides the solid card plane —
-   the de-blurred treatment TodoPanel and QueueDock already use —
-   not the glass plane: the shell budget is five backdrop-filtered
-   surfaces per viewport, and the populated home state carries five
-   without it (sidebar, hero seat, Quick start, Commands, Continue).
-   The sticky rail also stays off the scroll path's re-blur cost; its
-   boundary comes from the panel rim and shadow, as on the solid
-   surfaces. */
+   while the guide panel scrolls past it. It rides the solid card
+   plane — the de-blurred treatment TodoPanel and QueueDock already
+   use — not the glass plane: the shell budget is five
+   backdrop-filtered surfaces per viewport, and the populated home
+   state carries three without it (sidebar, hero seat, the one guide
+   panel). The sticky rail also stays off the scroll path's re-blur
+   cost; its boundary comes from the panel rim and shadow, as on the
+   solid surfaces. */
 .aside {
   grid-column: 2;
   grid-row: 1 / span 12;
@@ -62,9 +84,35 @@
   flex-direction: column;
   gap: 18px;
   padding: 18px;
-  background: var(--glass-top-light), var(--glass-card-solid);
+  /* Baked sibling recipe (Carlos, 2026-11-07): the rail used to mix
+     maroon over --glass-card-solid and kept the gray's lightness — the
+     gray source is gone entirely. These stops are the CENTER panel's
+     own rendered colors, sampled off the live app at matched heights
+     (maroon at the top pooling to black at the bottom, the way the
+     left panel shades), so the solid rail wears the exact tones the
+     glass panels render. Still solid (no backdrop filter of its own). */
+  background: linear-gradient(180deg,
+    #42252e 0%,
+    #361f27 17%,
+    #2d1c22 31%,
+    #22161c 45%,
+    #1e1217 58%,
+    #1c0f15 72%,
+    #1a0c12 86%,
+    #140810 100%);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
+}
+
+/* The rail is a full-height panel like the sidebar's, not a card that
+   ends where its content ends: at least the scrollport's published
+   height (--dsh-conversation-viewport-height, published on the scroll
+   body by the composer seat's ResizeObserver), so its bottom edge
+   lands on the panels' shared bottom line. Taller content still grows
+   the panel, and the sticky seat above keeps it pinned while the guide
+   column scrolls past. */
+.aside {
+  min-height: var(--dsh-conversation-viewport-height, 0px);
 }
 
 .panelHead {
@@ -76,24 +124,14 @@
 
 .panelTitle {
   margin: 0;
-  font-size: 15.5px;
+  font-size: 17px;
   font-weight: 600;
   letter-spacing: 0.01em;
   color: var(--dsw-alias-label-primary);
 }
 
 .panelSub {
-  font-size: 12px;
-  color: var(--dsw-alias-label-caption);
-}
-
-.panelTag {
-  margin-left: auto;
-  font-family: var(--ds-font-family-code);
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
+  font-size: 12.5px;
   color: var(--dsw-alias-label-caption);
 }
 
@@ -119,8 +157,30 @@
   gap: 12px;
 }
 
+/* The step cards are buttons: the command steps launch through the
+   input faces and the first step focuses the composer, so the card
+   carries the button resets and the shared lift hover. */
 .steps .card {
-  padding: 16px 16px 14px;
+  padding: 18px 18px 16px;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.steps .card:hover:not(:disabled) {
+  transform: translateY(var(--lift)) perspective(640px) rotateX(calc(var(--ly, 0) * var(--stand-tilt) * -1)) rotateY(calc(var(--lx, 0) * var(--stand-tilt)));
+  background: var(--glass-strong);
+  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow-lift);
+}
+
+.steps .card:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .stepN {
@@ -139,34 +199,22 @@
 }
 
 .stepTitle {
+  display: block;
   margin: 0 0 5px;
-  font-size: 13.5px;
+  font-size: 14.5px;
   font-weight: 600;
   color: var(--dsw-alias-label-primary);
 }
 
 .stepBody {
+  display: block;
   margin: 0;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.55;
   color: var(--dsw-alias-label-secondary);
 }
 
 /* ---- Commands ---- */
-
-.cmdGroup {
-  margin: 18px 0 9px;
-  font-family: var(--ds-font-family-code);
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--dsw-alias-label-caption);
-}
-
-.cmdGroup:first-of-type {
-  margin-top: 2px;
-}
 
 .cmdGrid {
   display: grid;
@@ -178,7 +226,7 @@
   display: flex;
   align-items: stretch;
   gap: 4px;
-  padding: 9px 13px;
+  padding: 12px 15px;
   border: 1px solid var(--glass-edge);
   border-radius: 10px;
   background: var(--glass);
@@ -189,14 +237,15 @@
 
 .cmd:hover {
   background: var(--glass-hi);
-  transform: translateY(var(--lift));
+  transform: translateY(var(--lift)) perspective(640px) rotateX(calc(var(--ly, 0) * var(--stand-tilt) * -1)) rotateY(calc(var(--lx, 0) * var(--stand-tilt)));
 }
 
 .cmdMain {
   display: flex;
   flex: 1;
-  align-items: baseline;
-  gap: 12px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
   min-width: 0;
   padding: 0;
   border: none;
@@ -213,7 +262,7 @@
 
 .cmdName {
   font-family: var(--ds-font-family-code);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
   color: var(--brand-blue);
@@ -224,11 +273,16 @@
   color: var(--dsw-alias-label-caption);
 }
 
+.cmdKind {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--dsw-alias-label-primary);
+}
+
 .cmdDesc {
-  margin-left: auto;
   font-size: 12.5px;
   line-height: 1.45;
-  text-align: right;
   color: var(--dsw-alias-label-secondary);
 }
 
@@ -266,7 +320,7 @@
   align-items: center;
   gap: 14px;
   width: 100%;
-  padding: 12px 16px;
+  padding: 14px 18px;
   font: inherit;
   text-align: left;
   color: inherit;
@@ -278,7 +332,7 @@
 }
 
 .cont:hover {
-  transform: translateY(var(--lift));
+  transform: translateY(var(--lift)) perspective(640px) rotateX(calc(var(--ly, 0) * var(--stand-tilt) * -1)) rotateY(calc(var(--lx, 0) * var(--stand-tilt)));
   background: var(--glass-strong);
   box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow-lift);
 }
@@ -303,11 +357,25 @@
 
 .contTitle {
   overflow: hidden;
-  font-size: 13.5px;
+  font-size: 14.5px;
   font-weight: 600;
   color: var(--dsw-alias-label-primary);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.contResume {
+  flex: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand-blue);
+}
+
+.contEmpty {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--dsw-alias-label-secondary);
 }
 
 .contMeta {
@@ -411,6 +479,9 @@
   text-align: left;
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
 }
 
 .guideLink:last-child {
@@ -419,6 +490,7 @@
 
 .guideLink:hover {
   color: var(--dsw-alias-label-primary);
+  transform: translateY(var(--lift)) perspective(640px) rotateX(calc(var(--ly, 0) * var(--stand-tilt) * -1)) rotateY(calc(var(--lx, 0) * var(--stand-tilt)));
 }
 
 .guideArrow {
@@ -435,9 +507,42 @@
   color: var(--dsw-alias-label-dimmed);
 }
 
-/* Narrow shell: the side panel drops below the center sections, the
+/* Narrow shell: the side panel drops below the guide panel, the
    steps go two-across, and the command grid stacks — the sample's
    responsive steps, keyed on the viewport as the sample keys them. */
+/* Living sheen + stand-up (dark): the shell tracker (AppFrame) writes
+   --px/--py on each panel as the pointer moves; the pool is plain
+   gradients over the panel's own paint — no blur, no new filtered
+   surface (the rail stays the solid plane it is). On hover the panel
+   stands: the house lift, the shadow stepping from the panel tier to
+   the lift tier, and --sheen-hot mixing the tight hot pool in at the
+   pointer (registered in glass-shell.css, so the boost transitions
+   instead of flipping). */
+:global([data-ds-dark-theme]) .panel {
+  transition:
+    transform var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    --sheen-hot var(--dur-base) var(--ease-out);
+}
+
+:global([data-ds-dark-theme]) .panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(320px circle at var(--px, -999px) var(--py, -999px), color-mix(in srgb, var(--sheen-hot-core) calc(var(--sheen-hot, 0) * 100%), transparent), transparent 70%),
+    radial-gradient(760px circle at var(--px, -999px) var(--py, -999px), var(--sheen-pool-core), var(--sheen-pool-halo) 48%, transparent 72%);
+}
+
+:global([data-ds-dark-theme]) .panel:hover {
+  transform: translateY(var(--lift));
+  box-shadow: var(--glass-rim), var(--shadow-lift);
+  --sheen-hot: 1;
+}
+
 @media (max-width: 1100px) {
   .aside {
     grid-column: 1;

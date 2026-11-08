@@ -12,7 +12,7 @@ import { HomeFavorites } from '../src/client/skeleton/HomeFavorites.tsx'
 import { HomeSections } from '../src/client/skeleton/HomeSections.tsx'
 import {
   DEFAULT_PINNED_COMMANDS, HOME_COMMANDS_BY_ID, HOME_COMMAND_GROUPS,
-  PINNED_COMMANDS_STORAGE_KEY, createPinnedCommandsSource, pinCommand,
+  HOME_MOST_USED_COMMANDS, PINNED_COMMANDS_STORAGE_KEY, createPinnedCommandsSource, pinCommand,
   readPinnedCommands, runHomeCommand, unpinCommand, writePinnedCommands,
 } from '../src/client/skeleton/home-commands.ts'
 
@@ -71,6 +71,17 @@ describe('home command catalog', () => {
 
   it('defaults the favorites to the sample five', () => {
     expect(DEFAULT_PINNED_COMMANDS).toEqual(['new-session', 'scan', 'status', 'report', 'model'])
+  })
+
+  it('curates the most-used rows scan-first, each with a plain-language scan-type label', () => {
+    expect(HOME_MOST_USED_COMMANDS.map(entry => entry.command.id)).toEqual([
+      'deepscan', 'scan', 'pcscan', 'nmap', 'nuclei', 'metasploit', 'status', 'report',
+    ])
+    for (const entry of HOME_MOST_USED_COMMANDS) {
+      expect(HOME_COMMANDS_BY_ID.get(entry.command.id)).toBe(entry.command)
+      expect(en[entry.kindKey]).toBeTypeOf('string')
+      expect(zh[entry.kindKey]).toBeTypeOf('string')
+    }
   })
 })
 
@@ -195,51 +206,129 @@ describe('HomeSections', () => {
     return { view: render(<HomeSections {...props} />), props, calls }
   }
 
-  it('renders every catalog command with its description and the fleet panel', () => {
+  it('renders ONE guide panel holding Quick start, Most-used commands, and Continue as sub-blocks', () => {
+    const { view } = renderSections()
+    const root = view.container
+    // Exactly one top-level section in the center column: the guide panel.
+    const topSections = root.querySelectorAll(':scope > section')
+    expect(topSections).toHaveLength(1)
+    const guide = view.getByLabelText(en['home.guide.title'])
+    expect(guide).toBe(topSections[0])
+    // The side panel stays a separate aside, untouched by the merge.
+    expect(root.querySelectorAll(':scope > aside')).toHaveLength(1)
+    // The three sub-blocks live inside the one panel, in flow order,
+    // under the ids the side panel's Guide links scroll to — and none
+    // of them is a panel section of its own.
+    const blocks = ['home-quick-start', 'home-commands', 'home-continue']
+      .map(id => document.getElementById(id))
+    for (const block of blocks) {
+      expect(block).not.toBeNull()
+      expect(block!.tagName).not.toBe('SECTION')
+      expect(guide.contains(block)).toBe(true)
+    }
+    expect([...guide.querySelectorAll('[id^="home-"]')].map(el => el.id)).toEqual([
+      'home-quick-start', 'home-commands', 'home-continue',
+    ])
+    // Every option Carlos named is inside the one panel: the four
+    // step cards, the eight command rows with their pin stars (the
+    // favorites toggles), and the Continue block.
+    const quick = within(blocks[0] as HTMLElement)
+    for (const key of ['home.step1.title', 'home.step2.title', 'home.step3.title', 'home.step4.title'] as const) {
+      expect(quick.getByText(en[key]).closest('button')).not.toBeNull()
+    }
+    const commands = within(blocks[1] as HTMLElement)
+    expect(commands.getAllByLabelText(/^(Pin|Unpin) \//)).toHaveLength(8)
+    for (const { command } of HOME_MOST_USED_COMMANDS) {
+      expect(commands.getByText(en[command.descKey])).toBeTruthy()
+    }
+    const cont = within(blocks[2] as HTMLElement)
+    expect(cont.getByText(en['home.continue.empty'])).toBeTruthy()
+  })
+
+  it('lists the most-used commands scan-first with scan-type labels, and keeps the fleet panel', () => {
     const { view } = renderSections()
     const section = view.getByLabelText('Most-used commands')
     const panel = within(section)
     const nameSpans = [...section.querySelectorAll('span')]
-    for (const group of HOME_COMMAND_GROUPS) {
-      for (const command of group.commands) {
-        const label = command.args === undefined ? command.token : `${command.token} ${command.args}`
-        expect(nameSpans.some(span => span.textContent === label)).toBe(true)
-        expect(panel.getByText(en[command.descKey])).toBeTruthy()
-      }
+    const labels = HOME_MOST_USED_COMMANDS.map(({ command }) => (
+      command.args === undefined ? command.token : `${command.token} ${command.args}`
+    ))
+    const positions = labels.map(label => nameSpans.findIndex(span => span.textContent === label))
+    expect(positions.every(at => at >= 0)).toBe(true)
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions)
+    for (const { command, kindKey } of HOME_MOST_USED_COMMANDS) {
+      expect(panel.getByText(en[kindKey])).toBeTruthy()
+      expect(panel.getByText(en[command.descKey])).toBeTruthy()
     }
+    expect(nameSpans.some(span => span.textContent.startsWith('/goal'))).toBe(false)
     expect(view.getByText('Morpheus')).toBeTruthy()
     expect(view.getByText('Scribe')).toBeTruthy()
-    expect(view.getByText('AlterEgo · 108 tools')).toBeTruthy()
+    expect(view.getByText('AlterEgo · 109 tools')).toBeTruthy()
   })
 
-  it('launches a command on row click and toggles pins from the star', () => {
+  it('launches most-used commands on row click and toggles pins from the star', () => {
     const { view, props, calls } = renderSections()
     const panel = within(view.getByLabelText('Most-used commands'))
-    fireEvent.click(panel.getByText('Show the current engagement status'))
-    expect(calls).toEqual(['setDraft:/status', 'submit'])
-    fireEvent.click(panel.getByLabelText('Unpin /status'))
-    expect(props.unpinCommand).toHaveBeenCalledWith('status')
-    fireEvent.click(panel.getByLabelText('Pin /stop to favorites'))
-    expect(props.pinCommand).toHaveBeenCalledWith('stop')
+    fireEvent.click(panel.getByText(en['home.cmd.deepscan.desc']))
+    fireEvent.click(panel.getByText(en['home.cmd.status.desc']))
+    expect(calls).toEqual(['setDraft:/deepscan ', 'setDraft:/status', 'submit'])
+    fireEvent.click(panel.getByLabelText('Unpin /report'))
+    expect(props.unpinCommand).toHaveBeenCalledWith('report')
+    fireEvent.click(panel.getByLabelText('Pin /nmap to favorites'))
+    expect(props.pinCommand).toHaveBeenCalledWith('nmap')
   })
 
-  it('omits Continue when no recent session exists', () => {
+  it('renders the four quick-start steps as actions wired to the real flow', () => {
+    const { view, props, calls } = renderSections()
+    const panel = within(view.getByLabelText('Quick start'))
+    const stepKeys = ['home.step1.title', 'home.step2.title', 'home.step3.title', 'home.step4.title'] as const
+    for (const key of stepKeys) expect(panel.getByText(en[key])).toBeTruthy()
+    const stepButton = (key: typeof stepKeys[number]) => (
+      panel.getByText(en[key]).closest('button') as HTMLButtonElement
+    )
+    fireEvent.click(stepButton('home.step2.title'))
+    fireEvent.click(stepButton('home.step3.title'))
+    fireEvent.click(stepButton('home.step4.title'))
+    expect(calls).toEqual(['setDraft:/scan ', 'setDraft:/status', 'submit', 'setDraft:/report', 'submit'])
+    // The insert launch focuses the composer for the target; the submits do not.
+    expect(props.focusComposer).toHaveBeenCalledOnce()
+    fireEvent.click(stepButton('home.step1.title'))
+    expect(props.focusComposer).toHaveBeenCalledTimes(2)
+    expect(calls).toHaveLength(5)
+  })
+
+  it('keeps step one live in the inert posture while the command steps disable', () => {
+    const { view, props } = renderSections({ disabled: true })
+    const panel = within(view.getByLabelText('Quick start'))
+    const step1 = panel.getByText(en['home.step1.title']).closest('button') as HTMLButtonElement
+    const step2 = panel.getByText(en['home.step2.title']).closest('button') as HTMLButtonElement
+    expect(step2.disabled).toBe(true)
+    expect(step1.disabled).toBe(false)
+    fireEvent.click(step1)
+    expect(props.focusComposer).toHaveBeenCalledOnce()
+  })
+
+  it('shows an honest Continue empty state with no button when no recent session exists', () => {
     const { view } = renderSections()
-    expect(view.queryByText('Continue')).toBeNull()
+    const panel = within(view.getByLabelText('Continue'))
+    expect(panel.getByText(en['home.continue.empty'])).toBeTruthy()
+    expect(panel.queryByRole('button')).toBeNull()
   })
 
-  it('continues a real recent session, skipping the current, blank, and subagent rows', () => {
+  it('continues only the most recent session, skipping the current, blank, and subagent rows', () => {
     const current = 'cur' as SessionId
     const alpha = 'a' as SessionId
+    const beta = 'z' as SessionId
     const blank = 'b' as SessionId
     const sub = 'c' as SessionId
     const state: SessionListState = {
-      ids: [current, alpha, blank, sub],
+      ids: [current, blank, alpha, sub, beta],
       byId: {
         [current]: summary('cur'),
-        [alpha]: summary('a', { displayTitle: 'Alpha scan', cwd: '/work/alpha', running: true }),
         [blank]: summary('b', { blank: true }),
+        [alpha]: summary('a', { displayTitle: 'Alpha scan', cwd: '/work/alpha', running: true }),
         [sub]: summary('c', { origin: 'subagent' }),
+        [beta]: summary('z', { displayTitle: 'Beta scan' }),
       },
       phase: 'ready',
       projectionsBySession: {},
@@ -248,11 +337,17 @@ describe('HomeSections', () => {
       useSessions: sessionsHook(state),
       currentSessionId: current,
     })
-    expect(view.getByText('Alpha scan')).toBeTruthy()
-    expect(view.getByText('Running')).toBeTruthy()
-    expect(view.queryByText('Session b')).toBeNull()
-    expect(view.queryByText('Session c')).toBeNull()
-    fireEvent.click(view.getByText('Alpha scan'))
+    const panel = within(view.getByLabelText('Continue'))
+    expect(panel.getByText('Alpha scan')).toBeTruthy()
+    expect(panel.getByText('Running')).toBeTruthy()
+    expect(panel.queryByText('Beta scan')).toBeNull()
+    expect(panel.queryByText('Session b')).toBeNull()
+    expect(panel.queryByText('Session c')).toBeNull()
+    const buttons = panel.getAllByRole('button')
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0]?.textContent).toContain(en['home.continue.resume'])
+    fireEvent.click(buttons[0]!)
+    expect(props.openSession).toHaveBeenCalledOnce()
     expect(props.openSession).toHaveBeenCalledWith('a')
   })
 })
