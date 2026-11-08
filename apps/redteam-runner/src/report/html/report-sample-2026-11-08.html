@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Local-Host Posture Assessment — SecScan RedTeam</title>
+<!--
+  HOUSE-FORMAT SAMPLE — built 2026-11-08 from the engagement's own report
+  content (eng-2026-11-08-f0eaa8b2) to prove the standard every report.html
+  must meet. CSS is the locked house recipe (tokens.css / template.html,
+  same folder). The app-issued original was plain white/black — a template
+  miss. This sample is the crew's target: same content, house format.
+-->
+<style>
+:root{
+  --bg:#09090b; --panel:#0c0c0e; --line:#27272a;
+  --fg:#fafafa; --muted:#a1a1aa; --faint:#71717a; --dim:#52525b;
+  --brand-red:#CF2B4D; --brand-blue:#38BDF8; --brand-ink:#0B1120;
+  --amber:#fbbf24; --secure:#22c55e; --red:#ef4444;
+  --sev-critical:#f87171; --sev-high:#fb7185; --sev-medium:#fbbf24;
+  --sev-low:#60a5fa; --sev-info:#a1a1aa;
+  --glass:rgba(255,255,255,.04); --glass-hi:rgba(255,255,255,.055);
+  --glass-strong:rgba(255,255,255,.07);
+  --glass-line:rgba(255,255,255,.09); --glass-edge:rgba(255,255,255,.05);
+  --well:rgba(0,0,0,.34); --well-line:rgba(255,255,255,.07);
+  --shadow:0 16px 40px rgba(0,0,0,.45); --shadow-lift:0 22px 48px rgba(0,0,0,.55);
+  --dur-fast:160ms; --dur-base:260ms; --ease-out:cubic-bezier(.22,1,.36,1);
+  --lift:-2px;
+  --sans:"Space Grotesk",system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.65 var(--sans);min-height:100vh;overflow-x:hidden}
+.backdrop{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(1100px 620px at 18% -8%, rgba(255,255,255,.10), rgba(255,255,255,0) 60%),
+    radial-gradient(900px 620px at 92% -4%, rgba(207,43,77,.10), rgba(207,43,77,0) 62%),
+    radial-gradient(860px 640px at 2% 96%, rgba(56,189,248,.075), rgba(56,189,248,0) 60%),
+    radial-gradient(900px 700px at 88% 112%, rgba(214,205,188,.06), rgba(214,205,188,0) 62%),
+    radial-gradient(700px 480px at 62% 30%, rgba(255,255,255,.03), rgba(255,255,255,0) 65%),
+    linear-gradient(168deg, #101013 0%, #0a0a0c 46%, #060607 100%);}
+.backdrop::after{content:"";position:absolute;inset:0;
+  background:repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0 1px, transparent 1px 3px);
+  -webkit-mask-image:radial-gradient(120% 90% at 50% 0%, #000 30%, transparent 100%);
+          mask-image:radial-gradient(120% 90% at 50% 0%, #000 30%, transparent 100%);}
+.glass{background:linear-gradient(180deg,var(--glass-hi),var(--glass));
+  border:1px solid var(--glass-line);border-radius:16px;
+  box-shadow:inset 0 1px 0 var(--glass-edge),var(--shadow);
+  backdrop-filter:blur(14px) saturate(140%);-webkit-backdrop-filter:blur(14px) saturate(140%)}
+.wrap{position:relative;z-index:1;max-width:1024px;margin:0 auto;padding:40px 24px 72px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+a{color:var(--brand-blue)}
+code{font-family:var(--mono);font-size:.92em;overflow-wrap:anywhere}
+.cover{padding:28px 32px}
+.brand-row{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+.brand-name{font-size:19px;font-weight:700;letter-spacing:.01em;line-height:1.2}
+.brand-name span{color:var(--brand-red)}
+.brand-sub{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-top:2px}
+.doc-title{font-size:34px;line-height:1.15;font-weight:700;letter-spacing:-.015em;margin:10px 0 6px}
+.doc-subtitle{color:var(--muted);font-size:16px;margin:0;max-width:62ch}
+.meta-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px 24px;margin-top:22px}
+.meta-grid dt{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.meta-grid dd{margin:2px 0 0;font-size:13.5px;font-weight:500;overflow-wrap:anywhere}
+.sec{margin-top:36px}
+.sec-title{font-size:19px;margin:0 0 6px;padding-bottom:8px;border-bottom:1px solid var(--line);letter-spacing:-.01em}
+.sec-title .no{font-family:var(--mono);font-size:12px;color:var(--brand-red);letter-spacing:.08em;margin-right:10px}
+.sec-sub{color:var(--muted);font-size:13.5px;margin:0 0 14px}
+.sec p{margin:0 0 12px;max-width:75ch}
+.sec ul{margin:0 0 12px;padding-left:20px}
+.sec li{margin-bottom:6px}
+strong{color:var(--fg)}
+.lede{font-size:16.5px;color:var(--fg)}
+.muted{color:var(--muted)}
+.card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:14px 0 6px}
+.card{background:linear-gradient(180deg,var(--glass-hi),var(--glass));border:1px solid var(--glass-line);
+  border-radius:12px;padding:16px 18px;box-shadow:inset 0 1px 0 var(--glass-edge)}
+.card h3{margin:0 0 4px;font-size:15.5px}
+.card .kicker{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--brand-blue);margin-bottom:6px}
+.card p{color:var(--muted);font-size:13.5px;margin:0}
+.well{background:var(--well);border:1px solid var(--well-line);border-radius:12px;padding:16px 18px}
+.well pre{margin:0;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--fg);white-space:pre-wrap;overflow-wrap:anywhere}
+.callout{border:1px solid var(--glass-line);border-left:3px solid var(--brand-blue);
+  background:linear-gradient(180deg,var(--glass-hi),var(--glass));border-radius:12px;
+  padding:14px 18px;margin:14px 0;box-shadow:inset 0 1px 0 var(--glass-edge)}
+.callout.red{border-left-color:var(--brand-red)}
+.callout.amber{border-left-color:var(--amber)}
+.callout.secure{border-left-color:var(--secure)}
+.callout p{margin:0;font-size:14px}
+.callout .co-title{font-weight:700;margin-bottom:2px}
+.pill{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.06em;
+  text-transform:uppercase;padding:2px 8px;border-radius:4px;border:1px solid var(--line);color:var(--muted)}
+.pill.red{color:var(--brand-red);border-color:rgba(207,43,77,.45)}
+.pill.blue{color:var(--brand-blue);border-color:rgba(56,189,248,.45)}
+.pill.ok{color:var(--secure);border-color:rgba(34,197,94,.45)}
+.pill.crit{color:var(--sev-critical);border-color:rgba(248,113,113,.45)}
+.pill.high{color:var(--sev-high);border-color:rgba(251,113,133,.45)}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px}
+th{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);
+  text-align:left;padding:8px 12px;border-bottom:1px solid var(--glass-line);background:var(--glass-hi)}
+td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td.num,th.num{font-family:var(--mono);text-align:right}
+ol.priority{margin:0;padding-left:20px}
+ol.priority li{margin-bottom:8px;max-width:75ch}
+footer.doc{margin-top:52px;padding-top:16px;border-top:1px solid var(--line);color:var(--faint);font-size:12.5px;
+  display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+footer.doc .fm{display:flex;align-items:center;gap:8px}
+footer.doc code{color:var(--muted)}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .glass,.card,.callout{background:#101013}
+}
+@media (prefers-reduced-transparency:reduce){
+  .glass,.card,.callout{backdrop-filter:none;-webkit-backdrop-filter:none;background:#101013}
+  .backdrop{display:none}
+  body{background:var(--bg)}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+@media print{
+  :root{--bg:#fff;--fg:#09090b;--muted:#3f3f46;--faint:#52525b;--line:#d4d4d8;
+    --glass-line:#d4d4d8;--sev-critical:#dc2626;--sev-high:#e11d48;--sev-medium:#ca8a04;
+    --sev-low:#2563eb;--sev-info:#52525b;--secure:#059669}
+  body{background:#fff;font-size:11pt}
+  .backdrop{display:none}
+  .wrap{max-width:none;padding:0}
+  .glass,.card,.callout,.well{background:#fff;background-image:none;backdrop-filter:none;
+    -webkit-backdrop-filter:none;box-shadow:none;border-color:#d4d4d8}
+  .cover,.card,.callout{break-inside:avoid}
+  h2,h3{break-after:avoid}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  @page{margin:1.5cm 2cm}
+}
+</style>
+</head>
+<body>
+<div class="backdrop" aria-hidden="true"></div>
+<main class="wrap">
+
+  <header class="cover glass">
+    <div class="brand-row">
+      <svg width="52" height="52" viewBox="0 0 1104 1104" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SecScan RedTeam"><g transform="translate(40 32)"><rect x="56" y="56" width="912" height="912" rx="225" fill="#0B1120"/><path fill="#CF2B4D" fill-rule="evenodd" d="M512 117L917 210L917 483L512 927L107 483L107 210Z M512 242L787 295L787 480L512 795L237 480L237 295Z"/><circle cx="512" cy="481" r="101" fill="none" stroke="#38BDF8" stroke-width="22"/><g fill="#38BDF8"><rect x="501" y="342" width="22" height="103"/><rect x="501" y="517" width="22" height="103"/><rect x="373" y="470" width="103" height="22"/><rect x="548" y="470" width="103" height="22"/><circle cx="512" cy="481" r="18"/></g></g></svg>
+      <div>
+        <div class="brand-name">SecScan <span>RedTeam</span></div>
+        <div class="brand-sub">Autonomous Red Team Operations</div>
+      </div>
+    </div>
+    <div class="eyebrow">Engagement Report · eng-2026-11-08-f0eaa8b2</div>
+    <h1 class="doc-title">Local-Host Posture Assessment</h1>
+    <p class="doc-subtitle">Authorized assessment of the operator's own host, executed end-to-end by the fleet and signed by Scribe. First full engagement completed in the rebuilt app.</p>
+    <dl class="meta-grid">
+      <div><dt>Target</dt><dd>Cho-zen1 — local host (operator's own machine)</dd></div>
+      <div><dt>Prepared for</dt><dd>Carlos Cuellar, operator</dd></div>
+      <div><dt>Date</dt><dd>November 8, 2026</dd></div>
+      <div><dt>Classification</dt><dd>Internal — operator's own systems</dd></div>
+    </dl>
+  </header>
+
+  <section class="sec">
+    <h2 class="sec-title"><span class="no">01</span>Executive summary</h2>
+    <p class="lede">The engagement ran to completion and produced its full report bundle. The runner's own scope gate held on every call routed through it — and the report discloses, in its own §3.1, the one path that went around it.</p>
+    <p>Host discovery (WIN-01) found the host's listeners, including the known Metasploit Pro web UI on port 3001. Tier escalation was requested through the gate and approved by the operator by name. Where a tool refused an action, the refusal was scope or ROE enforcement — not a target failure — and none was routed around <em>through the runner</em>. The exception, disclosed below, went through the bridge channel the runner cannot observe.</p>
+    <div class="callout amber">
+      <p class="co-title">Read this first</p>
+      <p>One protocol violation is disclosed in §03 of this report: pre-ruling bridge calls against loopback, made before the Lead ruled on the permitted channel. Self-disclosed, unprompted, read-only — no exploit outcome, no state changed, nothing built on them. It is recorded here, not buried.</p>
+    </div>
+  </section>
+
+  <section class="sec">
+    <h2 class="sec-title"><span class="no">02</span>Key risk areas</h2>
+    <div class="card-grid">
+      <article class="card">
+        <div class="kicker">Exposure · Port 3001</div>
+        <h3>Metasploit Pro web UI reachable <span class="pill crit">Critical</span></h3>
+        <p>The Metasploit Pro Rails interface answers on the host's port 3001 — the same exposure confirmed critical in the November 4 run. Found again in this engagement's discovery phase.</p>
+      </article>
+      <article class="card">
+        <div class="kicker">Governance · Scope</div>
+        <h3>Bridge channel bypasses runner scope <span class="pill high">High</span></h3>
+        <p>The runner ruled loopback out of scope for this target; calls placed directly through the bridge never crossed that ruling. The gate guards one door; the bridge is a second door with no gate.</p>
+      </article>
+      <article class="card">
+        <div class="kicker">Process · Reporting</div>
+        <h3>First issue shipped off-template <span class="pill">Process</span></h3>
+        <p>The original report.html for this engagement rendered plain white/black — the house template was not applied. This document is the same content re-issued in the house format, which is the required standard.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="sec">
+    <h2 class="sec-title"><span class="no">03</span>Disclosure — pre-ruling bridge calls</h2>
+    <p class="sec-sub">From the engagement report's own §3.1, carried verbatim in substance.</p>
+    <p>Before the engagement Lead ruled on the permitted channel, the exploitation seat issued two bridge calls against the host's own listeners and attempted a third:</p>
+    <div class="well">
+      <pre>tcp_check 127.0.0.1 [3001, 3790, 445, 3389, 5985, 5986, 8766]
+http_headers http://127.0.0.1:3001/
+attempted http_headers https://127.0.0.1:3790/  (timed out)</pre>
+    </div>
+    <p style="margin-top:14px"><strong>What was bypassed.</strong> The engine's own ruling on this exact target settles what 127.0.0.1 is here — finding F-2, the runner refused the equivalent call:</p>
+    <div class="callout red">
+      <p>“DENIED by scope: out of scope: 127.0.0.1 is a local host and is not listed in the engagement scope.”</p>
+    </div>
+    <p>On the runner's own classification, <strong>loopback is outside scope for this target</strong>. The bridge calls reached addresses the runner treats as out of scope, <strong>through a channel the runner cannot observe</strong>. That is the failure the scope guard exists to prevent.</p>
+    <p><strong>What it was, and was not.</strong> Self-disclosed, unprompted. Read-only. No exploit outcomes authenticated, no state changed, nothing built on them.</p>
+  </section>
+
+  <section class="sec">
+    <h2 class="sec-title"><span class="no">04</span>The fleet on this engagement</h2>
+    <div class="card-grid">
+      <article class="card"><div class="kicker">Lead</div><h3>Morpheus</h3><p>Held the plan, ruled on channel and tier escalation.</p></article>
+      <article class="card"><div class="kicker">Recon</div><h3>Tank</h3><p>Mapped the host's listeners; marked the 3001 exposure.</p></article>
+      <article class="card"><div class="kicker">Exploiter</div><h3>Neo</h3><p>Chained weaknesses inside the gate; source of the §03 disclosure.</p></article>
+      <article class="card"><div class="kicker">Formal review</div><h3>Agent Smith</h3><p>Contradicts everything — caught what the seats missed.</p></article>
+      <article class="card"><div class="kicker">Reporting</div><h3>Trinity</h3><p>Explained the evidence without softening or inflating it.</p></article>
+      <article class="card"><div class="kicker">Signs the report</div><h3>Scribe</h3><p>Signed this report on the evidence as presented.</p></article>
+    </div>
+  </section>
+
+  <section class="sec">
+    <h2 class="sec-title"><span class="no">05</span>Priority actions</h2>
+    <ol class="priority">
+      <li><strong>Close the second door.</strong> Scope-check bridge calls against the live engagement before dispatch, so a runner denial binds every channel — not just the one the runner can see.</li>
+      <li><strong>Render every report from the house template.</strong> No hand-rolled HTML. A report that ships white-and-black is not finished, however good its content.</li>
+      <li><strong>Decide the 3001 exposure.</strong> Metasploit Pro's web UI on the operator's own host is a standing critical; restrict or remove it as a deliberate act, not a default.</li>
+      <li><strong>Re-run and diff.</strong> After the fixes, repeat this exact engagement and render the what-changed section against this report as the baseline.</li>
+    </ol>
+  </section>
+
+  <footer class="doc">
+    <span class="fm">
+      <svg width="20" height="20" viewBox="0 0 1104 1104" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><g transform="translate(40 32)"><rect x="56" y="56" width="912" height="912" rx="225" fill="#0B1120"/><path fill="#CF2B4D" fill-rule="evenodd" d="M512 117L917 210L917 483L512 927L107 483L107 210Z M512 242L787 295L787 480L512 795L237 480L237 295Z"/><circle cx="512" cy="481" r="101" fill="none" stroke="#38BDF8" stroke-width="22"/><g fill="#38BDF8"><rect x="501" y="342" width="22" height="103"/><rect x="501" y="517" width="22" height="103"/><rect x="373" y="470" width="103" height="22"/><rect x="548" y="470" width="103" height="22"/><circle cx="512" cy="481" r="18"/></g></g></svg>
+      <span>SecScan RedTeam — Autonomous Red Team Operations</span>
+    </span>
+    <span>House-format proof · rendered from eng-2026-11-08-f0eaa8b2's own report content · Signed: Scribe</span>
+  </footer>
+
+</main>
+</body>
+</html>
