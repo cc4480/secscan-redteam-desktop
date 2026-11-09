@@ -116,7 +116,7 @@ export async function reportPhase(
     blocked: lsum.blocked,
     na: lsum.na,
     pending: lsum.pending,
-  }  // The engagement grade: the embedded Seclayer anchored scoring engine
+  }  // The engagement grade: the runner's local anchored scoring
   // is the runner's one grading voice (report/grading.ts) — deterministic,
   // computed here from the final confirmed findings, never the model's —
   // and never issued for a halted/blocked end (N/A, as the HTML cover renders).
@@ -127,7 +127,7 @@ export async function reportPhase(
       phase: 'report',
       actor: 'runner',
       action: 'report_grade',
-      result: opts.haltedReason || opts.blockedReason ? `Security grade N/A — engagement ${opts.blockedReason ? 'blocked' : 'halted'}; no grade issued for an incomplete engagement.` : `Security grade ${posture.grade} (${posture.score}/100, ${posture.postureRating}) over ${posture.activeCount} confirmed finding(s) — Seclayer anchored scoring.`,
+      result: opts.haltedReason || opts.blockedReason ? `Security grade N/A — engagement ${opts.blockedReason ? 'blocked' : 'halted'}; no grade issued for an incomplete engagement.` : `Security grade ${posture.grade} (${posture.score}/100, ${posture.postureRating}) over ${posture.activeCount} confirmed finding(s) — SecScan anchored scoring.`,
     })
   }
   // v0.21.0 nuclei: honest counting — template executions are variant-level

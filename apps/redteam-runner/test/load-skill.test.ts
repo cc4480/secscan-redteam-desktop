@@ -59,6 +59,6 @@ describe('load_skill dispatch (Layer 2 on trigger)', () => {
     for (const set of [RECON_TOOLS, EXPLOIT_TOOLS, FULL_TOOLS]) {
       assert.equal(set.filter(t => t.name === 'load_skill').length, 1)
     }
-    assert.equal(FULL_TOOLS.length, 42, 'the universal catalog grew by exactly the loader')
+    assert.equal(FULL_TOOLS.length, 36, 'the universal catalog grew by exactly the loader (42 before the six Seclayer battery tools were extracted on 2026-11-08)')
   })
 })

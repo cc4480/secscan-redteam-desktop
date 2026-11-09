@@ -33,7 +33,7 @@
  * against a real predecessor scan — that rule lives in detail.ts; the
  * PROVEN tier exists only behind execution-tier proof — tierOf).
  */
-import { type PostureBanner, type SecurityPosture } from '#seclayer/server/scoring.js'
+import { type PostureBanner, type SecurityPosture } from './posture.js'
 import { type Finding } from '../types.js'
 import { type NegativeProof, type PocBundle } from '../proof/index.js'
 import { type ReportMeta } from './html.js'

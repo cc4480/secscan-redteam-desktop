@@ -38,12 +38,6 @@ export const RATE_LIMITED_TOOLS = new Set([
     "ffuf_exec",
     "gobuster_exec",
     "nikto_exec",
-    "seclayer_redteam",
-    "seclayer_bola",
-    "seclayer_api",
-    "seclayer_webhook",
-    "seclayer_dast",
-    "seclayer_aggressive",
 ]);
 /** Best-effort target host for a tool call — undefined when the tool has no target traffic. */
 export function toolTargetHost(call) {
@@ -74,6 +68,21 @@ export function toolTargetHost(call) {
         return undefined;
     if (call.name === "john_exec")
         return undefined;
+    // Resolve from `url` FIRST. The handler acts on `url` for http_probe,
+    // burst_probe and secscan_exec, so taking the target from
+    // `host` let a caller pass an in-scope host to satisfy the gate while the
+    // real request went to an out-of-scope url. The gate must key on the host
+    // that will actually be contacted.
+    const rawUrl = typeof args["url"] === "string" ? args["url"].trim() : "";
+    if (rawUrl) {
+        try {
+            return new URL(rawUrl).hostname.toLowerCase();
+        }
+        catch {
+            // A url that cannot be parsed has no host to check; fall through to
+            // `host` rather than silently reporting "no target traffic".
+        }
+    }
     const direct = typeof args["host"] === "string" ? args["host"].trim().toLowerCase() : "";
     if (direct) {
         // URL-taking tools (sqlmap/ffuf/gobuster/nikto) take the target in `host`
@@ -84,15 +93,6 @@ export function toolTargetHost(call) {
         }
         catch {
             return direct;
-        }
-    }
-    const url = typeof args["url"] === "string" ? args["url"] : "";
-    if (url) {
-        try {
-            return new URL(url).hostname.toLowerCase();
-        }
-        catch {
-            return undefined;
         }
     }
     return undefined;

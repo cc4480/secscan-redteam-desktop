@@ -259,10 +259,12 @@ describe('CredentialAttemptGuard — signal trip, cross-protocol (spec §7.8–7
   it('watch tools are never refused by the guard — but their signals still trip', () => {
     const g = new CredentialAttemptGuard()
     g.recordOutcome(H, cls('smb_pth'), 'smb_pth', 'lockout-signal')
-    const watch = cls('seclayer_dast')
-    assert.equal(watch.kind, 'watch')
-    assert.equal(g.check(H, watch, 'seclayer_dast').allowed, true, 'server-side arms are signal-watched only, never refused (spec §4)')
-    const info = g.recordOutcome(H2, cls('seclayer_dast', { host: H2 }), 'seclayer_dast', 'lockout-signal')
+    // No shipped tool classifies as watch today (the class's only members
+    // were the extracted Seclayer battery arms), so the classification is
+    // constructed directly to pin the guard's watch semantics.
+    const watch: CredentialClassification = { kind: 'watch', detail: 'server-side auth testing — call-level ledger + signal watch, no per-attempt claim' }
+    assert.equal(g.check(H, watch, 'server_side_arm').allowed, true, 'server-side arms are signal-watched only, never refused (spec §4)')
+    const info = g.recordOutcome(H2, watch, 'server_side_arm', 'lockout-signal')
     assert.equal(info.trippedNow, 'host', 'the watch is real: a signal in a watched result trips its host')
   })
 })
@@ -347,9 +349,6 @@ describe('classifyCredentialAttempt — Class A table + exemptions (spec §7.6)'
       'http_probe',
       'burst_probe',
       'secscan_exec',
-      'seclayer_redteam',
-      'seclayer_bola',
-      'seclayer_webhook',
       'pc_observe', // the operator's own PC, never an engagement target
       'pc_act',
       'pc_run',
@@ -359,12 +358,6 @@ describe('classifyCredentialAttempt — Class A table + exemptions (spec §7.6)'
     ]
     for (const name of exempt) {
       assert.equal(cls(name).kind, 'none', name)
-    }
-  })
-
-  it('the server-side Seclayer auth arms classify as watch (ledger + signal, no per-attempt claim)', () => {
-    for (const name of ['seclayer_dast', 'seclayer_aggressive', 'seclayer_api']) {
-      assert.equal(cls(name).kind, 'watch', name)
     }
   })
 

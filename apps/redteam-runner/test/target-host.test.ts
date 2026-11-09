@@ -2,7 +2,7 @@
  * Target resolution — the value the scope gate, rate limiter and lockout all key on.
  *
  * The defect this pins shut: the resolver preferred `args.host`, but http_probe,
- * burst_probe, secscan_exec and seclayer_* act on `args.url`. A caller could pass
+ * burst_probe and secscan_exec act on `args.url`. A caller could pass
  * an in-scope `host` to satisfy the gate and an out-of-scope `url` for the handler
  * to fetch — the gate would check a host that was never contacted. Resolution now
  * keys on `url` first, i.e. on what the request will actually reach.

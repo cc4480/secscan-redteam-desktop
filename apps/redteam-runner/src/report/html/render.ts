@@ -12,7 +12,7 @@
  * external requests, readable with scripts off (the single script is a
  * copy-button enhancement).
  */
-import { type SecurityPosture, type PostureBanner } from '#seclayer/server/scoring.js'
+import { type SecurityPosture, type PostureBanner } from '../posture.js'
 import { type Finding } from '../../types.js'
 import { type PocBundle, type NegativeProof } from '../../proof/index.js'
 import { renderMarkdown } from '../../ui/markdown.js'

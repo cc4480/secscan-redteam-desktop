@@ -4,7 +4,7 @@
  * The executive-summary and findings sections are assembled by render.ts
  * (they own the prose renderer and the tier grouping respectively).
  */
-import { type SecurityPosture, type PostureBanner } from '#seclayer/server/scoring.js';
+import { type SecurityPosture, type PostureBanner } from '../posture.js';
 import { type Finding } from '../../types.js';
 import { type PocBundle } from '../../proof/index.js';
 import { type ReportMeta } from '../html.js';

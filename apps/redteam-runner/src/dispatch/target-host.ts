@@ -46,12 +46,6 @@ export const RATE_LIMITED_TOOLS = new Set([
   "ffuf_exec",
   "gobuster_exec",
   "nikto_exec",
-  "seclayer_redteam",
-  "seclayer_bola",
-  "seclayer_api",
-  "seclayer_webhook",
-  "seclayer_dast",
-  "seclayer_aggressive",
 ]);
 
 /** Best-effort target host for a tool call — undefined when the tool has no target traffic. */
@@ -78,7 +72,7 @@ export function toolTargetHost(call: ToolCallRequest): string | undefined {
   if (XTOOL_TOOL_NAMES.has(call.name) && args["action"] !== "run") return undefined;
   if (call.name === "john_exec") return undefined;
   // Resolve from `url` FIRST. The handler acts on `url` for http_probe,
-  // burst_probe, secscan_exec and seclayer_*, so taking the target from
+  // burst_probe and secscan_exec, so taking the target from
   // `host` let a caller pass an in-scope host to satisfy the gate while the
   // real request went to an out-of-scope url. The gate must key on the host
   // that will actually be contacted.

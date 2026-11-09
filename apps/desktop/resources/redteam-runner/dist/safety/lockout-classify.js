@@ -46,8 +46,12 @@ const CLASS_A_TOOLS = {
     // transport it opens, not by its read-only intent.
     rdp_shadow_prep: "winrm",
 };
-/** Server-side auth arms: call-level ledger + signal watch, no per-attempt claim (spec §4). */
-const WATCH_TOOLS = new Set(["seclayer_dast", "seclayer_aggressive", "seclayer_api"]);
+/** Server-side auth arms: call-level ledger + signal watch, no per-attempt
+ * claim (spec §4). The class's only members were the vendored Seclayer
+ * battery's arms (seclayer_dast / seclayer_aggressive / seclayer_api),
+ * extracted from the tree on 2026-11-08 — no current tool classifies as
+ * watch, and the class stays for the next server-side arm. */
+const WATCH_TOOLS = new Set([]);
 /**
  * Explicitly never counted (spec §4): offline work, unauthenticated probes,
  * and tools with no credential submission. Named so the conservative-in
@@ -65,9 +69,6 @@ const EXEMPT_TOOLS = new Set([
     "http_probe", // a POST to /login is indistinguishable from content discovery here (spec §8)
     "burst_probe",
     "secscan_exec",
-    "seclayer_redteam",
-    "seclayer_bola",
-    "seclayer_webhook",
 ]);
 const PASSWORD_FILE_OPTION_KEYS = new Set(["USERPASS_FILE", "USER_FILE", "PASS_FILE", "USERPASS"]);
 function protocolFromName(name) {

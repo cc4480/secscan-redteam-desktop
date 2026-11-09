@@ -22,8 +22,6 @@ import { handlePcAgentTools } from "./pc-agent.js";
 import { handleResearchTools } from "./research.js";
 import { handleSkillLoadTools } from "./skill-load.js";
 import { handleSecscanTools } from "./secscan.js";
-import { handleSeclayerTools } from "./seclayer.js";
-import { handleSeclayerDastTool } from "./seclayer-dast.js";
 import type { DispatchResult } from "./types.js";
 import { handleWebTools } from "./web.js";
 import { handleXTool } from "./xtool.js";
@@ -46,8 +44,6 @@ const HANDLERS = [
   handlePcAgentTools,
   handleBridgeTools,
   handleSecscanTools,
-  handleSeclayerTools,
-  handleSeclayerDastTool,
   handleResearchTools,
   handleSkillLoadTools,
   handleBookkeepingTools,

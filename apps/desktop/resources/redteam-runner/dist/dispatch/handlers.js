@@ -9,8 +9,6 @@ import { handlePcAgentTools } from "./pc-agent.js";
 import { handleResearchTools } from "./research.js";
 import { handleSkillLoadTools } from "./skill-load.js";
 import { handleSecscanTools } from "./secscan.js";
-import { handleSeclayerTools } from "./seclayer.js";
-import { handleSeclayerDastTool } from "./seclayer-dast.js";
 import { handleWebTools } from "./web.js";
 import { handleXTool } from "./xtool.js";
 /* Handler chain note: dispatchToolInner passes the router's per-call
@@ -31,8 +29,6 @@ const HANDLERS = [
     handlePcAgentTools,
     handleBridgeTools,
     handleSecscanTools,
-    handleSeclayerTools,
-    handleSeclayerDastTool,
     handleResearchTools,
     handleSkillLoadTools,
     handleBookkeepingTools,
