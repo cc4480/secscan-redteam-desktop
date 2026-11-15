@@ -61,7 +61,7 @@ export type ReadinessResult = { ok: true; readiness: ReadinessView } | { ok: fal
  */
 export interface McpServerStatusItem {
   /** Stable row identity: the server namespace the harness row registers under. */
-  readonly id: 'secscan' | 'seclayer' | 'redteam' | 'alterego'
+  readonly id: 'redteam' | 'alterego'
   /** Product label shown for the row. */
   readonly label: string
   /**

@@ -1,17 +1,18 @@
 /**
- * MsfExecutor — the runner's Metasploit bridge, behind the safety core.
+ * MsfExecutor — the runner's Metasploit arm, behind the safety core.
  * (Module doc comment preserved on the msf/executor.ts barrel.)
  *
  * Preflight order (mirrors host-exec/executor.ts):
- *   1. ROE scope check (exact hostname match, fail closed, before any packet)
+ *   1. ROE scope check (exact hostname match, fail closed, before any
+ *      local process is spawned)
  *   2. module/payload policy (dos + destructive modules refused; generic
  *      single-command payloads run the runner-built canary marker, which
  *      additionally passes the destructive denylist; Meterpreter payloads
  *      open a session — see 6)
- *   4. credential resolution (REDTEAM_MSFRPC_* env/Secure Vault only, fail
- *      fast with setup instructions)
- *   5. execution with timeout + abort signal; the console is destroyed on
- *      abort (the call signal is what stops a running module)
+ *   4. framework availability (the local msfconsole resolves and executes,
+ *      fail fast with setup instructions)
+ *   5. execution with timeout + abort signal; the console process is
+ *      killed on abort (the call signal is what stops a running module)
  *   6. session hygiene: a generic-payload validation run must not leave
  *      sessions behind — any session that wasn't there before is stopped
  *      immediately. A Meterpreter-payload run is the one exception (W8):
@@ -20,12 +21,11 @@
  *      stays open under a runner-issued handle
  *   7. redaction of every secret from every string that leaves
  *
- * The request function is injectable so tests run against a fake msfrpcd.
+ * The process spawner is injectable so tests run against a fake msfconsole.
  */
 
 import { capOutput, checkDestructive, redactSecrets, validateHostTarget } from '../../host-exec/common.js'
-import { type MsfRequestFn } from '../protocol.js'
-import { MsfAuthError } from '../client.js'
+import { MsfAuthError, type MsfSpawnFn } from '../local-client.js'
 import {
   buildMarkerCommand,
   checkMsfModule,
@@ -52,13 +52,13 @@ export { MSF_TIMEOUT_MS } from './executor-types.js'
 export type { MsfDeps, MsfResult } from './executor-types.js'
 
 export class MsfExecutor {
-  readonly deps: { request?: MsfRequestFn; env: NodeJS.ProcessEnv; endpoint?: { host: string; port: number; useTls: boolean } }
+  readonly deps: { spawn?: MsfSpawnFn; env: NodeJS.ProcessEnv; testMode?: boolean }
   /** TEST MODE: policy checks bypassed (see MsfDeps.testMode). */
   readonly testMode: boolean
   /** Live Meterpreter sessions opened by validated runs on this executor (W8). */
   readonly sessions = new MsfSessionManager()
   constructor(deps: MsfDeps = {}) {
-    this.deps = { request: deps.request, env: deps.env ?? process.env, endpoint: deps.endpoint }
+    this.deps = { spawn: deps.spawn, env: deps.env ?? process.env, testMode: deps.testMode }
     this.testMode = deps.testMode === true
   }
 
@@ -124,7 +124,7 @@ export class MsfExecutor {
     const started = Date.now()
     const pre = this.preflight(args.host, args.scopeHosts)
     if ('refused' in pre) return this.refusedResult(args.host, pre.refused)
-    // Policy first — before credentials, before any packet to msfrpcd.
+    // Policy first — before any local process is spawned.
     // TEST MODE: module/payload policy and the canary destructive check
     // are bypassed (structural module validation inside checkMsfModule
     // still applies); dispatch/msf.ts logs the would-be denials.

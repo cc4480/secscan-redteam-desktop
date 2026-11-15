@@ -35,14 +35,20 @@ interface WorkspaceNavigation {
   startSession(workspaceId?: Parameters<SidebarRootInjected['startSession']>[0]): void
 }
 
+interface SettingsNavigation {
+  open(): void
+  openSection(id: string): void
+}
+
 /** Services required by the sidebar plugin. */
-export const inject = ['slots', 'layout', 'uiWorkspace', 'locale']
+export const inject = ['slots', 'layout', 'uiWorkspace', 'locale', 'settingsNavigation']
 
 /** Registers the sidebar shell and its service callbacks.
  * @param ctx - Client root context.
  */
 export function apply(ctx: ClientContext): void {
   const workspaceNavigation = ctx.get('uiWorkspace') as unknown as WorkspaceNavigation
+  const settingsNavigation = ctx.get('settingsNavigation') as unknown as SettingsNavigation
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-sidebar: dictionaries')
   const panels = createSnapshotStore<readonly SidebarPanelMetadata[]>([])
   const syncPanels = (): void => {
@@ -67,6 +73,7 @@ export function apply(ctx: ClientContext): void {
     startSession: (workspaceId) => { workspaceNavigation.startSession(workspaceId) },
     toggleSidebar: () => { ctx.layout.toggleSidebar() },
     selectPanel: (id) => { ctx.layout.selectPanel(id) },
+    openLocalModels: () => { settingsNavigation.openSection('local-models') },
     hooks: { panels },
   })
   ctx.slots.inject('sidebar', () => ctx.slots.register({

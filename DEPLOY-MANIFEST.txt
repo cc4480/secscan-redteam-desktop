@@ -1,0 +1,254 @@
+DEPLOY MANIFEST — Web Local Models feature (VM build tree @ bedb17cd + feature crew changes + B4 test fix)
+Generated: 2026-11-07 (America/Chicago) by builder slice; every entry: path <TAB> bytes <TAB> sha256
+Copy each file to the SAME relative path in the box tree. Do NOT copy anything under apps/desktop/** (none listed).
+
+== SECTION A: source/config files (git status --porcelain, modified + untracked) ==
+packages/api/remotes/package.json	3648	7c9584886c4921a5656e1051d8a94d926f8af7c39856117a25c638fa9da034c7
+packages/api/remotes/src/client/index.ts	10107	1b7967d1982045d0fa1e595e1017834a894ebbc57adae73c1ca2f546ab0cb017
+packages/api/remotes/tsconfig.client.json	2165	d6d4fec171adb88fad0399c6bfa7fd31217f6664a711a7187fe1b5c62e7f5997
+packages/bundle/web-app/cordis.patch.yml	21605	04dd1f9cdce0be9d608a7ed961ada1131e376c583ec267aa4bdd5f01b23660e4
+packages/bundle/web-app/package.json	9526	4ecada43528b2d0ab8e217cb96682a546c6901ccb24ea8628d73dc9b130c24ef
+packages/client/ui-settings-general/README.md	11190	4a41b636f2b1d1d6d4cb50e5312a8cf820dd679f334bdbfcc60b6fe7f54fb09a
+packages/client/ui-settings-general/src/client/index.ts	12124	3c6d5e3e29858dab9b2815ef6fc5d3ebea3f4b067a33280d4018283374986eb0
+packages/client/ui-settings-general/src/client/service.ts	1677	a85573b3b3af61d1e880e07db65f0f4c68008fcc12db59e28bf3197fdb7b6c20
+packages/client/ui-settings-general/tests/settings-navigation.client.spec.ts	2703	2ebe80767a3dfda66f88bf9d8f775d0e3aabd41fb111accad7b0a32f2f2a3140
+packages/client/ui-settings-general/tests/shell.client.spec.ts	9540	6d3b747bc039114da02b0c97a71aef11c334752e0b0e17adf6f3ad47a86a60bc
+packages/client/ui-settings-local-models/README.i18n.yaml	450	88a6251225d2fb46c932c39aa8d23919825670b8dcdc8c223f5af605a9a5f009
+packages/client/ui-settings-local-models/README.md	3983	0f7cd96c5d473c72631ac05c7d119eaac3dc0baaf7de9e75de4f367041d13fc0
+packages/client/ui-settings-local-models/README.zh.md	3641	51338faa16f4604355b5b49a27d2b32bca3205ed7d3824fa312b847a939fc27b
+packages/client/ui-settings-local-models/package.json	1495	8ae1fb7421168a5eccaf4cb0152ad217b7bc5c2b5f47f65fe4dbb31ed5522884
+packages/client/ui-settings-local-models/src/client/LocalModelsSection.module.css	2703	3377ed6435d8f5b3e3891cbc0518f1181231cbd7d2ff5df91fc4a46183b90d9c
+packages/client/ui-settings-local-models/src/client/LocalModelsSection.tsx	6992	17e8ca903e23eaa2782170dfd5c3f84db90e7b0b5e2c6f2d8165fa5759e31185
+packages/client/ui-settings-local-models/src/client/index.ts	2873	d8f76ad55f07bd386b41f81e661ad9142df475a93569d32a239455e93f6bf67a
+packages/client/ui-settings-local-models/src/client/locales.ts	2342	7ab87269258b5e4274e926050341946798f5d19c22a1f0c768f5389c767bd835
+packages/client/ui-settings-local-models/src/css-modules.d.ts	99	d4395f8ef04ea16601b9b84979df7de5af4ccfeb7b094c510f1442f3d8d5785a
+packages/client/ui-settings-local-models/src/index.ts	513	94a831dc1ff05295aad0197c38ccf46e50b9533d190260af4e49d7ffaa0d1561
+packages/client/ui-settings-local-models/tests/apply.client.spec.ts	4466	fe74295f0dad9c4fcb105a3fce4d0753c4db626fb12a644a62c1f1ea0359b0d3
+packages/client/ui-settings-local-models/tests/section.client.spec.tsx	6080	6fe8959504aaecba3e35d426aedd2251d475d5d6c12739d3920bac77dd732f6d
+packages/client/ui-settings-local-models/tsconfig.json	405	fb2db8677b44e788ad6bd6f722947d2818b9a6b2a798c9578e518708e9d6c187
+packages/client/ui-settings-local-models/tsdown.config.ts	156	4cb0cab393af8147926c304af2f361b301bc81c52f226b54fbf93950bb618945
+packages/client/ui-sidebar/src/client/SidebarRoot.tsx	14152	8c1ad26d8f8a3bcca692c38c350e2aa79b422e6f674e2afb10b137ecad185e5d
+packages/client/ui-sidebar/src/client/contract/slots.ts	6355	95c16a8df53124426d0dff2bfb6fce784ce6f25651ef5bd16a40423b3358b5a5
+packages/client/ui-sidebar/src/client/index.ts	4841	1ca41426474626202df9571dc8fe2acf11dd6c4b25314952f7dbf4029d69dd8d
+packages/client/ui-sidebar/src/client/locales.ts	866	6c8e8df8244e27754746569a9b1ddc8ab7a31d9f2def9ffbf548e1113695a7df
+packages/client/ui-sidebar/tests/__snapshots__/sidebar-snapshot.client.spec.tsx.snap	11462	cca89bb4d846b86b633565eba65e73a671c9daa075cc12497e186b9e58e88138
+packages/client/ui-sidebar/tests/apply.client.spec.tsx	7400	624aa3dac96da593497631b48317541a95ea0ab23b68706dab5ef1faae9f81b2
+packages/client/ui-sidebar/tests/panel-list.client.spec.tsx	14274	b1c1e5328028b365ca0db6312f2c8a86d24ac68969dfc50b1d91c5bd40e314fc
+packages/client/ui-sidebar/tests/pointer-scrollbars.client.spec.tsx	7516	14c23190e68172f6114fac3836bef19d74cc802a3d8e53a75095d1074e5792a0
+packages/client/ui-sidebar/tests/sidebar-root.client.spec.tsx	14207	a772ab4360ee5681ecffb050955085b5165a7e9f816038ba175897f68144857a
+packages/client/ui-sidebar/tests/sidebar-snapshot.client.spec.tsx	5863	130a6ca8bd52f3652148de79ec6e00a9319d7a04d9bb84d50873cebb59e14bce
+packages/redteam/llm-local/README.md	6925	2c06e22750877de6de8b466b1ba66970f5217303bd841143708119577cc7f82f
+packages/redteam/llm-local/package.json	1844	7e88c3d499570b3d8775981d8b1ca74856a369216116a24e3dafa6ed9d702970
+packages/redteam/llm-local/src/adapter.ts	32291	8f23ed061c4ed481c03f7d8a52f0c3dba887d1d14c2c7d6c6f732bb6b1f7f0ad
+packages/redteam/llm-local/src/index.ts	6571	0c3a99fb183ee51b5ef06a412171c1374328db8d5210bd296c3384a2387b2ebd
+packages/redteam/llm-local/src/local-models-service.ts	2225	bc07af3df3f28af2657ad6aa5a434a6f9125eeeb7b9ab87b2175939959c30dec
+packages/redteam/llm-local/src/ollama.ts	11187	351ddbb4a9bb83e896059ef3c53d548b8fdf44a0753d1d0053b5d15e57bab6fd
+packages/redteam/llm-local/src/types.ts	1860	70f3dc35b044961f0aae75964703b2a8918c531b4a355a865667c6d3a3434e14
+packages/redteam/llm-local/test/composition.test.ts	11321	ed00409f77d2d83489ae4afd6e58cd78381e068b13ea4c852ff93f19fb84fd4a
+packages/redteam/llm-local/test/ollama.test.ts	17801	a611f271b2d9569b15697d1c2341257e28479a9f574d9eb36e438c8fd361302a
+packages/redteam/llm-local/test/remote.test.ts	9842	4816a672658f4c39f1a1a85a3e02d184d20c9e1f0995db21e5a2b34968337740
+packages/redteam/llm-local/tsconfig.json	391	2e7567e7ac41d930c2233f2cc94a15fb29a9e823f90e5f4e6079050960edcf50
+packages/redteam/llm-local/tsconfig.test.json	695	36f2f7624f014ccb83770cd642734e23b53a002c26039a241c5d237af1bf9df2
+tsconfig.base.json	48312	20bbf7b8965069cd3ba5d2f9a5ebc044296f87d3a7647e0cccf4c40374466d08
+tsconfig.client.json	7290	9414622fad41f31cbb8d2d800fe60416d4a678f3fc5a0199f17c848739aa517f
+
+== SECTION B: built outputs the web host serves (per changed package, lib/ minus *.tsbuildinfo) ==
+# Serving path (verified from source): dynamic client rows are served per-plugin at /plugins/<id>/client.js from
+# packages/client/modules node half reading each package's lib/client.js; host-side entries resolve via package
+# exports to lib/index.js / lib/types/**. apps/web/dist bundles ONLY the shell (@deepseek-ai/dsh-client-web);
+# PLATFORM_MODULES (packages/client/web/src/platform.ts) contains none of the changed packages, so dist is
+# NOT stale relative to this feature and no dist files are included. dist is absent in this VM tree.
+packages/api/remotes/lib/client.js	467468	4886073179ba5ecc7207333ededfd66ac94498a417e170d20c544a504eef25d9
+packages/api/remotes/lib/client.js.map	880681	a57b169fb88107abcaf5daf1cbf2ff4e072b1c83a9a60ce56a9005bac81b6047
+packages/api/remotes/lib/index.js	5949	679afcc5d98a284711b08ba8655717203b4ad3ddabc7e55ff39c231ee41fa648
+packages/api/remotes/lib/types/client/index.d.ts	6163	f7671dd6c4b68694d9c97f32d73fb55bcbcc33df9936ee0e43d6949ab8077d49
+packages/api/remotes/lib/types/client/index.d.ts.map	3196	1a62a80c1bfede86812123966eecbe8ab3140a14c4a2909422f79904da74b640
+packages/api/remotes/lib/types/client/index.js	3185	9e80e34a3adab18d2e30dc0a633d2ad7e64c07b190830c3bcb0907cddb81f6bb
+packages/api/remotes/lib/types/client/index.js.map	1752	91a83e8be39a7b3e642dea5cf050d4b9c40818abd730d7f5d3d5181cddb4bbb5
+packages/api/remotes/lib/types/index.d.ts	612	defef2b5508361c76484ee00e9311df398c16f8bf693939e1508fb1299cb8e66
+packages/api/remotes/lib/types/index.d.ts.map	400	11b9a8232916e90bccfa6720be18862780d12931c3678e3dc85fef805fbed730
+packages/api/remotes/lib/types/index.js	4838	4d9a253a535ec3d7e8ae62dcb85585730e0b4e5fbdd7da3d7519c532fcf0e6d9
+packages/api/remotes/lib/types/index.js.map	4347	495279a518562c6b1f5e4a85d850d62f455734ffb886d6a0c873de6de53319bf
+packages/api/remotes/lib/types/remote-events.d.ts	2406	de05eca55dff1b1de143a65711fce9fdb9354066dcb55d74c30538671ab04d85
+packages/api/remotes/lib/types/remote-events.d.ts.map	251	99ba065b8964bf6f9ec6c877f1eba15acd32ec13bc3c0e7fef63cf6a4fd035d8
+packages/api/remotes/lib/types/remote-events.js	1862	d6a3a4838bfda8d5f1843fe598711219804c8ea71bea5fad4af0e687c0b1279c
+packages/api/remotes/lib/types/remote-events.js.map	1408	ef9d1d13ce06211db3b0bbb0d0667922e657c14dbc00c50f14cc27f72f3eb21e
+packages/api/remotes/lib/types/types.d.ts	891	c1569edc742e2f04b10fca5ab23efdfc7fe37ec2325ac1b617a8bf7a57a9cc5c
+packages/api/remotes/lib/types/types.d.ts.map	355	cb745ff6ba0883db297748d91e0e1b87397d25aaff3930e95344eb6015668599
+packages/api/remotes/lib/types/types.js	507	7cf83ec39be43ae8312f590fc0b4aedb1833ea4c6fe6fcb3202320d792b41412
+packages/api/remotes/lib/types/types.js.map	122	b70ec09f7e231fded10573ce6833a100cfc37f17951bcbf79e931a9e95be21ee
+packages/client/ui-settings-general/lib/client.js	54465	c132939db90755ccb0d88f3f40fd971ed4bc1731eb2b4c38eafff4768126a3c3
+packages/client/ui-settings-general/lib/client.js.map	72618	94b4a979c4abc5117df829f699e794a85f4d212b22228b6ad6d57b831fc21841
+packages/client/ui-settings-general/lib/index.js	492	b91129388489ef64d7d372b3eaf1d83166135f1039406dc6ea698262471c3eaa
+packages/client/ui-settings-general/lib/types/client/CurrentVersionRow.d.ts	594	0363c0d81fa72206721f7d16b4a31345c2bcb2eeb967fda0f55386950a8d35d0
+packages/client/ui-settings-general/lib/types/client/CurrentVersionRow.d.ts.map	323	5d2b99ca144015b8276deb61d158dc5c32b4ef830b05d39581dd0046b2279611
+packages/client/ui-settings-general/lib/types/client/CurrentVersionRow.js	632	f652db0c7ce42e7dac0b69c651c01cdd1a89f80f357af4f1a42705d5e6bb2666
+packages/client/ui-settings-general/lib/types/client/CurrentVersionRow.js.map	437	b688bf688f3c95d8d09ca166d859607b5b895eee2931835ecf25d811bf7dcac4
+packages/client/ui-settings-general/lib/types/client/DesktopUpdateIndicator.d.ts	1315	7d988aa4659c2b8c2f927771139d57fff121d1487d4b24d28b028d26e6b61269
+packages/client/ui-settings-general/lib/types/client/DesktopUpdateIndicator.d.ts.map	861	d7c6cf1213261b4fdcc0849d0a5c87282db5bc7df47e5c16dc046c3a4c7fed3a
+packages/client/ui-settings-general/lib/types/client/DesktopUpdateIndicator.js	4468	cbce369d85c16557f179f2fb4d2bf7a5f5546b79ce20967d6791613756f1c774
+packages/client/ui-settings-general/lib/types/client/DesktopUpdateIndicator.js.map	4016	702573ee308a6e2dc929a12c02ff74b5983ce0ffc6b9002d0f43a6b93a9b3924
+packages/client/ui-settings-general/lib/types/client/DeveloperToolsRow.d.ts	825	21d9029978a458f6816719011440853e7f43e7bfa17595092eb7dd3daec59268
+packages/client/ui-settings-general/lib/types/client/DeveloperToolsRow.d.ts.map	591	c736c286a272b481b650718424584963f4188a726a6ad764cfba814cff8c647c
+packages/client/ui-settings-general/lib/types/client/DeveloperToolsRow.js	1360	53c30b50976ea2a1fb17de6892e97c08916ca94edcf09051625b6dbb30761c36
+packages/client/ui-settings-general/lib/types/client/DeveloperToolsRow.js.map	1210	e3e4dfeb10818339ce15151d89024b6b055bd2ef64f85dba2a386951da3c38b0
+packages/client/ui-settings-general/lib/types/client/GeneralSection.d.ts	675	5ff0e04ae52845c456e785b64021f49fbc6e7b1ed7ddf2d138e4339bcfd108f7
+packages/client/ui-settings-general/lib/types/client/GeneralSection.d.ts.map	375	839b642a670f2e47b0712929f365f2dd53eb347b6ee440d605688f13b0c81897
+packages/client/ui-settings-general/lib/types/client/GeneralSection.js	445	1c98ae2e7a3b03bbebf1ee8acfa4af6e772864e565348a6dc0a45b374b992665
+packages/client/ui-settings-general/lib/types/client/GeneralSection.js.map	331	728671faa33d2b46a312ea153776aa28ee037ea9d389571a5c8372bf0a589c2e
+packages/client/ui-settings-general/lib/types/client/SettingsDocumentAction.d.ts	1301	e015011ad9924a1a8e803ae1e38386dadcb076cd69c1107e37c74528914e815a
+packages/client/ui-settings-general/lib/types/client/SettingsDocumentAction.d.ts.map	713	77e748c353c32eab7b0f846481bd36bf217553f79acdae6cdac90c196b846ae9
+packages/client/ui-settings-general/lib/types/client/SettingsDocumentAction.js	1189	cc5a067bb53efe3c21db281cdfb60fec189e2acb011488d2340b9e7b25685bed
+packages/client/ui-settings-general/lib/types/client/SettingsDocumentAction.js.map	989	4fb66f8eb44a44fba5900ff9249a60b012ca1e5fec85a7c06e6a69be080670b4
+packages/client/ui-settings-general/lib/types/client/SettingsOverlay.d.ts	434	02ff36e9c4f592a4deeaa1a99fbb0d549fab206611c7d5970e7ebf55639e9405
+packages/client/ui-settings-general/lib/types/client/SettingsOverlay.d.ts.map	249	2870a8e136a2498c98876aa8ec12ef061e964029530e9542dd8501b5b3b86334
+packages/client/ui-settings-general/lib/types/client/SettingsOverlay.js	4796	6a29a53b96ae3c6057544f7ed7dfe76feae9e0b266a28d257f78676dd6f94682
+packages/client/ui-settings-general/lib/types/client/SettingsOverlay.js.map	3795	6bea48059cba9c893f243923726c285d2195e58df275eef70c83704ee75b5650
+packages/client/ui-settings-general/lib/types/client/SettingsRoot.d.ts	363	d57994465b5a226eebf187dc4b5a044b415114b75d25763c2b28c28deaf20855
+packages/client/ui-settings-general/lib/types/client/SettingsRoot.d.ts.map	242	5f8253ac1aa1659354406cd92927ec95ec3558d946425c86ba50a6ed147178c0
+packages/client/ui-settings-general/lib/types/client/SettingsRoot.js	7270	6f6cd155f7e09cc8400fb7fb3f07536bdc41b5577dae737afb87e332d1ecccfb
+packages/client/ui-settings-general/lib/types/client/SettingsRoot.js.map	5926	1feb3dc755df28aaec8a5ba1d18e01e9e0d7521d839ceeb1664e328e0fd8a074
+packages/client/ui-settings-general/lib/types/client/chrome.d.ts	1303	e8ab152a35e54437a2a889ae588a463b790e941e4a7c8344ab14e0bd0ed92d23
+packages/client/ui-settings-general/lib/types/client/chrome.d.ts.map	669	becaa4715e986c35bbec82744cc8aa1549f748019b8bc677016fee8c79cb53eb
+packages/client/ui-settings-general/lib/types/client/chrome.js	1361	dbd34af9d72db7951588ead0fe9a0c5ebc4e05cbfc5585a761f085d3b66b6641
+packages/client/ui-settings-general/lib/types/client/chrome.js.map	699	b6af47fb7c6fac7888676caeb38b8d4d9758560b8110dd430b74187ee2e31356
+packages/client/ui-settings-general/lib/types/client/desktop-update-source.d.ts	866	d8781b6c598d34ef045086055370f45e250230912ad6df1c41812beef2fa7fe0
+packages/client/ui-settings-general/lib/types/client/desktop-update-source.d.ts.map	520	5473be6127f270a3c909d096ff1ff44d90883a5232386ec4e7e4532644d2844c
+packages/client/ui-settings-general/lib/types/client/desktop-update-source.js	2147	006b780076c5189f5ba2866828af3fbc3725ab0e036a1302e978765558717df6
+packages/client/ui-settings-general/lib/types/client/desktop-update-source.js.map	2114	ecea92bc8213c51e6866ce0e60afcbd8f5c1156858aa9074ee07f7e48a984258
+packages/client/ui-settings-general/lib/types/client/index.d.ts	2324	4d73a3ddb9a71e6915f45cad5b8a5a0534c930a2f265941c1ca75f0fe390dd3e
+packages/client/ui-settings-general/lib/types/client/index.d.ts.map	935	498dc0c42daf7739752480d7272c2943d5124744d00f8f7c28dfd823ff6b15fa
+packages/client/ui-settings-general/lib/types/client/index.js	10053	a793ba951db13b151f1d0b0fc972382c8f7438840eca4bab2a15fb960458743c
+packages/client/ui-settings-general/lib/types/client/index.js.map	7773	6751166a0576e9bc042aa87d13a64ba3a7c6ecf8458ffe5e78a901078bda7e2e
+packages/client/ui-settings-general/lib/types/client/locales.d.ts	2890	8a23661272aea722ddab0bfee47ab5ef4f115fcc321e0a308eecfeb7ab8ea0be
+packages/client/ui-settings-general/lib/types/client/locales.d.ts.map	349	3c40fddd52188de34622bcf0122d34877cf2bb489f10a3e226ce3a9911d2aeda
+packages/client/ui-settings-general/lib/types/client/locales.js	4824	ef33674d0f6ea19906aa8d253a2d638871278c5e7a95c10c07ebc82230ad211b
+packages/client/ui-settings-general/lib/types/client/locales.js.map	1801	01dc20f6762f4855b35c5149e55618a12183f5e6bafc44072dd678374f9d4598
+packages/client/ui-settings-general/lib/types/client/service.d.ts	1710	7c5f4c7306602b26e5c5d0a2ecfc9be01cd6fcb25e086f3b6f5f3f726dcc5f7e
+packages/client/ui-settings-general/lib/types/client/service.d.ts.map	653	2e8b522c0711b2f11dae4b81632b4515814ddc3ac6107175aa5f309dc64c346e
+packages/client/ui-settings-general/lib/types/client/service.js	640	de37b92a4f47feff5d58aa4187b54f76b4435d2e7e0299b2436a738499b5bfa9
+packages/client/ui-settings-general/lib/types/client/service.js.map	408	728119e4c97711d96246a0fa119aacfd8bf3c3453a2ec927580ddb893a05a830
+packages/client/ui-settings-general/lib/types/client/settings-document-store.d.ts	2026	bae800c9c87cf8bd1a04ffa3ce6a4a9a50dc9136c96c75c7f3dc17a6c1c720a7
+packages/client/ui-settings-general/lib/types/client/settings-document-store.d.ts.map	923	4ad423ce750b6775b9328e54f898658b9c6b67d26ab3409e655ed03a9e17d214
+packages/client/ui-settings-general/lib/types/client/settings-document-store.js	3095	73aada214c20ff88a2b0b9ec64d1ecf64f18416b4a4f16c2ae82602e50370699
+packages/client/ui-settings-general/lib/types/client/settings-document-store.js.map	2381	225df1ded317b26d653c86057d872294367572c7876d7d0a113413ce7a2e1b64
+packages/client/ui-settings-general/lib/types/client/shell-contract.d.ts	3491	7c3d595358b72d91dad0f834c6ed6d7e56afefd53179c448df31527bc4942949
+packages/client/ui-settings-general/lib/types/client/shell-contract.d.ts.map	1464	33ad40ce6426cd413eb4411f7d45c4134b7f9bcf1f33ff81a967c537401b1ec1
+packages/client/ui-settings-general/lib/types/client/shell-contract.js	53	b50a41060edff98dae15162e75bd521090e2a308a2d509f18a649ccb8298a510
+packages/client/ui-settings-general/lib/types/client/shell-contract.js.map	133	abbab94202841d59abef69cb864e881f5a81bd29c0ca3aa8fbc38cb01e0134b1
+packages/client/ui-settings-general/lib/types/client/shell-store.d.ts	1673	a3a9a6f9ecc81f1075c108d73bb9d825d8d02dd15a5e00239e5738942241d76a
+packages/client/ui-settings-general/lib/types/client/shell-store.d.ts.map	726	4d5847ae15ea4a4a1c28fa05e89f9bd60f55d21edf0d2aecec140a679242df89
+packages/client/ui-settings-general/lib/types/client/shell-store.js	1410	3670e472e8568bc989e190e08c375de2457aa39c48c11cc1d1406d36c993c454
+packages/client/ui-settings-general/lib/types/client/shell-store.js.map	808	426a4027fe71d2e4461f0f07e07eaca63be5784ffb072cc3c2fe23c540b3d4dc
+packages/client/ui-settings-general/lib/types/index.d.ts	771	7a705454dcc0a8dd934bdd022efb17f2cd069d286e24c33676087818d0b972f8
+packages/client/ui-settings-general/lib/types/index.d.ts.map	413	81706f752e4c18bf92cd23d3099852b4ef8c7f7f7ae08d8dc5e92bfcd6f4b829
+packages/client/ui-settings-general/lib/types/index.js	478	c48c39b94b7956a93c193cda658982ef69f9c3a96e378109a0945ba04b554159
+packages/client/ui-settings-general/lib/types/index.js.map	537	52fe4a3b829da3ee9527fdc0153302f06cd30690807cf046281b261da9801242
+packages/client/ui-settings-general/lib/types/types.d.ts	1290	59971240e1e06c8b546013ab64d61ab74e15da1e621b4769192d2b205ce5eeb4
+packages/client/ui-settings-general/lib/types/types.d.ts.map	890	12a28dc3fb371146d71f142164b609652304536745f7e24e785f45e5f392c43b
+packages/client/ui-settings-general/lib/types/types.js	150	afc4248930b22ff4c5b09fab1ff15b8522879cbe7ff3ec14a2b975a87137d8fc
+packages/client/ui-settings-general/lib/types/types.js.map	116	c590a0fafdbd3ee65a709e199f25aab5cafb4693015152e01b39e26c01fe1c45
+packages/client/ui-settings-local-models/lib/client.js	14883	227c33204c8ce902b47e06a2a4a6ad54124eda5e27a657b28a17af6cffe65061
+packages/client/ui-settings-local-models/lib/client.js.map	17995	30fc99ec0e3e476de13040c139b0871e66c62e72d05652d4bb60282e58f1e800
+packages/client/ui-settings-local-models/lib/index.js	552	206079ddd113c58eba0066d1327bbc4c1265fb1a4691d2ebc4af5d3d49e08294
+packages/client/ui-settings-local-models/lib/types/client/LocalModelsSection.d.ts	2251	60092cd950162de5c1f3fe3a0357ce5cf004d7755521b131a3539c27a033b1c4
+packages/client/ui-settings-local-models/lib/types/client/LocalModelsSection.d.ts.map	979	0d94f1942f54c5c9210803f6279401e13624657cd8dc875dd80e117c1cf0e94a
+packages/client/ui-settings-local-models/lib/types/client/LocalModelsSection.js	4778	c1a082ec6c97c52cbf3bf0d090085f427f18a1921539b7577b989f335d7d8332
+packages/client/ui-settings-local-models/lib/types/client/LocalModelsSection.js.map	4835	65760fd67a9834cca14cf5055a156959e348f28e3efb66640ad64ffef03d29f8
+packages/client/ui-settings-local-models/lib/types/client/index.d.ts	1213	2283cd1503705887da6cd006d36a7161a9124434ebe964bc64ba6d184031067a
+packages/client/ui-settings-local-models/lib/types/client/index.d.ts.map	593	0dca85f357ce590fcf8d039583aa02d763b2820c0a8aae846b64945619236d68
+packages/client/ui-settings-local-models/lib/types/client/index.js	1776	a47f9c0e5c3abad77c3232d322f30b0546004d73304aeb83be745004d7b5bb81
+packages/client/ui-settings-local-models/lib/types/client/index.js.map	1326	d06207e75138ac722f5737f397f71666eb3b72221226a3de752323c2b22fd49f
+packages/client/ui-settings-local-models/lib/types/client/locales.d.ts	658	a66fa4d19a3622739409b9787a6c923d218e5930e1ea6f670a8e92d3ac5c15a1
+packages/client/ui-settings-local-models/lib/types/client/locales.d.ts.map	544	7a892fff4f3c38d5537cffc746ef792efedefa2845dbf98f44e84d8c8b3cb212
+packages/client/ui-settings-local-models/lib/types/client/locales.js	1960	c3b9fd3fcaee0face82f4404b2ebae880d7fa527f6efa15a289f4412912871fc
+packages/client/ui-settings-local-models/lib/types/client/locales.js.map	1158	44cb0849fad8f3f5de6c53f5a12eef6469efd73b1265e835c9bf1b5625ae7e21
+packages/client/ui-settings-local-models/lib/types/index.d.ts	553	d31a979cfc2804c5a6ae128b0c62512377cf6bac274da07443cc67bb884b4881
+packages/client/ui-settings-local-models/lib/types/index.d.ts.map	167	e6e7af79e770af5adeb074a056484157ecb00ce40a42913273eda2397e98ab5c
+packages/client/ui-settings-local-models/lib/types/index.js	540	c010d8a85a88c64fb85848d893bab36e5192fb2f0de7f5d58e954667b410d422
+packages/client/ui-settings-local-models/lib/types/index.js.map	163	69825c217e5b729cb66cc69fde2666b11872aef65a1fa0d17b0fb122b663167c
+packages/client/ui-sidebar/lib/client.js	31476	fd6e8491fa0672c598c79626132d49279bec4a13ef7739a36072ce8beafd45a9
+packages/client/ui-sidebar/lib/client.js.map	31731	becf1aec03d34be32fd6d4edb1b4c65fd6e974db4ca7414d0d96fc4c0956e56b
+packages/client/ui-sidebar/lib/index.js	181	be323c589cda4dbb7714df563ebb66f581a3d37ed2ab6859fed85fcebf970aea
+packages/client/ui-sidebar/lib/types/client/HeaderLeadingControls.d.ts	1005	98ac57f57036851b3bdb836d85015886aec0cedc611bdc641352648eedacc64f
+packages/client/ui-sidebar/lib/types/client/HeaderLeadingControls.d.ts.map	484	b860c830ff4b4a798fba3a911afd115d43120a2375460e31822e8d741c2af71b
+packages/client/ui-sidebar/lib/types/client/HeaderLeadingControls.js	1524	7fb76bf62dab912d31b6da575b3fa0b75d1900c692819fede5e46c9cd60ad480
+packages/client/ui-sidebar/lib/types/client/HeaderLeadingControls.js.map	944	3cdaa04c2e0f155997a414d4e3f041ed6d933f48670b772975f0730ae8ed6463
+packages/client/ui-sidebar/lib/types/client/SidebarRoot.d.ts	503	79c9f60a7182bdfc6705499475bf02126193b500df530d0978edb1e908592c4e
+packages/client/ui-sidebar/lib/types/client/SidebarRoot.d.ts.map	343	24fc257aa22a19abd4d398010d95a78b6b35c06b722aeabcdd442e65e5da3ea5
+packages/client/ui-sidebar/lib/types/client/SidebarRoot.js	11744	d79aefaf4dbfdfa23f16f79ba7243f918ad32176075a5548e5e7b2c856222729
+packages/client/ui-sidebar/lib/types/client/SidebarRoot.js.map	8179	313c3d13f09de9769c646bdf6c4654397ae8199ced362819a7b5c708d7056d74
+packages/client/ui-sidebar/lib/types/client/contract/slots.d.ts	6917	7fbffd133422402a6668aa5c41cd435995a1c0fe7fbe109fa91c9e3ac7baf2b7
+packages/client/ui-sidebar/lib/types/client/contract/slots.d.ts.map	2578	3bd3da086508013b00b8793b0d19a462fe0a56a014262e7ce7f5299a38adb424
+packages/client/ui-sidebar/lib/types/client/contract/slots.js	44	8e17593bc2565eef2ac8420a29a49f57046b137f8adc8d483f5e2a8251292750
+packages/client/ui-sidebar/lib/types/client/contract/slots.js.map	127	15ab7c8d0e43626de80bfba537da0815a4d3fc56560df45466eec606724c3404
+packages/client/ui-sidebar/lib/types/client/index.d.ts	969	25311215d097595d86e9c2fe271f34406e0fe549be943f9890f5ad4a5acf3a2e
+packages/client/ui-sidebar/lib/types/client/index.d.ts.map	623	03ffffb3d7271615158ea0648366f10d03b5dd7cc7f13e7e26ae049780203c7e
+packages/client/ui-sidebar/lib/types/client/index.js	3522	929dcd683db8ef09e5a29aaf7d6bb2edd280c054b975b6cc9eae11dbf73a8b7f
+packages/client/ui-sidebar/lib/types/client/index.js.map	3261	f7d8aa40876a84e14bfd5417f2c6c73321c126170db09954bee278eaa608d96a
+packages/client/ui-sidebar/lib/types/client/locales.d.ts	763	1fe694bf3937cf124b7351dc5f33463dfc98b64af72093296ae973702a0216b1
+packages/client/ui-sidebar/lib/types/client/locales.d.ts.map	293	953a2bb42ca9fff5e7d6a98d4508fd15248167524e90cae4470171d4e18a424c
+packages/client/ui-sidebar/lib/types/client/locales.js	773	ff997546a01369ad919976d65475760e8ad50d728ed92085fd571b03dcf9e4a4
+packages/client/ui-sidebar/lib/types/client/locales.js.map	506	ff06cedea754e60ddef74f7c18d4a74a85c64f4125b626172e47f1c497d7851c
+packages/client/ui-sidebar/lib/types/index.d.ts	175	c907d47c2d72978e204e064d407b4a25a5d5d5ff768d1a1b00af8d5338c1580f
+packages/client/ui-sidebar/lib/types/index.d.ts.map	164	52c7539a118070475d236466806e9d1305454ce5f34bcf14fcaa418634137b71
+packages/client/ui-sidebar/lib/types/index.js	162	e9dd336079c5501281ed5ad331ab3ce31d8a3453dc59cce56f2e461212cd1dd3
+packages/client/ui-sidebar/lib/types/index.js.map	160	e2f2c4fe9746dbdf550e717c536b3362a3b8e1c5bd9dcfc7109ed3d614166fbd
+packages/redteam/llm-local/lib/.src-hash	133	8c899de21168248fbae11b5bf0175a489af8eca9205a7a99e84b425331863598
+packages/redteam/llm-local/lib/index.js	84424	97ade3030dd34d461254cdd2d2690c5eaa4bc0303856112d5333b56ce5a6b855
+packages/redteam/llm-local/lib/typert.host.d.ts	123	5e2d26ee86d0fe170dac8cd3f5854e67bdea334c57f40a5766ace57b8304c17d
+packages/redteam/llm-local/lib/typert.host.js	3701	bb2e8c581e98aa04d155d265bf0ded11af24e657bee4cedf997ae536fddbdd7c
+packages/redteam/llm-local/lib/typert.remote-client.d.ts	801	c23dc901b45121e973b384039e7e2342d4459307cc02b9868a7cb85c6565c511
+packages/redteam/llm-local/lib/typert.remote-client.d.ts.map	194	f7d2a2ef5f452493641e4562eded6b437b287791e4a55098bae7ee0413a58a2c
+packages/redteam/llm-local/lib/typert.remote-client.js	1507	76b9bf80d650b47f49305e13abf026b5c37269b5cfc95b528fd0b2e19d7eeb29
+packages/redteam/llm-local/lib/types/adapter.d.ts	9405	301ca74124687afc3d2fb9a403e8f50626d44c6a5fdb92265c93af946ed06b8d
+packages/redteam/llm-local/lib/types/adapter.d.ts.map	2552	6bf360088b05801e4beb30b1db129612183f43e1e4ab3511fcbca7ce038939b3
+packages/redteam/llm-local/lib/types/adapter.js	32505	b5bad75b51bb0bc4ced60f9ee388a27549149dc66df36918ff94f16c20796f76
+packages/redteam/llm-local/lib/types/adapter.js.map	20246	a6ac6307b4f37e602e5edf6c932de2a6faf6cd9c5abea3aa66098d45ad006851
+packages/redteam/llm-local/lib/types/index.d.ts	4259	69a2183376f91840914632b1920b7f0870797eceee97661fc477de9c4ce0a8b7
+packages/redteam/llm-local/lib/types/index.d.ts.map	872	e805d87be001243dafd67d6f7206d18b8720e54f4401caf144d2094d91e86256
+packages/redteam/llm-local/lib/types/index.js	5068	59239bb626793134a11b29df7658aec2286a265b202a4edae6d703fc1efe7ccf
+packages/redteam/llm-local/lib/types/index.js.map	2487	913d02fe68306f6edf9f92c3f4912d3b521f2acfd57c77e16c86f2bdc7120b9d
+packages/redteam/llm-local/lib/types/local-models-service.d.ts	2174	285092972ee75f2df3934bd1bf76634dffc64abdb2c3c65cb5bbd66cd780d3ce
+packages/redteam/llm-local/lib/types/local-models-service.d.ts.map	636	035de40304433cc1ffe91e296d514ed2af450aae71176bcaf2bfc188c870bfc6
+packages/redteam/llm-local/lib/types/local-models-service.js	4928	783eb2dbb2f07c00bffe59519f17e04712af576fa4309d194e9928c0a630bd0c
+packages/redteam/llm-local/lib/types/local-models-service.js.map	603	11565fd6da08e0d6730ed53916f1cb1ac42d2f1b4709b9f52ac46feaf3e4f8b1
+packages/redteam/llm-local/lib/types/ollama.d.ts	6324	6eca0b9d51354ee77936beb911d825abb8a242a2c27bf74b16f9ae474c246e11
+packages/redteam/llm-local/lib/types/ollama.d.ts.map	1749	ab4bfff70bd4f0bdb7143aed76983bc933eb1578f7c44a9945fbb76cd40eb9e2
+packages/redteam/llm-local/lib/types/ollama.js	9362	4c6dc4a3a1cf235fa76ed9500eb031c364ee55f27ef66cd3baa47996cd08fec2
+packages/redteam/llm-local/lib/types/ollama.js.map	5653	6e4298b103d7527df263dfa7d6e19b1a54bbaea57e607849eaba2612f3eac4ca
+packages/redteam/llm-local/lib/types/state.d.ts	7077	a1a9b5913feeec85ff0a6d4a623033a3020085566d7f4b65c713e223e71abd8e
+packages/redteam/llm-local/lib/types/state.d.ts.map	2279	60047a6f1aa526b6f8b375faf000a76fa082970ae042032bb3281c7b1560a388
+packages/redteam/llm-local/lib/types/state.js	10827	81e6ea89bfe2da50c68c05aca610d87878692be695d8d898fd2954c117e2c573
+packages/redteam/llm-local/lib/types/state.js.map	6942	9bd235bc146ae87305795390961caaea8ed634ece18473d344ed5fa257cef06a
+packages/redteam/llm-local/lib/types/types.d.ts	1963	530927a58280342aa16f04e10618e1530759f817d236d407ca4db297818dad74
+packages/redteam/llm-local/lib/types/types.d.ts.map	846	c43bc28eb006304199f74223e4a472ecd54d8ea25fed13de200f5387285258f0
+packages/redteam/llm-local/lib/types/types.js	432	fe088d991ffd7686b4c34848b56cc0e18d624616f176c8e8f3e8f41120991b4e
+packages/redteam/llm-local/lib/types/types.js.map	120	6da834ee158b8c318dbd501b2fbed3a24a3f90f5f95111087a63f7804de8e339
+
+== EXCLUDED (named, with reason) ==
+packages/redteam/llm-local/dist-test/** — test-compile output produced by running llm-local's own test script
+  (tsc -p tsconfig.test.json) during verification on the VM; regenerated on demand, never served.
+packages/bundle/web-app/lib/** — bundle package changed only cordis.patch.yml + package.json (both in Section A,
+  read from the package root at runtime); its lib/ output is unchanged by this feature.
+*.tsbuildinfo under lib/ — incremental compiler state, not served; excluded from Section B.
+Tree-root *.log / *-log.txt / build-*.txt / *-done.txt files — crew build junk logs at tree root (gitignored,
+  absent from git status --porcelain); not part of the feature.
+packages/client/ui-settings-local-models/node_modules/** — untracked-dir expansion excluded the package-local
+  node_modules symlink farm; dependencies resolve from the box tree's own install.
+
+== TOTALS ==
+Section A files: 48, bytes: 365974
+Section B files: 167, bytes: 2022827
+TOTAL FILES: 215
+TOTAL BYTES: 2388801
+
+== PER-BOX RESTART + VERIFY (from web-local-models skill) ==
+Ornith1 (target tree /home/linuxuser/secscan-rebuild-test):
+  1. Check the box for other lanes' active builds first; serialize — never kill another lane's process.
+  2. Copy the files above into the same relative paths under /home/linuxuser/secscan-rebuild-test.
+  3. Restart the web service as linuxuser: pnpm start:web   (log: /home/linuxuser/rt-web.log)
+  4. Verify: bare URL returns 401; token URL returns 200 (token value never printed); the new surface
+     (Application menu -> Local models section) is present in the served app.
+GPU box (target tree /home/carlos/secscan-rebuild-test): same steps as carlos — copy, restart the web
+  service (pnpm start:web), verify bare URL 401 / token URL 200 / Local models surface present.

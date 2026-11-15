@@ -97,8 +97,6 @@ function refuseUnprotectedPlaintextPersistence(protector: McpSecretProtector): v
 
 /** Accepted draft; `null` means the stored entry is left untouched. */
 export interface McpCredentialDraft {
-  readonly secscan: string | null
-  readonly seclayer: string | null
   readonly runner: string | null
   readonly endpoint: string | null
 }
@@ -162,9 +160,8 @@ export function maskMcpCredential(value: string): string {
 /**
  * Validate a pasted token. The shape check rejects the two ways a token arrives
  * wrong - a whole `NAME=value` line copied out of a shell profile, and a value
- * pasted with its quotes - without guessing the token's own format: SecScan
- * issues `ssk_` tokens today and the runner console issues its own, so no prefix
- * is required.
+ * pasted with its quotes - without guessing the token's own format: the runner
+ * console issues its own tokens, so no prefix is required.
  * @param value - raw form field value.
  * @returns whether the value can be stored as a token.
  */
@@ -205,14 +202,12 @@ export function normalizeMcpCredentialDraft(input: McpCredentialDraftInput): Mcp
     if (value.trim() === '') return null
     return isMcpTokenValue(value) ? value.trim() : undefined
   }
-  const secscan = token(input.secscan)
-  const seclayer = token(input.seclayer)
   const runner = token(input.runner)
-  if (secscan === undefined || seclayer === undefined || runner === undefined) return undefined
+  if (runner === undefined) return undefined
   const endpoint = input.endpoint.trim()
-  if (endpoint === '') return { secscan, seclayer, runner, endpoint: null }
+  if (endpoint === '') return { runner, endpoint: null }
   if (!isMcpEndpoint(endpoint)) return undefined
-  return { secscan, seclayer, runner, endpoint }
+  return { runner, endpoint }
 }
 
 /**
@@ -334,7 +329,7 @@ export async function writeStoredMcpCredentials(
     const fingerprint = storedFingerprint(mergeable, name)
     credentials[name] = { value: kept, ...fingerprint === undefined ? {} : { fingerprint } }
   }
-  for (const [name, value] of [['SECSCAN_MCP_TOKEN', draft.secscan], ['SECLAYER_API_KEY', draft.seclayer], ['REDTEAM_UI_TOKEN', draft.runner]] as const) {
+  for (const [name, value] of [['REDTEAM_UI_TOKEN', draft.runner]] as const) {
     if (value === null) continue
     credentials[name] = { value: protector.protect(value), fingerprint: maskMcpCredential(value) }
   }

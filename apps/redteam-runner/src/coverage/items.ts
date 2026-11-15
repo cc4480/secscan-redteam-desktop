@@ -21,6 +21,7 @@
  */
 import { ALL_TARGETS, TARGET_PREFIXES, TARGET_PROFILES } from '../targets/index.js'
 import { nucleiBinaryPresent } from '../nuclei/prereq.js'
+import { msfBinaryPresent } from '../msf/prereq.js'
 import type { BatteryCategory } from '../battery.js'
 import type { TargetId } from '../targets/index.js'
 import type { VariantProgress } from '../variants/types.js'
@@ -112,8 +113,8 @@ export function resolveItemKey(raw: string, _targetProfile?: string): string | u
  */
 export function prerequisiteMet(needs: string): boolean {
   const n = needs.toLowerCase()
-  if (n.includes('msfrpcd')) {
-    return !!(process.env.REDTEAM_MSFRPC_USER && process.env.REDTEAM_MSFRPC_PASS)
+  if (n.includes('msfconsole')) {
+    return msfBinaryPresent()
   }
   if (n.includes('kerberos ticket')) {
     return !!(

@@ -1,0 +1,12 @@
+native/system/packages/darwin-arm64      | [WARN] Unsupported platform: wanted: {"cpu":["arm64"],"os":["darwin"],"libc":["any"]} (current: {"os":"win32","cpu":"x64","libc":"unknown"})
+native/system/packages/darwin-x64        | [WARN] Unsupported platform: wanted: {"cpu":["x64"],"os":["darwin"],"libc":["any"]} (current: {"os":"win32","cpu":"x64","libc":"unknown"})
+native/system/packages/linux-arm64       | [WARN] Unsupported platform: wanted: {"cpu":["arm64"],"os":["linux"],"libc":["any"]} (current: {"os":"win32","cpu":"x64","libc":"unknown"})
+native/system/packages/linux-x64         | [WARN] Unsupported platform: wanted: {"cpu":["x64"],"os":["linux"],"libc":["any"]} (current: {"os":"win32","cpu":"x64","libc":"unknown"})
+$ tsc -p src/secscan/tsconfig.json && node scripts/secscan-dist.mjs && tsc -p src/seclayer/tsconfig.json && node scripts/seclayer-dist.mjs && tsc -p tsconfig.json && node scripts/copy-dir.mjs src/ui/public dist/ui/public && node scripts/copy-dir.mjs assets dist/assets && node scripts/dist-hash.mjs write . && node scripts/stamp-deps.mjs
+secscan-dist: rewrote specifiers in 44 emitted files; staged runtime shims into dist/secscan/node_modules
+seclayer-dist: rewrote specifiers in 0 emitted files
+[copy-dir] src/ui/public -> dist/ui/public
+[copy-dir] assets -> dist/assets
+[dist-hash] stamped @secscan/redteam-runner: 658 src files → dist\.src-hash
+[dist-hash] stamped @secscan/redteam-auth-gate: 4 src files → C:\Users\Cho-zen\secscan-rebuild-test\packages\redteam\auth-gate\lib\.src-hash
+[dist-hash] stamped @secscan/redteam-llm-router: 40 src files → C:\Users\Cho-zen\secscan-rebuild-test\packages\redteam\llm-router\lib\.src-hash

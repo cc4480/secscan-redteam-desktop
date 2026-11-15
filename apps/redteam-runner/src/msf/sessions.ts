@@ -2,7 +2,7 @@
  * MsfSessionManager — the registry of live Meterpreter sessions (W8).
  *
  * A record exists ONLY because a validated exploit run produced the
- * session: the executor snapshots the daemon's session list before the
+ * session: the executor snapshots the runtime session list before the
  * run, diffs it after, and registers the new Meterpreter session here as
  * the mechanical follow-through of that run. There is deliberately no
  * "open a session" entry point — nothing can register a session against
@@ -13,19 +13,19 @@
  * run's marker, and the executor still proves the session by echoing the
  * runner-built marker through it before any agent command runs.
  *
- * Handles are runner-generated UUIDs; the daemon's numeric session ids
+ * Handles are runner-generated UUIDs; the console's numeric session ids
  * never leave the runner, so an agent cannot address a session the
- * runner did not register (a foreign or pre-existing daemon session is
+ * runner did not register (a foreign or pre-existing console session is
  * unreachable through this registry).
  */
 
 import { randomUUID } from "node:crypto";
-import type { MsfClient } from "./client.js";
+import type { LocalMsfClient } from "./local-client.js";
 
 export interface MsfSessionRecord {
   /** Runner-generated handle — the only way agents address the session. */
   handle: string;
-  /** msfrpcd session id (runner-internal). */
+  /** Runtime session id assigned by the local client (runner-internal). */
   daemonId: string;
   /** Scope-checked host the validating exploit ran against. */
   targetHost: string;
@@ -86,7 +86,7 @@ export class MsfSessionManager {
    * Throws on an unknown/closed handle — callers translate to a refusal.
    */
   async exec(
-    client: MsfClient,
+    client: LocalMsfClient,
     handle: string,
     command: string,
     opts: { timeoutMs: number; signal?: AbortSignal },
@@ -118,8 +118,8 @@ export class MsfSessionManager {
     return { record, output };
   }
 
-  /** Stop the daemon session and forget the handle. False when unknown. */
-  async close(client: MsfClient, handle: string): Promise<boolean> {
+  /** Stop the runtime session and forget the handle. False when unknown. */
+  async close(client: LocalMsfClient, handle: string): Promise<boolean> {
     const record = this.sessions.get(handle);
     if (!record) return false;
     this.sessions.delete(handle);

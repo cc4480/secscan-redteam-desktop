@@ -5,14 +5,17 @@
  *   - Non-scan tools (reports, verification workflow, everything else) → allow.
  *   - scan_url WITHOUT an explicit active-testing request → allow (passive recon).
  *   - scan_url WITH an explicit active-testing request → allow ONLY if the
- *     target domain is listed by the SecScan server (injected
- *     `isServerVerified`, which must itself fail closed).
- *     Otherwise → deny, with the server verification flow as remediation.
+ *     target domain is in the app's local verified-domain record (injected
+ *     `isVerified`, which must itself fail closed).
+ *     Otherwise → deny, with the local verification flow as remediation.
  *
- * The SecScan server is the SOLE source of truth: there is no operator
- * allowlist or any other out-of-band bypass, matching the runner's own gate
- * (runner/src/gate.ts) and the safety case's "no operator exceptions" claim.
- * The gate never issues tokens and performs no DNS of its own.
+ * The app's local verification record is the SOLE source of truth: the app
+ * issues the challenge token itself, checks the `_secscan-challenge` DNS
+ * TXT record itself, and records the result locally (see local.ts). There
+ * is no operator allowlist or any other out-of-band bypass, matching the
+ * runner's own gate (runner/src/gate.ts) and the safety case's "no operator
+ * exceptions" claim. This hook performs no DNS of its own; it consults the
+ * injected verdict only.
  *
  * Host-family probes (`mcp__redteam__*`, every one of which takes a required
  * `targetProfile` of secscan, seclayer, windows or linux — see
@@ -21,7 +24,7 @@
  * right split rather than a gap:
  *
  *   - The gate can enforce the scan half because its authority is a fact it can
- *     fetch from the SecScan server WITHOUT the model. It has no such fact for
+ *     check itself — the app's local verification record — WITHOUT the model. It has no such fact for
  *     host scope: "is this host in the engagement's scope?" is answered only by
  *     the engine (`mcp__redteam__get_engagement`, `list_live_engagements`,
  *     `update_target_map`), and the engine is the runner the tool call reaches
@@ -51,11 +54,12 @@ export type GateDecision = { kind: 'allow' } | { kind: 'deny'; reason: string }
 
 export interface GateContext {
   /**
-   * Server-side verdict for a domain. MUST fail closed: any error, timeout,
-   * or missing credential returns false. Injected so unit tests need no network.
+   * Ownership verdict for a domain from the app's LOCAL verification record
+   * (see local.ts). MUST fail closed: any error or timeout returns false.
+   * Injected so unit tests need no network.
    * This is the gate's only authorization input — there is no allowlist bypass.
    */
-  isServerVerified: (domain: string) => Promise<boolean>
+  isVerified: (domain: string) => Promise<boolean>
 }
 
 /** Base tool name, tolerating the harness MCP namespace (mcp__secscan__scan_url). */
@@ -145,7 +149,7 @@ export function wantsActiveTesting(args: Record<string, unknown>): boolean {
 }
 
 /**
- * Pure decision function. `ctx.isServerVerified` is the only impure input
+ * Pure decision function. `ctx.isVerified` is the only impure input
  * and is wrapped defensively: a throw can never become an allow.
  */
 export async function decide(
@@ -176,10 +180,10 @@ export async function decide(
     }
   }
 
-  // The only proof path: the SecScan server's own verified-domain list.
+  // The only proof path: the app's own local verified-domain record.
   let verified = false
   try {
-    verified = await ctx.isServerVerified(domain)
+    verified = await ctx.isVerified(domain)
   } catch {
     verified = false // fail closed — a throwing checker can never approve
   }

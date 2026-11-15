@@ -24,6 +24,7 @@ import { arsenalIndexItem, credentialPoolItem, formatReadiness, readinessReport 
 import { buildAndSwapArsenalIndex, type ArsenalBuildData } from '../src/arsenal/index-store.js'
 import { ARSENAL_EMPTY_FIX } from '../src/arsenal/tools.js'
 import { _resetNmapProbeCache } from '../src/nmap/prereq.js'
+import { _resetMsfProbeCache } from '../src/msf/prereq.js'
 
 const ffuf = findXTool('ffuf')
 const dirs = ffuf ? findProfile(ffuf, 'dirs') : undefined
@@ -124,7 +125,7 @@ describe('readiness report', () => {
     _resetNmapProbeCache()
     const report = await readinessReport({ REDTEAM_NMAP_BIN: '/no/such/nmap' } as NodeJS.ProcessEnv)
     const ids = report.items.map(i => i.id)
-    for (const id of ['nmap', 'wordlist', 'msfrpcd', 'secscan_token', 'deepseek_key']) {
+    for (const id of ['nmap', 'wordlist', 'msfconsole', 'secscan_token', 'deepseek_key']) {
       assert.ok(ids.includes(id), `missing readiness item ${id}`)
     }
     assert.equal(report.ok, false, 'an environment without tokens cannot be ready')
@@ -157,38 +158,35 @@ describe('readiness report', () => {
     assert.equal(token?.state, 'missing')
   })
 
-  it('reports the Seclayer key ready when set and missing with MCP-setup guidance when not', async () => {
+  it('carries no Seclayer key item — the suites are native and keyless', async () => {
     _resetNmapProbeCache()
     const withKey = await readinessReport({ SECLAYER_API_KEY: 'test-key' } as NodeJS.ProcessEnv)
-    const readyItem = withKey.items.find(i => i.id === 'seclayer_key')
-    assert.equal(readyItem?.state, 'ready')
-    assert.equal(readyItem?.required, false)
-
+    assert.equal(withKey.items.find(i => i.id === 'seclayer_key'), undefined)
     const without = await readinessReport({} as NodeJS.ProcessEnv)
-    const missingItem = without.items.find(i => i.id === 'seclayer_key')
-    assert.equal(missingItem?.state, 'missing')
-    assert.equal(missingItem?.required, false)
-    assert.equal(
-      missingItem?.fix,
-      'Optional: add the Seclayer API key in the MCP setup step, or set SECLAYER_API_KEY, to use the Seclayer MCP server and its scan tools.',
-    )
+    assert.equal(without.items.find(i => i.id === 'seclayer_key'), undefined)
   })
 
-  it('reports the RPC daemon as not-configured when credentials are absent and unreachable when they are not', async () => {
+  it('reports the local Metasploit framework missing when msfconsole cannot run and ready when it can', async () => {
     _resetNmapProbeCache()
-    const noCreds = await readinessReport({ REDTEAM_NMAP_BIN: '/no/such/nmap' } as NodeJS.ProcessEnv)
-    assert.equal(noCreds.items.find(i => i.id === 'msfrpcd')?.state, 'not-configured')
-
-    const creds = await readinessReport({
+    _resetMsfProbeCache()
+    const missing = await readinessReport({
       REDTEAM_NMAP_BIN: '/no/such/nmap',
-      REDTEAM_MSFRPC_USER: 'msf',
-      REDTEAM_MSFRPC_PASS: 'x',
-      REDTEAM_MSFRPC_HOST: '127.0.0.1',
-      REDTEAM_MSFRPC_PORT: '1', // nothing listens on port 1
+      REDTEAM_MSFCONSOLE_BIN: '/no/such/msfconsole',
     } as NodeJS.ProcessEnv)
-    const rpc = creds.items.find(i => i.id === 'msfrpcd')
-    assert.equal(rpc?.state, 'unreachable')
-    assert.match(rpc?.fix ?? '', /msfrpcd/)
+    const missingItem = missing.items.find(i => i.id === 'msfconsole')
+    assert.equal(missingItem?.state, 'missing')
+    assert.equal(missingItem?.required, false)
+    assert.match(missingItem?.fix ?? '', /msfconsole/)
+
+    _resetMsfProbeCache()
+    // Any executable that answers --version stands in for a real framework
+    // install: the probe executes the binary, it does not parse its output.
+    const present = await readinessReport({
+      REDTEAM_NMAP_BIN: '/no/such/nmap',
+      REDTEAM_MSFCONSOLE_BIN: process.execPath,
+    } as NodeJS.ProcessEnv)
+    assert.equal(present.items.find(i => i.id === 'msfconsole')?.state, 'ready')
+    _resetMsfProbeCache()
   })
 
   it('reports the resolved path AND source for the bridges, plus the tools directory', async () => {

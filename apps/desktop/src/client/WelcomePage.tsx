@@ -54,14 +54,12 @@ export function Welcome({ api }: { api: WelcomeReadinessApi }) {
   const keyButton = useRef<HTMLButtonElement>(null)
   const focusEntry = useRef(false)
   const [mcp, setMcp] = useState<WelcomeMcpState | null>(null)
-  const [secscanDraft, setSecscanDraft] = useState('')
-  const [seclayerDraft, setSeclayerDraft] = useState('')
   const [runnerDraft, setRunnerDraft] = useState('')
   const [endpointDraft, setEndpointDraft] = useState('')
   const [mcpError, setMcpError] = useState('')
   const [readiness, setReadiness] = useState<ReadinessResult | null>(null)
   const [readinessLoading, setReadinessLoading] = useState(false)
-  const secscanInput = useRef<HTMLInputElement>(null)
+  const runnerInput = useRef<HTMLInputElement>(null)
 
   function navigate(next: Page) {
     pageRef.current = next
@@ -120,7 +118,7 @@ export function Welcome({ api }: { api: WelcomeReadinessApi }) {
 
   useEffect(() => {
     if (page === 'key') input.current?.focus()
-    else if (page === 'mcp') secscanInput.current?.focus()
+    else if (page === 'mcp') runnerInput.current?.focus()
     else if (page === 'entry' && focusEntry.current) {
       focusEntry.current = false
       keyButton.current?.focus()
@@ -212,7 +210,7 @@ export function Welcome({ api }: { api: WelcomeReadinessApi }) {
   async function saveMcp(event: FormEvent) {
     event.preventDefault()
     if (busyRef.current || mcp === null) return
-    if (!plausibleToken(secscanDraft) || !plausibleToken(seclayerDraft) || !plausibleToken(runnerDraft)) {
+    if (!plausibleToken(runnerDraft)) {
       setMcpError(m.welcomeMcpInvalid)
       return
     }
@@ -224,11 +222,9 @@ export function Welcome({ api }: { api: WelcomeReadinessApi }) {
     setBusy(true)
     setMcpError('')
     try {
-      const result = await api.saveMcp({ secscan: secscanDraft, seclayer: seclayerDraft, runner: runnerDraft, endpoint: endpointDraft })
+      const result = await api.saveMcp({ runner: runnerDraft, endpoint: endpointDraft })
       if (!mounted.current) return
       if (!result.ok) { setMcpError(m.welcomeMcpFailed); return }
-      setSecscanDraft('')
-      setSeclayerDraft('')
       setRunnerDraft('')
       // The account step still has to run on a fresh machine; otherwise the step's completion ends first run.
       if (mcp.entryRequired) navigate('entry')
@@ -305,8 +301,7 @@ export function Welcome({ api }: { api: WelcomeReadinessApi }) {
   }
 
   const fingerprints = mcp === null ? [] : Object.values(mcp.fingerprints)
-  const mcpChanged = secscanDraft.trim() !== '' || seclayerDraft.trim() !== ''
-    || runnerDraft.trim() !== ''
+  const mcpChanged = runnerDraft.trim() !== ''
     || (mcp !== null && endpointDraft.trim() !== mcp.endpoint)
 
   return <>
@@ -321,22 +316,10 @@ export function Welcome({ api }: { api: WelcomeReadinessApi }) {
         <header className="key-heading"><h1 id="mcp-title">{m.welcomeMcpTitle}</h1><p id="mcp-description">{m.welcomeMcpDescription}</p></header>
         <div className="mcp-fields">
           <div className="key-field">
-            <label className="visually-hidden" htmlFor="mcp-secscan">{m.welcomeMcpSecscanPlaceholder}</label>
-            <input ref={secscanInput} id="mcp-secscan" type="password" autoComplete="off" autoCapitalize="off" spellCheck={false}
-              placeholder={m.welcomeMcpSecscanPlaceholder} value={secscanDraft} disabled={busy}
-              aria-describedby="mcp-description mcp-error" onChange={(event) => { setSecscanDraft(event.target.value); setMcpError('') }} />
-          </div>
-          <div className="key-field">
-            <label className="visually-hidden" htmlFor="mcp-seclayer">{m.welcomeMcpSeclayerPlaceholder}</label>
-            <input id="mcp-seclayer" type="password" autoComplete="off" autoCapitalize="off" spellCheck={false}
-              placeholder={m.welcomeMcpSeclayerPlaceholder} value={seclayerDraft} disabled={busy}
-              onChange={(event) => { setSeclayerDraft(event.target.value); setMcpError('') }} />
-          </div>
-          <div className="key-field">
             <label className="visually-hidden" htmlFor="mcp-runner">{m.welcomeMcpRunnerPlaceholder}</label>
-            <input id="mcp-runner" type="password" autoComplete="off" autoCapitalize="off" spellCheck={false}
+            <input ref={runnerInput} id="mcp-runner" type="password" autoComplete="off" autoCapitalize="off" spellCheck={false}
               placeholder={m.welcomeMcpRunnerPlaceholder} value={runnerDraft} disabled={busy}
-              onChange={(event) => { setRunnerDraft(event.target.value); setMcpError('') }} />
+              aria-describedby="mcp-description mcp-error" onChange={(event) => { setRunnerDraft(event.target.value); setMcpError('') }} />
           </div>
           <div className="key-field">
             <label className="visually-hidden" htmlFor="mcp-endpoint">{m.welcomeMcpEndpointPlaceholder}</label>

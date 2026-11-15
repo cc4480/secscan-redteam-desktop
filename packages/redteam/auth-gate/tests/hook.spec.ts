@@ -2,7 +2,7 @@
  * Auth-gate decision table.
  *
  * The scan half is the half this hook enforces, so it is pinned here in both
- * directions: an active request without server proof is denied, and an active
+ * directions: an active request without local proof is denied, and an active
  * request WITH proof is allowed. The host half is pinned as a pass-through on
  * purpose — the engagement engine owns host scope, and a test that recorded a
  * scope decision here would be recording a check that does not exist and must
@@ -13,12 +13,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { decide, isHostFamilyProbe, isScanTool, targetDomain, wantsActiveTesting } from '../src/hook.ts'
 import type { GateContext } from '../src/hook.ts'
 
-/** A gate whose server verdict is fixed, and which counts its own calls. */
+/** A gate whose local verdict is fixed, and which counts its own calls. */
 function gate(verified: boolean): GateContext & { calls: string[] } {
   const calls: string[] = []
   return {
     calls,
-    isServerVerified: async (domain: string) => {
+    isVerified: async (domain: string) => {
       calls.push(domain)
       return verified
     },
@@ -45,14 +45,14 @@ describe('wantsActiveTesting', () => {
 })
 
 describe('decide', () => {
-  it('allows a passive scan without asking the server', async () => {
+  it('allows a passive scan without asking the verifier', async () => {
     const ctx = gate(false)
     await expect(decide({ toolName: 'mcp__secscan__scan_url', arguments: { url: 'https://acme.example' } }, ctx))
       .resolves.toEqual({ kind: 'allow' })
     expect(ctx.calls).toEqual([])
   })
 
-  it('denies an active scan whose domain is not server-verified', async () => {
+  it('denies an active scan whose domain is not locally verified', async () => {
     const ctx = gate(false)
     const decision = await decide(
       { toolName: 'mcp__secscan__scan_url', arguments: { url: 'https://acme.example', aggressive: true } },
@@ -63,7 +63,7 @@ describe('decide', () => {
     expect(ctx.calls).toEqual(['acme.example'])
   })
 
-  it('allows an active scan only on the server-verified list', async () => {
+  it('allows an active scan only on the locally verified list', async () => {
     const ctx = gate(true)
     await expect(decide(
       { toolName: 'mcp__secscan__scan_url', arguments: { url: 'https://acme.example', aggressive: true } },
@@ -78,8 +78,8 @@ describe('decide', () => {
     expect(ctx.calls).toEqual([])
   })
 
-  it('fails closed when the server check throws', async () => {
-    const ctx: GateContext = { isServerVerified: () => Promise.reject(new Error('network down')) }
+  it('fails closed when the verification check throws', async () => {
+    const ctx: GateContext = { isVerified: () => Promise.reject(new Error('network down')) }
     const decision = await decide(
       { toolName: 'scan_url', arguments: { url: 'https://acme.example', active: true } },
       ctx,
@@ -89,7 +89,7 @@ describe('decide', () => {
 
   it('passes host-family probes through to the engagement engine', async () => {
     const ctx = gate(false)
-    const verify = vi.spyOn(ctx, 'isServerVerified')
+    const verify = vi.spyOn(ctx, 'isVerified')
     // Every mcp__redteam__* executor tool carries a required targetProfile, and
     // the engine checks the host against the engagement's scope and its tier.
     // This hook adds nothing to that and must not pretend to.

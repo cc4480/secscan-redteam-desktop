@@ -101,52 +101,45 @@ describe('apply', () => {
         assert.match(text, /delivers the report IN THIS THREAD/);
         assert.match(text, /A scan request starts a runner engagement via `mcp__redteam__engagement_launch`/);
     });
-    it('inventories the Seclayer tools as an operator-keyed surface, not an engagement path', () => {
+    it('inventories the SecLayer tools as native runner tools inside engagements', () => {
         const { sections } = captureApply();
         const text = flat(sections[0].text);
-        assert.match(text, /### Seclayer tools \(native MCP, namespaced mcp__seclayer__\*\)/);
-        assert.match(text, /seclayer_scan/);
-        assert.match(text, /seclayer_list_scans/);
-        assert.match(text, /seclayer_get_report/);
-        assert.match(text, /Present only when the operator has seated a Seclayer API key/);
-        assert.match(text, /spends a credit on the operator's Seclayer account/);
-        assert.match(text, /not how an engagement scans; the HARD RULE governs that/);
-        // The Seclayer inventory sits between the SecScan inventory and the
+        assert.match(text, /### SecLayer tools \(native, inside the runner\)/);
+        assert.match(text, /seclayer_redteam/);
+        assert.match(text, /seclayer_bola/);
+        assert.match(text, /seclayer_api/);
+        assert.match(text, /seclayer_webhook/);
+        assert.match(text, /seclayer_dast/);
+        assert.match(text, /seclayer_aggressive/);
+        assert.match(text, /there is no external Seclayer service/);
+        // The SecLayer inventory sits between the SecScan inventory and the
         // engagement-engine inventory, mirroring the bundle's row order.
-        const secscanAt = text.indexOf('### SecScan tools');
-        const seclayerAt = text.indexOf('### Seclayer tools');
+        const secscanAt = text.indexOf('### SecScan engines');
+        const seclayerAt = text.indexOf('### SecLayer tools');
         const engineAt = text.indexOf('### Engagement engine');
-        assert.ok(secscanAt !== -1 && seclayerAt > secscanAt && engineAt > seclayerAt, 'the Seclayer inventory follows the SecScan inventory and precedes the engine inventory');
+        assert.ok(secscanAt !== -1 && seclayerAt > secscanAt && engineAt > seclayerAt, 'the SecLayer inventory follows the SecScan inventory and precedes the engine inventory');
     });
-    it('governs Seclayer service use: native first, credit discipline, labeled evidence, honest absence', () => {
+    it('teaches SecLayer as native suites: no account or credits, blind-SSRF stated as not-run', () => {
         const { sections } = captureApply();
         const text = flat(sections[0].text);
-        // Placement: the qualification sits with the rule it qualifies — after the
-        // fulfilment passage, before the team roster passage.
-        assert.match(text, /### The Seclayer service: a second opinion, never the engine/);
-        const serviceAt = text.indexOf('### The Seclayer service');
+        // Placement: the section sits after the fulfilment passage, before the
+        // team roster passage.
+        assert.match(text, /### SecLayer tests: native suites inside the runner/);
+        const serviceAt = text.indexOf('### SecLayer tests');
         const fulfilAt = text.indexOf('delivers the report IN THIS THREAD');
         const teamAt = text.indexOf('### The team');
-        assert.ok(fulfilAt !== -1 && serviceAt > fulfilAt && teamAt > serviceAt, 'the Seclayer service doctrine follows the fulfilment passage and precedes the team passage');
-        // Native first; the service is never a substitute or a coverage filler.
-        assert.match(text, /the native battery runs first, inside the runner/);
-        assert.match(text, /A service scan never replaces the native pass, never fills a coverage gap/);
-        assert.match(text, /Naming Seclayer makes it an operator request against their own account/);
-        // Credit discipline.
-        assert.match(text, /`seclayer_scan` spends one credit on the operator's Seclayer account, every call/);
-        assert.match(text, /an independent second opinion on a target the engagement has already covered/);
-        assert.match(text, /Say in the thread that the call spends a credit before you make it/);
-        assert.match(text, /One scan per target per request/);
-        assert.match(text, /`seclayer_list_scans` and `seclayer_get_report` spend nothing/);
-        assert.match(text, /specialists do not spend credits/);
-        // Service output is labeled external evidence, never graded.
-        assert.match(text, /labeled as Seclayer service output, with its scan identifier/);
-        assert.match(text, /It never enters the anchored grade, the coverage record or the findings count/);
-        assert.match(text, /becomes a finding only when the engagement re-proves it with its own two observations/);
-        // Absence and auth failure are stated plainly, once, with no hunting or retrying.
-        assert.match(text, /Do not look for the tools under another name, do not ask for a key in chat/);
-        assert.match(text, /say the key is not seated and point at the MCP setup step/);
-        assert.match(text, /report the error as it came back, once, and stop/);
+        assert.ok(fulfilAt !== -1 && serviceAt > fulfilAt && teamAt > serviceAt, 'the SecLayer doctrine follows the fulfilment passage and precedes the team passage');
+        // Native and in-process; nothing external exists to key or spend.
+        assert.match(text, /execute in-process as part of an engagement/);
+        assert.match(text, /There is no Seclayer account, no API key, no credits/);
+        assert.match(text, /When a request names "Seclayer" it means these native suites/);
+        // The blind-SSRF limitation is stated, never papered over.
+        assert.match(text, /blind SSRF and other out-of-band checks currently no-op/);
+        assert.match(text, /must not claim blind-SSRF coverage it did not run/);
+        // The external service surface is gone from the doctrine entirely.
+        assert.doesNotMatch(text, /mcp__seclayer__/);
+        assert.doesNotMatch(text, /seclayer_scan/);
+        assert.doesNotMatch(text, /spends one credit/);
     });
     it('rosters four spawned teammates, the architect among them', () => {
         const { sections } = captureApply();
@@ -209,10 +202,10 @@ describe('apply', () => {
     it('replaces the deployment prompt with the compact profile on the local route', () => {
         const local = captureApply(LOCAL_CONTEXT);
         const remote = captureApply();
-        // The local doctrine is the authored profile, far smaller than the deployment prompt.
+        // The local doctrine is the lean brief, far smaller than the deployment prompt.
         assert.ok(local.sections[0].text.length > 0);
         assert.ok(local.sections[0].text.length < remote.sections[0].text.length / 2);
-        assert.match(local.sections[0].text, /AGENTS\.md|operating rules|Deployment rules/i);
+        assert.match(local.sections[0].text, /fleet opening \(lean\)/);
         // The profile carries its own soul, so the deployment SOUL is suppressed.
         assert.equal(local.sections[1].text, '');
         // Every other route is untouched.
@@ -248,20 +241,35 @@ describe('apply', () => {
         assert.equal(isDeferredTool('mcp__redteam__doctor_jobs', new Set(['doctor'])), false);
         assert.equal(isDeferredTool('bash', new Set(['doctor'])), false);
     });
-    it('gives a small local window the tight brief, and a roomy one the full profile', () => {
+    it('gives a small local window the tight brief, and a roomy one the lean brief', () => {
         const small = captureApply(SMALL_LOCAL_CONTEXT);
         const roomy = captureApply(ROOMY_LOCAL_CONTEXT);
         const tightChars = small.sections[0].text.length;
-        const fullChars = roomy.sections[0].text.length;
+        const leanChars = roomy.sections[0].text.length;
         assert.match(small.sections[0].text, /compact operating brief/);
-        assert.ok(tightChars < fullChars / 5, `tight brief (${tightChars}) must be far smaller than the profile (${fullChars})`);
+        assert.ok(tightChars < leanChars, `tight brief (${tightChars}) must be smaller than the lean brief (${leanChars})`);
         // Under 2,000 tokens at the token meter's four-characters-per-token price.
         assert.ok(Math.ceil(tightChars / 4) <= 2_000, 'tight brief stays under the 2,000-token ceiling');
         // The hard rule survives the compression: scans are engagements, never service scans.
         assert.match(small.sections[0].text, /mcp__redteam__engagement_launch/);
         assert.match(small.sections[0].text, /never a SecScan or Seclayer\s+service scan/);
-        // Roomier local windows keep the full authored profile.
-        assert.match(roomy.sections[0].text, /AGENTS\.md|operating rules/i);
+        // Roomier local windows open on the lean brief, not the full profile (F2).
+        assert.match(roomy.sections[0].text, /fleet opening \(lean\)/);
+        assert.ok(Math.ceil(leanChars / 4) <= 2_000, `lean brief priced at ${Math.ceil(leanChars / 4)} tokens must stay under the 2,000-token ceiling`);
+    });
+    it('a fresh local session opens on the lean brief', () => {
+        const roomy = captureApply(ROOMY_LOCAL_CONTEXT);
+        // The first fleet section IS the lean opening, priced in the low thousands
+        // of tokens at the meter's four-characters-per-token price — the fix for
+        // the five-figure first-turn prefill on CPU-served local models.
+        assert.match(roomy.sections[0].text, /^# SecScan Red Team — fleet opening \(lean\)/);
+        const priced = Math.ceil(roomy.sections[0].text.length / 4);
+        assert.ok(priced <= 2_000, `lean opening priced at ${priced} tokens`);
+        // The lean brief carries its own stance, so the deployment SOUL stays suppressed.
+        assert.equal(roomy.sections[1].text, '');
+        // The hard rules ride in the lean text: engagements, never service scans.
+        assert.match(roomy.sections[0].text, /mcp__redteam__engagement_launch/);
+        assert.match(roomy.sections[0].text, /no MCP servers/);
     });
     it('keeps only the engagement tools on a window too small for a tool surface', async () => {
         const { listeners } = captureApply();

@@ -83,11 +83,12 @@ export const NEEDS_KERBEROS_TICKET = "kerberos ticket material";
 export const NEEDS_HUMAN_OPERATOR = "human operator";
 export const NEEDS_PRIVILEGED_CLIENT = "privileged test client";
 /**
- * v0.11.0 prerequisite: the operator's Metasploit RPC daemon
- * (REDTEAM_MSFRPC_USER/PASS). CVE exploit-validation items execute when
- * msfrpcd is reachable; otherwise they report under Honest limits.
+ * v0.11.0 prerequisite: the Metasploit Framework installed on this host
+ * (msfconsole on PATH or REDTEAM_MSFCONSOLE_BIN). CVE exploit-validation
+ * items execute when the local framework is present; otherwise they
+ * report under Honest limits.
  */
-export const NEEDS_MSFRPCD = "msfrpcd";
+export const NEEDS_MSFCONSOLE = "local Metasploit framework (msfconsole)";
 /**
  * v0.21.0 prerequisite: the operator's Nuclei binary + template checkout
  * (REDTEAM_NUCLEI_BIN or nuclei on PATH). Template-bridge items execute

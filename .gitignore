@@ -78,3 +78,8 @@ apps/pc-agent-bridge/pc-agent-audit.jsonl
 
 # desktop test-run logs (written by the lifecycle specs)
 desktop-test-logs/
+
+# Consolidated scratch archive + runtime engagement data: kept on disk, never committed
+/_archive/
+/runner/
+/live/

@@ -124,6 +124,8 @@ export type SidebarRootInjected = {
   toggleSidebar: () => void
   /** Select the global panel addressed by a sidebar row. */
   selectPanel: (id: MainPanelId) => void
+  /** Open the settings panel on its Local models section (the web Application menu's only entry). */
+  openLocalModels: () => void
   /** Private reactive sources bound to framework selector hooks. */
   hooks: { panels: ObservableSnapshot<readonly SidebarPanelMetadata[]> }
 }

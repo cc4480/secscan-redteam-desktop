@@ -3,6 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Single-origin local app: 'self' covers scripts and styles. The three
+         relaxations are load-bearing: injected <style> elements from CSS Modules
+         need style-src unsafe-inline, document preview and file upload start
+         workers from blob URLs, and conversation images are object URLs.
+         unsafe-eval stays: the shipped bundle boot path uses it. Keep in step with the desktop
+         CONTENT_SECURITY_POLICY in apps/desktop/src/web-document.ts. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'sha256-ikYDEfGOZZNuGAdbu2YAz9STcFnRaWk0u5Dc0unuOyI=' 'sha256-Tjx8eCog8hcLBDoY4+Zh0j/LmpUQovqHxCTuz4BkKWU=' 'sha256-H+N1ZBHPqL2ck+XUrfp3rI+VZ3D9rUJDtog4bqvEDkk=' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self' ws: wss: http: https:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="/favicon-dark.svg" media="(prefers-color-scheme: dark)" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" media="(prefers-color-scheme: light)" />

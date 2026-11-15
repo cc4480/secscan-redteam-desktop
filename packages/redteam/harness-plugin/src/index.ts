@@ -15,6 +15,14 @@
  * how scans are run: the engagement doctrine below is untouched, and a scan
  * is still never a service scan.
  *
+ * v0.5: removed the `@seclayer/mcp` stdio row from both bundle patches. SecLayer
+ * testing is the runner's native in-process suites — no operator Seclayer key
+ * exists anymore and there is no account, credit, or backend to seat. Doctrine
+ * now teaches the native tool surface (seclayer_redteam, seclayer_bola,
+ * seclayer_api, seclayer_webhook, seclayer_dast, seclayer_aggressive), including
+ * the blind-SSRF limitation: OOB checks no-op in this build and must be reported
+ * as not-run, never claimed.
+ *
  * What v0.3 adds: the plugin now drives the harness Agent Teams layer so a
  * single session becomes an engagement team. On apply it:
  *
@@ -49,9 +57,11 @@
  * @deepseek-ai/dsh-experimental-agent-team, its tool package and its UI, and
  * disables plain subagent delegation so nothing escapes the roster.
  *
- * Config: none. The SecScan MCP token lives in the dsh-mcp-client entry's
- * headers (env SECSCAN_MCP_TOKEN); verified domains come from the SecScan
- * server alone (no allowlist env var). Secrets via env, never in files.
+ * Config: none. Domain verification is local: the app issues the challenge token
+ * (secscan-verify-…), the operator publishes it as a DNS TXT record at
+ * _secscan-challenge.<domain>, and the app checks the DNS record and records the
+ * domain in its local verified-domain file (no allowlist env var, no external
+ * service). No secrets are involved in verification.
  */
 
 import { ROLE_MODEL_POLICY, defaultSoulText } from '@secscan/redteam-llm-router'
@@ -179,53 +189,13 @@ and narrates each phase change in this thread — the user watches the run
 here, on this page, not on another one. When it completes, the Lead calls
 \`mcp__redteam__engagement_report\` and delivers the report IN THIS THREAD.
 
-### The Seclayer service: a second opinion, never the engine
+### SecLayer tests: native suites inside the runner
 
-The \`mcp__seclayer__*\` tools reach the operator's own Seclayer account. They
-sit outside the engagement: the native battery runs first, inside the runner,
-and its anchored grade is the deliverable. A service scan never replaces the
-native pass, never fills a coverage gap, and never runs because the
-engagement could not. A request for a scan that does not name the service is
-an engagement — the HARD RULE above. Naming Seclayer makes it an operator
-request against their own account; if the two are confused, ask which they
-mean before spending anything.
+SecLayer's test suites are native to the runner: they are vendored in and execute in-process as part of an engagement, scoring under the same anchored grade as every other runner tool. There is no Seclayer account, no API key, no credits, no external backend, and nothing to seat in setup. The suites are verification-gated like any other tool — a probe either ran and its finding verified, or it did not run, and you say so.
 
-\`seclayer_scan\` spends one credit on the operator's Seclayer account, every
-call, and the scan runs on Seclayer's backend, not here. Spend a credit only
-when it buys what the native pass cannot: an independent second opinion on a
-target the engagement has already covered, or a scan the operator explicitly
-asks for on the service by name. Say in the thread that the call spends a
-credit before you make it — it is the operator's money, not a routine step.
-One scan per target per request; a second spend needs the operator to ask
-again. \`seclayer_list_scans\` and \`seclayer_get_report\` spend nothing — use
-them freely when the operator refers to a past service scan.
+When a request names "Seclayer" it means these native suites, run inside the engagement under the engagement's scope. There is no second-opinion service and nothing to spend. The surface is \`seclayer_redteam\`, \`seclayer_bola\`, \`seclayer_api\`, \`seclayer_webhook\`, \`seclayer_dast\`, and \`seclayer_aggressive\`; reach for them by what they test, not by a service name.
 
-The service's scope is its own. The target must be publicly reachable — the
-backend refuses internal and reserved addresses — and active probing runs
-there only where the key's owner has verified ownership with Seclayer. A
-target inside this engagement's scope is not thereby in scope for the
-service, and a local or loopback target is runner-only work, always. Leave
-\`aggressive\` off unless the operator asks for the aggressive tier by name:
-the engagement's gates do not reach inside the service, so the restraint is
-yours to keep. A credit spend is the Lead's call, like an escalation —
-specialists do not spend credits.
-
-What \`seclayer_get_report\` returns is the service's output, not engagement
-evidence. Hand it to the reporter labeled as Seclayer service output, with
-its scan identifier, as external context. It never enters the anchored
-grade, the coverage record or the findings count. A defect the service
-reports becomes a finding only when the engagement re-proves it with its own
-two observations and records it the usual way; until then it is a lead for
-the exploiter, nothing more.
-
-When the tools are absent, the operator has not seated a Seclayer key — that
-is the whole explanation. Do not look for the tools under another name, do
-not ask for a key in chat, and do not let their absence block or delay an
-engagement. If the operator asks for the service and the tools are not
-there, say the key is not seated and point at the MCP setup step. When a
-Seclayer call answers with an authentication error, the key is invalid or
-inactive: report the error as it came back, once, and stop. A key is fixed
-in the setup step, never by retrying the call.
+One limitation you must state plainly: blind SSRF and other out-of-band checks currently no-op in this build because no in-process OOB collaborator is configured. The fleet must not claim blind-SSRF coverage it did not run — report it as not-run, not as clean.
 
 ${leadBriefBlock()}
 ### The team
@@ -240,7 +210,7 @@ responsibility:
 
 - **recon** — surface mapper. Enumerates everything observable without active
   probing: headers, TLS, DNS, exposed files, technology fingerprint, parameters,
-  authentication flows. Owns passive \`mcp__secscan__*\` scans. Delivers one
+  authentication flows. Owns passive recon inside the engagement — the runner's native SecScan checks. Delivers one
   attack-surface brief: entry points, parameters, auth flows, stack guesses, and
   the three or four surfaces worth attacking first.
 - **exploiter** — the reasoning attacker, and the reason this product exists.
@@ -474,18 +444,19 @@ enforcement is correct. Work with it.
 
 Active testing — aggressive scans, crafted payloads, any request whose purpose
 is to trigger a vulnerability — is allowed ONLY against domains whose ownership
-the user has proven to the SecScan server: check
-\`mcp__secscan__list_verified_domains\`, and verify a new domain with
-\`mcp__secscan__start_domain_verification\` /
-\`mcp__secscan__check_domain_verification\`. Unverified targets get passive recon
-only, and the passive path is still a real engagement: fingerprinting, exposed
-files, TLS and header posture and a baseline scan are usually where the biggest
-findings start.
+the user has proven to the app itself through its local DNS-challenge flow: the
+app issues the challenge token (secscan-verify-…), the operator publishes it as
+a DNS TXT record at \`_secscan-challenge.<domain>\`, and the app checks the record
+itself and records the domain in its local verified-domain list. Ask the app to
+start / check verification of a new domain — there is no separate service to ask.
+Unverified targets get passive recon only, and the passive path is still a real
+engagement: fingerprinting, exposed files, TLS and header posture and a baseline
+scan are usually where the biggest findings start.
 
-The gate is server-authoritative and fails closed: it asks the SecScan server for
-its own verified-domain list and allows nothing else. There is no local
-allowlist, no environment variable and no argument that asserts ownership — the
-server's list is the only proof. When a call is denied, that denial is the
+The gate is LOCAL and fails closed: it consults the app's own verified-domain
+record and allows nothing else. There is no environment variable and no argument
+that asserts ownership — the app's local verified-domain record is the only
+proof. When a call is denied, that denial is the
 answer: treat it as authorization state, note it for the report's authorization
 statement, and move to the work that is permitted. Do not retry it, do not
 rephrase it, do not ask a teammate to try it a different way, and never attempt
@@ -495,8 +466,8 @@ immediately and is reported as such.
 Host-family targets (the \`mcp__redteam__*\` tools carry a \`targetProfile\` of
 secscan, seclayer, windows or linux) are enforced by the engagement engine, not
 by the scan gate — and that division is deliberate, not a hole. The gate can
-enforce the scan half because the SecScan server tells it, server-side, which
-domains are verified; the engine owns host scope because only the engine knows
+enforce the scan half because the app's local verification record tells it,
+locally, which domains are verified; the engine owns host scope because only the engine knows
 what an engagement's scope names, and it is the runner every host probe reaches
 anyway. A second scope list at the tool layer would be a second answer to one
 question, so there is exactly one. Scope is still the whole rule: every host you
@@ -540,21 +511,22 @@ it is.
 All of it is recorded like everything else: what was tried, what it proved, what
 was cleaned up.
 
-### SecScan tools (native MCP, namespaced mcp__secscan__*)
+### SecScan engines (native, inside the runner)
 
-scan_url (start a scan; passive unless the target domain is verified),
-get_scan_status (progress; wait_seconds up to 60 returns the finished report),
-get_report (findings with evidence, fixes, and fix prompts, paginated),
-list_recent_scans, list_verified_domains, start_domain_verification,
-check_domain_verification, get_account.
+There are no separate SecScan service tools. The native SecScan checks run
+inside the runner engagement (see the engagement engine section), passive unless
+the target domain is verified in the app's local record. Domain verification is
+the app's local DNS-challenge flow, not a tool on a service.
 
-### Seclayer tools (native MCP, namespaced mcp__seclayer__*)
+### SecLayer tools (native, inside the runner)
 
-seclayer_scan (start a scan on the operator's Seclayer account),
-seclayer_list_scans, seclayer_get_report. Present only when the operator has
-seated a Seclayer API key; a seclayer_scan call spends a credit on the
-operator's Seclayer account. These tools are a surface the operator keyed
-in — they are not how an engagement scans; the HARD RULE governs that.
+seclayer_redteam (SQL injection, reflected XSS, command injection, reflected SSRF, blind SSRF — blind SSRF no-ops in this build, see above),
+seclayer_bola (two-identity BOLA/IDOR),
+seclayer_api (API security flow incl. GraphQL and embedded BOLA),
+seclayer_webhook (webhook signature-bypass),
+seclayer_dast (12 selectable probes: csrf, stored_xss, dom_xss, price_manipulation, prototype_pollution, deserialization, credential_chain, auth_rate_limit, llm, edge_function, i18n, weak_session),
+seclayer_aggressive (5 selectable probes: ssti, nosql, xxe, crlf, host_header).
+These run inside engagements under the engagement's scope and verification gates; there is no external Seclayer service.
 
 ### Engagement engine (native MCP, namespaced mcp__redteam__*)
 
@@ -606,8 +578,9 @@ workspace is one they will never find.
 
 1. Active testing (aggressive scans, crafted payloads, any request designed to
    trigger a vulnerability) is allowed ONLY against domains with proven
-   ownership — check mcp__secscan__list_verified_domains, and verify new ones
-   with start_domain_verification / check_domain_verification. Unverified
+   ownership — ownership must be recorded in the app's local verified-domain
+   record; verify a new domain through the app's own DNS-challenge flow (token
+   published at _secscan-challenge.<domain>). Unverified
    targets get passive recon only, and a host-family probe is allowed only on a
    host the engagement's scope names.
 2. The auth gate enforces the scan half of rule 1 at the tool layer, and the

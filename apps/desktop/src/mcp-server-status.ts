@@ -12,22 +12,16 @@
  * for the count. It is visibility only — nothing here starts, stops, or
  * reconfigures a row, and no row's `failOnStartupError` changes.
  *
- * No credential value leaves this module: a row's token or key is used only
- * as the probe's own bearer or child environment, and every reported detail
- * is a fixed phrase or an HTTP status.
+ * No credential value leaves this module: a row's token is used only as the
+ * probe's own bearer, and every reported detail is a fixed phrase or an HTTP
+ * status. The SecScan and Seclayer rows are native now and have no server to
+ * probe; the two rows that remain are the engagement runner and the bridge.
  */
 
-import { spawn } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { McpServerStatusItem } from './welcome-api.ts'
-
-/** The SecScan row's endpoint, as composed in the desktop bundle patch. */
-const SECSCAN_MCP_URL = 'https://secscan.us/api/mcp'
-
-/** The Seclayer row's stdio command arguments, as composed in the desktop bundle patch. */
-const SECLAYER_MCP_ARGS: readonly string[] = ['-y', '@seclayer/mcp@1.0.0']
 
 /** MCP protocol version the in-repo clients and servers speak. */
 const PROTOCOL_VERSION = '2025-03-26'
@@ -65,31 +59,8 @@ export interface McpHttpRequestInit {
 /** Injectable HTTP transport; the default wraps the global `fetch`. */
 export type McpHttpFetch = (url: string, init: McpHttpRequestInit) => Promise<McpHttpResponse>
 
-/** The narrow child-process surface the stdio probe drives. */
-export interface McpStdioChild {
-  /** The child's standard input, written with newline-delimited JSON-RPC. */
-  stdin: { write(chunk: string): void }
-  /** The child's standard output, read as newline-delimited JSON-RPC. */
-  stdout: { on(event: 'data', listener: (chunk: Buffer | string) => void): void }
-  /**
-   * Subscribe to the child's exit or spawn error.
-   * @param event - lifecycle event to observe.
-   * @param listener - invoked with the exit code or error.
-   */
-  on(event: 'exit' | 'error', listener: (...args: unknown[]) => void): void
-  /** Terminate the child; the probe kills every child it spawned once it has its answer. */
-  kill(): void
-}
-
-/** Injectable stdio spawn; the default spawns the row's own command. */
-export type McpStdioSpawn = (command: string, args: readonly string[], env: NodeJS.ProcessEnv) => McpStdioChild
-
 /** Where each row's probe target and credential come from, assembled by the shell from the environment and the credential document. */
 export interface McpServerProbeInputs {
-  /** Effective SecScan MCP token; absent or empty means the row is unkeyed and is not probed. */
-  secscanToken?: string | undefined
-  /** Effective Seclayer API key; absent or empty means the row is unkeyed and is not probed. */
-  seclayerKey?: string | undefined
   /** Effective engagement-runner console endpoint, the same value the MCP step shows. */
   runnerEndpoint: string
   /** Effective runner token the row presents; the bundled console's own token counts. */
@@ -104,18 +75,14 @@ export interface McpServerProbeInputs {
 
 /** Injectable transports and budgets for {@link probeMcpServers}; production uses the defaults. */
 export interface McpServerStatusOptions {
-  /** HTTP transport for the three streamable-HTTP rows. */
+  /** HTTP transport for the two streamable-HTTP rows. */
   fetch?: McpHttpFetch | undefined
-  /** Spawn for the Seclayer stdio row. */
-  spawn?: McpStdioSpawn | undefined
   /**
    * Read the bridge token file.
    * @param path - resolved token file path.
    * @returns the file's contents, or `undefined` when it cannot be read.
    */
   readTokenFile?: ((path: string) => Promise<string | undefined>) | undefined
-  /** Environment the Seclayer child inherits (its key is merged over it). */
-  environment?: NodeJS.ProcessEnv | undefined
   /** Per-probe deadline in milliseconds. */
   timeoutMs?: number | undefined
 }
@@ -196,23 +163,6 @@ const defaultFetch: McpHttpFetch = async (url, init) => {
   })
 }
 
-/** The default stdio spawn: the row's command with piped stdio, adapted to {@link McpStdioChild}. */
-const defaultSpawn: McpStdioSpawn = (command, args, env) => {
-  const child = spawn(command, [...args], { env, stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true })
-  if (child.stdin === null || child.stdout === null) {
-    child.kill()
-    throw new Error('mcp-server-status: the stdio child has no piped stdio')
-  }
-  const stdin = child.stdin
-  const stdout = child.stdout
-  return {
-    stdin: { write: (chunk: string) => { stdin.write(chunk) } },
-    stdout: { on: (event, listener) => { stdout.on(event, listener) } },
-    on: (event, listener) => { child.on(event, listener) },
-    kill: () => { child.kill() },
-  }
-}
-
 /**
  * Read a token file's contents; pairing is judged by the caller under the
  * consumers' own rule (a missing, unreadable, or whitespace-only file is not
@@ -286,91 +236,18 @@ async function probeHttpServer(fetchImpl: McpHttpFetch, url: string, token: stri
 }
 
 /**
- * Probe the Seclayer stdio row: spawn the row's own command with its key,
- * speak newline-delimited JSON-RPC, and count the listed tools. The child is
- * always killed once the probe settles — the settings surface borrows the
- * server for one handshake and never leaves a second copy running.
- *
- * @param spawnImpl - child factory.
- * @param key - the Seclayer API key the row presents.
- * @param environment - environment the child inherits; the key merges over it.
- * @param timeoutMs - deadline for the whole handshake.
- * @returns the row's outcome; every failure is a `failed` outcome, never a throw.
- */
-async function probeStdioServer(spawnImpl: McpStdioSpawn, key: string, environment: NodeJS.ProcessEnv, timeoutMs: number): Promise<ProbeOutcome> {
-  let child: McpStdioChild
-  try {
-    child = spawnImpl(process.platform === 'win32' ? 'npx.cmd' : 'npx', SECLAYER_MCP_ARGS, { ...environment, SECLAYER_API_KEY: key })
-  } catch {
-    return { state: 'failed' }
-  }
-  return new Promise<ProbeOutcome>((resolve) => {
-    let settled = false
-    let phase: 'initialize' | 'tools' = 'initialize'
-    let buffer = ''
-    const finish = (outcome: ProbeOutcome): void => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      child.kill()
-      resolve(outcome)
-    }
-    const timer = setTimeout(() => { finish({ state: 'failed' }) }, timeoutMs)
-    child.stdout.on('data', (chunk) => {
-      buffer += chunk.toString()
-      let newline = buffer.indexOf('\n')
-      while (newline >= 0) {
-        const line = buffer.slice(0, newline)
-        buffer = buffer.slice(newline + 1)
-        newline = buffer.indexOf('\n')
-        if (line.trim() === '') continue
-        let parsed: unknown
-        try {
-          parsed = JSON.parse(line)
-        } catch {
-          continue
-        }
-        if (!record(parsed)) continue
-        if (phase === 'initialize' && parsed.id === 1) {
-          const result = record(parsed.result) ? parsed.result : undefined
-          if (parsed.error !== undefined || result === undefined) { finish({ state: 'failed' }); return }
-          const capabilities = record(result.capabilities) ? result.capabilities : undefined
-          if (capabilities?.tools === undefined) { finish({ state: 'no-tools', toolCount: 0 }); return }
-          phase = 'tools'
-          child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} })}\n`)
-          child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} })}\n`)
-        } else if (phase === 'tools' && parsed.id === 2) {
-          const result = record(parsed.result) ? parsed.result : undefined
-          if (parsed.error !== undefined || result === undefined || !Array.isArray(result.tools)) { finish({ state: 'failed' }); return }
-          finish({ state: 'connected', toolCount: result.tools.length })
-          return
-        }
-      }
-    })
-    child.on('exit', () => { finish({ state: 'failed' }) })
-    child.on('error', () => { finish({ state: 'failed' }) })
-    child.stdin.write(`${JSON.stringify({
-      jsonrpc: '2.0', id: 1, method: 'initialize',
-      params: { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: { name: 'secscan-mcp-settings', version: '1' } },
-    })}\n`)
-  })
-}
-
-/**
  * Probe every configured MCP row and return one status item per row, in the
- * order the MCP step presents them. Rows without a seated credential are
- * named (`unkeyed` / `unpaired`) without being probed, because probing them
- * could only reproduce the harness's silent 401 or empty-token spawn.
+ * order the MCP step presents them. The bridge row without a pairing is named
+ * (`unpaired`) without being probed, because probing it could only reproduce
+ * the harness's silent failure.
  *
  * @param inputs - each row's endpoint and credential sources.
  * @param options - injectable transports and budgets; production uses the defaults.
- * @returns the four rows' status items.
+ * @returns the two rows' status items.
  */
 export async function probeMcpServers(inputs: McpServerProbeInputs, options: McpServerStatusOptions = {}): Promise<McpServerStatusItem[]> {
   const fetchImpl = options.fetch ?? defaultFetch
-  const spawnImpl = options.spawn ?? defaultSpawn
   const readTokenFile = options.readTokenFile ?? defaultReadTokenFile
-  const environment = options.environment ?? process.env
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
 
   const tokenFile = (inputs.bridgeTokenFile ?? '').trim() || join(inputs.homeDir ?? homedir(), '.config', 'pc-bridge', 'token')
@@ -379,23 +256,13 @@ export async function probeMcpServers(inputs: McpServerProbeInputs, options: Mcp
     ? bridgeTokenFileContents.trim()
     : undefined
 
-  const secscanToken = inputs.secscanToken
-  const secscan: Promise<ProbeOutcome> = secscanToken !== undefined && secscanToken.trim() !== ''
-    ? probeHttpServer(fetchImpl, SECSCAN_MCP_URL, secscanToken, timeoutMs)
-    : Promise.resolve({ state: 'unkeyed' })
-  const seclayerKey = inputs.seclayerKey
-  const seclayer: Promise<ProbeOutcome> = seclayerKey !== undefined && seclayerKey.trim() !== ''
-    ? probeStdioServer(spawnImpl, seclayerKey, environment, timeoutMs)
-    : Promise.resolve({ state: 'unkeyed' })
   const redteam: Promise<ProbeOutcome> = probeHttpServer(fetchImpl, inputs.runnerEndpoint, inputs.runnerToken ?? '', timeoutMs)
   const alterego: Promise<ProbeOutcome> = bridgeToken === undefined
     ? Promise.resolve({ state: 'unpaired' })
     : probeHttpServer(fetchImpl, resolveBridgeMcpEndpoint(inputs.bridgeUrl), bridgeToken, timeoutMs)
 
-  const [secscanOutcome, seclayerOutcome, redteamOutcome, alteregoOutcome] = await Promise.all([secscan, seclayer, redteam, alterego])
+  const [redteamOutcome, alteregoOutcome] = await Promise.all([redteam, alterego])
   return [
-    { id: 'secscan', label: 'SecScan MCP', ...secscanOutcome },
-    { id: 'seclayer', label: 'Seclayer MCP', ...seclayerOutcome },
     { id: 'redteam', label: 'Engagement runner', ...redteamOutcome },
     { id: 'alterego', label: 'AlterEgo bridge', ...alteregoOutcome },
   ]

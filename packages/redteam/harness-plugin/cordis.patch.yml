@@ -1,14 +1,19 @@
 # secscan-redteam bundle patch: mounts the red-team composition into the host
-# dsh profile. Three entries:
-#   1. mcp-secscan — the harness-NATIVE MCP client (@deepseek-ai/dsh-mcp-client)
-#      connecting to the live SecScan MCP endpoint over Streamable HTTP.
-#      Tools appear namespaced as mcp__secscan__scan_url, mcp__secscan__get_report, ...
-#   2. mcp-seclayer — the Seclayer MCP server (@seclayer/mcp) over stdio,
-#      keyed by the operator's own Seclayer API key.
-#      Tools appear namespaced as mcp__seclayer__seclayer_scan,
-#      mcp__seclayer__seclayer_list_scans, mcp__seclayer__seclayer_get_report.
-#   3. secscan-redteam — this plugin: the auth gate (tools/pre-execute hook)
+# dsh profile. One entry:
+#   1. secscan-redteam — this plugin: the auth gate (tools/pre-execute hook)
 #      plus the red-team engagement-protocol system-prompt section.
+#
+# There are NO MCP client rows in this patch anymore:
+#   - SecScan scanning is native (the runner's in-process engines), and
+#     domain-ownership verification is local — the app issues the challenge
+#     token itself, checks the `_secscan-challenge.<domain>` DNS TXT record
+#     itself, and records verified domains in a local file
+#     (@secscan/redteam-auth-gate's local.ts). No SECSCAN_MCP_TOKEN exists.
+#   - SecLayer testing is native — the runner's in-process suites
+#     (seclayer_redteam / seclayer_bola / seclayer_api / seclayer_webhook /
+#     seclayer_dast / seclayer_aggressive). The old `npx @seclayer/mcp` row
+#     (an npm fetch at spawn against a hosted backend) is removed; no
+#     SECLAYER_API_KEY exists.
 #
 # Install: `dsh plugin --profile <name> add /path/to/secscan-redteam/harness-plugin`
 # then merge this file's entries into the profile's cordis.patch.yml
@@ -18,56 +23,11 @@
 # NEVER put a raw key in this file.
 
 - insert:
-    - id: mcp-secscan
-      name: '@deepseek-ai/dsh-mcp-client'
-      config:
-        serverName: secscan
-        transport: streamable-http
-        url: https://secscan.us/api/mcp
-        headers:
-            # MCP-scope token - create at https://secscan.us/settings (AI editors).
-            # Verified 2026-10-15: the settings page issues an ssk_-prefixed token FOR
-            # MCP and the endpoint accepts it (initialize and get_account both HTTP 200).
-            # Earlier revisions warned that ssk_ would be rejected - that is no longer
-            # true. If a token is refused, suspect revocation or the wrong account, not
-            # the prefix. If the token is UNSET the harness still starts and the
-            # mcp__secscan__* tools simply do not appear - and the auth gate fails closed
-            # anyway, so nothing aggressive can run without it.
-          Authorization: !!js "'Bearer ' + (process.env.SECSCAN_MCP_TOKEN || '')"
-        # If the token is unset the harness still starts; the mcp__secscan__*
-        # tools simply don't appear (and the auth gate fails closed anyway).
-
-    # The Seclayer service, over stdio. @seclayer/mcp serves stdio only, so
-    # this row spawns it with npx; the version is pinned so an upstream
-    # release can never silently change the tool surface under a saved
-    # profile. Tools arrive namespaced mcp__seclayer__*: seclayer_scan,
-    # seclayer_list_scans, seclayer_get_report - the operator's own service
-    # scans against their own Seclayer account (a scan call spends a credit
-    # there). This row adds reach, not authority: an engagement still scans
-    # with the runner, never with this service.
-    #
-    # The key arrives by NAME only, through the mcp-client's secretEnv seam:
-    # the credential vault writes SECLAYER_API_KEY into the app's process
-    # env at startup, and the client resolves the named value into the
-    # child's spawn env. The value never appears in this file or in any
-    # composed config dump. If the key is UNSET the server exits at startup,
-    # the harness still starts, and no mcp__seclayer__* tools appear - the
-    # same failure shape as an unset SECSCAN_MCP_TOKEN above. If the key is
-    # set but invalid, the tools appear and the server answers its scan
-    # tools with an authentication error.
-    - id: mcp-seclayer
-      name: '@deepseek-ai/dsh-mcp-client'
-      config:
-        serverName: seclayer
-        transport: stdio
-        command: !!js "process.platform === 'win32' ? 'npx.cmd' : 'npx'"
-        args: ['-y', '@seclayer/mcp@1.0.0']
-        secretEnv: ['SECLAYER_API_KEY']
-
-- insert:
     - id: secscan-redteam
       name: '@secscan/redteam-harness-plugin'
       config:
-        # No plugin config needed. Verified domains come from the SecScan
-        # server alone (list_verified_domains over MCP) — there is no
-        # allowlist env var. The MCP token lives in env SECSCAN_MCP_TOKEN.
+        # No plugin config needed. Verified domains come from the app's
+        # LOCAL verification record alone — the app issues the challenge
+        # token itself and checks the `_secscan-challenge.<domain>` DNS TXT
+        # record itself (@secscan/redteam-auth-gate's local.ts). There is
+        # no allowlist env var and no MCP token.

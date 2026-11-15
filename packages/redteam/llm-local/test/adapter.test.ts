@@ -112,7 +112,7 @@ describe('local adapter dispatch gate', () => {
     assert.equal(requests.length, 0)
   })
 
-  it('fails starting, error, and serving-other states distinctly', async () => {
+  it('fails starting and error states distinctly', async () => {
     const directory = await createFixtureModelsDir()
     const { fetchImpl, requests } = fakeFetch('')
     const adapter = new LocalLlamaAdapter({ modelsDir: directory, fetchImpl })
@@ -127,12 +127,41 @@ describe('local adapter dispatch gate', () => {
     assert.ok(errored instanceof LlmError)
     assert.equal(errored.failure.code, 'LOCAL_SERVER_ERROR')
 
-    await writeServerState(directory, { status: 'running', baseUrl: FIXTURE_BASE_URL, modelId: SECOND_MODEL_ID })
-    const other = await rejectionOf(adapter.stream(options(ACTIVE_MODEL_ID)))
-    assert.ok(other instanceof LlmError)
-    assert.equal(other.failure.code, 'LOCAL_SERVER_SERVING_OTHER')
-    assert.match(other.failure.message, new RegExp(SECOND_MODEL_ID))
     assert.equal(requests.length, 0)
+  })
+
+  it('routes a serving-other turn to the served model with a disclosed note block', async () => {
+    const directory = await createFixtureModelsDir()
+    await writeServerState(directory, { status: 'running', baseUrl: FIXTURE_BASE_URL, modelId: SECOND_MODEL_ID })
+    const sse = [
+      'data: {"choices":[{"delta":{"content":"Routed answer"},"finish_reason":null}]}',
+      'data: {"choices":[],"usage":{"prompt_tokens":5,"completion_tokens":2,"total_tokens":7}}',
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}',
+      'data: [DONE]',
+      '',
+    ].join('\n')
+    const { fetchImpl, requests } = fakeFetch(sse)
+    const adapter = new LocalLlamaAdapter({ modelsDir: directory, fetchImpl })
+    const chunks = await collect(adapter.stream(options(ACTIVE_MODEL_ID)))
+
+    assert.equal(requests.length, 1)
+    assert.equal(requests[0]?.url, `${FIXTURE_BASE_URL}/chat/completions`)
+    const sent = JSON.parse(String(requests[0]?.init.body)) as { model: string }
+    assert.equal(sent.model, SECOND_MODEL_ID)
+
+    const types = chunks.map(chunk => chunk.type)
+    assert.deepEqual(types, [
+      'block-start', 'text-delta', 'block-end',
+      'block-start', 'text-delta', 'block-end',
+      'usage', 'finish',
+    ])
+    assert.equal(chunks[0]?.type === 'block-start' ? chunks[0].index : -1, 0)
+    assert.equal(chunks[3]?.type === 'block-start' ? chunks[3].index : -1, 1)
+    const note = chunks[1]?.type === 'text-delta' ? chunks[1].text : ''
+    assert.match(note, new RegExp(SECOND_MODEL_ID))
+    assert.match(note, /routed to/)
+    const answer = chunks[4]?.type === 'text-delta' ? chunks[4].text : ''
+    assert.equal(answer, 'Routed answer')
   })
 })
 

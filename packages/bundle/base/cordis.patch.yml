@@ -187,7 +187,11 @@
 
     # OTel releases a Session-log prefix only after explicit user feedback,
     # regardless of model provider. Ordinary activity never triggers capture.
-    # DSH_TELEMETRY_OTLP_URL overrides the production endpoint. A non-empty
+    # STANDALONE DEFAULT (2026-11-12): telemetry ships DISABLED — nothing is
+    # exported anywhere. An operator who runs their own collector opts in
+    # with DSH_TELEMETRY_MODE=FEEDBACK_ONLY and points DSH_TELEMETRY_OTLP_URL
+    # at it; the exporter default below is loopback, never a hosted endpoint.
+    # A non-empty
     # DSH_TELEMETRY_DISABLED — any value, including '0'/'false' — opts the
     # process out (the launchers patch the row disabled; config cannot disable
     # a row). Exports carry the harness home's anonymous user id ($DSH_HOME/.anonymous-user-id,
@@ -204,10 +208,10 @@
     - id: session-telemetry-otel
       name: '@deepseek-ai/dsh-session-telemetry-otel'
       config:
-        mode: !!js process.env.DSH_TELEMETRY_MODE || 'FEEDBACK_ONLY'
+        mode: !!js process.env.DSH_TELEMETRY_MODE || 'DISABLED'
         shutdownTimeoutMillis: 3000
         exporter:
-          url: !!js process.env.DSH_TELEMETRY_OTLP_URL ?? 'https://harness-telemetry.deepseeksvc.com/v1/logs'
+          url: !!js process.env.DSH_TELEMETRY_OTLP_URL ?? 'http://127.0.0.1:4318/v1/logs'
           compression: gzip
           timeoutMillis: 1000
         processor:

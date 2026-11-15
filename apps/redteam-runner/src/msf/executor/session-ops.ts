@@ -5,7 +5,7 @@
  * on the gate exported here.
  *
  * Perimeter (unchanged from the rest of the bridge): exact
- * scope preflight before any daemon contact, sessions addressable only by
+ * scope preflight before any local process is spawned, sessions addressable only by
  * runner-issued handles bound to the exploited host, destructive-command
  * denylist on session commands, and dumped credential material SEALED to
  * the engagement evidence store — tool results carry counts, types and
@@ -13,8 +13,7 @@
  */
 
 import { capOutput, checkDestructive, redactSecrets } from "../../host-exec/common.js";
-import type { ConsoleRunResult, MsfClient } from "../client.js";
-import type { MsfRequestFn } from "../protocol.js";
+import type { ConsoleRunResult, LocalMsfClient, MsfSpawnFn } from "../local-client.js";
 import type { MsfSessionManager } from "../sessions.js";
 import { authedClient } from "./auth.js";
 import type { MsfResult } from "./executor.js";
@@ -22,7 +21,7 @@ import type { MsfResult } from "./executor.js";
 /** The slice of MsfExecutor these operations run against. */
 export interface SessionOpsHost {
   readonly deps: {
-    request?: MsfRequestFn;
+    spawn?: MsfSpawnFn;
     env: NodeJS.ProcessEnv;
     endpoint?: { host: string; port: number; useTls: boolean };
   };
@@ -79,7 +78,7 @@ export function gateSession(
 
 /**
  * Finish an exploit run whose payload was a Meterpreter session payload:
- * diff the daemon session list, register the new Meterpreter session,
+ * diff the runtime session list, register the new Meterpreter session,
  * stop any other new session, and prove the session by echoing the
  * runner-built marker through it. The session stays OPEN on success —
  * opening it is the mechanical audit-log step that follows the validated
@@ -88,7 +87,7 @@ export function gateSession(
 export async function finishSessionRun(
   host: SessionOpsHost,
   input: {
-    client: MsfClient;
+    client: LocalMsfClient;
     secrets: string[];
     before: Set<string>;
     console: ConsoleRunResult;
@@ -217,7 +216,7 @@ export async function sessionCommand(
   }
 }
 
-/** Close an open session (daemon session stopped, handle forgotten). */
+/** Close an open session (runtime session stopped, handle forgotten). */
 export async function closeSession(
   host: SessionOpsHost,
   args: SessionCloseArgs,

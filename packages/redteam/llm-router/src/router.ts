@@ -58,6 +58,7 @@ import { XaiProvider, XAI_API_KEY_ENV } from './providers/xai.js'
 import { ZaiProvider, ZAI_API_KEY_ENV } from './providers/zai.js'
 import { GeminiProvider, GEMINI_API_KEY_ENV } from './providers/gemini.js'
 import { LocalOpenAiProvider } from './providers/local.js'
+import { OllamaProvider } from './providers/ollama.js'
 import { ResilienceError } from './executor.js'
 import { CredentialPool, collectCredentialEnv, type PoolEntrySnapshot } from './pool.js'
 import { FilePoolStateStore } from './pool-store.js'
@@ -361,3 +362,5 @@ registerProvider(resilient(new ZaiProvider(), ZAI_API_KEY_ENV))
 registerProvider(resilient(new GeminiProvider(), GEMINI_API_KEY_ENV))
 // Offline/self-hosted route: selected by REDTEAM_LLM_PROVIDER=local (see policy.ts).
 registerProvider(resilient(new LocalOpenAiProvider()))
+// Ollama daemon route: selected by REDTEAM_LLM_PROVIDER=ollama (see policy.ts).
+registerProvider(resilient(new OllamaProvider()))

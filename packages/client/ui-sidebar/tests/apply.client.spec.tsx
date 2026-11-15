@@ -33,8 +33,10 @@ async function bench(declare = true) {
   await ctx.plugin(SlotRegistry).await()
   const layout = { toggleSidebar: vi.fn(), selectPanel: vi.fn() }
   const uiWorkspace = { startSession: vi.fn() }
+  const settingsNavigation = { open: vi.fn(), openSection: vi.fn() }
   ctx.provide('layout', layout)
   ctx.provide('uiWorkspace', uiWorkspace as never)
+  ctx.provide('settingsNavigation', settingsNavigation)
   ctx.provide('locale', new LocaleRuntime(ctx))
   const slots = ctx.get('slots') as SlotRegistry
   if (declare) {
@@ -47,7 +49,7 @@ async function bench(declare = true) {
       SidebarFrame,
     )
   }
-  return { ctx, slots, layout, uiWorkspace }
+  return { ctx, slots, layout, uiWorkspace, settingsNavigation }
 }
 
 describe('ui-sidebar apply', () => {
@@ -56,7 +58,7 @@ describe('ui-sidebar apply', () => {
   })
 
   it('declares only the services it uses', () => {
-    expect(inject).toEqual(['slots', 'layout', 'uiWorkspace', 'locale'])
+    expect(inject).toEqual(['slots', 'layout', 'uiWorkspace', 'locale', 'settingsNavigation'])
   })
 
   it('registers the shell and declares its child seats', async () => {
@@ -78,7 +80,7 @@ describe('ui-sidebar apply', () => {
     expect(leading[0]!.locale).toBe('sidebar')
     expect(leading[0]!.inject).toBe(b.slots.entries('sidebar')[0]!.inject)
     const injected = (b.slots.entries('sidebar')[0]!.inject as () => SidebarRootInjected)()
-    expect(Object.keys(injected)).toEqual(['startSession', 'toggleSidebar', 'selectPanel', 'hooks'])
+    expect(Object.keys(injected)).toEqual(['startSession', 'toggleSidebar', 'selectPanel', 'openLocalModels', 'hooks'])
     expect(injected.hooks.panels.getSnapshot()).toEqual([])
     expect(b.slots.entries('main')).toEqual([])
     // Both arms delegate to the Workspace UI's shared New Session action.
@@ -91,6 +93,11 @@ describe('ui-sidebar apply', () => {
     const panelId = 'custom-panel' as MainPanelId
     injected.selectPanel(panelId)
     expect(b.layout.selectPanel).toHaveBeenCalledExactlyOnceWith(panelId)
+    // The web Application menu's entry delegates to the settings navigation
+    // service, addressed at the Local models section.
+    injected.openLocalModels()
+    expect(b.settingsNavigation.openSection).toHaveBeenCalledExactlyOnceWith('local-models')
+    expect(b.settingsNavigation.open).not.toHaveBeenCalled()
     expectTypeOf<Parameters<SidebarRootInjected['selectPanel']>[0]>().toEqualTypeOf<MainPanelId>()
   })
 

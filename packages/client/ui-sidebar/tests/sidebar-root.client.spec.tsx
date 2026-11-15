@@ -50,7 +50,7 @@ function mountShell({ collapsed = false, width = 300, panels = [] }: { collapsed
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector(panels)}
       useResource={useResource} useWorkspaces={neverHook}
-      startSession={startSession} toggleSidebar={toggleSidebar} t={t}
+      startSession={startSession} toggleSidebar={toggleSidebar} t={t} openLocalModels={() => {}}
       renderSlot={((
         key: string,
         owner: SidebarFooterActionOwnerProps | SidebarSectionOwnerProps | SidebarSettingsOwnerProps,
@@ -168,9 +168,9 @@ describe('SidebarRoot shell', () => {
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])}
       useResource={useResource} useWorkspaces={neverHook}
-      startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
+      startSession={vi.fn()} toggleSidebar={vi.fn()} t={t} openLocalModels={() => {}}
       renderSlot={((key: string) => key === 'sidebar.toggle.badge'
-        ? <Tooltip label="Update Ã¢â‚¬â€ V1.2.3"><span data-testid="badge" /></Tooltip>
+        ? <Tooltip label="Update ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â V1.2.3"><span data-testid="badge" /></Tooltip>
         : null) as SidebarRootComponentProps['renderSlot']}
     />)
     const toggle = screen.getByRole('button', { name: 'Open sidebar' })
@@ -181,7 +181,7 @@ describe('SidebarRoot shell', () => {
     // even after the toggle's longer hover delay has elapsed.
     fireEvent.mouseEnter(screen.getByTestId('badge'))
     act(() => { vi.advanceTimersByTime(500) })
-    expect(screen.getAllByRole('tooltip').map(bubble => bubble.textContent)).toEqual(['Update Ã¢â‚¬â€ V1.2.3'])
+    expect(screen.getAllByRole('tooltip').map(bubble => bubble.textContent)).toEqual(['Update ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â V1.2.3'])
     fireEvent.mouseLeave(screen.getByTestId('badge'), { relatedTarget: toggle })
     expect(screen.getByRole('tooltip').textContent).toBe('Open sidebar')
     fireEvent.mouseLeave(toggle)

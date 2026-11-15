@@ -26,6 +26,18 @@ export function apply(ctx: Context): void {
 
   ctx.effect(() => {
     const source = new EventSource(EVENTS_ROUTE)
+    // One line per outage, not one per reconnect: EventSource fires error on every
+    // failed attempt, and a Host that boots slowly would otherwise fill the console.
+    let reportedOffline = false
+    source.addEventListener('open', () => {
+      if (reportedOffline) ctx.logger.info('client-hmr: event channel reconnected')
+      reportedOffline = false
+    })
+    source.addEventListener('error', () => {
+      if (reportedOffline) return
+      reportedOffline = true
+      ctx.logger.info('client-hmr: event channel unavailable, retrying in the background')
+    })
     source.addEventListener('message', (event: MessageEvent<string>) => {
       let value: unknown
       try {

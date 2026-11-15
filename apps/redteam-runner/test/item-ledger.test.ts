@@ -18,11 +18,11 @@ import {
   prerequisiteMet,
 } from "../src/coverage/items.js";
 import { TARGET_PROFILES, FULL_BATTERY_TARGETS, BATTERY_ITEM_COUNTS, TOTAL_BATTERY_ITEMS } from "../src/targets/index.js";
+import { _resetMsfProbeCache } from "../src/msf/prereq.js";
 
 // prerequisiteMet reads the environment — pin it for determinism.
 const PREREQ_ENV = [
-  "REDTEAM_MSFRPC_USER",
-  "REDTEAM_MSFRPC_PASS",
+  "REDTEAM_MSFCONSOLE_BIN",
   "REDTEAM_KRB_CCACHE_B64",
   "REDTEAM_KRB_CCACHE_PATH",
   "REDTEAM_KRB_KIRBI_B64",
@@ -35,6 +35,8 @@ beforeEach(() => {
     savedEnv[k] = process.env[k];
     delete process.env[k];
   }
+  // The framework probe caches per process; env pinning must invalidate it.
+  _resetMsfProbeCache();
 });
 afterEach(() => {
   for (const k of PREREQ_ENV) {
@@ -78,11 +80,11 @@ describe("buildItemLedger", () => {
       assert.equal(v.disposition, "blocked", `${key} should start blocked`);
       assert.match(v.reason ?? "", /Prerequisite not met:/);
     }
-    // msfrpcd methodology items blocked too
+    // Metasploit methodology items blocked too (no local framework here)
     const msfBlocked = [...ledger.values()].filter(
-      (v) => v.disposition === "blocked" && (v.reason ?? "").includes("msfrpcd"),
+      (v) => v.disposition === "blocked" && (v.reason ?? "").includes("msfconsole"),
     );
-    assert.ok(msfBlocked.length >= 6, `expected >= 6 msfrpcd-blocked items, got ${msfBlocked.length}`);
+    assert.ok(msfBlocked.length >= 6, `expected >= 6 msfconsole-blocked items, got ${msfBlocked.length}`);
   });
 
   it("a met prerequisite unblocks the item at build time", () => {
@@ -280,12 +282,15 @@ describe("summary and coordinator visibility", () => {
 });
 
 describe("prerequisiteMet", () => {
-  it("msfrpcd needs both user and pass", () => {
-    assert.equal(prerequisiteMet("msfrpcd"), false);
-    process.env.REDTEAM_MSFRPC_USER = "u";
-    assert.equal(prerequisiteMet("msfrpcd"), false);
-    process.env.REDTEAM_MSFRPC_PASS = "p";
-    assert.equal(prerequisiteMet("msfrpcd"), true);
+  it("the msfconsole prerequisite is met only when the local framework actually runs", () => {
+    process.env.REDTEAM_MSFCONSOLE_BIN = "/no/such/msfconsole";
+    _resetMsfProbeCache();
+    assert.equal(prerequisiteMet("local Metasploit framework (msfconsole)"), false);
+    // Any executable answering --version stands in for a real install:
+    // the probe executes the binary, it does not parse its output.
+    process.env.REDTEAM_MSFCONSOLE_BIN = process.execPath;
+    _resetMsfProbeCache();
+    assert.equal(prerequisiteMet("local Metasploit framework (msfconsole)"), true);
   });
 
   it("kerberos ticket material any-of", () => {

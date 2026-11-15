@@ -4,8 +4,10 @@
  * plus the settings panel as a `shell.overlay` occupant, and registers
  * everything on the Settings pages that belongs to no single feature: the
  * trigger/header chrome content, local-document action, General section,
- * and `settings` dictionaries. Feature-owned rows and sections stay with
- * their features. Export discipline: packages/client/AGENTS.md.
+ * and `settings` dictionaries, and provides the `settingsNavigation`
+ * service other plugins open the panel through. Feature-owned rows and
+ * sections stay with their features. Export discipline:
+ * packages/client/AGENTS.md.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // Type-only: pulls the ctx.remote merge and its fixed Host facts.
@@ -26,6 +28,8 @@ import type {
 import { SettingsRoot } from './SettingsRoot.tsx'
 import { SettingsOverlay } from './SettingsOverlay.tsx'
 import { createSettingsShellStore } from './shell-store.ts'
+import type { ISettingsNavigation } from './service.ts'
+import { SettingsNavigationController } from './service.ts'
 import { DesktopUpdateBadge } from './DesktopUpdateIndicator.tsx'
 import type { DesktopUpdateBridge } from '../types.ts'
 import { DesktopUpdateSource } from './desktop-update-source.ts'
@@ -48,6 +52,15 @@ export type { SettingsDocumentActionInjected, SettingsDocumentActionProps } from
 export type { SettingsDocumentState } from './settings-document-store.ts'
 export { SettingsDocumentStore } from './settings-document-store.ts'
 export type { SettingsKey } from './locales.ts'
+// ISettingsNavigation: the ctx.settingsNavigation face consumers type against.
+export type { ISettingsNavigation } from './service.ts'
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /** The outward face only; the concrete service stays inside this plugin. */
+    settingsNavigation: ISettingsNavigation
+  }
+}
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -68,7 +81,8 @@ export const inject = ['slots', 'locale', 'connection', 'remote', 'remote.settin
 
 /**
  * Register the `settings` dictionaries, the chrome content, and the General
- * section, each once its slot declaration is on the ledger.
+ * section, each once its slot declaration is on the ledger, and provide
+ * ctx.settingsNavigation over the shell store.
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
@@ -170,10 +184,22 @@ export function apply(ctx: ClientContext): void {
       },
     },
   })
-  // One shell store handle for both settings registrations: the framework
-  // caches one instance per handle, so the trigger row and the panel read
-  // and write the same open/active state.
-  const shellStore = createSettingsShellStore()
+  // One shell store instance for both settings registrations and the
+  // navigation service: the handle wrapper makes every create() return
+  // this instance (ui-layout's root-entry pattern), so the trigger row,
+  // the panel, and ctx.settingsNavigation read and write the same
+  // open/active state.
+  const shellHandle = createSettingsShellStore()
+  const shellInstance = shellHandle.create()
+  const shellStore: typeof shellHandle = { ...shellHandle, create: () => shellInstance }
+  const disposeNavigation = ctx.reflect.provide(
+    'settingsNavigation',
+    new SettingsNavigationController(shellInstance.actions),
+  )
+  // Provided first, so it tears down last: the face outlives every caller
+  // that reaches for it. provide()'s disposer settles asynchronously;
+  // teardown is synchronous fire-and-forget, matching ui-sidebar-right.
+  ctx.effect(() => () => { void disposeNavigation() }, 'ui-settings-general: settings navigation service')
   ctx.slots.inject('sidebar.settings', () => ctx.slots.register({
     name: 'sidebar.settings',
     locale: NS,

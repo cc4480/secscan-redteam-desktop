@@ -193,7 +193,9 @@ export class ConnectionController {
           if (!this.isRunning()) return
           if (retryDelay.signal.aborted) continue
         }
-        console.warn(`[connection] connection lost, retry #${String(attempt)}`)
+        // Log the first retry of an outage only. A Host that takes a while to come up
+        // would otherwise print one line per backoff attempt.
+        if (attempt === 1) console.warn(`[connection] connection lost, retry #${String(attempt)}`)
         this.callSink(() => { this.sinks.onReconnectRequested?.() })
         if (!this.isRunning()) return
       }

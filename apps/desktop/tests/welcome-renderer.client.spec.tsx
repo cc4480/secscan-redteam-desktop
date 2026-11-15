@@ -64,8 +64,6 @@ function mount(language = 'zh-CN', options: { page?: 'entry' | 'mcp'; mcp?: Part
       ...heading === 'key-title' ? [document.querySelector('#key-description')!.textContent, `${input.placeholder} [password]`] : [],
       ...heading === 'mcp-title' ? [
         document.querySelector('#mcp-description')!.textContent,
-        `${field('#mcp-secscan').placeholder} [password]`,
-        `${field('#mcp-seclayer').placeholder} [password]`,
         `${field('#mcp-runner').placeholder} [password]`,
         `${field('#mcp-endpoint').placeholder} [url]`,
         ...note('#mcp-store'), ...note('#mcp-stored'), ...note('#mcp-environment'),
@@ -306,11 +304,9 @@ describe('desktop welcome MCP access step', () => {
     expect(view.document.querySelector<HTMLElement>('#mcp-form')!.hidden).toBe(false)
     expect(view.document.querySelector<HTMLElement>('#key-form')!.hidden).toBe(true)
     expect(view.document.querySelector<HTMLElement>('#tagline')!.hidden).toBe(true)
-    expect(view.field('#mcp-secscan').type).toBe('password')
-    expect(view.field('#mcp-seclayer').type).toBe('password')
     expect(view.field('#mcp-runner').type).toBe('password')
     expect(view.field('#mcp-endpoint').value).toBe('http://127.0.0.1:8787/mcp')
-    expect(view.document.activeElement).toBe(view.field('#mcp-secscan'))
+    expect(view.document.activeElement).toBe(view.field('#mcp-runner'))
     expect(view.api.readMcp).toHaveBeenCalledOnce()
     expect(view.button('#mcp-save').disabled).toBe(true)
     await expect(view.copy()).toMatchFileSnapshot(`./expected/welcome/${language}-mcp.expected.txt`)
@@ -321,10 +317,8 @@ describe('desktop welcome MCP access step', () => {
       page: 'mcp',
       mcp: {
         servers: [
-          { id: 'secscan', label: 'SecScan MCP', state: 'connected', toolCount: 3 },
-          { id: 'seclayer', label: 'Seclayer MCP', state: 'unkeyed' },
-          { id: 'redteam', label: 'Engagement runner', state: 'failed', detail: 'HTTP 401' },
-          { id: 'alterego', label: 'AlterEgo bridge', state: 'no-tools', toolCount: 0 },
+          { id: 'redteam', label: 'Engagement runner', state: 'connected', toolCount: 3 },
+          { id: 'alterego', label: 'AlterEgo bridge', state: 'failed', detail: 'HTTP 401' },
         ],
       },
     })
@@ -333,68 +327,45 @@ describe('desktop welcome MCP access step', () => {
     expect(section).not.toBeNull()
     expect(section!.querySelector('.readiness-title')!.textContent).toBe(view.api.messages.welcomeMcpStatusTitle)
     const row = (id: string) => view.document.querySelector(`#mcp-server-${id}`)!.textContent ?? ''
-    expect(row('secscan')).toContain('SecScan MCP')
-    expect(row('secscan')).toContain(view.api.messages.welcomeMcpStatusConnected)
-    expect(row('secscan')).toContain('3')
-    expect(row('seclayer')).toContain(view.api.messages.welcomeMcpStatusUnkeyed)
-    expect(row('redteam')).toContain(view.api.messages.welcomeMcpStatusFailed)
-    expect(row('redteam')).toContain('HTTP 401')
-    expect(row('alterego')).toContain(view.api.messages.welcomeMcpStatusNoTools)
-    // The whole point of the surface: the four rows are not interchangeable.
-    const texts = ['secscan', 'seclayer', 'redteam', 'alterego'].map(row)
-    expect(new Set(texts).size).toBe(4)
+    expect(row('redteam')).toContain('Engagement runner')
+    expect(row('redteam')).toContain(view.api.messages.welcomeMcpStatusConnected)
+    expect(row('redteam')).toContain('3')
+    expect(row('alterego')).toContain(view.api.messages.welcomeMcpStatusFailed)
+    expect(row('alterego')).toContain('HTTP 401')
+    // The whole point of the surface: the two rows are not interchangeable.
+    const texts = ['redteam', 'alterego'].map(row)
+    expect(new Set(texts).size).toBe(2)
   })
 
   it('stores one trimmed draft and continues to the account step', async () => {
     const view = mount('en', { page: 'mcp' })
     await loaded(view)
-    fireEvent.change(view.field('#mcp-secscan'), { target: { value: '  ssk_onetime-test-token  ' } })
-    fireEvent.change(view.field('#mcp-runner'), { target: { value: 'runner-onetime-test-token' } })
+    fireEvent.change(view.field('#mcp-runner'), { target: { value: '  runner-onetime-test-token  ' } })
     expect(view.button('#mcp-save').disabled).toBe(false)
     view.submitMcp()
     view.submitMcp()
     expect(view.api.saveMcp).toHaveBeenCalledExactlyOnceWith({
-      secscan: '  ssk_onetime-test-token  ', seclayer: '', runner: 'runner-onetime-test-token', endpoint: 'http://127.0.0.1:8787/mcp',
+      runner: '  runner-onetime-test-token  ', endpoint: 'http://127.0.0.1:8787/mcp',
     })
     await vi.waitFor(() => { expect(view.document.querySelector<HTMLElement>('#mcp-form')!.hidden).toBe(true) })
     expect(view.document.querySelector<HTMLElement>('#tagline')!.hidden).toBe(false)
     expect(view.api.finishMcp).not.toHaveBeenCalled()
     // A token must never survive in the rendered document once it has been stored.
-    expect(view.document.body.textContent).not.toContain('ssk_onetime-test-token')
     expect(view.document.body.textContent).not.toContain('runner-onetime-test-token')
-    expect(view.field('#mcp-secscan').value).toBe('')
+    expect(view.field('#mcp-runner').value).toBe('')
   })
 
-  it('enables Save for a Seclayer-only edit and stores the key (GATE B)', async () => {
-    const view = mount('en', { page: 'mcp' })
-    await loaded(view)
-    expect(view.field('#mcp-seclayer').type).toBe('password')
-    expect(view.button('#mcp-save').disabled).toBe(true)
-    fireEvent.change(view.field('#mcp-seclayer'), { target: { value: 'seclayer-test-key-0003' } })
-    expect(view.button('#mcp-save').disabled).toBe(false)
-    view.submitMcp()
-    expect(view.api.saveMcp).toHaveBeenCalledExactlyOnceWith({
-      secscan: '', seclayer: 'seclayer-test-key-0003', runner: '', endpoint: 'http://127.0.0.1:8787/mcp',
-    })
-    await vi.waitFor(() => { expect(view.document.querySelector<HTMLElement>('#mcp-form')!.hidden).toBe(true) })
-    // The stored key must not survive in the rendered document or the field.
-    expect(view.field('#mcp-seclayer').value).toBe('')
-    expect(view.document.body.textContent).not.toContain('seclayer-test-key-0003')
-  })
-
-  it('shows all three stored fingerprints and the environment note for an inherited Seclayer key', async () => {
+  it('shows the stored fingerprint and the environment note for an inherited runner token', async () => {
     const view = mount('en', {
       page: 'mcp',
       mcp: {
         required: false, entryRequired: false, stored: true,
-        fingerprints: { SECSCAN_MCP_TOKEN: 'ssk_…0001', SECLAYER_API_KEY: 'secl…0003', REDTEAM_UI_TOKEN: 'rtr_…0002' },
-        fromEnvironment: ['SECLAYER_API_KEY'],
+        fingerprints: { REDTEAM_UI_TOKEN: 'rtr_…0002' },
+        fromEnvironment: ['REDTEAM_UI_TOKEN'],
       },
     })
     await loaded(view)
     const stored = view.document.querySelector('#mcp-stored')!.textContent
-    expect(stored).toContain('ssk_…0001')
-    expect(stored).toContain('secl…0003')
     expect(stored).toContain('rtr_…0002')
     expect(view.document.querySelector<HTMLElement>('#mcp-environment')!.hidden).toBe(false)
     expect(view.document.querySelector('#mcp-environment')!.textContent).toBe(view.api.messages.welcomeMcpEnvironment)
@@ -404,7 +375,7 @@ describe('desktop welcome MCP access step', () => {
     const view = mount('en', { page: 'mcp', mcp: { required: false, entryRequired: false } })
     await loaded(view)
     expect(view.button('#mcp-later').textContent).toBe(view.api.messages.welcomeMcpClose)
-    fireEvent.change(view.field('#mcp-secscan'), { target: { value: 'ssk_rotation-test-token' } })
+    fireEvent.change(view.field('#mcp-runner'), { target: { value: 'runner-rotation-test-token' } })
     view.submitMcp()
     await vi.waitFor(() => { expect(view.api.finishMcp).toHaveBeenCalledOnce() })
     // The host closes this window or opens the workspace; the step never routes to the account entry.
@@ -422,10 +393,10 @@ describe('desktop welcome MCP access step', () => {
     expect(view.api.clearMcp).not.toHaveBeenCalled()
   })
 
-  it.each(['bad token', 'SECSCAN_MCP_TOKEN=ssk_assignment'])('refuses %s before the host sees it', async (value) => {
+  it.each(['bad token', 'REDTEAM_UI_TOKEN=runner_assignment'])('refuses %s before the host sees it', async (value) => {
     const view = mount('en', { page: 'mcp' })
     await loaded(view)
-    fireEvent.change(view.field('#mcp-secscan'), { target: { value } })
+    fireEvent.change(view.field('#mcp-runner'), { target: { value } })
     view.submitMcp()
     expect(view.api.saveMcp).not.toHaveBeenCalled()
     expect(view.document.querySelector<HTMLElement>('#mcp-error')!.hidden).toBe(false)
@@ -435,7 +406,7 @@ describe('desktop welcome MCP access step', () => {
   it('refuses a console address that would send the token off the loopback', async () => {
     const view = mount('en', { page: 'mcp' })
     await loaded(view)
-    fireEvent.change(view.field('#mcp-secscan'), { target: { value: 'ssk_loopback-test-token' } })
+    fireEvent.change(view.field('#mcp-runner'), { target: { value: 'runner-loopback-test-token' } })
     fireEvent.change(view.field('#mcp-endpoint'), { target: { value: 'http://console.example.test/mcp' } })
     view.submitMcp()
     expect(view.api.saveMcp).not.toHaveBeenCalled()
@@ -447,12 +418,12 @@ describe('desktop welcome MCP access step', () => {
     const view = mount('en', { page: 'mcp' })
     await loaded(view)
     view.api.saveMcp.mockResolvedValue({ ok: false })
-    fireEvent.change(view.field('#mcp-secscan'), { target: { value: 'ssk_refused-test-token' } })
+    fireEvent.change(view.field('#mcp-runner'), { target: { value: 'runner-refused-test-token' } })
     view.submitMcp()
     await vi.waitFor(() => { expect(view.document.querySelector<HTMLElement>('#mcp-error')!.hidden).toBe(false) })
     expect(view.document.querySelector('#mcp-error')!.textContent).toBe(view.api.messages.welcomeMcpFailed)
-    expect(view.field('#mcp-secscan').value).toBe('ssk_refused-test-token')
-    expect(view.document.body.textContent).not.toContain('ssk_refused-test-token')
+    expect(view.field('#mcp-runner').value).toBe('runner-refused-test-token')
+    expect(view.document.body.textContent).not.toContain('runner-refused-test-token')
   })
 
   it('shows stored fingerprints, an environment note, and removes the document on request', async () => {
@@ -460,12 +431,11 @@ describe('desktop welcome MCP access step', () => {
       page: 'mcp',
       mcp: {
         required: false, entryRequired: false, stored: true,
-        fingerprints: { SECSCAN_MCP_TOKEN: 'ssk_…0001', REDTEAM_UI_TOKEN: 'rtr_…0002' },
+        fingerprints: { REDTEAM_UI_TOKEN: 'rtr_…0002' },
         fromEnvironment: ['REDTEAM_MCP_URL'],
       },
     })
     await loaded(view)
-    expect(view.document.querySelector('#mcp-stored')!.textContent).toContain('ssk_…0001')
     expect(view.document.querySelector('#mcp-stored')!.textContent).toContain('rtr_…0002')
     expect(view.document.querySelector<HTMLElement>('#mcp-environment')!.hidden).toBe(false)
     view.api.readMcp.mockResolvedValue({ ...unconfiguredMcp, stored: false })

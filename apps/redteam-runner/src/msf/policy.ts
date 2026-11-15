@@ -25,74 +25,18 @@
 
 import { checkDestructive } from "../host-exec/common.js";
 
-export const MSF_ENV_HOST = "REDTEAM_MSFRPC_HOST";
-export const MSF_ENV_PORT = "REDTEAM_MSFRPC_PORT";
-export const MSF_ENV_USER = "REDTEAM_MSFRPC_USER";
-export const MSF_ENV_PASS = "REDTEAM_MSFRPC_PASS";
-export const MSF_ENV_TLS = "REDTEAM_MSFRPC_TLS";
-
-export const MSFRPC_SETUP_INSTRUCTIONS = [
-  "msfrpcd is unreachable. The Metasploit bridge needs Metasploit's RPC daemon:",
+export const MSF_NATIVE_SETUP_INSTRUCTIONS = [
+  "The Metasploit arm runs the framework installed on THIS host via msfconsole",
+  "(no daemon, no RPC credentials, no network listener). To fix:",
   "  1. Install Metasploit Framework (https://www.metasploit.com/download or your distro package).",
-  "  2. Start the daemon: msfrpcd -P <rpc-password> -U msf -a 127.0.0.1 -p 55553 -S",
-  "     (-S = SSL; keep it on loopback unless you know what you're doing.)",
-  "  3. Set REDTEAM_MSFRPC_USER / REDTEAM_MSFRPC_PASS (and optionally",
-  "     REDTEAM_MSFRPC_HOST / REDTEAM_MSFRPC_PORT / REDTEAM_MSFRPC_TLS) in the",
-  "     environment or Secure Vault, then re-run.",
+  "  2. Ensure `msfconsole` is on PATH, or set REDTEAM_MSFCONSOLE_BIN to its full path.",
+  "  3. Re-run.",
   "",
-  "The DAEMON RUNS WITHOUT A DATABASE, which is enough for module search and",
-  "single-module execution — the two things this bridge actually calls. What is",
-  "missing without one is db_* awareness: hosts, services, creds, vulns and notes",
-  "found during a run are not persisted, so nothing accumulates across sessions",
-  "and `db.hosts` errors with 'Unknown API Call: rpc_hosts' because there is no",
-  "workspace to read.",
-  "",
-  "To attach one, point MSF_DATABASE_CONFIG at a database.yml before starting",
-  "msfrpcd. The database must carry the FRAMEWORK schema:",
-  "  a. Point database.yml at an EMPTY database the msfrpcd user owns. Reusing a",
-  "     Metasploit Pro database does NOT work — its schema lacks tables the",
-  "     Framework needs, and the Pro role usually cannot create them.",
-  "  b. Build the schema: rake db:migrate   (run from the framework root with",
-  "     BUNDLE_GEMFILE set). 164 migrations is a complete 6.5 schema.",
-  "  c. Start msfrpcd with MSF_DATABASE_CONFIG set, then create the workspace",
-  "     once via the RPC: db.add_workspace('default').",
-  "  d. Verify with db.status — it must report your database name, and the",
-  "     startup log must NOT say 'No database support'.",
-  "Note: `loot` does not exist in Metasploit 6.5 — neither the table nor the RPC",
-  "endpoint — so db.loot failing is expected there and not a setup fault.",
+  "No database is required for module search or single-module execution — the",
+  "two things this arm actually calls. db-backed features (db_* workspace",
+  "awareness: hosts, services, creds accumulated across runs) are not used by",
+  "this arm and nothing persists between console processes.",
 ].join("\n");
-
-export interface MsfCredentials {
-  host: string;
-  port: number;
-  useTls: boolean;
-  user: string;
-  pass: string;
-}
-
-/** msfrpcd connection credentials — fail fast with setup instructions. */
-export function resolveMsfCredentials(env: NodeJS.ProcessEnv = process.env): MsfCredentials {
-  const host = env[MSF_ENV_HOST]?.trim() || "127.0.0.1";
-  const portRaw = env[MSF_ENV_PORT]?.trim();
-  const port = portRaw ? Number(portRaw) : 55553;
-  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
-    throw new Error(`[msf] ${MSF_ENV_PORT} must be a TCP port number, got ${JSON.stringify(portRaw)}.`);
-  }
-  const useTls = (env[MSF_ENV_TLS]?.trim() ?? "1") !== "0";
-  const user = env[MSF_ENV_USER]?.trim();
-  const pass = env[MSF_ENV_PASS];
-  if (!user || !pass) {
-    throw new Error(
-      `[msf] missing msfrpcd credentials: set ${MSF_ENV_USER} and ${MSF_ENV_PASS} in the environment or Secure Vault.\n${MSFRPC_SETUP_INSTRUCTIONS}`,
-    );
-  }
-  return { host, port, useTls, user, pass };
-}
-
-/** Values that must never appear in logs, errors, or events. */
-export function msfSecrets(creds: MsfCredentials): string[] {
-  return creds.pass && creds.pass.length >= 4 ? [creds.pass] : [];
-}
 
 /**
  * Generic command-execution payloads: they run ONE command and open NO
@@ -210,7 +154,7 @@ export function buildMarkerCommand(marker: string): { command: string; refused: 
   return { command, refused: checkDestructive(command) };
 }
 
-/** Rank labels msfrpcd reports → numeric weight for sorting. */
+/** Rank labels msfconsole search reports → numeric weight for sorting. */
 const RANK_WEIGHTS: Record<string, number> = {
   excellent: 600,
   great: 500,

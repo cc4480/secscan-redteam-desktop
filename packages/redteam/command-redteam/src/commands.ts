@@ -104,7 +104,7 @@ const SIBLINGS: readonly { name: string; description: string; spec: SiblingSpec 
   },
   {
     name: 'metasploit',
-    description: 'CVE validation through the Metasploit bridge (tier 2, approval required)',
+    description: 'CVE validation through the native Metasploit arm (tier 2, approval required)',
     spec: { tier: 2, phases: ['recon', 'exploit', 'report'], targets: ['windows', 'linux'], requiresApproval: true },
   },
 ]

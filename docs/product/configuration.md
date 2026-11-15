@@ -15,16 +15,17 @@ SecScan RedTeam is configured through three channels, in a deliberate order of p
 
 | Variable | Meaning |
 |---|---|
-| `SECSCAN_MCP_TOKEN` | The operator's permanent SecScan MCP token (minted at secscan.us → Settings → AI editors). Unset → no `mcp__secscan__*` tools, and the auth gate has no verification source. |
-| `SECSCAN_MCP_URL` | SecScan MCP endpoint override. Default `https://secscan.us/api/mcp`. |
-| `SECLAYER_API_KEY` | The operator's Seclayer API key (dashboard → Developer / API Keys). Resolved by name into the spawned `@seclayer/mcp` server's environment; unset → the server exits at startup and its tools do not appear. |
+| `SECSCAN_MCP_TOKEN` | Runner-only, and only with `REDTEAM_VERIFY_VIA_SERVICE=1`: the token the runner presents when it asks the hosted SecScan service to confirm a domain. Domain verification is in-house by default (the app's own DNS TXT challenge) and the fleet profile has no SecScan connection; this variable has no effect without the opt-in. |
+| `SECSCAN_MCP_URL` | Endpoint override for that same opt-in service check. Default `https://secscan.us/api/mcp`. |
+| `REDTEAM_VERIFY_VIA_SERVICE` | Set to `1` in the runner's environment to use the hosted-service domain check above instead of the in-house verifier. Off by default. |
+| `REDTEAM_MSFCONSOLE_BIN` | Full path to the local `msfconsole` binary when it is not on PATH. The Metasploit arm runs the framework installed on this host; there is no daemon and no RPC credential variable. |
 | `REDTEAM_MCP_URL` | Point the harness at an operator-run runner console instead of the bundled one (e.g. `https://console.example.test/mcp`). Setting it suppresses the bundled console. |
 | `REDTEAM_UI_TOKEN` | The runner console's token. The desktop supervisor generates one per install when the operator has not set one; an operator-run console needs a token at or above the strength floor. |
 | `REDTEAM_LOCAL_SANDBOX` | Set to `1` in the runner's environment to enable local/lab (loopback) targets for chat-launched engagements. Off by default; the engagement still records the operator's attestation. |
 
 ## The credential store
 
-Keys entered in the app are held in a single credential document (the MCP credential contract: `secscan`, `seclayer`, `runner`, and endpoint entries) in the app's per-user application-data directory, so builds and reinstalls never wipe it. Values are encrypted with the OS keychain via Electron `safeStorage`; on Windows the store refuses plaintext outright (an unavailable encryption backend is a loud save failure, never a silent cleartext file). Resolution order at connection time is **credential store → launch environment → inherited process environment**. Revoke at the minting service to kill a key everywhere at once.
+Keys entered in the app are held in a single credential document (the MCP credential contract: the `runner` token and endpoint entries) in the app's per-user application-data directory, so builds and reinstalls never wipe it. Values are encrypted with the OS keychain via Electron `safeStorage`; on Windows the store refuses plaintext outright (an unavailable encryption backend is a loud save failure, never a silent cleartext file). Resolution order at connection time is **credential store → launch environment → inherited process environment**. Model-provider keys are revoked at the provider that minted them.
 
 ## Fleet bounds
 

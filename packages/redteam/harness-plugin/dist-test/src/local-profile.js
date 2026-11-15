@@ -4,10 +4,12 @@
  * A downloaded GGUF answers inside the operator's own llama-server window
  * (32,768 tokens is the shipped Local Models default), which cannot host the
  * full deployment prompt plus the skill catalog plus the conversation. This
- * module assembles the small profile authored in `local-prompt-profile/`:
- * the operating rules verbatim, the core identity/preference files, and the
- * Layer-1 tool stub index, in the documented order. Every other route keeps
- * the full deployment prompt.
+ * module serves the local route its opening text: the lean brief
+ * (`lean.md`, ~1,600 tokens) by default, the tight brief (`tight.md`) for
+ * 4K-class windows, and — when no lean file is installed — the assembled
+ * profile authored in `local-prompt-profile/` (the operating rules verbatim,
+ * the core identity/preference files, and the Layer-1 tool stub index, in
+ * the documented order). Every other route keeps the full deployment prompt.
  *
  * @module @secscan/redteam-harness-plugin/local-profile
  */
@@ -29,6 +31,8 @@ const PROFILE_FILES = [
 /** Directory candidates for the authored profile, nearest first. */
 /** The single-file brief used when the routed window cannot host the full profile. */
 const TIGHT_PROFILE_FILE = 'tight.md';
+/** The lean fleet opening served to local windows by default (F2). */
+const LEAN_PROFILE_FILE = 'lean.md';
 /**
  * Windows at or below this size get the tight brief instead of the profile:
  * a 4K-class local model fits ~520 prompt tokens plus a little history, where
@@ -154,7 +158,8 @@ function readFileCached(path) {
 }
 /**
  * The local prompt for one routed window: the tight brief when the window is
- * small (or the operator forces it), otherwise the full profile. Undefined when
+ * small (or the operator forces it), otherwise the lean brief, falling back
+ * to the full assembled profile when no lean file is installed. Undefined when
  * no complete profile is installed — the caller then keeps the full deployment
  * prompt rather than sending a deployment with no operating rules at all.
  * @param contextWindow - the routed window, when the session recorded one.
@@ -171,6 +176,13 @@ export function localProfileText(contextWindow) {
         if (existsSync(path))
             return readFileCached(path);
     }
+    // The lean brief is the local default: a fresh local session opens on the
+    // ~1,600-token brief instead of the ~9,255-token assembled profile, whose
+    // prefill dominated the first turn on CPU-served local models. The full
+    // profile remains the fallback when no lean file is installed.
+    const leanPath = join(directory, LEAN_PROFILE_FILE);
+    if (existsSync(leanPath))
+        return readFileCached(leanPath);
     return readProfile(directory);
 }
 /**

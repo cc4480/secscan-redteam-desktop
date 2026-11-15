@@ -1,20 +1,20 @@
 /**
  * Auth gate: a `tools/pre-execute` hook that keeps active testing scoped.
  *
- * The SecScan MCP server (https://secscan.us/api/mcp, connected via the
- * harness-native @deepseek-ai/dsh-mcp-client) exposes its tools namespaced as
- * `mcp__<serverName>__<tool>` — e.g. `mcp__secscan__scan_url`. The server
- * itself only runs active tests against verified domains; this gate is the
- * agent-layer backstop so an explicit active-testing request can never
- * dispatch without proof.
+ * Scan tools exposed to the fleet are namespaced as
+ * `mcp__<serverName>__<tool>` — e.g. `mcp__secscan__scan_url`. This gate is
+ * the agent-layer backstop so an explicit active-testing request can never
+ * dispatch without proof of domain ownership.
  *
- * Verification is SERVER-AUTHORITATIVE: before allowing an active-testing
- * scan, the gate asks the SecScan server for its own verified-domain list
- * (`list_verified_domains` over the MCP endpoint) and allows only listed
- * domains. The server is the sole source of truth — there is no operator
- * allowlist or other out-of-band bypass, matching the runner's own gate. The
- * gate issues no tokens and does no DNS of its own. Any check error or
- * timeout fails closed (deny).
+ * Verification is LOCAL: before allowing an active-testing scan, the gate
+ * consults the app's own verified-domain record and allows only listed
+ * domains. The app itself issues the challenge token, checks the
+ * `_secscan-challenge.<domain>` DNS TXT record itself, and records the
+ * result in a local file (@secscan/redteam-auth-gate's local.ts). That
+ * record is the sole source of truth — there is no operator allowlist or
+ * other out-of-band bypass, and no external verification service or token
+ * is involved, matching the runner's own gate. Any check error fails
+ * closed (deny).
  *
  * SCOPE OF THIS HOOK — the scan half only. Host-family probes (`mcp__redteam__*`
  * with a `targetProfile` of secscan, seclayer, windows or linux) pass through
@@ -32,32 +32,19 @@
 
 import {
   decide,
-  isServerVerified,
+  LocalDomainVerifier,
   type GateContext,
-  type ServerVerificationConfig,
 } from '@secscan/redteam-auth-gate'
 import type { Context, PreToolDecision, ToolExecution } from './harness-types.js'
 
-const DEFAULT_MCP_URL = 'https://secscan.us/api/mcp'
-
-function serverConfig(): ServerVerificationConfig | null {
-  const token = process.env['SECSCAN_MCP_TOKEN']
-  if (!token) return null
-  return {
-    endpoint: process.env['SECSCAN_MCP_URL'] ?? DEFAULT_MCP_URL,
-    token,
-  }
-}
-
 function gateContext(): GateContext {
-  const cfg = serverConfig()
+  const verifier = LocalDomainVerifier.create()
   return {
-    // Fail closed twice: isServerVerified already returns false on any
+    // Fail closed twice: the verifier already returns false on any
     // error, and the wrapper below swallows anything unexpected.
-    isServerVerified: async (domain: string): Promise<boolean> => {
-      if (!cfg) return false
+    isVerified: async (domain: string): Promise<boolean> => {
       try {
-        return await isServerVerified(domain, cfg)
+        return await verifier.isVerified(domain)
       } catch {
         return false
       }

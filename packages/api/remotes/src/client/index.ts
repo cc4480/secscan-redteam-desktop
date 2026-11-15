@@ -19,6 +19,7 @@ import fileUploadsRemote from '@deepseek-ai/dsh-client-file-upload/remote'
 import sessionReferencesRemote from '@deepseek-ai/dsh-session-reference/remote'
 import subagentsRemote from '@deepseek-ai/dsh-subagent/remote'
 import sessionRemote from '@deepseek-ai/dsh-api-session-controller/remote'
+import localModelsRemote from '@secscan/redteam-llm-local/remote'
 import jobRemote from '@deepseek-ai/dsh-api-job-controller/remote'
 import workspaceRemote from '@deepseek-ai/dsh-api-workspace-controller/remote'
 import terminalRemote from '@deepseek-ai/dsh-api-terminal-controller/remote'
@@ -51,6 +52,7 @@ export type {} from '@deepseek-ai/dsh-session-reference/remote'
 export type {} from '@deepseek-ai/dsh-subagent/remote'
 export type * from '@deepseek-ai/dsh-subagent/client'
 export type {} from '@deepseek-ai/dsh-api-session-controller/remote'
+export type {} from '@secscan/redteam-llm-local/remote'
 export type * from '@deepseek-ai/dsh-api-session-controller/types'
 export type {} from '@deepseek-ai/dsh-api-job-controller/remote'
 export type * from '@deepseek-ai/dsh-api-job-controller/types'
@@ -140,6 +142,10 @@ export type {
   LlmConfigurableProvider, LlmDiscoveredModel,
   LlmModelDiscoveryRequest, LlmProviderInfo,
 } from '@deepseek-ai/dsh-llm/types'
+// Status and lifecycle-action vocabulary for the localModels namespace.
+export type {
+  LocalModelActionResult, LocalModelDeleteResult, LocalModelPullStart, LocalModelPullStatus, LocalModelsStatus,
+} from '@secscan/redteam-llm-local/types'
 // Reference-discovery result vocabulary for the fileReferences and
 // sessionReferenceResolver namespaces.
 export type { FileReferenceCandidate } from '@deepseek-ai/dsh-file-reference/types'
@@ -177,7 +183,7 @@ export async function apply(ctx: Context): Promise<() => Promise<void>> {
       pluginInventoryRemote, pluginManagerRemote, pluginRegistryProbeRemote, messageFeedbackRemote, sessionFeedbackRemote,
       fileUploadsRemote, sessionReferencesRemote,
       permissionPresetsRemote, subagentsRemote, sessionRemote, jobRemote, workspaceRemote, workspaceFilesRemote, terminalRemote,
-      officeToPdfRemote,
+      officeToPdfRemote, localModelsRemote,
     ]) {
       disposers.push(await ctx.remote.$mount(contribution))
     }

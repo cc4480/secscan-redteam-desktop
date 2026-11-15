@@ -45,7 +45,7 @@ export const REDTEAM_PROFILE = {
         },
         {
             name: 'recon',
-            role: 'Surface mapper. Passive recon first (headers, TLS, DNS, exposed files, tech fingerprinting via mcp__secscan__scan_url passive scans), then hands attack-surface notes to the exploiter.',
+            role: 'Surface mapper. Passive recon first (headers, TLS, DNS, exposed files, tech fingerprinting via the engagement\'s native SecScan checks running in passive mode inside the runner), then hands attack-surface notes to the exploiter.',
             provider: ROLE_MODEL_POLICY.recon.provider,
             model: ROLE_MODEL_POLICY.recon.model,
             reasoning_effort: ROLE_MODEL_POLICY.recon.reasoningEffort,
@@ -81,8 +81,9 @@ export const REDTEAM_PROFILE = {
             id: 'scope',
             subject: 'Verify scope and authorization',
             description: 'Confirm the engagement scope (target URLs, test window, auth credentials if any) and run ' +
-                'the auth gate: prove domain ownership with mcp__secscan__start_domain_verification and ' +
-                'mcp__secscan__check_domain_verification (or confirm it in mcp__secscan__list_verified_domains). ' +
+                'the auth gate: prove domain ownership through the app\'s local verification (the app issues ' +
+                'the challenge token; the operator publishes it as a TXT record at _secscan-challenge.<domain>; ' +
+                'the app checks DNS itself and records the domain in its local verified list). ' +
                 'If ownership is unverified, the engagement runs PASSIVE ONLY — no active probing, no crafted ' +
                 'payloads. Record the authorization state for the report.',
             assignee: 'coordinator',
@@ -90,10 +91,10 @@ export const REDTEAM_PROFILE = {
         {
             id: 'recon',
             subject: 'Passive reconnaissance and surface mapping',
-            description: 'Enumerate the attack surface without active probing: run mcp__secscan__scan_url for ' +
-                'the baseline, poll with mcp__secscan__get_scan_status (wait_seconds), read ' +
-                'mcp__secscan__get_report, review headers/TLS/DNS/exposed files, fingerprint the stack, ' +
-                'list parameters and auth flows. Deliver an attack-surface brief.',
+            description: 'Enumerate the attack surface without active probing: the baseline comes from ' +
+                'the engagement\'s native SecScan checks (run inside the runner engagement); ' +
+                'review the engagement\'s findings/report for headers/TLS/DNS/exposed files, ' +
+                'fingerprint the stack, list parameters and auth flows. Deliver an attack-surface brief.',
             assignee: 'recon',
             dependencies: ['scope'],
         },

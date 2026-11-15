@@ -245,9 +245,7 @@ const mcp = vi.hoisted(() => {
       values: { ...stored.values }, fingerprints: { ...stored.fingerprints }, exists: stored.exists, declined: stored.declined,
     })),
     write: vi.fn(async (_file: string, _protector: unknown,
-      draft: { secscan: string | null; seclayer: string | null; runner: string | null; endpoint: string | null }, declined = false) => {
-      if (draft.secscan !== null) { stored.values.SECSCAN_MCP_TOKEN = draft.secscan; stored.fingerprints.SECSCAN_MCP_TOKEN = 'ssk_…oken' }
-      if (draft.seclayer !== null) { stored.values.SECLAYER_API_KEY = draft.seclayer; stored.fingerprints.SECLAYER_API_KEY = 'secl…oken' }
+      draft: { runner: string | null; endpoint: string | null }, declined = false) => {
       if (draft.runner !== null) stored.values.REDTEAM_UI_TOKEN = draft.runner
       if (draft.endpoint !== null) stored.values.REDTEAM_MCP_URL = draft.endpoint
       if (declined) stored.declined = true
@@ -284,8 +282,6 @@ it('applies a first save of the runner token or console endpoint to the running 
   vi.stubEnv('DSH_DESKTOP_OPEN_DEVTOOLS', '0')
   vi.stubEnv('DSH_DESKTOP_MANDATORY_UPDATE_CONFIG', undefined)
   vi.stubEnv('DSH_DESKTOP_UPDATE_JOURNAL_DIR', undefined)
-  vi.stubEnv('SECSCAN_MCP_TOKEN', undefined)
-  vi.stubEnv('SECLAYER_API_KEY', undefined)
   vi.stubEnv('REDTEAM_UI_TOKEN', undefined)
   vi.stubEnv('REDTEAM_MCP_URL', undefined)
   await import('../src/main.ts')
@@ -300,16 +296,15 @@ it('applies a first save of the runner token or console endpoint to the running 
 
   // A save that touches no console name behaves exactly as before: the document is
   // reloaded and the Host restarted, and the supervisor is never disturbed.
-  expect(await state.operations!.saveMcp({ secscan: 'ssk_unrelated-token', seclayer: '', runner: '', endpoint: '' })).toEqual({ ok: true })
+  expect(await state.operations!.saveMcp({ runner: '', endpoint: '' })).toEqual({ ok: true })
   expect(state.stopRunner).not.toHaveBeenCalled()
   expect(state.startRunner).toHaveBeenCalledOnce()
-  expect(process.env.SECSCAN_MCP_TOKEN).toBe('ssk_unrelated-token')
   expect(process.env.REDTEAM_MCP_URL).toBe(SUPERVISOR_ENDPOINT)
   expect(process.env.REDTEAM_UI_TOKEN).toBe(SUPERVISOR_TOKEN)
 
   // The first save of a runner token: the bundled console restarts and runs with the
   // saved token, so the environment the replacement Host composes from carries it.
-  expect(await state.operations!.saveMcp({ secscan: '', seclayer: '', runner: 'operator-runner-token-1', endpoint: '' })).toEqual({ ok: true })
+  expect(await state.operations!.saveMcp({ runner: 'operator-runner-token-1', endpoint: '' })).toEqual({ ok: true })
   expect(state.stopRunner).toHaveBeenCalledOnce()
   expect(state.startRunner).toHaveBeenCalledTimes(2)
   expect(state.stopRunner.mock.invocationCallOrder[0]!).toBeLessThan(state.startRunner.mock.invocationCallOrder[1]!)
@@ -325,11 +320,10 @@ it('applies a first save of the runner token or console endpoint to the running 
   expect(state.startRunner).toHaveBeenCalledTimes(3)
   expect(state.runnerActive).toBe(true)
   expect(process.env.REDTEAM_UI_TOKEN).toBe(SUPERVISOR_TOKEN)
-  expect(process.env.SECSCAN_MCP_TOKEN).toBeUndefined()
 
   // The first save of a console endpoint: the bundled console stops and stays off,
   // and the saved endpoint is the one now in effect for the runner row.
-  expect(await state.operations!.saveMcp({ secscan: '', seclayer: '', runner: '', endpoint: 'http://127.0.0.1:9999/mcp' })).toEqual({ ok: true })
+  expect(await state.operations!.saveMcp({ runner: '', endpoint: 'http://127.0.0.1:9999/mcp' })).toEqual({ ok: true })
   expect(state.stopRunner).toHaveBeenCalledTimes(3)
   expect(state.startRunner).toHaveBeenCalledTimes(4)
   expect(state.runnerActive).toBe(false)

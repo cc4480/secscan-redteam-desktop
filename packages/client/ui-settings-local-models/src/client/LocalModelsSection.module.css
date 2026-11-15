@@ -1,0 +1,368 @@
+/* Local models section: endpoint status, served model rows, and the
+ * on-disk model file rows. Colors resolve through theme tokens; in the
+ * dark theme the panel and the rows wear the house black-and-maroon
+ * gradient (see the dark-theme block at the end of this sheet). */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 760px;
+  min-width: 0;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.heading {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.refreshButton {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  margin-left: auto;
+  padding: 0 10px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.refreshButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.refreshButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
+}
+
+.intro {
+  margin: 0;
+  font-size: 13px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.subheading {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+}
+
+.status {
+  margin: 0;
+  font-size: 13px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.statusLine {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.value {
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  /* Endpoint addresses and file paths can outgrow the column. */
+  overflow-wrap: anywhere;
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.row {
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: 16px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--dsw-alias-bg-layer-3);
+}
+
+.rowHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.modelId {
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+  overflow-wrap: anywhere;
+}
+
+.tag {
+  flex: none;
+  padding: 1px 6px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* Per-model lifecycle controls, rendered through the section's action
+ * seam by ModelActions.tsx. */
+.actions {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.actionButton {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 10px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.actionButton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.actionButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
+}
+
+.actionButton:disabled {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+.actionStatus {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.actionError {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+  overflow-wrap: anywhere;
+}
+
+/* Per-model context-window control, rendered under the row's lifecycle
+ * actions by ModelActions.tsx: a numeric input, its default hint, and
+ * Save / Use-default buttons in the row's action style. */
+.contextForm {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  flex-basis: 100%;
+  gap: 6px;
+}
+
+.contextInput {
+  box-sizing: border-box;
+  width: 110px;
+  height: 28px;
+  padding: 0 10px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.contextInput:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
+}
+
+.contextInput:disabled {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* Heading above the listed repository files the operator picks from,
+ * in the download form below. */
+.repoFilesHeading {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+/* Hugging Face download form, rendered through the section's download
+ * seam by ModelActions.tsx in llama mode. */
+.downloadForm {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.fieldLabel {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.input {
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 10px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
+}
+
+.input:disabled {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* Pull progress bar: the track and fill under the progress text, shown
+ * only while the host job reports both byte counts, with the fill width
+ * set from the reported percent. The fill wears the maroon-to-red
+ * accent gradient; the track is the ramp's pooled black end. */
+.progressTrack {
+  display: inline-block;
+  flex: none;
+  width: 120px;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--dsw-static-maroon-900);
+}
+
+.progressFill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background-image: linear-gradient(90deg, var(--dsw-static-maroon-700) 0%, var(--dsw-static-red-400) 100%);
+}
+
+/* Dark theme: this page wears the house black-and-maroon gradient —
+ * maroon above, black pooled at the bottom — over its surface tokens,
+ * the recipe the converted Modal/Menu/Settings panels use (their stops
+ * are the maroon ramp 750 → 800 → 850 → 900 → 950). The gray label
+ * aliases do not survive on these surfaces: muted text is re-pointed
+ * to warm on-maroon mixes of the red ramp's near-white and the ramp's
+ * own maroon, and button/input fills take the gradient instead of the
+ * neutral hover wash. */
+:global(body[data-ds-dark-theme]) .section,
+:global(body[data-ds-dark-theme]) .row {
+  background-image: linear-gradient(180deg, var(--dsw-static-maroon-750) 0%, var(--dsw-static-maroon-800) 30%, var(--dsw-static-maroon-850) 55%, var(--dsw-static-maroon-900) 82%, var(--dsw-static-maroon-950) 100%);
+}
+
+:global(body[data-ds-dark-theme]) .refreshButton,
+:global(body[data-ds-dark-theme]) .actionButton,
+:global(body[data-ds-dark-theme]) .input,
+:global(body[data-ds-dark-theme]) .contextInput {
+  background-image: linear-gradient(180deg, var(--dsw-static-maroon-750) 0%, var(--dsw-static-maroon-900) 100%);
+}
+
+:global(body[data-ds-dark-theme]) .refreshButton:hover,
+:global(body[data-ds-dark-theme]) .actionButton:hover:not(:disabled) {
+  background-image: linear-gradient(180deg, var(--dsw-static-maroon-700) 0%, var(--dsw-static-maroon-850) 100%);
+}
+
+:global(body[data-ds-dark-theme]) .intro,
+:global(body[data-ds-dark-theme]) .status,
+:global(body[data-ds-dark-theme]) .hint,
+:global(body[data-ds-dark-theme]) .meta,
+:global(body[data-ds-dark-theme]) .actionStatus,
+:global(body[data-ds-dark-theme]) .actionButton:disabled,
+:global(body[data-ds-dark-theme]) .input:disabled,
+:global(body[data-ds-dark-theme]) .contextInput:disabled {
+  color: color-mix(in srgb, var(--dsw-static-red-100) 55%, var(--dsw-static-maroon-700));
+}
+
+:global(body[data-ds-dark-theme]) .tag,
+:global(body[data-ds-dark-theme]) .fieldLabel {
+  color: color-mix(in srgb, var(--dsw-static-red-100) 78%, var(--dsw-static-maroon-700));
+}

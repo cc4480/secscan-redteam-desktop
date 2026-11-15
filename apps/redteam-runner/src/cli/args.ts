@@ -85,7 +85,7 @@ complete only when every cell is probed or honestly BLOCKED.
 (default: the four vendor targets; add webapp to opt in the generic client-webapp battery).
 Only applies with --full-battery. Several battery items
 carry honest prerequisites (each tagged [needs: ...] in the plan skeleton,
-e.g. the Metasploit items need msfrpcd and the Nuclei items need the nuclei
+e.g. the Metasploit items need the local Metasploit framework (msfconsole) and the Nuclei items need the nuclei
 binary); three need more than operator tooling â€” WS-064: kerberos ticket
 material, WS-065: human operator for the shadowing act, LX-041: privileged
 test client for the mount proof â€” see docs/ROADMAP.md; --scope must cover
@@ -170,10 +170,10 @@ REDTEAM_SSH_PASSWORD / REDTEAM_SSH_KEY / REDTEAM_SSH_KEY_PATH;
 REDTEAM_SMB_USER + REDTEAM_SMB_PASSWORD (+ optional REDTEAM_SMB_DOMAIN);
 REDTEAM_WINRM_USER + REDTEAM_WINRM_PASSWORD. Test accounts only, via
 environment or Secure Vault â€” never in code, never logged.
-Metasploit bridge (v0.11.0, CVE exploit validation): REDTEAM_MSFRPC_USER +
-REDTEAM_MSFRPC_PASS (+ optional REDTEAM_MSFRPC_HOST / REDTEAM_MSFRPC_PORT /
-REDTEAM_MSFRPC_TLS=0). Requires the operator's msfrpcd running
-(msfrpcd -P <pass> -U <user> -a 127.0.0.1 -p 55553 -S) â€” fail closed otherwise.`);
+Metasploit arm (v0.11.0, CVE exploit validation): the Metasploit Framework
+installed on this host — msfconsole on PATH or REDTEAM_MSFCONSOLE_BIN set
+to its full path. Runs natively as local processes; no daemon, no
+credentials — fail closed otherwise.`);
   process.exit(2);
 }
 

@@ -28,7 +28,7 @@ import { join } from "node:path";
 /** The environment variable the desktop supervisor exports for the payload. */
 export const TOOLS_DIR_ENV = "REDTEAM_TOOLS_DIR";
 
-export type ExternalToolId = "nmap" | "nuclei" | "ffuf" | "gobuster" | "john" | "sqlmap" | "nikto";
+export type ExternalToolId = "nmap" | "nuclei" | "ffuf" | "gobuster" | "john" | "sqlmap" | "nikto" | "msfconsole";
 
 /** Where a resolved binary came from. */
 export type ResolveSource = "explicit" | "tools-dir" | "path";
@@ -99,6 +99,7 @@ interface ToolEntry {
  */
 const TOOLS: Record<ExternalToolId, ToolEntry> = {
   nmap: { envBin: "REDTEAM_NMAP_BIN", directory: false, bundled: "nmap", exeNames: ["nmap"] },
+  msfconsole: { envBin: "REDTEAM_MSFCONSOLE_BIN", directory: false, bundled: "msfconsole", exeNames: ["msfconsole"] },
   nuclei: { envBin: "REDTEAM_NUCLEI_BIN", directory: false, bundled: "nuclei", exeNames: ["nuclei"] },
   ffuf: { envBin: "REDTEAM_FFUF_BIN", directory: false, bundled: "ffuf", exeNames: ["ffuf"] },
   gobuster: { envBin: "REDTEAM_GOBUSTER_BIN", directory: false, bundled: "gobuster", exeNames: ["gobuster"] },
@@ -145,7 +146,7 @@ const CHILD_SYSTEM_ENV: ReadonlySet<string> = new Set(["PATH", "PATHEXT", "SYSTE
 /** REDTEAM_* vars that only NAME tool locations: the tool table's bin/dir
  *  vars plus the payload dir, nping, the wordlist and the nuclei templates.
  *  Every other REDTEAM_* var is runner-only — several carry credential
- *  material (SSH/SMB/MSFRPC passwords, Kerberos caches) and none may leak
+ *  material (SSH/SMB passwords, Kerberos caches) and none may leak
  *  into a child. Credential-shaped names (*_API_KEY / *_TOKEN / any other
  *  secret) are excluded by construction: only the names above can pass. */
 const CHILD_TOOL_ENV: ReadonlySet<string> = new Set([

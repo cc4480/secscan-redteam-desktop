@@ -1,0 +1,112 @@
+/**
+ * The Arsenal bridge: the one place the browser-facing share surface speaks
+ * MCP, so the browser never has to.
+ *
+ * The runner console exposes its Arsenal index only as MCP tools on its
+ * token-gated `/mcp` endpoint (there are no Arsenal HTTP routes). The bridge
+ * accepts exactly the three read-only Arsenal tools, forwards each as a
+ * stateless JSON-RPC `tools/call` with the console bearer attached
+ * server-side, and answers the browser with the tool's own JSON result. Any
+ * other tool name is refused here, before anything is sent.
+ */
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
+import { ARSENAL_TOOL_NAMES } from "./shared.js";
+/** Response-body ceiling for one Arsenal answer; search results are bounded lists, never megabytes. */
+const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+/** Deadline for one Arsenal call; the index answers in milliseconds when healthy. */
+const CALL_TIMEOUT_MS = 30_000;
+/**
+ * Whether a requested tool name is one the bridge forwards.
+ * @param tool - the requested tool name.
+ * @returns true when the name is on the read-only Arsenal allowlist.
+ */
+export function isArsenalToolName(tool) {
+    return ARSENAL_TOOL_NAMES.includes(tool);
+}
+function failure(status, code, message) {
+    const payload = { code, message };
+    return { status, payload };
+}
+/**
+ * Call one allowlisted Arsenal tool on the console's `/mcp` endpoint.
+ * @param target - the console base URL and bearer.
+ * @param tool - the allowlisted tool name.
+ * @param args - the tool arguments, forwarded verbatim.
+ * @returns the outcome to answer the browser with.
+ */
+export async function callArsenalTool(target, tool, args) {
+    const url = new URL('/mcp', `${target.baseUrl}/`);
+    const body = JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: tool, arguments: args },
+    });
+    const headers = {
+        'content-type': 'application/json',
+        'content-length': String(Buffer.byteLength(body)),
+        ...(target.token === '' ? {} : { authorization: `Bearer ${target.token}` }),
+    };
+    const issue = url.protocol === 'https:' ? httpsRequest : httpRequest;
+    let text;
+    try {
+        text = await new Promise((resolve, reject) => {
+            const upstream = issue(url, { method: 'POST', headers }, (upstreamRes) => {
+                const chunks = [];
+                let size = 0;
+                upstreamRes.on('data', (chunk) => {
+                    size += chunk.byteLength;
+                    if (size > MAX_RESPONSE_BYTES) {
+                        upstreamRes.destroy(new Error(`arsenal response exceeded ${MAX_RESPONSE_BYTES} bytes`));
+                        return;
+                    }
+                    chunks.push(chunk);
+                });
+                upstreamRes.on('end', () => { resolve(Buffer.concat(chunks, size).toString('utf8')); });
+                upstreamRes.on('error', reject);
+            });
+            upstream.setTimeout(CALL_TIMEOUT_MS, () => {
+                upstream.destroy(new Error(`arsenal call timed out after ${CALL_TIMEOUT_MS} ms`));
+            });
+            upstream.on('error', reject);
+            upstream.end(body);
+        });
+    }
+    catch (error) {
+        // Same reasoning as the proxy: a refusal means nothing is serving the address,
+        // which is usually an operator-supplied REDTEAM_MCP_URL, not an app defect.
+        const message = error.message;
+        const detail = /ECONNREFUSED|EHOSTUNREACH|ENOTFOUND|ETIMEDOUT/i.test(message)
+            ? `${message} — nothing is listening there. Start that console, or clear `
+                + 'REDTEAM_MCP_URL so the desktop app starts its own.'
+            : message;
+        return failure(502, 'console-unavailable', `runner console unreachable: ${detail}`);
+    }
+    let rpc;
+    try {
+        rpc = JSON.parse(text);
+    }
+    catch {
+        // Swallows the parse error: a non-JSON answer is exactly the bad-response case.
+        return failure(502, 'arsenal-bad-response', 'the console answered the Arsenal call with a non-JSON response');
+    }
+    if (rpc.error !== undefined) {
+        return failure(502, 'arsenal-error', rpc.error.message ?? 'the console refused the Arsenal call');
+    }
+    const resultText = rpc.result?.content?.[0]?.text;
+    if (rpc.result === undefined || resultText === undefined) {
+        return failure(502, 'arsenal-bad-response', 'the console answered the Arsenal call without a tool result');
+    }
+    if (rpc.result.isError === true) {
+        return failure(502, 'arsenal-tool-failed', resultText);
+    }
+    try {
+        return { status: 200, payload: JSON.parse(resultText) };
+    }
+    catch {
+        // The tools answer JSON text today; a future plain-text answer still
+        // reaches the browser, wrapped rather than dropped.
+        return { status: 200, payload: { text: resultText } };
+    }
+}

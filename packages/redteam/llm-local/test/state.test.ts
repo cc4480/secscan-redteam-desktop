@@ -101,7 +101,7 @@ describe('local dispatch gate', () => {
     )
     assert.deepEqual(
       resolveLocalDispatch({ status: 'running', baseUrl: FIXTURE_BASE_URL, modelId: SECOND_MODEL_ID }, ACTIVE_MODEL_ID),
-      { kind: 'serving-other', servingModelId: SECOND_MODEL_ID },
+      { kind: 'serving-other', servingModelId: SECOND_MODEL_ID, baseUrl: FIXTURE_BASE_URL },
     )
     // A running state silent about its model still routes: the endpoint
     // itself is the authority for the one model it loaded.

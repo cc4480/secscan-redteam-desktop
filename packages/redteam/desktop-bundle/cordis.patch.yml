@@ -5,57 +5,49 @@
 # and before the profile's own cordis.patch.yml - so a person can still override
 # or disable any row by id in their own patch layer.
 #
-# Fifteen rows:
-#   1. mcp-secscan      - the harness-NATIVE MCP client
-#                         (@deepseek-ai/dsh-mcp-client) over Streamable HTTP.
-#                         Tools appear namespaced mcp__secscan__scan_url,
-#                         mcp__secscan__get_report, ...
-#   2. mcp-seclayer     - the Seclayer MCP server (@seclayer/mcp) over stdio,
-#                         keyed by the operator's own Seclayer API key.
-#                         Tools appear namespaced mcp__seclayer__seclayer_scan,
-#                         mcp__seclayer__seclayer_list_scans, ...
-#   3. secscan-redteam  - @secscan/redteam-harness-plugin: the authorization
+# Thirteen rows:
+#   1. secscan-redteam  - @secscan/redteam-harness-plugin: the authorization
 #                         gate as a `tools/pre-execute` hook, plus the
 #                         engagement-protocol system-prompt section.
-#   4. mcp-redteam-runner - the engagement ENGINE (battery, safety core, proof
+#   2. mcp-redteam-runner - the engagement ENGINE (battery, safety core, proof
 #                         bundles, compliance packs) as a second MCP client, over
 #                         the console's POST /mcp. Tools appear namespaced
 #                         mcp__redteam__*.
-#   5. mcp-alterego     - AlterEgo, the operator's PC bridge, as a fourth
+#   3. mcp-alterego     - AlterEgo, the operator's PC bridge, as a fourth
 #                         MCP client over Streamable HTTP: the chat
 #                         surface's direct wire to the bridge's live tool
 #                         registry, beside the runner's engagement-only
 #                         bridge gate. Tools appear namespaced
 #                         mcp__alterego__*.
-#   6. agent-team       - the Agent Teams roster, durable peer mailbox and
+#   4. agent-team       - the Agent Teams roster, durable peer mailbox and
 #                         shared task DAG. This is what makes the engagement a
 #                         TEAM: the session agent is the Lead and creates named
 #                         teammates (recon, exploiter, reporter) that persist
 #                         across crashes and restarts.
-#   7. tool-agent-team  - the model-facing Team tools: spawn_teammate,
+#   5. tool-agent-team  - the model-facing Team tools: spawn_teammate,
 #                         send_message, list_agents, wait_agent,
 #                         interrupt_agent, team_task_{create,list,get,update}.
-#   8. ui-agent-team    - the Web UI for viewing the roster and task board.
-#   9. command-redteam  - @secscan/redteam-command: the operator's RedTeam
+#   6. ui-agent-team    - the Web UI for viewing the roster and task board.
+#   7. command-redteam  - @secscan/redteam-command: the operator's RedTeam
 #                         slash commands (/scan, /status, /report, /stop,
 #                         /use) over the harness command registry.
-#  10. speech-to-text   - the dictation provider registry
+#  8. speech-to-text   - the dictation provider registry
 #                         (@deepseek-ai/dsh-experimental-speech-to-text):
 #                         exact provider routing with no fallback; its
 #                         volatile Settings (provider, language) are the
 #                         operator's audio options.
-#  11. speech-to-text-sensevoice - the local SenseVoice recognizer
+#  9. speech-to-text-sensevoice - the local SenseVoice recognizer
 #                         (provider id sensevoice-local): ONNX inference in
 #                         a managed subprocess; models download only on the
 #                         operator's explicit preparation, never on mount.
-#  12. api-speech-to-text - the authenticated loopback channel carrying
+#  10. api-speech-to-text - the authenticated loopback channel carrying
 #                         complete recordings from the client to the Host
 #                         provider.
-#  13. ui-voice-input   - the composer microphone control: record on click,
+#  11. ui-voice-input   - the composer microphone control: record on click,
 #                         transcribe on Stop, insert the text into the draft.
 #                         Nothing reaches the model until the operator
 #                         submits the draft as ordinary text.
-#  14. llm-local        - @secscan/redteam-llm-local: the desktop's
+#  12. llm-local        - @secscan/redteam-llm-local: the desktop's
 #                         downloaded GGUF models as the harness `local`
 #                         provider. The Host catalog lists them because
 #                         they exist in the registry, whether or not the
@@ -63,7 +55,7 @@
 #                         the endpoint the desktop publishes in
 #                         server-state.json, and a stopped server fails
 #                         with the Local Models start action.
-#  15. llm-meta         - @secscan/redteam-llm-meta: Meta's Muse models
+#  13. llm-meta         - @secscan/redteam-llm-meta: Meta's Muse models
 #                         as the harness `meta` provider. The Host catalog
 #                         lists the four Meta models unconditionally;
 #                         dispatch resolves the key per request through
@@ -139,83 +131,31 @@
     skipProviders:
       - local
 - insert:
-    - id: mcp-secscan
-      name: '@deepseek-ai/dsh-mcp-client'
-      config:
-        serverName: secscan
-        transport: streamable-http
-        url: https://secscan.us/api/mcp
-        headers:
-          # MCP-scope token - create at https://secscan.us/settings (AI editors).
-          # Verified 2026-10-15: the settings page issues an ssk_-prefixed token FOR
-          # MCP and the endpoint accepts it (initialize and get_account both HTTP 200).
-          # Earlier revisions warned that ssk_ would be rejected - that is no longer
-          # true. If a token is refused, suspect revocation or the wrong account, not
-          # the prefix. If the token is UNSET the harness still starts and the
-          # mcp__secscan__* tools simply do not appear - and the auth gate fails
-          # closed anyway, so nothing aggressive can run without it.
-          Authorization: !!js "'Bearer ' + (process.env.SECSCAN_MCP_TOKEN || '')"
-        reconnect:
-          enabled: true
-          # Copied from the runner row: the schema maximum is the
-          # supported equivalent of never giving up, so a mid-session
-          # outage does not permanently unregister these tools.
-          maxAttempts: 9007199254740991
-
-    # The Seclayer service, over stdio. @seclayer/mcp serves stdio only, so
-    # this row spawns it with npx; the version is pinned so an upstream
-    # release can never silently change the tool surface under a saved
-    # profile. Tools arrive namespaced mcp__seclayer__*: seclayer_scan,
-    # seclayer_list_scans, seclayer_get_report - the operator's own service
-    # scans against their own Seclayer account (a scan call spends a credit
-    # there). This row adds reach, not authority: an engagement still scans
-    # with the runner, never with this service.
-    #
-    # The key arrives by NAME only, through the mcp-client's secretEnv seam:
-    # the credential vault writes SECLAYER_API_KEY into the app's process
-    # env at startup, and the client resolves the named value into the
-    # child's spawn env. The value never appears in this file or in any
-    # composed config dump. If the key is UNSET the server exits at startup,
-    # the harness still starts, and no mcp__seclayer__* tools appear - the
-    # same failure shape as an unset SECSCAN_MCP_TOKEN above. If the key is
-    # set but invalid, the tools appear and the server answers its scan
-    # tools with an authentication error.
-    - id: mcp-seclayer
-      name: '@deepseek-ai/dsh-mcp-client'
-      config:
-        serverName: seclayer
-        transport: stdio
-        command: !!js "process.platform === 'win32' ? 'npx.cmd' : 'npx'"
-        args: ['-y', '@seclayer/mcp@1.0.0']
-        secretEnv: ['SECLAYER_API_KEY']
-        reconnect:
-          enabled: true
-          # Copied from the runner row: the schema maximum is the
-          # supported equivalent of never giving up, so a mid-session
-          # outage does not permanently unregister these tools.
-          maxAttempts: 9007199254740991
-
     - id: secscan-redteam
       name: '@secscan/redteam-harness-plugin'
       config:
-        # No plugin config needed. Verified domains come from the SecScan server
-        # alone (list_verified_domains over MCP) - there is no allowlist env var,
+        # No plugin config needed. Verified domains come from the app's LOCAL
+        # verification record alone - the app issues the challenge token itself
+        # and checks the `_secscan-challenge.<domain>` DNS TXT record itself
+        # (@secscan/redteam-auth-gate's local.ts). There is no allowlist env var,
         # deliberately: an env-var allowlist would be a way to assert ownership
-        # locally instead of proving it with the server. The MCP token lives in
-        # env SECSCAN_MCP_TOKEN.
+        # instead of proving it with the DNS challenge. No MCP token exists.
 
     # The ENGAGEMENT ENGINE, over MCP. This is the row that actually combines the
     # product with the harness.
     #
     # secscan-redteam is two different things and it is worth keeping them
     # straight:
-    #   - the SecScan scan service (row mcp-secscan above) is an MCP SERVER the
-    #     harness calls for scan_url / get_report / domain verification;
+    #   - the SecScan engines are NATIVE: they run in-process inside the
+    #     runner (secscan_exec) - there is no external scan service and no
+    #     MCP client row for them; domain verification is likewise local
+    #     (the app's own DNS TXT challenge check, see the secscan-redteam
+    #     row above);
     #   - the runner (@secscan/redteam-runner) is the engagement engine - the
     #     418-intent battery, the safety core, proof bundles, compliance packs -
     #     and it was an MCP CLIENT only, so there was nothing to connect to.
     #     runner/src/ui/mcp-endpoint.ts now serves POST /mcp on the console, so
-    #     the engine is addressable the same way the scan service is.
+    #     the engine is addressable from the fleet.
     #
     # Tools arrive namespaced mcp__redteam__*: start_engagement, get_engagement,
     # get_feed, get_findings, get_proof, get_coverage, get_compliance,
@@ -242,6 +182,18 @@
     # Safety: every tool delegates to the same handler the console UI calls, so
     # the safety core, launch validation, tier rules and approval logging all
     # still apply. This row adds reach, not authority.
+    #
+    # DE-MCP EXCEPTION (standalone pass, 2026-11-12): this hop remains an MCP
+    # client row on purpose, and the reason is structural, not preference.
+    # The cockpit handlers behind the endpoint live in the console's UiStore
+    # (apps/redteam-runner/src/ui/), which @secscan/redteam-runner does not
+    # export — its root exports runEngagement/readEvents/readState only, and
+    # packages may not depend on that private app package anyway. The console
+    # is a separately supervised process (apps/desktop/src/redteam-runner.ts),
+    # and a fleet-side re-implementation over runEngagement would fork the
+    # safety path this endpoint exists to share. The row is removed when the
+    # runner grows a non-MCP localhost surface over the SAME handlers and the
+    # supervisor publishes it. Record: app-fix-2026-11-12/landing-de-mcp.md.
     - id: mcp-redteam-runner
       name: '@deepseek-ai/dsh-mcp-client'
       config:
@@ -309,6 +261,16 @@
     # app from starting. A failed connect is logged by the client and the
     # mcp__alterego__* tools simply do not appear until the bridge is live
     # and paired. Do not "fix" this to true.
+    #
+    # DE-MCP EXCEPTION (standalone pass, 2026-11-12): this hop also remains
+    # an MCP client row. The bridge server is the operator's separate
+    # AlterEgo install — it is not part of this repo, it is routinely on a
+    # DIFFERENT machine reached over the tailnet (not loopback, so there is
+    # no local process for the app to own), and the only bridge client in
+    # this tree (apps/redteam-runner/src/bridge/client.ts) speaks the same
+    # JSON-RPC protocol. The row is removed when AlterEgo publishes a
+    # non-MCP HTTP contract and a package-side client exists for it.
+    # Record: app-fix-2026-11-12/landing-de-mcp.md.
     - id: mcp-alterego
       name: '@deepseek-ai/dsh-mcp-client'
       config:

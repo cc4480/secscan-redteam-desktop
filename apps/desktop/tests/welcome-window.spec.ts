@@ -33,6 +33,8 @@ function createWindow() {
     isDestroyed: vi.fn().mockReturnValue(false),
     destroy: vi.fn(),
     show: vi.fn(),
+    focus: vi.fn(),
+    moveTop: vi.fn(),
     once: vi.fn<(name: string, callback: () => void) => void>(),
   }
 }
@@ -214,17 +216,17 @@ describe('desktop welcome window', () => {
     expect(await read(own)).toMatchObject({ required: true, stored: false })
     const save = electron.handlers.get(WELCOME_IPC.saveMcp)!
     expect(await save(own, 'ssk-not-an-object')).toEqual({ ok: false })
-    expect(await save(own, { secscan: 42, seclayer: '', runner: '', endpoint: '' })).toEqual({ ok: false })
-    expect(await save(own, { secscan: 'x'.repeat(5000), seclayer: '', runner: '', endpoint: '' })).toEqual({ ok: false })
-    // The handler rebuilds the draft field by field, so the seclayer field is
-    // shape-checked like the others: absent, non-string, or over-long is refused
-    // here rather than stripped on its way to the store.
-    expect(await save(own, { secscan: '', runner: '', endpoint: '' })).toEqual({ ok: false })
-    expect(await save(own, { secscan: '', seclayer: 42, runner: '', endpoint: '' })).toEqual({ ok: false })
-    expect(await save(own, { secscan: '', seclayer: 'x'.repeat(5000), runner: '', endpoint: '' })).toEqual({ ok: false })
+    expect(await save(own, { runner: 42, endpoint: '' })).toEqual({ ok: false })
+    expect(await save(own, { runner: 'x'.repeat(5000), endpoint: '' })).toEqual({ ok: false })
+    // The handler rebuilds the draft field by field, so each field is
+    // shape-checked: absent, non-string, or over-long is refused here rather
+    // than stripped on its way to the store.
+    expect(await save(own, { endpoint: '' })).toEqual({ ok: false })
+    expect(await save(own, { runner: '', endpoint: 42 })).toEqual({ ok: false })
+    expect(await save(own, { runner: '', endpoint: 'x'.repeat(5000) })).toEqual({ ok: false })
     expect(saveMcp).not.toHaveBeenCalled()
-    expect(await save(own, { secscan: 'ssk_window-test-token', seclayer: 'seclayer-window-test-token', runner: '', endpoint: '' })).toEqual({ ok: true })
-    expect(saveMcp).toHaveBeenCalledExactlyOnceWith({ secscan: 'ssk_window-test-token', seclayer: 'seclayer-window-test-token', runner: '', endpoint: '' })
+    expect(await save(own, { runner: 'runner-window-test-token', endpoint: '' })).toEqual({ ok: true })
+    expect(saveMcp).toHaveBeenCalledExactlyOnceWith({ runner: 'runner-window-test-token', endpoint: '' })
     expect(await electron.handlers.get(WELCOME_IPC.clearMcp)!(own)).toEqual({ ok: true })
     expect(clearMcp).toHaveBeenCalledOnce()
     await electron.handlers.get(WELCOME_IPC.finishMcp)!(own)

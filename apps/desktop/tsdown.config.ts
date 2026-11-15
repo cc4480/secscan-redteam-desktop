@@ -54,6 +54,24 @@ export default defineConfig([
           },
         },
       })
+      // The Ollama window is a third IIFE page served from the same shell.
+      await build({
+        configFile: false,
+        root: fileURLToPath(new URL('.', import.meta.url)),
+        esbuild: { jsx: 'automatic' },
+        define: { 'process.env.NODE_ENV': JSON.stringify('production') },
+        build: {
+          outDir: 'lib/ollama',
+          emptyOutDir: true,
+          lib: {
+            entry: 'src/client/ollama.ts',
+            formats: ['iife'],
+            name: 'DesktopOllama',
+            fileName: () => 'ollama.js',
+            cssFileName: 'ollama',
+          },
+        },
+      })
     },
     outDir: 'lib',
     format: ['esm'],
@@ -64,7 +82,7 @@ export default defineConfig([
     clean: false,
     deps: { neverBundle: ['electron'] },
   },
-  ...(['preload-app', 'preload-welcome', 'preload-llama', 'preload-platform-account', 'preload-mandatory', 'preload-update-dialog'] as const).map(name => ({
+  ...(['preload-app', 'preload-welcome', 'preload-llama', 'preload-ollama', 'preload-platform-account', 'preload-mandatory', 'preload-update-dialog'] as const).map(name => ({
     // Sandboxed Electron preloads run as CommonJS even though the application package is ESM.
     entry: { [name]: `lib/types/${name}.js` },
     outDir: 'lib',

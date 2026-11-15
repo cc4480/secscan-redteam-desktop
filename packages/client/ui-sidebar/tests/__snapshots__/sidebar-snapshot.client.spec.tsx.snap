@@ -58,29 +58,34 @@ exports[`sidebar shell snapshots > renders the Windows sidebar in expanded and c
       aria-label="Global panels"
       class="panelList"
     >
-      <button
-        aria-haspopup="menu"
-        aria-label="Application"
-        class="panelRow"
-        data-tilt="true"
-        type="button"
+      <span
+        class="root"
       >
-        <span
-          aria-hidden="true"
-          class="panelGlyph"
+        <button
+          aria-expanded="false"
+          aria-haspopup="menu"
+          aria-label="Application"
+          class="panelRow"
+          data-tilt="true"
+          type="button"
         >
-          <svg
+          <span
             aria-hidden="true"
-            data-content="5610364e"
-            fill="none"
-            height="18"
-            stroke-width="1"
-            viewBox="0 0 16 16"
-            width="18"
-            xmlns="http://www.w3.org/2000/svg"
-          />
-        </span>
-      </button>
+            class="panelGlyph"
+          >
+            <svg
+              aria-hidden="true"
+              data-content="5610364e"
+              fill="none"
+              height="18"
+              stroke-width="1"
+              viewBox="0 0 16 16"
+              width="18"
+              xmlns="http://www.w3.org/2000/svg"
+            />
+          </span>
+        </button>
+      </span>
     </nav>
     <div
       class="regionArea"
@@ -149,34 +154,39 @@ exports[`sidebar shell snapshots > renders the Windows sidebar in expanded and c
       aria-label="Global panels"
       class="panelList"
     >
-      <button
-        aria-haspopup="menu"
-        aria-label="Application"
-        class="panelRow"
-        data-tilt="true"
-        type="button"
+      <span
+        class="root"
       >
-        <span
-          aria-hidden="true"
-          class="panelGlyph"
+        <button
+          aria-expanded="false"
+          aria-haspopup="menu"
+          aria-label="Application"
+          class="panelRow"
+          data-tilt="true"
+          type="button"
         >
-          <svg
+          <span
             aria-hidden="true"
-            data-content="5610364e"
-            fill="none"
-            height="16"
-            stroke-width="1"
-            viewBox="0 0 16 16"
-            width="16"
-            xmlns="http://www.w3.org/2000/svg"
-          />
-        </span>
-        <span
-          class="panelTitle wide"
-        >
-          Application
-        </span>
-      </button>
+            class="panelGlyph"
+          >
+            <svg
+              aria-hidden="true"
+              data-content="5610364e"
+              fill="none"
+              height="16"
+              stroke-width="1"
+              viewBox="0 0 16 16"
+              width="16"
+              xmlns="http://www.w3.org/2000/svg"
+            />
+          </span>
+          <span
+            class="panelTitle wide"
+          >
+            Application
+          </span>
+        </button>
+      </span>
     </nav>
     <div
       class="regionArea"
@@ -268,29 +278,34 @@ exports[`sidebar shell snapshots > renders the collapsed rail after the crossfad
       aria-label="Global panels"
       class="panelList"
     >
-      <button
-        aria-haspopup="menu"
-        aria-label="Application"
-        class="panelRow"
-        data-tilt="true"
-        type="button"
+      <span
+        class="root"
       >
-        <span
-          aria-hidden="true"
-          class="panelGlyph"
+        <button
+          aria-expanded="false"
+          aria-haspopup="menu"
+          aria-label="Application"
+          class="panelRow"
+          data-tilt="true"
+          type="button"
         >
-          <svg
+          <span
             aria-hidden="true"
-            data-content="5610364e"
-            fill="none"
-            height="18"
-            stroke-width="1"
-            viewBox="0 0 16 16"
-            width="18"
-            xmlns="http://www.w3.org/2000/svg"
-          />
-        </span>
-      </button>
+            class="panelGlyph"
+          >
+            <svg
+              aria-hidden="true"
+              data-content="5610364e"
+              fill="none"
+              height="18"
+              stroke-width="1"
+              viewBox="0 0 16 16"
+              width="18"
+              xmlns="http://www.w3.org/2000/svg"
+            />
+          </span>
+        </button>
+      </span>
     </nav>
     <div
       class="regionArea"
@@ -359,34 +374,39 @@ exports[`sidebar shell snapshots > renders the expanded column (no brand, empty 
       aria-label="Global panels"
       class="panelList"
     >
-      <button
-        aria-haspopup="menu"
-        aria-label="Application"
-        class="panelRow"
-        data-tilt="true"
-        type="button"
+      <span
+        class="root"
       >
-        <span
-          aria-hidden="true"
-          class="panelGlyph"
+        <button
+          aria-expanded="false"
+          aria-haspopup="menu"
+          aria-label="Application"
+          class="panelRow"
+          data-tilt="true"
+          type="button"
         >
-          <svg
+          <span
             aria-hidden="true"
-            data-content="5610364e"
-            fill="none"
-            height="16"
-            stroke-width="1"
-            viewBox="0 0 16 16"
-            width="16"
-            xmlns="http://www.w3.org/2000/svg"
-          />
-        </span>
-        <span
-          class="panelTitle wide"
-        >
-          Application
-        </span>
-      </button>
+            class="panelGlyph"
+          >
+            <svg
+              aria-hidden="true"
+              data-content="5610364e"
+              fill="none"
+              height="16"
+              stroke-width="1"
+              viewBox="0 0 16 16"
+              width="16"
+              xmlns="http://www.w3.org/2000/svg"
+            />
+          </span>
+          <span
+            class="panelTitle wide"
+          >
+            Application
+          </span>
+        </button>
+      </span>
     </nav>
     <div
       class="regionArea"
@@ -455,34 +475,39 @@ exports[`sidebar shell snapshots > renders the expanded column in the default lo
       aria-label="全局面板"
       class="panelList"
     >
-      <button
-        aria-haspopup="menu"
-        aria-label="Application"
-        class="panelRow"
-        data-tilt="true"
-        type="button"
+      <span
+        class="root"
       >
-        <span
-          aria-hidden="true"
-          class="panelGlyph"
+        <button
+          aria-expanded="false"
+          aria-haspopup="menu"
+          aria-label="Application"
+          class="panelRow"
+          data-tilt="true"
+          type="button"
         >
-          <svg
+          <span
             aria-hidden="true"
-            data-content="5610364e"
-            fill="none"
-            height="16"
-            stroke-width="1"
-            viewBox="0 0 16 16"
-            width="16"
-            xmlns="http://www.w3.org/2000/svg"
-          />
-        </span>
-        <span
-          class="panelTitle wide"
-        >
-          Application
-        </span>
-      </button>
+            class="panelGlyph"
+          >
+            <svg
+              aria-hidden="true"
+              data-content="5610364e"
+              fill="none"
+              height="16"
+              stroke-width="1"
+              viewBox="0 0 16 16"
+              width="16"
+              xmlns="http://www.w3.org/2000/svg"
+            />
+          </span>
+          <span
+            class="panelTitle wide"
+          >
+            Application
+          </span>
+        </button>
+      </span>
     </nav>
     <div
       class="regionArea"

@@ -1,0 +1,30 @@
+scripts/persistence-catalog-envelope.ts(20,55): error TS1109: Expression expected.
+scripts/persistence-catalog-envelope.ts(20,56): error TS1161: Unterminated regular expression literal.
+scripts/persistence-catalog-envelope.ts(21,12): error TS1109: Expression expected.
+scripts/persistence-catalog-envelope.ts(21,13): error TS1005: ';' expected.
+scripts/persistence-catalog-envelope.ts(21,17): error TS1435: Unknown keyword or identifier. Did you mean 'try'?
+scripts/persistence-catalog-envelope.ts(21,23): error TS1434: Unexpected keyword or identifier.
+scripts/persistence-catalog-envelope.ts(21,27): error TS1434: Unexpected keyword or identifier.
+scripts/persistence-catalog-envelope.ts(21,42): error TS1109: Expression expected.
+scripts/persistence-catalog-envelope.ts(21,73): error TS1005: ';' expected.
+scripts/persistence-catalog-envelope.ts(22,2): error TS1003: Identifier expected.
+scripts/persistence-catalog-envelope.ts(22,3): error TS1161: Unterminated regular expression literal.
+scripts/persistence-catalog-envelope.ts(70,55): error TS1109: Expression expected.
+scripts/persistence-catalog-envelope.ts(70,56): error TS1161: Unterminated regular expression literal.
+scripts/persistence-catalog-envelope.ts(71,12): error TS1109: Expression expected.
+scripts/persistence-catalog-envelope.ts(71,13): error TS1005: ';' expected.
+scripts/persistence-catalog-envelope.ts(71,34): error TS1005: ';' expected.
+scripts/persistence-catalog-envelope.ts(72,2): error TS1003: Identifier expected.
+scripts/persistence-catalog-envelope.ts(72,3): error TS1161: Unterminated regular expression literal.
+scripts/persistence-catalog-events.ts(14,55): error TS1109: Expression expected.
+scripts/persistence-catalog-events.ts(14,56): error TS1161: Unterminated regular expression literal.
+scripts/persistence-catalog-events.ts(15,12): error TS1109: Expression expected.
+scripts/persistence-catalog-events.ts(15,13): error TS1005: ';' expected.
+scripts/persistence-catalog-events.ts(15,17): error TS1435: Unknown keyword or identifier. Did you mean 'try'?
+scripts/persistence-catalog-events.ts(15,23): error TS1434: Unexpected keyword or identifier.
+scripts/persistence-catalog-events.ts(15,27): error TS1435: Unknown keyword or identifier. Did you mean 'declare'?
+scripts/persistence-catalog-events.ts(15,36): error TS1434: Unexpected keyword or identifier.
+scripts/persistence-catalog-events.ts(15,47): error TS1109: Expression expected.
+scripts/persistence-catalog-events.ts(15,62): error TS1005: ';' expected.
+scripts/persistence-catalog-events.ts(16,2): error TS1003: Identifier expected.
+scripts/persistence-catalog-events.ts(16,3): error TS1161: Unterminated regular expression literal.

@@ -123,6 +123,17 @@ export {
   LOCAL_PROVIDER_ID,
 } from './providers/local.js'
 export {
+  OllamaProvider,
+  OLLAMA_PROVIDER_ID,
+  OLLAMA_API_KEY_ENV,
+  OLLAMA_ALLOW_REMOTE_ENV,
+  OLLAMA_BASE_URL,
+  OLLAMA_BASE_URL_ENV,
+  OLLAMA_MAX_OUTPUT_TOKENS_ENV,
+  OLLAMA_MODEL_ENV,
+  OLLAMA_NUM_CTX_ENV,
+} from './providers/ollama.js'
+export {
   QwenProvider,
   QWEN_API_KEY_ENV,
   QWEN_API_KEY_FALLBACK_ENV,

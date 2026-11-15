@@ -65,6 +65,10 @@ The shell owns the chrome and the projections; it contributes the Developer tool
 
 The navigation is a projection of the `settings.section` ledger; nav labels may be locale-following thunks, resolved through `resolveSlotLabel` and re-rendered on the section ledger bump or the locale revision (an optional `ctx.get('locale')` read; no hard locale dependency). The onboarding ledger projects in ascending order; the active registrant receives its id, `complete()`, and an `openSection(id)` callback, and completing or skipping transfers ownership to the next entry.
 
+### Settings navigation service
+
+The shell provides `ctx.settingsNavigation` — `open()` and `openSection(id)` — over the same shell store instance its trigger and panel registrations render from, so another plugin can open the panel at a named section without importing this package's store. Consumers name `settingsNavigation` in their plugin `inject` and call the face; its type, `ISettingsNavigation`, is exported type-only from this package's `/client` surface.
+
 ### Connection recovery
 
 The shell is an explicit recovery consumer, so it injects Connection directly rather than adding lifecycle controls to `ctx.remote`. Its private hooks compartment binds `ctx.connection.state`, while the component receives only the selected state and an injected callback for `ctx.connection.reconnect()`. `ConnectionIndicator` owns the inline presentation and receives all visible and accessible copy from the `settings` locale namespace; the shell owns the 800ms minimum-visible hold for the connecting state and the two-second recovered-state timer, which starts when the recovered pill becomes visible after the hold.

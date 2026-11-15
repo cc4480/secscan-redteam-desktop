@@ -53,6 +53,7 @@ export type FleetProviderSelection =
   | 'xai'
   | 'zai'
   | 'gemini'
+  | 'ollama'
 
 /** Every selection the record may carry; a value outside this list is not a record this build wrote. */
 export const FLEET_PROVIDER_SELECTIONS: readonly FleetProviderSelection[] = [
@@ -65,6 +66,7 @@ export const FLEET_PROVIDER_SELECTIONS: readonly FleetProviderSelection[] = [
   'xai',
   'zai',
   'gemini',
+  'ollama',
 ]
 
 /**

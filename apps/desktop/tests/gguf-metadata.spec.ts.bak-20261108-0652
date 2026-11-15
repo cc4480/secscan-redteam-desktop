@@ -1,0 +1,214 @@
+/**
+ * Model limit detection: the GGUF header reader and the one place that decides
+ * a model's context window and output budget.
+ */
+
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
+import { readGgufMetadata } from '../src/gguf-metadata.ts'
+import {
+  FALLBACK_CONTEXT_LENGTH,
+  MAX_DERIVED_OUTPUT_TOKENS,
+  MIN_DERIVED_OUTPUT_TOKENS,
+  deriveMaxOutputTokens,
+  resolveModelLimits,
+} from '../src/model-limits.ts'
+
+/** GGUF value type ids used by the fixtures. */
+const T_UINT32 = 4
+const T_STRING = 8
+const T_ARRAY = 9
+const T_UINT64 = 10
+
+/** Builds a little-endian GGUF buffer from metadata pairs. */
+class GgufBuilder {
+  private readonly parts: Buffer[] = []
+
+  /** @returns this builder, with the 4-byte header magic and version appended. */
+  header(tensorCount = 0, kvCount: number): this {
+    const buf = Buffer.alloc(4 + 4 + 8 + 8)
+    buf.writeUInt32LE(0x4655_4747, 0) // 'GGUF'
+    buf.writeUInt32LE(3, 4)
+    buf.writeBigUInt64LE(BigInt(tensorCount), 8)
+    buf.writeBigUInt64LE(BigInt(kvCount), 16)
+    this.parts.push(buf)
+    return this
+  }
+
+  /** @returns this builder, with a string key and a uint32 value appended. */
+  uint32Pair(key: string, value: number): this {
+    this.parts.push(this.key(key))
+    const valueBuf = Buffer.alloc(4 + 4)
+    valueBuf.writeUInt32LE(T_UINT32, 0)
+    valueBuf.writeUInt32LE(value, 4)
+    this.parts.push(valueBuf)
+    return this
+  }
+
+  /** @returns this builder, with a string key and a string value appended. */
+  stringPair(key: string, value: string): this {
+    this.parts.push(this.key(key))
+    const typeBuf = Buffer.alloc(4)
+    typeBuf.writeUInt32LE(T_STRING, 0)
+    const text = Buffer.from(value, 'utf8')
+    const lengthBuf = Buffer.alloc(8)
+    lengthBuf.writeBigUInt64LE(BigInt(text.length), 0)
+    this.parts.push(typeBuf, lengthBuf, text)
+    return this
+  }
+
+  /** @returns this builder, with a large string array appended (the tokenizer case). */
+  bigStringArray(key: string, entries: number): this {
+    this.parts.push(this.key(key))
+    const head = Buffer.alloc(4 + 4 + 8)
+    head.writeUInt32LE(T_ARRAY, 0)
+    head.writeUInt32LE(T_STRING, 4)
+    head.writeBigUInt64LE(BigInt(entries), 8)
+    this.parts.push(head)
+    const one = Buffer.from('x', 'utf8')
+    for (let index = 0; index < entries; index += 1) {
+      const lengthBuf = Buffer.alloc(8)
+      lengthBuf.writeBigUInt64LE(BigInt(one.length), 0)
+      this.parts.push(lengthBuf, one)
+    }
+    return this
+  }
+
+  /** @returns the assembled buffer. */
+  build(): Buffer {
+    return Buffer.concat(this.parts)
+  }
+
+  /** @returns the encoded key: uint64 length + bytes. */
+  private key(key: string): Buffer {
+    const text = Buffer.from(key, 'utf8')
+    const lengthBuf = Buffer.alloc(8)
+    lengthBuf.writeBigUInt64LE(BigInt(text.length), 0)
+    return Buffer.concat([lengthBuf, text])
+  }
+}
+
+let directory: string | undefined
+
+/** @returns a temp file holding the given bytes. */
+function temporaryGguf(bytes: Buffer): string {
+  directory ??= mkdtempSync(join(tmpdir(), 'gguf-limits-'))
+  const path = join(directory, `model-${String(Date.now())}-${String(Math.random()).slice(2)}.gguf`)
+  writeFileSync(path, bytes)
+  return path
+}
+
+afterEach(() => {
+  if (directory !== undefined) rmSync(directory, { recursive: true, force: true })
+  directory = undefined
+})
+
+describe('readGgufMetadata', () => {
+  it('reads the architecture and the declared context window', async () => {
+    const path = temporaryGguf(new GgufBuilder()
+      .header(0, 2)
+      .stringPair('general.architecture', 'llama')
+      .uint32Pair('llama.context_length', 131072)
+      .build())
+    const metadata = await readGgufMetadata(path)
+    expect(metadata.architecture).toBe('llama')
+    expect(metadata.contextLength).toBe(131072)
+    expect(metadata.declaredMaxOutputTokens).toBeUndefined()
+  })
+
+  it('falls back to max_position_embeddings when no context_length is declared', async () => {
+    const path = temporaryGguf(new GgufBuilder()
+      .header(0, 2)
+      .stringPair('general.architecture', 'bert')
+      .uint32Pair('bert.max_position_embeddings', 512)
+      .build())
+    const metadata = await readGgufMetadata(path)
+    expect(metadata.contextLength).toBe(512)
+  })
+
+  it('reads an explicitly declared output cap when the header carries one', async () => {
+    const path = temporaryGguf(new GgufBuilder()
+      .header(0, 3)
+      .stringPair('general.architecture', 'llama')
+      .uint32Pair('llama.context_length', 32768)
+      .uint32Pair('llama.max_output_tokens', 4096)
+      .build())
+    const metadata = await readGgufMetadata(path)
+    expect(metadata.declaredMaxOutputTokens).toBe(4096)
+  })
+
+  it('walks past a large tokenizer array without loading the model', async () => {
+    // 5,000 single-byte strings sit between the general keys and the numbers:
+    // the reader must skip them and still answer.
+    const path = temporaryGguf(new GgufBuilder()
+      .header(0, 4)
+      .stringPair('general.architecture', 'qwen2')
+      .bigStringArray('tokenizer.ggml.tokens', 5000)
+      .uint32Pair('qwen2.context_length', 32768)
+      .stringPair('general.name', 'synthetic')
+      .build())
+    const metadata = await readGgufMetadata(path)
+    expect(metadata.architecture).toBe('qwen2')
+    expect(metadata.contextLength).toBe(32768)
+    expect(metadata.name).toBe('synthetic')
+    // The whole file is tiny; the point is that it read a bounded prefix, not the tensors.
+    expect(metadata.consumedBytes).toBeGreaterThan(0)
+  })
+
+  it('returns an empty result for a file that is not GGUF', async () => {
+    const path = temporaryGguf(Buffer.from('not a model at all'))
+    const metadata = await readGgufMetadata(path)
+    expect(metadata.architecture).toBeUndefined()
+    expect(metadata.contextLength).toBeUndefined()
+    expect(metadata.consumedBytes).toBe(0)
+  })
+
+  it('returns an empty result for a missing file rather than throwing', async () => {
+    const metadata = await readGgufMetadata(join(tmpdir(), 'definitely-not-here-9f3a.gguf'))
+    expect(metadata.contextLength).toBeUndefined()
+  })
+})
+
+describe('resolveModelLimits', () => {
+  it('uses a declared context window and derives the output budget from it', () => {
+    const limits = resolveModelLimits({ contextLength: 32768 })
+    expect(limits.contextLength).toBe(32768)
+    expect(limits.contextSource).toBe('declared')
+    expect(limits.maxOutputSource).toBe('derived')
+    expect(limits.maxOutputTokens).toBe(8192) // 32768 / 4, capped at the ceiling
+  })
+
+  it('prefers a declared output cap and marks it declared', () => {
+    const limits = resolveModelLimits({ contextLength: 32768, declaredMaxOutputTokens: 2048 })
+    expect(limits.maxOutputTokens).toBe(2048)
+    expect(limits.maxOutputSource).toBe('declared')
+  })
+
+  it('never lets a declared output exceed the context window', () => {
+    const limits = resolveModelLimits({ contextLength: 1024, declaredMaxOutputTokens: 999999 })
+    expect(limits.maxOutputTokens).toBe(1024)
+  })
+
+  it('falls back and labels both numbers derived when nothing is declared', () => {
+    const limits = resolveModelLimits({})
+    expect(limits.contextLength).toBe(FALLBACK_CONTEXT_LENGTH)
+    expect(limits.contextSource).toBe('derived')
+    expect(limits.maxOutputSource).toBe('derived')
+  })
+
+  it('ignores nonsense values instead of trusting them', () => {
+    const limits = resolveModelLimits({ contextLength: Number.NaN, declaredMaxOutputTokens: -5 })
+    expect(limits.contextLength).toBe(FALLBACK_CONTEXT_LENGTH)
+    expect(limits.maxOutputTokens).toBeGreaterThanOrEqual(MIN_DERIVED_OUTPUT_TOKENS)
+  })
+})
+
+describe('deriveMaxOutputTokens', () => {
+  it('stays inside the documented bounds', () => {
+    expect(deriveMaxOutputTokens(512)).toBe(MIN_DERIVED_OUTPUT_TOKENS)
+    expect(deriveMaxOutputTokens(4_000_000)).toBe(MAX_DERIVED_OUTPUT_TOKENS)
+    expect(deriveMaxOutputTokens(8192)).toBe(2048)
+  })
+})

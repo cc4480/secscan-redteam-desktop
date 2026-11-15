@@ -8,11 +8,11 @@ Systems you own. For web targets, ownership is proven with the SecScan service's
 **My scan was refused as unverified. What do I do?**
 Verify the domain in your SecScan account (or via `start_domain_verification` in chat), then check it appears in `list_verified_domains`. The gate consults the service's list at the moment of the call and fails closed on any error — a transient service problem also reads as a refusal, and the engagement record shows the denial.
 
-**What is the difference between `scan_url` and an engagement?**
-`scan_url` is the SecScan *service's* hosted scan of a verified domain: one instrument, one pass, the service's report. An engagement is the fleet: the runner's native battery, external engines, exploitation, challenger review, and an anchored-grade report, run locally under your scope. They cross-check each other well; they are not the same thing.
+**Is there a hosted scan service behind the app?**
+No. The SecScan engines and the SecLayer suites are embedded in the runner and run on your machine; there is no hosted scan, no service account, and no per-scan credit. An engagement is the fleet: the native battery, the local engines, exploitation, challenger review, and an anchored-grade report, run locally under your scope.
 
 **Does the native battery need a SecScan key?**
-The battery itself is embedded code and runs locally. But authorizing an active web engagement goes through the service's verified-domain list, so in practice the SecScan token is what makes web engagements possible. The Seclayer key is never required — it unlocks only the second-opinion service.
+There are no scanner keys at all. What an active web engagement needs is a verified domain, and verification is in-app: the app issues a token, you publish it as a DNS TXT record at `_secscan-challenge.<domain>`, and the app checks the record itself. The only keys the app holds are model-provider keys.
 
 **What do PROVEN and CONFIRMED actually mean?**
 PROVEN: the flaw was demonstrated end-to-end and the receipt (a replayable proof bundle) passed a negative control. CONFIRMED: independently observed a second time through the challenger path. DEFERRED is "plausible, unproven in this run" and RULED OUT is "tested, cleared". The report orders findings in that sequence and never upgrades a tier silently. Definitions: [Security model](security-model.md#the-proof-standard).
@@ -29,13 +29,13 @@ No. It binds `127.0.0.1` only, requires its token, and the desktop supervisor ne
 ## Keys and connections
 
 **Where are my keys stored, and how do I revoke one?**
-In the app's per-user credential store, encrypted with the OS keychain (`safeStorage`); on Windows the store refuses plaintext storage outright. Revoke at the service that minted the key (SecScan account settings, Seclayer dashboard) — revocation is the kill switch and takes effect at the next call. See [MCP services](mcp-services.md#storage).
+In the app's per-user credential store, encrypted with the OS keychain (`safeStorage`); on Windows the store refuses plaintext storage outright. Revoke at the provider that minted the key — revocation is the kill switch and takes effect at the next call. See [MCP services](mcp-services.md#keys-and-credentials).
 
-**The Seclayer tools don't appear in my session.**
-Almost always: no key seated. With `SECLAYER_API_KEY` unset, the spawned server exits at startup by design and the tools are simply absent — nothing prompts. Seat the key in the welcome/settings MCP step (or the environment) and restart the session. If the tools appear but answer with an authentication error, the key itself is invalid or revoked: re-mint it in the Seclayer dashboard and re-seat it. Check the readiness list in the app — it reports each key's state plainly.
+**Where are the Seclayer tools?**
+Inside engagements. The SecLayer suites are native runner tools (`seclayer_redteam`, `seclayer_bola`, `seclayer_api`, `seclayer_webhook`, `seclayer_dast`, `seclayer_aggressive`), not chat-session tools and not a separate server: the fleet calls them as part of an engagement's battery, with no key and no setup. The one exception is blind SSRF, which reports as not-run — the native suites carry no out-of-band collaborator.
 
-**My SecScan token was rejected.**
-The service's answer is the truth: the token is revoked, expired, or belongs to a different account than the one holding the verified domains. Re-mint at secscan.us → Settings → AI editors and re-seat. The app surfaces one error naming the service and never loops.
+**My domain still shows unverified.**
+The app checks for a TXT record at `_secscan-challenge.<domain>` carrying the exact `secscan-verify-…` token it issued. Publish that record at your DNS provider, give it a few minutes to propagate, and re-run the check in the app. A record on the wrong name, a token from an earlier challenge, or a record your provider wrapped in extra quotes are the usual causes; the check fails closed until the record matches exactly.
 
 **A run died when the model provider hiccuped. Should it have?**
 No — that is exactly what the resilience layer exists for: classified failover, credential-pool rotation, and cooldowns should degrade speed, not kill the run. If a run did die on a transient provider error, capture the engagement record and the classified reason from the feed; that is a defect report worth filing. A *missing* key, by contrast, fails fast and honestly by design.

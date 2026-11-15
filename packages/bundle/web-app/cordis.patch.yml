@@ -277,6 +277,11 @@
     - id: ui-settings-models
       name: '@deepseek-ai/dsh-client-ui-settings-models'
 
+    # Local models: endpoint status, served models, and on-disk model
+    # files over the `localModels` Remote namespace.
+    - id: ui-settings-local-models
+      name: '@deepseek-ai/dsh-client-ui-settings-local-models'
+
     # Plugin management: the sidebar Plugins page installs, enables, disables,
     # and removes the profile's bundles through the `pluginManager` Remote.
     # Without a profile-backed Host it reports itself unavailable.

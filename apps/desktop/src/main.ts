@@ -73,6 +73,7 @@ import { DesktopUpdateDialog, type UpdateDialogOptions } from './update-dialog.t
 import { readDesktopRuntime } from './runtime-tree.ts'
 import { DesktopBrowserGuests } from './browser-guests.ts'
 import { installLlamaShell } from './llama-shell.ts'
+import { installOllamaShell } from './ollama-shell.ts'
 
 let focusPrimaryWindow = (): void => {}
 let stopForRecovery = async (): Promise<void> => {}
@@ -80,6 +81,7 @@ let shuttingDown = false
 let windowsLanguage: string | undefined
 /** The bundled local-model feature installed for this launch; disposed on quit. */
 let llamaShell: ReturnType<typeof installLlamaShell> | undefined
+let ollamaShell: ReturnType<typeof installOllamaShell> | undefined
 /**
  * Whether the backend has reached ready: false until the first ready, back to
  * false when a restart returns it to starting, frozen during shutdown so a
@@ -453,6 +455,17 @@ async function main(): Promise<void> {
   })
   llamaShell.attachRunnerEnvironment(process.env)
   /**
+   * The Ollama feature: it attaches to the operator's own Ollama daemon (there is
+   * no child process to own), registers its IPC service beside the llama shell,
+   * and re-publishes the persisted model choice so a relaunch keeps the fleet
+   * routed to Ollama. Installed once; only the quit path disposes it.
+   */
+  ollamaShell = installOllamaShell({
+    environment: process.env,
+    ipcMain,
+    windows: () => BrowserWindow.getAllWindows().map(window => window.webContents),
+  })
+  /**
    * The Metasploit RPC bridge this application starts when the machine already has a
    * Framework installation.
    *
@@ -747,6 +760,16 @@ async function main(): Promise<void> {
         return serveWebDocument(request, join(resources.dsh, 'node_modules', '@deepseek-ai', 'dsh-web-frontend', 'dist'))
       }
       if (backend.host === undefined || hostUrl === undefined || hostCookie === undefined) {
+        // The Host is still starting. The event channel must not answer 5xx: EventSource
+        // treats a failed load as an error and logs one per reconnect attempt, so a slow
+        // Host boot fills the renderer console. Answer with an SSE stream that carries a
+        // retry hint and closes immediately, which is a normal, quiet reconnect.
+        if (url.pathname === '/plugins/events') {
+          return Promise.resolve(new Response('retry: 3000\n\n', {
+            status: 200,
+            headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-store' },
+          }))
+        }
         return Promise.resolve(new Response(null, { status: 503 }))
       }
       return forwardWebRequest(request, hostUrl, hostCookie)
@@ -976,6 +999,7 @@ async function main(): Promise<void> {
     updates.dispose()
     // The llama-server child must not outlive the application that owns its port.
     void llamaShell?.dispose()
+    void ollamaShell?.dispose()
   })
 
   app.setAboutPanelOptions({
@@ -1016,6 +1040,11 @@ async function main(): Promise<void> {
     {
       label: 'Local models...',
       click: () => { void llamaShell?.openWindow().catch((error: unknown) => { console.error(error) }) },
+    },
+    // Ollama: the operator's own daemon, attached by the Ollama shell (window, IPC).
+    {
+      label: 'Ollama models...',
+      click: () => { void ollamaShell?.openWindow().catch((error: unknown) => { console.error(error) }) },
     },
     ...development ? [
       { type: 'separator' as const },
@@ -1216,8 +1245,6 @@ async function main(): Promise<void> {
           // values the MCP rows compose from, so a dead, rejected, or tools-less
           // server is visible on this surface instead of only in the Host log.
           const servers = await probeMcpServers({
-            secscanToken: process.env.SECSCAN_MCP_TOKEN ?? storedMcpCredentials.values.SECSCAN_MCP_TOKEN,
-            seclayerKey: process.env.SECLAYER_API_KEY ?? storedMcpCredentials.values.SECLAYER_API_KEY,
             runnerEndpoint: state.endpoint,
             runnerToken: process.env.REDTEAM_UI_TOKEN ?? storedMcpCredentials.values.REDTEAM_UI_TOKEN,
             bridgeUrl: process.env.PC_BRIDGE_URL,
@@ -1269,7 +1296,7 @@ async function main(): Promise<void> {
             try {
               const protector = desktopMcpSecretProtector()
               if (await writeStoredMcpCredentials(mcpCredentialPath, protector,
-                { secscan: null, seclayer: null, runner: null, endpoint: null }, true)) {
+                { runner: null, endpoint: null }, true)) {
                 storedMcpCredentials = await readStoredMcpCredentials(mcpCredentialPath, protector)
               }
             } catch (error) {

@@ -199,9 +199,7 @@ const mcp = vi.hoisted(() => {
       values: { ...stored.values }, fingerprints: { ...stored.fingerprints }, exists: stored.exists, declined: stored.declined,
     })),
     write: vi.fn(async (_file: string, _protector: unknown,
-      draft: { secscan: string | null; seclayer: string | null; runner: string | null }, declined = false) => {
-      if (draft.secscan !== null) { stored.values.SECSCAN_MCP_TOKEN = draft.secscan; stored.fingerprints.SECSCAN_MCP_TOKEN = 'ssk_…oken' }
-      if (draft.seclayer !== null) { stored.values.SECLAYER_API_KEY = draft.seclayer; stored.fingerprints.SECLAYER_API_KEY = 'secl…oken' }
+      draft: { runner: string | null; endpoint: string | null }, declined = false) => {
       if (draft.runner !== null) stored.values.REDTEAM_UI_TOKEN = draft.runner
       if (declined) stored.declined = true
       stored.exists = true
@@ -328,32 +326,31 @@ it('starts the Host for welcome onboarding and opens the workspace on skip witho
 
   // A refused value reaches neither the document nor the environment, and starts no Host.
   const hostsBefore = state.startHost.mock.calls.length
-  expect(await state.operations!.saveMcp({ secscan: 'SECSCAN_MCP_TOKEN=ssk_pasted-line', seclayer: '', runner: '', endpoint: '' })).toEqual({ ok: false })
-  expect(await state.operations!.saveMcp({ secscan: '', seclayer: '', runner: '', endpoint: 'http://10.0.0.5:8787/mcp' })).toEqual({ ok: false })
+  expect(await state.operations!.saveMcp({ runner: 'REDTEAM_UI_TOKEN=runner_pasted-line', endpoint: '' })).toEqual({ ok: false })
+  expect(await state.operations!.saveMcp({ runner: '', endpoint: 'http://10.0.0.5:8787/mcp' })).toEqual({ ok: false })
   expect(mcp.write).not.toHaveBeenCalled()
   expect(state.startHost).toHaveBeenCalledTimes(hostsBefore)
-  expect(process.env.SECSCAN_MCP_TOKEN).toBeUndefined()
+  expect(process.env.REDTEAM_UI_TOKEN).toBeUndefined()
 
-  expect(await state.operations!.saveMcp({ secscan: 'ssk_first-run-token', seclayer: '', runner: 'runner-first-run-token', endpoint: '' })).toEqual({ ok: true })
+  expect(await state.operations!.saveMcp({ runner: 'runner-first-run-token', endpoint: '' })).toEqual({ ok: true })
   expect(mcp.write).toHaveBeenCalledExactlyOnceWith(mcpView.storePath, expect.anything(), {
-    secscan: 'ssk_first-run-token', seclayer: null, runner: 'runner-first-run-token', endpoint: null,
+    runner: 'runner-first-run-token', endpoint: null,
   })
   // The stored values are in the environment the replacement Host is constructed with, which is
   // exactly what its MCP rows read while cordis composes the profile.
   expect(state.stopHost).toHaveBeenCalledOnce()
   expect(state.startHost).toHaveBeenCalledTimes(hostsBefore + 1)
   expect(state.hostEnvironments.at(-1)).toBe(process.env)
-  expect(state.hostEnvironments.at(-1)!.SECSCAN_MCP_TOKEN).toBe('ssk_first-run-token')
   expect(state.hostEnvironments.at(-1)!.REDTEAM_UI_TOKEN).toBe('runner-first-run-token')
 
   // Revocation removes the document, and the environment with it, on another restart.
   expect(await state.operations!.clearMcp()).toEqual({ ok: true })
   expect(mcp.clear).toHaveBeenCalledOnce()
   expect(state.startHost).toHaveBeenCalledTimes(hostsBefore + 2)
-  expect(state.hostEnvironments.at(-1)!.SECSCAN_MCP_TOKEN).toBeUndefined()
+  expect(state.hostEnvironments.at(-1)!.REDTEAM_UI_TOKEN).toBeUndefined()
 
   // Leaving the step records the decision so first run does not ask again.
   await state.operations!.finishMcp()
   expect(mcp.write).toHaveBeenLastCalledWith(mcpView.storePath, expect.anything(),
-    { secscan: null, seclayer: null, runner: null, endpoint: null }, true)
+    { runner: null, endpoint: null }, true)
 })

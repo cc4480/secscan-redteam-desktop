@@ -22,19 +22,17 @@ The desktop app (`apps/desktop`) is the installed product: product name "SecScan
 
 ## The harness profile
 
-The fleet exists because a Cordis bundle patch (`packages/redteam/desktop-bundle`) is composed over the base profiles. It inserts seven rows:
+The fleet exists because a Cordis bundle patch (`packages/redteam/desktop-bundle`) is composed over the base profiles. Its fleet-defining rows:
 
 | Row | What it contributes |
 |---|---|
-| `mcp-secscan` | The SecScan service as an MCP client connection (Streamable HTTP) — scans, domain verification, monitors |
-| `mcp-seclayer` | The Seclayer service as a spawned stdio MCP server (`@seclayer/mcp`, version-pinned) — second-opinion scans |
-| `secscan-redteam` | The harness plugin: the authorization gate as a `tools/pre-execute` hook, and the engagement doctrine as a system-prompt section |
-| `mcp-redteam-runner` | The runner console as an MCP client connection — the engagement engine's tools |
+| `secscan-redteam` | The harness plugin: the authorization gate as a `tools/pre-execute` hook, and the engagement doctrine as a system-prompt section. The SecScan engines and domain verification are native to the runner and the app — this row carries no service connection |
+| `mcp-redteam-runner` | The runner console as an MCP client connection — the engagement engine's tools (a documented exception to the standalone rule; see [MCP services](mcp-services.md)) |
 | `agent-team` | The roster, durable peer mailbox, and shared task board (the DAG) |
 | `tool-agent-team` | The model-facing team tools: `spawn_teammate`, `send_message`, `list_agents`, `wait_agent`, `interrupt_agent`, `team_task_*` |
 | `ui-agent-team` | The web UI for the roster and the task board |
 
-One further row in the same patch, `mcp-alterego`, connects AlterEgo — the operator's own PC bridge — as a fourth MCP client: Streamable HTTP to the bridge's local endpoint (`http://127.0.0.1:8765/mcp` by default), offering the bridge's live registry of 109 tools for the operator's own Windows PC. AlterEgo is a separate open-source project ([cc4480/alterego](https://github.com/cc4480/alterego)); its pairing and security posture are covered in [MCP services](mcp-services.md).
+One further row in the same patch, `mcp-alterego`, connects AlterEgo — the operator's own PC bridge — as a second MCP client: Streamable HTTP to the bridge's endpoint (`http://127.0.0.1:8765/mcp` by default; routinely a tailnet address, because the bridge runs on the operator's PC, a different machine), offering the bridge's live registry of 109 tools for that PC. AlterEgo is a separate open-source project ([cc4480/alterego](https://github.com/cc4480/alterego)); its pairing and security posture are covered in [MCP services](mcp-services.md).
 
 The same patch disables the harness's direct-subagent and workflow delegation rows on purpose: all delegation flows through the team tools, so every worker is on the roster, on the board, and in the audit trail. A profile's own patch layer composes after the bundle, so an operator can still override or disable any row by ID.
 

@@ -1,0 +1,2114 @@
+{
+  "checked": 78,
+  "clean": 10,
+  "problems": [
+    {
+      "file": "scripts/benchmark-next-package-dependency.ts",
+      "family": 6,
+      "lost": 6,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Benchmark which additional Host package most reduces npm peer resolution. */",
+        "benchmarkNpmResolution,",
+        "buildRegistryIndex,",
+        "parsePositiveIntegerOption,",
+        "publishWorkspaceRange,",
+        "type RegistryIndex,"
+      ]
+    },
+    {
+      "file": "scripts/benchmark-npm-resolution.ts",
+      "family": 7,
+      "lost": 1,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Benchmark npm's dependency-tree resolution against an all-local registry. */"
+      ]
+    },
+    {
+      "file": "scripts/build-exe-for-python-sdk.ts",
+      "family": 9,
+      "lost": 65,
+      "behaviourDiff": {
+        "return": 1,
+        "await": 3,
+        "call": 10
+      },
+      "lostSample": [
+        "private readonly outDir = resolve(root, OUT_DIR)",
+        "await this.runPnpm('runtime dependency closure', ['run', 'verify-runtime-closure'])",
+        "await this.runPnpm('build', ['run', 'build'])",
+        "if (this.staging === root || root.startsWith(this.staging + sep)) {",
+        "throw new Error(`build-exe-for-python-sdk: refusing to clear staging dir ${this.staging}: it contains the repo root.`)",
+        "if (this.cli.dryRun) console.log(`build-exe-for-python-sdk: [dry-run] rm -rf ${this.staging}`)",
+        "else await rm(this.staging, { recursive: true, force: true })",
+        "await this.runPnpm('deploy', [",
+        "this.staging,",
+        "await this.restoreLegacyHoists()",
+        "await this.materializeStagedLinks()",
+        "if (this.cli.dryRun) {"
+      ]
+    },
+    {
+      "file": "scripts/check-workspace-constraints.spec.ts",
+      "family": 4,
+      "lost": 1,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Workspace dependency ranges and package publication constraints. */"
+      ]
+    },
+    {
+      "file": "scripts/check-workspace-constraints.ts",
+      "family": 9,
+      "lost": 3,
+      "behaviourDiff": {
+        "assign": -1
+      },
+      "lostSample": [
+        "const standardReleaseMemberDirectory = /^(?:packages\\/(?!experimental\\/)[^/]+\\/[^/]+|apps\\/(?!desktop(?:-host)?$)[^/]+|vendor\\/[^/]+)$/",
+        "const nativeWorkspaceManifest = readJson(join(root, 'native/system/package.json'))",
+        "const nativeVersion = nativeWorkspaceManifest.version"
+      ]
+    },
+    {
+      "file": "scripts/ci-workflow.spec.ts",
+      "family": 11,
+      "lost": 29,
+      "behaviourDiff": {
+        "if": 1,
+        "return": 1,
+        "throw": 1,
+        "call": 9,
+        "assign": 3
+      },
+      "lostSample": [
+        "const runnerPrivatePnpmDestination = /^\\$\\{\\{ runner\\.temp \\}\\}\\/setup-pnpm-\\$\\{\\{ github\\.run_id \\}\\}-\\$\\{\\{ github\\.run_attempt \\}\\}$/",
+        "const install = steps.find((step): step is Record<string, unknown> & { run: string } => (",
+        "expect(install, `${jobName} must define the filesystem-branched install`).toBeDefined()",
+        "expect(install!.run).toContain(\"$fs -eq 'ReFS'\")",
+        "expect(install!.run).toContain('--package-import-method=clone')",
+        "expect(install!.run).toContain('corepack pnpm install')",
+        "const installLines = install!.run.split('\\n').map(line => line.trim())",
+        "expect(install!.run).not.toContain('$cloneFlag')",
+        "const serialStore = serialSteps.find((step): step is Record<string, unknown> & { run: string } => (",
+        "expect(serialStore).toBeDefined()",
+        "expect(serialStore!.run).toContain('[IO.Path]::GetPathRoot($env:GITHUB_WORKSPACE)')",
+        "expect(serialStore!.run).toContain(\"'.pnpm-store'\")"
+      ]
+    },
+    {
+      "file": "scripts/client-build-environment.client.spec.ts",
+      "family": 7,
+      "lost": 60,
+      "behaviourDiff": {
+        "case": 5,
+        "return": 1,
+        "await": 1,
+        "call": 2,
+        "assign": 8
+      },
+      "lostSample": [
+        "clientBuildEnvironmentDefines,",
+        "readClientBuildRecord,",
+        "writeClientBuildRecord,",
+        "for (const fixtureRoot of roots.splice(0)) rmSync(fixtureRoot, { recursive: true, force: true })",
+        "const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-client-build-'))",
+        "roots.push(fixtureRoot)",
+        "write(join(fixtureRoot, 'apps/web/dist/index.html'), '<main></main>')",
+        "write(join(fixtureRoot, 'packages/client/example/lib/client.js'), 'module.exports = {}\\n')",
+        "writeClientBuildRecord(fixtureRoot, environment)",
+        "return fixtureRoot",
+        "function git(root: string, args: readonly string[]): string {",
+        "cwd: root,"
+      ]
+    },
+    {
+      "file": "scripts/client-bundle-purity.spec.ts",
+      "family": 9,
+      "lost": 0,
+      "behaviourDiff": {
+        "case": 2,
+        "call": 1
+      },
+      "lostSample": []
+    },
+    {
+      "file": "scripts/cordis-core-api.ts",
+      "family": 7,
+      "lost": 1,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Generate detailed Cordis core API pages from pinned vendor declarations. */"
+      ]
+    },
+    {
+      "file": "scripts/coverage-partitions.spec.ts",
+      "family": 8,
+      "lost": 2,
+      "behaviourDiff": {
+        "call": 1,
+        "assign": 1
+      },
+      "lostSample": [
+        "assignWeightedPartitions,",
+        "async function writeVitestCache(root: string, entries: Array<[string, { duration: number }]>): Promise<void> {"
+      ]
+    },
+    {
+      "file": "scripts/coverage-partitions.ts",
+      "family": 7,
+      "lost": 1,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Coordinate single-worker Vitest coverage partitions and one merged report. */"
+      ]
+    },
+    {
+      "file": "scripts/dev-web.ts",
+      "family": 9,
+      "lost": 2,
+      "behaviourDiff": {
+        "await": 1,
+        "call": 2
+      },
+      "lostSample": [
+        "CLIENT_BUILD_PROFILE_SELECTOR,",
+        "if (isMain) {"
+      ]
+    },
+    {
+      "file": "scripts/doc-standard.spec.ts",
+      "family": 5,
+      "lost": 0,
+      "behaviourDiff": {
+        "call": 4,
+        "assign": 4
+      },
+      "lostSample": []
+    },
+    {
+      "file": "scripts/gen-client-catalog.ts",
+      "family": 7,
+      "lost": 2,
+      "behaviourDiff": {},
+      "lostSample": [
+        "declaredTypes,",
+        "referencedTypeNames,"
+      ]
+    },
+    {
+      "file": "scripts/gen-config-catalog.ts",
+      "family": 10,
+      "lost": 1,
+      "behaviourDiff": {},
+      "lostSample": [
+        "function findExportedTypeDecl(world: World, ctx: FileCtx, name: string, seen = new Set<string>()): { decl: TypeDecl; ctx: FileCtx } | null {"
+      ]
+    },
+    {
+      "file": "scripts/gen-cordis-catalog.ts",
+      "family": 13,
+      "lost": 1,
+      "behaviourDiff": {
+        "assign": 3
+      },
+      "lostSample": [
+        "export { REGION_BEGIN, REGION_END }"
+      ]
+    },
+    {
+      "file": "scripts/gen-doc-graphs.ts",
+      "family": 19,
+      "lost": 13,
+      "behaviourDiff": {
+        "return": 1,
+        "call": 2,
+        "assign": 5
+      },
+      "lostSample": [
+        "collectPackageGraph,",
+        "escapeMermaidLabel as escLabel,",
+        "graphNodeId as nodeId,",
+        "type PackageGraphNode,",
+        "sourceFile: ts.SourceFile",
+        "private readonly packageSourceFiles: ReadonlySet<ts.SourceFile>",
+        "this.packageSourceFiles = new Set(sources.map(source => source.sourceFile))",
+        "/** Index resolved function calls in the given files for narrow argument-flow recovery. */",
+        "private buildCallSiteIndex(files: Iterable<ts.SourceFile>): CallSiteIndex {",
+        "private callSitesFor(owner: ts.FunctionDeclaration): ts.CallExpression[] {",
+        "this.globalCallSites = this.buildCallSiteIndex(this.packageSourceFiles)",
+        "index = this.buildCallSiteIndex([file])"
+      ]
+    },
+    {
+      "file": "scripts/gen-scoped-events.ts",
+      "family": 7,
+      "lost": 24,
+      "behaviourDiff": {
+        "call": 1
+      },
+      "lostSample": [
+        "const root = resolve(import.meta.dirname, '..')",
+        "const candidates = this.subjectCandidates(member)",
+        ".filter(candidate => this.typesEquivalent(candidate.type, keyType))",
+        "`${where} has multiple routing-key candidates for ${this.typeText(keyType)}: `",
+        "+ candidates.map(candidate => `${candidate.path}: ${this.typeText(candidate.type)}`).join(', '),",
+        "const keyLabel = this.typeText(keyType)",
+        "return this.checker.isTypeAssignableTo(this.normalizedType(contract.baseType), this.normalizedType(scopedBase))",
+        "`${where} has no matching scopeTarget(base, key) call for carrier base ${this.typeText(scopedBase)}`,",
+        "if (!keyTypes.some(type => this.typesEquivalent(type, match.keyType))) keyTypes.push(match.keyType)",
+        "`${where} carrier base ${this.typeText(scopedBase)} has inconsistent routing-key types: `",
+        "+ matches.map(match => `${this.typeText(match.keyType)} at ${match.source}`).join(', '),",
+        "private subjectCandidates(member: ts.MethodSignature): SubjectCandidate[] {"
+      ]
+    },
+    {
+      "file": "scripts/gen-third-party-notices.spec.ts",
+      "family": 9,
+      "lost": 5,
+      "behaviourDiff": {
+        "call": 2,
+        "assign": 2
+      },
+      "lostSample": [
+        "manifestPatterns,",
+        "parsePyprojectRequirements,",
+        "parseVendoredRows,",
+        "render,",
+        "virtualManifest,"
+      ]
+    },
+    {
+      "file": "scripts/gen-third-party-notices.ts",
+      "family": 10,
+      "lost": 1,
+      "behaviourDiff": {
+        "call": 1
+      },
+      "lostSample": [
+        "function installedManifest(name: string, manifests: Map<string, Manifest>, expectedVersion?: string): VirtualManifest | undefined {"
+      ]
+    },
+    {
+      "file": "scripts/gen-tool-catalog.ts",
+      "family": 10,
+      "lost": 1,
+      "behaviourDiff": {
+        "assign": 3
+      },
+      "lostSample": [
+        "const TOOL_PACKAGES: ToolPackage[] = ["
+      ]
+    },
+    {
+      "file": "scripts/gen-translation-brief.ts",
+      "family": 5,
+      "lost": 3,
+      "behaviourDiff": {
+        "call": 3,
+        "assign": -1
+      },
+      "lostSample": [
+        "pairAnchorOfArgument,",
+        "TRANSLATION_SCOPE_GLOB_EXCLUDES,",
+        "const argv = process.argv.slice(2)"
+      ]
+    },
+    {
+      "file": "scripts/install-lefthook.spec.ts",
+      "family": 9,
+      "lost": 5,
+      "behaviourDiff": {
+        "case": 2,
+        "call": 7,
+        "assign": 6
+      },
+      "lostSample": [
+        "chmodSync,",
+        "mkdirSync,",
+        "mkdtempSync,",
+        "writeFileSync,",
+        "describe('worktree-local Lefthook installer', { timeout: 90_000 }, () => {"
+      ]
+    },
+    {
+      "file": "scripts/loader-volatile-update.spec.ts",
+      "family": 6,
+      "lost": 4,
+      "behaviourDiff": {
+        "if": 2,
+        "throw": 2,
+        "call": 4,
+        "assign": 1
+      },
+      "lostSample": [
+        "/** Loader commits volatile config values into running fibers without remounting; ordinary changes keep the update lifecycle. */",
+        "function context() {",
+        "const fiber = ctx.loader.resolve(id).fiber!",
+        "await fiber.entry!.update({ config })"
+      ]
+    },
+    {
+      "file": "scripts/locale-dictionary-parity.spec.ts",
+      "family": 4,
+      "lost": 0,
+      "behaviourDiff": {
+        "call": 1
+      },
+      "lostSample": []
+    },
+    {
+      "file": "scripts/migrate-sessions-to-v4.spec.ts",
+      "family": 6,
+      "lost": 1,
+      "behaviourDiff": {
+        "case": 1,
+        "call": 4,
+        "assign": 3
+      },
+      "lostSample": [
+        "/** The contributor command uses real persistence on private temporary corpora. */"
+      ]
+    },
+    {
+      "file": "scripts/migrate-sessions-to-v4.ts",
+      "family": 7,
+      "lost": 20,
+      "behaviourDiff": {
+        "return": 1,
+        "await": 1,
+        "call": 10,
+        "assign": 5
+      },
+      "lostSample": [
+        "write(`Session migration to V4 started ${startedAt}`)",
+        "write(`Root: ${root}`)",
+        "write(`Session jobs: ${jobs}`)",
+        "write(`Node: ${process.version}; platform: ${process.platform}/${process.arch}`)",
+        "write(`Git HEAD: ${checkoutCommit}`)",
+        "write(`Discovered ${candidates.length} Session directories or invalid layout entries.`)",
+        "write(`${label} ${retry ? 'RETRY' : 'START'} ${source === undefined ? 'inspect entry' : `${source.filename} (V${source.version}, ${source.bytes} bytes)`}`)",
+        "write(`${label} ${status}; completed=${completed}/${candidates.length}`)",
+        "recordOutcome('unknown', 'skipped')",
+        "recordOutcome(source.version, source.version === 4 ? 'alreadyV4' : 'converted')",
+        "write(`${label} DEFERRED: ${error.message}; retry once after initial jobs finish`)",
+        "appendFileSync(log, `${inspect(error, { depth: null, colors: false })}\\n`)"
+      ]
+    },
+    {
+      "file": "scripts/oxlint-contract.spec.ts",
+      "family": 6,
+      "lost": 0,
+      "behaviourDiff": {
+        "call": 3,
+        "assign": 3
+      },
+      "lostSample": []
+    },
+    {
+      "file": "scripts/package-invariants.spec.ts",
+      "family": 5,
+      "lost": 2,
+      "behaviourDiff": {
+        "case": 1,
+        "call": 2,
+        "assign": 2
+      },
+      "lostSample": [
+        "collectPackageInvariantViolations,",
+        "packageInvariantOwners,"
+      ]
+    },
+    {
+      "file": "scripts/package-invariants.ts",
+      "family": 7,
+      "lost": 1,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Discover every package under the repository package tree. */"
+      ]
+    },
+    {
+      "file": "scripts/persistence-changes.spec.ts",
+      "family": 10,
+      "lost": 9,
+      "behaviourDiff": {
+        "if": 1,
+        "return": 1,
+        "throw": 1,
+        "call": 3,
+        "assign": 1,
+        "optional-chain": 3
+      },
+      "lostSample": [
+        "/** Current-tree persistence history rejects uncovered and incorrectly acknowledged type changes. */",
+        "parseHistoricalPersistenceSnapshot,",
+        "parsePersistenceSnapshot,",
+        "validatePersistenceHistory,",
+        "const node = nodes[index]!",
+        "if (node.kind !== 'object') throw new Error('header fixture requires an object')",
+        "const node = nodes[0]!",
+        "if (node.kind !== 'object') throw new Error('event fixture requires an object')",
+        "const type = node.properties.find(item => item.name === 'type')!.type"
+      ]
+    },
+    {
+      "file": "scripts/persistence-changes.ts",
+      "family": 8,
+      "lost": 1,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Verify and acknowledge persistence type changes from current-tree schema history. */"
+      ]
+    },
+    {
+      "file": "scripts/persistence-formats.spec.ts",
+      "family": 5,
+      "lost": 1,
+      "behaviourDiff": {
+        "call": 1,
+        "assign": 1
+      },
+      "lostSample": [
+        "/** Format reference coverage follows the writer version and retains complete historical schemas. */"
+      ]
+    },
+    {
+      "file": "scripts/persistence-releases.spec.ts",
+      "family": 4,
+      "lost": 1,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Offline release archives preserve historical schemas and reject incomplete or inconsistent transitions. */"
+      ]
+    },
+    {
+      "file": "scripts/persistence-schema.spec.ts",
+      "family": 6,
+      "lost": 0,
+      "behaviourDiff": {
+        "call": 1,
+        "assign": 1
+      },
+      "lostSample": []
+    },
+    {
+      "file": "scripts/persistence-schema.ts",
+      "family": 6,
+      "lost": 20,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Extract complete persistent Session record types from one source-only compiler program. */",
+        "envelopes.push(extraction.envelope(node, event.name))",
+        "return extraction.inventory(roots)",
+        "private readonly declarationMetadata = new Map<number, DeclarationMetadata>()",
+        "envelope(id: number, event: string): number {",
+        "const node = this.nodes[id] as SchemaNode",
+        "if (node.kind === 'union') return this.union(node.types.map(type => this.envelope(type, event)))",
+        "const literal = tag === undefined ? undefined : canonicalizeSchema(this.nodes, tag.type).nodes[0]",
+        "const string = this.nodes.length",
+        "this.nodes.push({ kind: 'primitive', type: 'string' })",
+        "this.nodes.push(envelope)",
+        "return this.nodes.length - 1"
+      ]
+    },
+    {
+      "file": "scripts/project-doc-site.spec.ts",
+      "family": 11,
+      "lost": 3,
+      "behaviourDiff": {
+        "case": 1
+      },
+      "lostSample": [
+        "/** Tests for the documentation website projection adapter. */",
+        "addProjectionFrontmatter, emitRawMarkdownPages, llmsTxt, projectedPageContent, publishableImage,",
+        "rawMarkdownFiles, rawMarkdownPageContent, rawMarkdownRoute, resolveRepositoryRef, rewriteMarkdown,"
+      ]
+    },
+    {
+      "file": "scripts/project-doc-site.ts",
+      "family": 9,
+      "lost": 1,
+      "behaviourDiff": {},
+      "lostSample": [
+        "copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync,"
+      ]
+    },
+    {
+      "file": "scripts/publish-npm-baseline.ts",
+      "family": 10,
+      "lost": 9,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Build, publish, and verify one commit-addressed npm workspace baseline. */",
+        "existsSync,",
+        "mkdirSync,",
+        "mkdtempSync,",
+        "readFileSync,",
+        "realpathSync,",
+        "readdirSync,",
+        "rmSync,",
+        "writeFileSync,"
+      ]
+    },
+    {
+      "file": "scripts/release/bump.ts",
+      "family": 5,
+      "lost": 12,
+      "behaviourDiff": {
+        "call": 2,
+        "assign": -1
+      },
+      "lostSample": [
+        "options: {",
+        "family: { type: 'string' },",
+        "prerelease: { type: 'string' },",
+        "'dry-run': { type: 'boolean', default: false },",
+        "},",
+        "if (values.family === undefined) throw new Error('usage: bump.ts --family <dsh|vendor> [version]')",
+        "const family = releaseFamily(values.family)",
+        "if (values.prerelease !== undefined) {",
+        "if (values.prerelease !== undefined && !/^[0-9A-Za-z.-]+$/.test(values.prerelease)) {",
+        "throw new Error(`--prerelease must be a semver prerelease identifier, got ${values.prerelease}`)",
+        "planned = planPerPackage(family, members, values.prerelease)",
+        "const dryRun = values['dry-run']"
+      ]
+    },
+    {
+      "file": "scripts/release/families.spec.ts",
+      "family": 7,
+      "lost": 11,
+      "behaviourDiff": {
+        "case": 1,
+        "return": 1,
+        "call": -7,
+        "assign": 4
+      },
+      "lostSample": [
+        "/** Release family discovery, publish order, tag naming, and the bump judgements. */",
+        "const root = mkdtempSync(join(tmpdir(), 'dsh-release-build-'))",
+        "const root = mkdtempSync(join(tmpdir(), 'dsh-release-private-'))",
+        "roots.push(root)",
+        "const root = mkdtempSync(join(tmpdir(), 'dsh-release-experimental-'))",
+        "roots.push(root)",
+        "const root = mkdtempSync(join(tmpdir(), 'dsh-release-version-'))",
+        "roots.push(root)",
+        "const root = mkdtempSync(join(tmpdir(), 'dsh-release-prerelease-'))",
+        "roots.push(root)",
+        "const members = [member('apps/cli', '@deepseek-ai/dsh'), { ...member('apps/web', '@deepseek-ai/dsh-web-frontend'), version: '0.0.2' }]"
+      ]
+    },
+    {
+      "file": "scripts/release/families.ts",
+      "family": 5,
+      "lost": 7,
+      "behaviourDiff": {
+        "return": 2,
+        "call": 5
+      },
+      "lostSample": [
+        "const manifestPaths = globSync([...this.patterns], { cwd: root }).sort()",
+        "if (manifestPaths.length === 0) throw new Error(`release family ${this.id} matched no manifests`)",
+        "if (seen.has(name)) throw new Error(`${name} appears twice in release family ${this.id}`)",
+        "this.orderEdges(member, byName, sections)",
+        "throw new Error(`dependency cycle in release family ${this.id}: ${[...path, member.name].join(' -> ')}`)",
+        "`release family ${this.id}: no publish order honours ${member.name} -> ${dependency.name};`",
+        "private orderEdges("
+      ]
+    },
+    {
+      "file": "scripts/render-persistence-schema.ts",
+      "family": 5,
+      "lost": 1,
+      "behaviourDiff": {},
+      "lostSample": [
+        "type SchemaNode,"
+      ]
+    },
+    {
+      "file": "scripts/rescope-vendor.ts",
+      "family": 12,
+      "lost": 11,
+      "behaviourDiff": {
+        "if": 1,
+        "else": 1,
+        "call": 5,
+        "assign": 3
+      },
+      "lostSample": [
+        "{ file: 'scripts/check-workspace-constraints.ts', text: '?.[\\'@deepseek-ai/cordis\\']', count: 2 },",
+        "const EXACT_EDITS: readonly ExactEdit[] = [",
+        "file: 'scripts/check-workspace-constraints.ts',",
+        "file: 'scripts/publish-npm-baseline.ts',",
+        "file: 'scripts/gen-third-party-notices.ts',",
+        "file: 'scripts/gen-third-party-notices.ts',",
+        "file: 'scripts/gen-third-party-notices.ts',",
+        "file: 'scripts/gen-third-party-notices.ts',",
+        "if (file === 'scripts/rescope-vendor.ts') return true // the mapping itself",
+        "const files = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' })",
+        "if (process.argv[1] !== undefined && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {"
+      ]
+    },
+    {
+      "file": "scripts/run-gates.spec.ts",
+      "family": 12,
+      "lost": 27,
+      "behaviourDiff": {
+        "call": 4,
+        "assign": 4,
+        "nullish": 2
+      },
+      "lostSample": [
+        "cliGateOptions,",
+        "ciWorkerEnvironment,",
+        "collectDescendants,",
+        "defaultConcurrency,",
+        "gatesForMode,",
+        "parsePidPpidLines,",
+        "taskkillArgs,",
+        "return pid!",
+        "const execute = vi.fn(async (item: Gate) => resultFor(item))",
+        "const results = await runGates(ready, 8, async (subject) => {",
+        "return resultFor(subject, subject.id === 'doc-graphs' ? 'failed' : 'passed')",
+        "const execute = vi.fn(async (subject: Gate) => resultFor(subject))"
+      ]
+    },
+    {
+      "file": "scripts/run-gates.ts",
+      "family": 14,
+      "lost": 1,
+      "behaviourDiff": {
+        "call": 3,
+        "assign": 1
+      },
+      "lostSample": [
+        "/** Active Node major used to select version-specific compatibility checks. */"
+      ]
+    },
+    {
+      "file": "scripts/slot-walk.ts",
+      "family": 7,
+      "lost": 7,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** TSX must parse as TSX; a `.ts` file with JSX-looking generics must not. */",
+        "/** 1-based line of a node's first character. */",
+        "/** Declaration text including leading JSDoc, with container indentation removed. */",
+        "/** One member's JSDoc comment text, '' when the member has none. */",
+        "/** Strip the shared leading indentation of a multi-line source slice. */",
+        "/** Collapse a type text to one line so catalog rows stay one row. */",
+        "/** A property name's text, quotes removed. */"
+      ]
+    },
+    {
+      "file": "scripts/test-invariants.spec.ts",
+      "family": 6,
+      "lost": 0,
+      "behaviourDiff": {
+        "case": 3,
+        "call": 3,
+        "assign": 3
+      },
+      "lostSample": []
+    },
+    {
+      "file": "scripts/translation-brief.spec.ts",
+      "family": 7,
+      "lost": 7,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Regression tests for the minimal-update briefing assembly. */",
+        "computeMechanicalUpdate,",
+        "firstOccurrenceContext,",
+        "parseTerminologyRows,",
+        "relevantTerminologyRows,",
+        "renderTranslationBrief,",
+        "termOffsets,"
+      ]
+    },
+    {
+      "file": "scripts/translation-links.ts",
+      "family": 4,
+      "lost": 1,
+      "behaviourDiff": {},
+      "lostSample": [
+        "splitMarkdownUrlTarget,"
+      ]
+    },
+    {
+      "file": "scripts/translation-pairing-merge.spec.ts",
+      "family": 6,
+      "lost": 9,
+      "behaviourDiff": {
+        "case": 1,
+        "call": 4,
+        "assign": 3
+      },
+      "lostSample": [
+        "/** Integration coverage for automatic and explicit pairing-record conflict resolution. */",
+        "chmodSync,",
+        "mkdtempSync,",
+        "mkdirSync,",
+        "readFileSync,",
+        "rmSync,",
+        "symlinkSync,",
+        "writeFileSync,",
+        "describe('translation pairing merge composition', { timeout: 90_000 }, () => {"
+      ]
+    },
+    {
+      "file": "scripts/translation-pairing-merge.ts",
+      "family": 5,
+      "lost": 3,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Fail-closed composition of bilingual pairing records during Git merges. */",
+        "gitMergeInputPaths,",
+        "storeGitBlob,"
+      ]
+    },
+    {
+      "file": "scripts/translation-pairing.spec.ts",
+      "family": 7,
+      "lost": 5,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Regression tests for bilingual snapshots, corpus scope, and structure. */",
+        "blobHash,",
+        "pairAnchorOfArgument,",
+        "parseTranslationPairingCliArgs,",
+        "partitionGeneratedRegions,"
+      ]
+    },
+    {
+      "file": "scripts/verify-client-packages.spec.ts",
+      "family": 6,
+      "lost": 8,
+      "behaviourDiff": {
+        "call": 1,
+        "assign": -1
+      },
+      "lostSample": [
+        "/** Tests for client package modes and module requests. */",
+        "collectClientPackageViolations,",
+        "fixClientPackageManifests,",
+        "readClientDeclarations,",
+        "type ClientDeclaration,",
+        "type ClientPackage,",
+        "type ClientPackageFacts,",
+        "afterEach(() => {"
+      ]
+    },
+    {
+      "file": "scripts/verify-client-packages.ts",
+      "family": 9,
+      "lost": 2,
+      "behaviourDiff": {},
+      "lostSample": [
+        "async function main(): Promise<void> {",
+        "await main()"
+      ]
+    },
+    {
+      "file": "scripts/verify-client-route-resolution.ts",
+      "family": 5,
+      "lost": 5,
+      "behaviourDiff": {},
+      "lostSample": [
+        "const root = resolve(import.meta.dirname, '..')",
+        "export function browserFaceSources(projectRoot: string = root): string[] {",
+        "const path = resolve(root, file)",
+        "function main(): void {",
+        "if (import.meta.filename === resolve(process.argv[1] ?? '')) main()"
+      ]
+    },
+    {
+      "file": "scripts/verify-client-ui-i18n.ts",
+      "family": 6,
+      "lost": 13,
+      "behaviourDiff": {
+        "return": 2,
+        "call": 2,
+        "assign": -4
+      },
+      "lostSample": [
+        "const root = resolve(import.meta.dirname, '..')",
+        "const enclosingFunctionName = (node: ts.Node): string | undefined => {",
+        "const hasExplicitStringReturn = (node: ts.Node): boolean => {",
+        "globSync('packages/*/*/src/client/**/*.tsx', { cwd: root })",
+        "...globSync('packages/client/*/src/**/*.tsx', { cwd: root }),",
+        "...globSync('packages/client/ui-*/src/**/*.{ts,tsx}', { cwd: root }),",
+        "globSync(`${clientRoot}/**/*.{ts,tsx}`, { cwd: root })),",
+        "...globSync('apps/web/src/**/*.{ts,tsx}', { cwd: root }),",
+        "...globSync('apps/desktop/src/{main,update-coordinator}.{ts,tsx}', { cwd: root }),",
+        "...globSync('apps/desktop/renderer/*.js', { cwd: root }),",
+        "function main(): void {",
+        "findUiI18nViolations(file, readFileSync(resolve(root, file), 'utf8')))"
+      ]
+    },
+    {
+      "file": "scripts/verify-cordis-config.ts",
+      "family": 9,
+      "lost": 1,
+      "behaviourDiff": {
+        "call": 2
+      },
+      "lostSample": [
+        "if (import.meta.main) {"
+      ]
+    },
+    {
+      "file": "scripts/verify-default-product-isolation.spec.ts",
+      "family": 6,
+      "lost": 1,
+      "behaviourDiff": {
+        "case": 1,
+        "call": 4,
+        "assign": 3
+      },
+      "lostSample": [
+        "/** Source, installation, and composition regressions for default-product isolation. */"
+      ]
+    },
+    {
+      "file": "scripts/verify-default-product-isolation.ts",
+      "family": 6,
+      "lost": 13,
+      "behaviourDiff": {
+        "else": -1,
+        "return": 3,
+        "call": 7,
+        "assign": 4
+      },
+      "lostSample": [
+        "collectRuntimeLocalSourceSpecifiers,",
+        "collectRuntimeSourceSpecifiers,",
+        "const display = (path: string): string => relative(root, path).replaceAll('\\\\', '/')",
+        "const manifest = JSON.parse(readFileSync(resolve(root, path), 'utf8')) as Manifest",
+        "const html = resolve(root, 'apps/web/index.html')",
+        "if (existsSync(html)) {",
+        "if (entries.length === 0) failures.push('apps/web/index.html: missing default module entry')",
+        "scanSource(`${html}.inline-${String(index)}.js`, true, entry.textContent)",
+        "failures.push(`apps/web/index.html: external default module entry cannot be checked: ${src}`)",
+        "scanSource(resolve(root, 'apps/web', src.replace(/^\\//, '')), true)",
+        "} else failures.push('missing default Web entry apps/web/index.html')",
+        "/** Read the literal package lists that define installation-owned profile defaults and the optional bundles it ships. */"
+      ]
+    },
+    {
+      "file": "scripts/verify-export-jsdoc.ts",
+      "family": 6,
+      "lost": 1,
+      "behaviourDiff": {
+        "return": 1
+      },
+      "lostSample": [
+        "/** Resolve the declarations reachable through packages that do not export src/*. */"
+      ]
+    },
+    {
+      "file": "scripts/verify-no-unknown-casts.spec.ts",
+      "family": 5,
+      "lost": 0,
+      "behaviourDiff": {
+        "case": 1
+      },
+      "lostSample": []
+    },
+    {
+      "file": "scripts/verify-package-dependencies.spec.ts",
+      "family": 9,
+      "lost": 3,
+      "behaviourDiff": {
+        "call": 9,
+        "assign": 3
+      },
+      "lostSample": [
+        "PACKAGE_DEPENDENCY_POLICY,",
+        "type PackageDependencyPolicy,",
+        "afterEach(() => {"
+      ]
+    },
+    {
+      "file": "scripts/verify-package-dependencies.ts",
+      "family": 12,
+      "lost": 5,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Verify and repair npm dependency sections from published Client and Host faces. */",
+        "collectRuntimeLocalSourceSpecifiers,",
+        "collectRuntimeSourcePackageUses,",
+        "collectSourcePackageUses,",
+        "function generatedHostSources(root: string, packages: readonly WorkspacePackageManifest[]): ReadonlyMap<string, string> {"
+      ]
+    },
+    {
+      "file": "scripts/verify-package-meta.spec.ts",
+      "family": 8,
+      "lost": 2,
+      "behaviourDiff": {
+        "case": 1,
+        "call": 2
+      },
+      "lostSample": [
+        "/** Plugin metadata checks use private source-only packages and real resource exports. */",
+        "dir = join(root, 'packages', 'another', 'second')"
+      ]
+    },
+    {
+      "file": "scripts/verify-package-readme-model-experience.ts",
+      "family": 12,
+      "lost": 76,
+      "behaviourDiff": {
+        "if": -1,
+        "return": 34,
+        "call": 15,
+        "assign": -22
+      },
+      "lostSample": [
+        "let structuredCount = 0",
+        "let modelContextEntryCount = 0",
+        "let omittedSectionCount = 0",
+        "let explainedNoneCount = 0",
+        "let indirectCount = 0",
+        "let verbatimBlockCount = 0",
+        "let systemPromptEntryCount = 0",
+        "let toolSchemaEntryCount = 0",
+        "let kvCacheEffectCount = 0",
+        "continue",
+        "omittedSectionCount += 1",
+        "continue"
+      ]
+    },
+    {
+      "file": "scripts/verify-translation-pairing.ts",
+      "family": 4,
+      "lost": 8,
+      "behaviourDiff": {
+        "else": 1,
+        "return": 2,
+        "call": 7
+      },
+      "lostSample": [
+        "gitBlobHash,",
+        "gitIndexPaths,",
+        "readGitIndexBlob,",
+        "storeGitBlob,",
+        "renderTranslationPairingRecord,",
+        "let request: ReturnType<typeof parseTranslationPairingCliArgs>",
+        "request = parseTranslationPairingCliArgs(process.argv.slice(2))",
+        "if (writeMode) {"
+      ]
+    },
+    {
+      "file": "scripts/verify-type-equiv.ts",
+      "family": 8,
+      "lost": 9,
+      "behaviourDiff": {
+        "call": 2
+      },
+      "lostSample": [
+        "const root = resolve(import.meta.dirname, '..')",
+        "for (const fence of markdownFences(readFileSync(resolve(root, docRel), 'utf8'))) {",
+        "const abs = resolve(root, sourceRel)",
+        "const abs = resolve(root, sourceRel)",
+        "const abs = resolve(root, sourceRel)",
+        "const abs = resolve(root, sourceRel)",
+        "const manifestRaw = readFileSync(resolve(root, 'scripts/type-equiv.manifest.json'), 'utf8')",
+        "for (const match of globSync(pattern, { cwd: root })) {",
+        "if (!existsSync(resolve(root, d))) errors.push(`manifest references ${d}, which does not exist`)"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "file": "scripts/benchmark-next-package-dependency.ts",
+      "family": 6,
+      "lost": 6,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Benchmark which additional Host package most reduces npm peer resolution. */",
+        "benchmarkNpmResolution,",
+        "buildRegistryIndex,",
+        "parsePositiveIntegerOption,",
+        "publishWorkspaceRange,",
+        "type RegistryIndex,"
+      ]
+    },
+    {
+      "file": "scripts/benchmark-npm-resolution.ts",
+      "family": 7,
+      "lost": 1,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Benchmark npm's dependency-tree resolution against an all-local registry. */"
+      ]
+    },
+    {
+      "file": "scripts/build-exe-for-python-sdk.ts",
+      "family": 9,
+      "lost": 65,
+      "behaviourDiff": {
+        "return": 1,
+        "await": 3,
+        "call": 10
+      },
+      "lostSample": [
+        "private readonly outDir = resolve(root, OUT_DIR)",
+        "await this.runPnpm('runtime dependency closure', ['run', 'verify-runtime-closure'])",
+        "await this.runPnpm('build', ['run', 'build'])",
+        "if (this.staging === root || root.startsWith(this.staging + sep)) {",
+        "throw new Error(`build-exe-for-python-sdk: refusing to clear staging dir ${this.staging}: it contains the repo root.`)",
+        "if (this.cli.dryRun) console.log(`build-exe-for-python-sdk: [dry-run] rm -rf ${this.staging}`)",
+        "else await rm(this.staging, { recursive: true, force: true })",
+        "await this.runPnpm('deploy', [",
+        "this.staging,",
+        "await this.restoreLegacyHoists()",
+        "await this.materializeStagedLinks()",
+        "if (this.cli.dryRun) {"
+      ]
+    },
+    {
+      "file": "scripts/check-workspace-constraints.spec.ts",
+      "family": 4,
+      "lost": 1,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Workspace dependency ranges and package publication constraints. */"
+      ]
+    },
+    {
+      "file": "scripts/check-workspace-constraints.ts",
+      "family": 9,
+      "lost": 3,
+      "behaviourDiff": {
+        "assign": -1
+      },
+      "lostSample": [
+        "const standardReleaseMemberDirectory = /^(?:packages\\/(?!experimental\\/)[^/]+\\/[^/]+|apps\\/(?!desktop(?:-host)?$)[^/]+|vendor\\/[^/]+)$/",
+        "const nativeWorkspaceManifest = readJson(join(root, 'native/system/package.json'))",
+        "const nativeVersion = nativeWorkspaceManifest.version"
+      ]
+    },
+    {
+      "file": "scripts/ci-workflow.spec.ts",
+      "family": 11,
+      "lost": 29,
+      "behaviourDiff": {
+        "if": 1,
+        "return": 1,
+        "throw": 1,
+        "call": 9,
+        "assign": 3
+      },
+      "lostSample": [
+        "const runnerPrivatePnpmDestination = /^\\$\\{\\{ runner\\.temp \\}\\}\\/setup-pnpm-\\$\\{\\{ github\\.run_id \\}\\}-\\$\\{\\{ github\\.run_attempt \\}\\}$/",
+        "const install = steps.find((step): step is Record<string, unknown> & { run: string } => (",
+        "expect(install, `${jobName} must define the filesystem-branched install`).toBeDefined()",
+        "expect(install!.run).toContain(\"$fs -eq 'ReFS'\")",
+        "expect(install!.run).toContain('--package-import-method=clone')",
+        "expect(install!.run).toContain('corepack pnpm install')",
+        "const installLines = install!.run.split('\\n').map(line => line.trim())",
+        "expect(install!.run).not.toContain('$cloneFlag')",
+        "const serialStore = serialSteps.find((step): step is Record<string, unknown> & { run: string } => (",
+        "expect(serialStore).toBeDefined()",
+        "expect(serialStore!.run).toContain('[IO.Path]::GetPathRoot($env:GITHUB_WORKSPACE)')",
+        "expect(serialStore!.run).toContain(\"'.pnpm-store'\")"
+      ]
+    },
+    {
+      "file": "scripts/client-build-environment.client.spec.ts",
+      "family": 7,
+      "lost": 60,
+      "behaviourDiff": {
+        "case": 5,
+        "return": 1,
+        "await": 1,
+        "call": 2,
+        "assign": 8
+      },
+      "lostSample": [
+        "clientBuildEnvironmentDefines,",
+        "readClientBuildRecord,",
+        "writeClientBuildRecord,",
+        "for (const fixtureRoot of roots.splice(0)) rmSync(fixtureRoot, { recursive: true, force: true })",
+        "const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-client-build-'))",
+        "roots.push(fixtureRoot)",
+        "write(join(fixtureRoot, 'apps/web/dist/index.html'), '<main></main>')",
+        "write(join(fixtureRoot, 'packages/client/example/lib/client.js'), 'module.exports = {}\\n')",
+        "writeClientBuildRecord(fixtureRoot, environment)",
+        "return fixtureRoot",
+        "function git(root: string, args: readonly string[]): string {",
+        "cwd: root,"
+      ]
+    },
+    {
+      "file": "scripts/client-build-environment.ts",
+      "family": 5,
+      "lost": 0,
+      "behaviourDiff": {},
+      "lostSample": []
+    },
+    {
+      "file": "scripts/client-bundle-purity.spec.ts",
+      "family": 9,
+      "lost": 0,
+      "behaviourDiff": {
+        "case": 2,
+        "call": 1
+      },
+      "lostSample": []
+    },
+    {
+      "file": "scripts/cordis-core-api.ts",
+      "family": 7,
+      "lost": 1,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Generate detailed Cordis core API pages from pinned vendor declarations. */"
+      ]
+    },
+    {
+      "file": "scripts/coverage-partitions.spec.ts",
+      "family": 8,
+      "lost": 2,
+      "behaviourDiff": {
+        "call": 1,
+        "assign": 1
+      },
+      "lostSample": [
+        "assignWeightedPartitions,",
+        "async function writeVitestCache(root: string, entries: Array<[string, { duration: number }]>): Promise<void> {"
+      ]
+    },
+    {
+      "file": "scripts/coverage-partitions.ts",
+      "family": 7,
+      "lost": 1,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Coordinate single-worker Vitest coverage partitions and one merged report. */"
+      ]
+    },
+    {
+      "file": "scripts/dev-web.ts",
+      "family": 9,
+      "lost": 2,
+      "behaviourDiff": {
+        "await": 1,
+        "call": 2
+      },
+      "lostSample": [
+        "CLIENT_BUILD_PROFILE_SELECTOR,",
+        "if (isMain) {"
+      ]
+    },
+    {
+      "file": "scripts/doc-standard.spec.ts",
+      "family": 5,
+      "lost": 0,
+      "behaviourDiff": {
+        "call": 4,
+        "assign": 4
+      },
+      "lostSample": []
+    },
+    {
+      "file": "scripts/gen-client-catalog.spec.ts",
+      "family": 6,
+      "lost": 0,
+      "behaviourDiff": {},
+      "lostSample": []
+    },
+    {
+      "file": "scripts/gen-client-catalog.ts",
+      "family": 7,
+      "lost": 2,
+      "behaviourDiff": {},
+      "lostSample": [
+        "declaredTypes,",
+        "referencedTypeNames,"
+      ]
+    },
+    {
+      "file": "scripts/gen-config-catalog.ts",
+      "family": 10,
+      "lost": 1,
+      "behaviourDiff": {},
+      "lostSample": [
+        "function findExportedTypeDecl(world: World, ctx: FileCtx, name: string, seen = new Set<string>()): { decl: TypeDecl; ctx: FileCtx } | null {"
+      ]
+    },
+    {
+      "file": "scripts/gen-cordis-catalog.ts",
+      "family": 13,
+      "lost": 1,
+      "behaviourDiff": {
+        "assign": 3
+      },
+      "lostSample": [
+        "export { REGION_BEGIN, REGION_END }"
+      ]
+    },
+    {
+      "file": "scripts/gen-dependency-catalog.ts",
+      "family": 5,
+      "lost": 0,
+      "behaviourDiff": {},
+      "lostSample": []
+    },
+    {
+      "file": "scripts/gen-doc-graphs.ts",
+      "family": 19,
+      "lost": 13,
+      "behaviourDiff": {
+        "return": 1,
+        "call": 2,
+        "assign": 5
+      },
+      "lostSample": [
+        "collectPackageGraph,",
+        "escapeMermaidLabel as escLabel,",
+        "graphNodeId as nodeId,",
+        "type PackageGraphNode,",
+        "sourceFile: ts.SourceFile",
+        "private readonly packageSourceFiles: ReadonlySet<ts.SourceFile>",
+        "this.packageSourceFiles = new Set(sources.map(source => source.sourceFile))",
+        "/** Index resolved function calls in the given files for narrow argument-flow recovery. */",
+        "private buildCallSiteIndex(files: Iterable<ts.SourceFile>): CallSiteIndex {",
+        "private callSitesFor(owner: ts.FunctionDeclaration): ts.CallExpression[] {",
+        "this.globalCallSites = this.buildCallSiteIndex(this.packageSourceFiles)",
+        "index = this.buildCallSiteIndex([file])"
+      ]
+    },
+    {
+      "file": "scripts/gen-scoped-events.ts",
+      "family": 7,
+      "lost": 24,
+      "behaviourDiff": {
+        "call": 1
+      },
+      "lostSample": [
+        "const root = resolve(import.meta.dirname, '..')",
+        "const candidates = this.subjectCandidates(member)",
+        ".filter(candidate => this.typesEquivalent(candidate.type, keyType))",
+        "`${where} has multiple routing-key candidates for ${this.typeText(keyType)}: `",
+        "+ candidates.map(candidate => `${candidate.path}: ${this.typeText(candidate.type)}`).join(', '),",
+        "const keyLabel = this.typeText(keyType)",
+        "return this.checker.isTypeAssignableTo(this.normalizedType(contract.baseType), this.normalizedType(scopedBase))",
+        "`${where} has no matching scopeTarget(base, key) call for carrier base ${this.typeText(scopedBase)}`,",
+        "if (!keyTypes.some(type => this.typesEquivalent(type, match.keyType))) keyTypes.push(match.keyType)",
+        "`${where} carrier base ${this.typeText(scopedBase)} has inconsistent routing-key types: `",
+        "+ matches.map(match => `${this.typeText(match.keyType)} at ${match.source}`).join(', '),",
+        "private subjectCandidates(member: ts.MethodSignature): SubjectCandidate[] {"
+      ]
+    },
+    {
+      "file": "scripts/gen-third-party-notices.spec.ts",
+      "family": 9,
+      "lost": 5,
+      "behaviourDiff": {
+        "call": 2,
+        "assign": 2
+      },
+      "lostSample": [
+        "manifestPatterns,",
+        "parsePyprojectRequirements,",
+        "parseVendoredRows,",
+        "render,",
+        "virtualManifest,"
+      ]
+    },
+    {
+      "file": "scripts/gen-third-party-notices.ts",
+      "family": 10,
+      "lost": 1,
+      "behaviourDiff": {
+        "call": 1
+      },
+      "lostSample": [
+        "function installedManifest(name: string, manifests: Map<string, Manifest>, expectedVersion?: string): VirtualManifest | undefined {"
+      ]
+    },
+    {
+      "file": "scripts/gen-tool-catalog.ts",
+      "family": 10,
+      "lost": 1,
+      "behaviourDiff": {
+        "assign": 3
+      },
+      "lostSample": [
+        "const TOOL_PACKAGES: ToolPackage[] = ["
+      ]
+    },
+    {
+      "file": "scripts/gen-translation-brief.ts",
+      "family": 5,
+      "lost": 3,
+      "behaviourDiff": {
+        "call": 3,
+        "assign": -1
+      },
+      "lostSample": [
+        "pairAnchorOfArgument,",
+        "TRANSLATION_SCOPE_GLOB_EXCLUDES,",
+        "const argv = process.argv.slice(2)"
+      ]
+    },
+    {
+      "file": "scripts/install-lefthook.spec.ts",
+      "family": 9,
+      "lost": 5,
+      "behaviourDiff": {
+        "case": 2,
+        "call": 7,
+        "assign": 6
+      },
+      "lostSample": [
+        "chmodSync,",
+        "mkdirSync,",
+        "mkdtempSync,",
+        "writeFileSync,",
+        "describe('worktree-local Lefthook installer', { timeout: 90_000 }, () => {"
+      ]
+    },
+    {
+      "file": "scripts/loader-volatile-update.spec.ts",
+      "family": 6,
+      "lost": 4,
+      "behaviourDiff": {
+        "if": 2,
+        "throw": 2,
+        "call": 4,
+        "assign": 1
+      },
+      "lostSample": [
+        "/** Loader commits volatile config values into running fibers without remounting; ordinary changes keep the update lifecycle. */",
+        "function context() {",
+        "const fiber = ctx.loader.resolve(id).fiber!",
+        "await fiber.entry!.update({ config })"
+      ]
+    },
+    {
+      "file": "scripts/locale-dictionary-parity.spec.ts",
+      "family": 4,
+      "lost": 0,
+      "behaviourDiff": {
+        "call": 1
+      },
+      "lostSample": []
+    },
+    {
+      "file": "scripts/markdown.ts",
+      "family": 7,
+      "lost": 0,
+      "behaviourDiff": {},
+      "lostSample": []
+    },
+    {
+      "file": "scripts/migrate-sessions-to-v4.spec.ts",
+      "family": 6,
+      "lost": 1,
+      "behaviourDiff": {
+        "case": 1,
+        "call": 4,
+        "assign": 3
+      },
+      "lostSample": [
+        "/** The contributor command uses real persistence on private temporary corpora. */"
+      ]
+    },
+    {
+      "file": "scripts/migrate-sessions-to-v4.ts",
+      "family": 7,
+      "lost": 20,
+      "behaviourDiff": {
+        "return": 1,
+        "await": 1,
+        "call": 10,
+        "assign": 5
+      },
+      "lostSample": [
+        "write(`Session migration to V4 started ${startedAt}`)",
+        "write(`Root: ${root}`)",
+        "write(`Session jobs: ${jobs}`)",
+        "write(`Node: ${process.version}; platform: ${process.platform}/${process.arch}`)",
+        "write(`Git HEAD: ${checkoutCommit}`)",
+        "write(`Discovered ${candidates.length} Session directories or invalid layout entries.`)",
+        "write(`${label} ${retry ? 'RETRY' : 'START'} ${source === undefined ? 'inspect entry' : `${source.filename} (V${source.version}, ${source.bytes} bytes)`}`)",
+        "write(`${label} ${status}; completed=${completed}/${candidates.length}`)",
+        "recordOutcome('unknown', 'skipped')",
+        "recordOutcome(source.version, source.version === 4 ? 'alreadyV4' : 'converted')",
+        "write(`${label} DEFERRED: ${error.message}; retry once after initial jobs finish`)",
+        "appendFileSync(log, `${inspect(error, { depth: null, colors: false })}\\n`)"
+      ]
+    },
+    {
+      "file": "scripts/oxlint-contract.spec.ts",
+      "family": 6,
+      "lost": 0,
+      "behaviourDiff": {
+        "call": 3,
+        "assign": 3
+      },
+      "lostSample": []
+    },
+    {
+      "file": "scripts/package-invariants.spec.ts",
+      "family": 5,
+      "lost": 2,
+      "behaviourDiff": {
+        "case": 1,
+        "call": 2,
+        "assign": 2
+      },
+      "lostSample": [
+        "collectPackageInvariantViolations,",
+        "packageInvariantOwners,"
+      ]
+    },
+    {
+      "file": "scripts/package-invariants.ts",
+      "family": 7,
+      "lost": 1,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Discover every package under the repository package tree. */"
+      ]
+    },
+    {
+      "file": "scripts/persistence-catalog-source.ts",
+      "family": 6,
+      "lost": 0,
+      "behaviourDiff": {},
+      "lostSample": []
+    },
+    {
+      "file": "scripts/persistence-changes.spec.ts",
+      "family": 10,
+      "lost": 9,
+      "behaviourDiff": {
+        "if": 1,
+        "return": 1,
+        "throw": 1,
+        "call": 3,
+        "assign": 1,
+        "optional-chain": 3
+      },
+      "lostSample": [
+        "/** Current-tree persistence history rejects uncovered and incorrectly acknowledged type changes. */",
+        "parseHistoricalPersistenceSnapshot,",
+        "parsePersistenceSnapshot,",
+        "validatePersistenceHistory,",
+        "const node = nodes[index]!",
+        "if (node.kind !== 'object') throw new Error('header fixture requires an object')",
+        "const node = nodes[0]!",
+        "if (node.kind !== 'object') throw new Error('event fixture requires an object')",
+        "const type = node.properties.find(item => item.name === 'type')!.type"
+      ]
+    },
+    {
+      "file": "scripts/persistence-changes.ts",
+      "family": 8,
+      "lost": 1,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Verify and acknowledge persistence type changes from current-tree schema history. */"
+      ]
+    },
+    {
+      "file": "scripts/persistence-formats.spec.ts",
+      "family": 5,
+      "lost": 1,
+      "behaviourDiff": {
+        "call": 1,
+        "assign": 1
+      },
+      "lostSample": [
+        "/** Format reference coverage follows the writer version and retains complete historical schemas. */"
+      ]
+    },
+    {
+      "file": "scripts/persistence-releases.spec.ts",
+      "family": 4,
+      "lost": 1,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Offline release archives preserve historical schemas and reject incomplete or inconsistent transitions. */"
+      ]
+    },
+    {
+      "file": "scripts/persistence-schema-model.ts",
+      "family": 4,
+      "lost": 0,
+      "behaviourDiff": {},
+      "lostSample": []
+    },
+    {
+      "file": "scripts/persistence-schema.spec.ts",
+      "family": 6,
+      "lost": 0,
+      "behaviourDiff": {
+        "call": 1,
+        "assign": 1
+      },
+      "lostSample": []
+    },
+    {
+      "file": "scripts/persistence-schema.ts",
+      "family": 6,
+      "lost": 20,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Extract complete persistent Session record types from one source-only compiler program. */",
+        "envelopes.push(extraction.envelope(node, event.name))",
+        "return extraction.inventory(roots)",
+        "private readonly declarationMetadata = new Map<number, DeclarationMetadata>()",
+        "envelope(id: number, event: string): number {",
+        "const node = this.nodes[id] as SchemaNode",
+        "if (node.kind === 'union') return this.union(node.types.map(type => this.envelope(type, event)))",
+        "const literal = tag === undefined ? undefined : canonicalizeSchema(this.nodes, tag.type).nodes[0]",
+        "const string = this.nodes.length",
+        "this.nodes.push({ kind: 'primitive', type: 'string' })",
+        "this.nodes.push(envelope)",
+        "return this.nodes.length - 1"
+      ]
+    },
+    {
+      "file": "scripts/project-doc-site.spec.ts",
+      "family": 11,
+      "lost": 3,
+      "behaviourDiff": {
+        "case": 1
+      },
+      "lostSample": [
+        "/** Tests for the documentation website projection adapter. */",
+        "addProjectionFrontmatter, emitRawMarkdownPages, llmsTxt, projectedPageContent, publishableImage,",
+        "rawMarkdownFiles, rawMarkdownPageContent, rawMarkdownRoute, resolveRepositoryRef, rewriteMarkdown,"
+      ]
+    },
+    {
+      "file": "scripts/project-doc-site.ts",
+      "family": 9,
+      "lost": 1,
+      "behaviourDiff": {},
+      "lostSample": [
+        "copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync,"
+      ]
+    },
+    {
+      "file": "scripts/publish-npm-baseline.ts",
+      "family": 10,
+      "lost": 9,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Build, publish, and verify one commit-addressed npm workspace baseline. */",
+        "existsSync,",
+        "mkdirSync,",
+        "mkdtempSync,",
+        "readFileSync,",
+        "realpathSync,",
+        "readdirSync,",
+        "rmSync,",
+        "writeFileSync,"
+      ]
+    },
+    {
+      "file": "scripts/release/bump.ts",
+      "family": 5,
+      "lost": 12,
+      "behaviourDiff": {
+        "call": 2,
+        "assign": -1
+      },
+      "lostSample": [
+        "options: {",
+        "family: { type: 'string' },",
+        "prerelease: { type: 'string' },",
+        "'dry-run': { type: 'boolean', default: false },",
+        "},",
+        "if (values.family === undefined) throw new Error('usage: bump.ts --family <dsh|vendor> [version]')",
+        "const family = releaseFamily(values.family)",
+        "if (values.prerelease !== undefined) {",
+        "if (values.prerelease !== undefined && !/^[0-9A-Za-z.-]+$/.test(values.prerelease)) {",
+        "throw new Error(`--prerelease must be a semver prerelease identifier, got ${values.prerelease}`)",
+        "planned = planPerPackage(family, members, values.prerelease)",
+        "const dryRun = values['dry-run']"
+      ]
+    },
+    {
+      "file": "scripts/release/families.spec.ts",
+      "family": 7,
+      "lost": 11,
+      "behaviourDiff": {
+        "case": 1,
+        "return": 1,
+        "call": -7,
+        "assign": 4
+      },
+      "lostSample": [
+        "/** Release family discovery, publish order, tag naming, and the bump judgements. */",
+        "const root = mkdtempSync(join(tmpdir(), 'dsh-release-build-'))",
+        "const root = mkdtempSync(join(tmpdir(), 'dsh-release-private-'))",
+        "roots.push(root)",
+        "const root = mkdtempSync(join(tmpdir(), 'dsh-release-experimental-'))",
+        "roots.push(root)",
+        "const root = mkdtempSync(join(tmpdir(), 'dsh-release-version-'))",
+        "roots.push(root)",
+        "const root = mkdtempSync(join(tmpdir(), 'dsh-release-prerelease-'))",
+        "roots.push(root)",
+        "const members = [member('apps/cli', '@deepseek-ai/dsh'), { ...member('apps/web', '@deepseek-ai/dsh-web-frontend'), version: '0.0.2' }]"
+      ]
+    },
+    {
+      "file": "scripts/release/families.ts",
+      "family": 5,
+      "lost": 7,
+      "behaviourDiff": {
+        "return": 2,
+        "call": 5
+      },
+      "lostSample": [
+        "const manifestPaths = globSync([...this.patterns], { cwd: root }).sort()",
+        "if (manifestPaths.length === 0) throw new Error(`release family ${this.id} matched no manifests`)",
+        "if (seen.has(name)) throw new Error(`${name} appears twice in release family ${this.id}`)",
+        "this.orderEdges(member, byName, sections)",
+        "throw new Error(`dependency cycle in release family ${this.id}: ${[...path, member.name].join(' -> ')}`)",
+        "`release family ${this.id}: no publish order honours ${member.name} -> ${dependency.name};`",
+        "private orderEdges("
+      ]
+    },
+    {
+      "file": "scripts/render-persistence-schema.spec.ts",
+      "family": 4,
+      "lost": 0,
+      "behaviourDiff": {},
+      "lostSample": []
+    },
+    {
+      "file": "scripts/render-persistence-schema.ts",
+      "family": 5,
+      "lost": 1,
+      "behaviourDiff": {},
+      "lostSample": [
+        "type SchemaNode,"
+      ]
+    },
+    {
+      "file": "scripts/rescope-vendor.ts",
+      "family": 12,
+      "lost": 11,
+      "behaviourDiff": {
+        "if": 1,
+        "else": 1,
+        "call": 5,
+        "assign": 3
+      },
+      "lostSample": [
+        "{ file: 'scripts/check-workspace-constraints.ts', text: '?.[\\'@deepseek-ai/cordis\\']', count: 2 },",
+        "const EXACT_EDITS: readonly ExactEdit[] = [",
+        "file: 'scripts/check-workspace-constraints.ts',",
+        "file: 'scripts/publish-npm-baseline.ts',",
+        "file: 'scripts/gen-third-party-notices.ts',",
+        "file: 'scripts/gen-third-party-notices.ts',",
+        "file: 'scripts/gen-third-party-notices.ts',",
+        "file: 'scripts/gen-third-party-notices.ts',",
+        "if (file === 'scripts/rescope-vendor.ts') return true // the mapping itself",
+        "const files = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' })",
+        "if (process.argv[1] !== undefined && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {"
+      ]
+    },
+    {
+      "file": "scripts/run-gates.spec.ts",
+      "family": 12,
+      "lost": 27,
+      "behaviourDiff": {
+        "call": 4,
+        "assign": 4,
+        "nullish": 2
+      },
+      "lostSample": [
+        "cliGateOptions,",
+        "ciWorkerEnvironment,",
+        "collectDescendants,",
+        "defaultConcurrency,",
+        "gatesForMode,",
+        "parsePidPpidLines,",
+        "taskkillArgs,",
+        "return pid!",
+        "const execute = vi.fn(async (item: Gate) => resultFor(item))",
+        "const results = await runGates(ready, 8, async (subject) => {",
+        "return resultFor(subject, subject.id === 'doc-graphs' ? 'failed' : 'passed')",
+        "const execute = vi.fn(async (subject: Gate) => resultFor(subject))"
+      ]
+    },
+    {
+      "file": "scripts/run-gates.ts",
+      "family": 14,
+      "lost": 1,
+      "behaviourDiff": {
+        "call": 3,
+        "assign": 1
+      },
+      "lostSample": [
+        "/** Active Node major used to select version-specific compatibility checks. */"
+      ]
+    },
+    {
+      "file": "scripts/session-fixture-layout.ts",
+      "family": 5,
+      "lost": 0,
+      "behaviourDiff": {},
+      "lostSample": []
+    },
+    {
+      "file": "scripts/slot-walk.ts",
+      "family": 7,
+      "lost": 7,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** TSX must parse as TSX; a `.ts` file with JSX-looking generics must not. */",
+        "/** 1-based line of a node's first character. */",
+        "/** Declaration text including leading JSDoc, with container indentation removed. */",
+        "/** One member's JSDoc comment text, '' when the member has none. */",
+        "/** Strip the shared leading indentation of a multi-line source slice. */",
+        "/** Collapse a type text to one line so catalog rows stay one row. */",
+        "/** A property name's text, quotes removed. */"
+      ]
+    },
+    {
+      "file": "scripts/test-invariants.spec.ts",
+      "family": 6,
+      "lost": 0,
+      "behaviourDiff": {
+        "case": 3,
+        "call": 3,
+        "assign": 3
+      },
+      "lostSample": []
+    },
+    {
+      "file": "scripts/translation-brief.spec.ts",
+      "family": 7,
+      "lost": 7,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Regression tests for the minimal-update briefing assembly. */",
+        "computeMechanicalUpdate,",
+        "firstOccurrenceContext,",
+        "parseTerminologyRows,",
+        "relevantTerminologyRows,",
+        "renderTranslationBrief,",
+        "termOffsets,"
+      ]
+    },
+    {
+      "file": "scripts/translation-brief.ts",
+      "family": 5,
+      "lost": 0,
+      "behaviourDiff": {},
+      "lostSample": []
+    },
+    {
+      "file": "scripts/translation-links.ts",
+      "family": 4,
+      "lost": 1,
+      "behaviourDiff": {},
+      "lostSample": [
+        "splitMarkdownUrlTarget,"
+      ]
+    },
+    {
+      "file": "scripts/translation-pairing-merge.spec.ts",
+      "family": 6,
+      "lost": 9,
+      "behaviourDiff": {
+        "case": 1,
+        "call": 4,
+        "assign": 3
+      },
+      "lostSample": [
+        "/** Integration coverage for automatic and explicit pairing-record conflict resolution. */",
+        "chmodSync,",
+        "mkdtempSync,",
+        "mkdirSync,",
+        "readFileSync,",
+        "rmSync,",
+        "symlinkSync,",
+        "writeFileSync,",
+        "describe('translation pairing merge composition', { timeout: 90_000 }, () => {"
+      ]
+    },
+    {
+      "file": "scripts/translation-pairing-merge.ts",
+      "family": 5,
+      "lost": 3,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Fail-closed composition of bilingual pairing records during Git merges. */",
+        "gitMergeInputPaths,",
+        "storeGitBlob,"
+      ]
+    },
+    {
+      "file": "scripts/translation-pairing.spec.ts",
+      "family": 7,
+      "lost": 5,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Regression tests for bilingual snapshots, corpus scope, and structure. */",
+        "blobHash,",
+        "pairAnchorOfArgument,",
+        "parseTranslationPairingCliArgs,",
+        "partitionGeneratedRegions,"
+      ]
+    },
+    {
+      "file": "scripts/translation-pairing.ts",
+      "family": 6,
+      "lost": 0,
+      "behaviourDiff": {},
+      "lostSample": []
+    },
+    {
+      "file": "scripts/verify-client-packages.spec.ts",
+      "family": 6,
+      "lost": 8,
+      "behaviourDiff": {
+        "call": 1,
+        "assign": -1
+      },
+      "lostSample": [
+        "/** Tests for client package modes and module requests. */",
+        "collectClientPackageViolations,",
+        "fixClientPackageManifests,",
+        "readClientDeclarations,",
+        "type ClientDeclaration,",
+        "type ClientPackage,",
+        "type ClientPackageFacts,",
+        "afterEach(() => {"
+      ]
+    },
+    {
+      "file": "scripts/verify-client-packages.ts",
+      "family": 9,
+      "lost": 2,
+      "behaviourDiff": {},
+      "lostSample": [
+        "async function main(): Promise<void> {",
+        "await main()"
+      ]
+    },
+    {
+      "file": "scripts/verify-client-route-resolution.ts",
+      "family": 5,
+      "lost": 5,
+      "behaviourDiff": {},
+      "lostSample": [
+        "const root = resolve(import.meta.dirname, '..')",
+        "export function browserFaceSources(projectRoot: string = root): string[] {",
+        "const path = resolve(root, file)",
+        "function main(): void {",
+        "if (import.meta.filename === resolve(process.argv[1] ?? '')) main()"
+      ]
+    },
+    {
+      "file": "scripts/verify-client-ui-i18n.ts",
+      "family": 6,
+      "lost": 13,
+      "behaviourDiff": {
+        "return": 2,
+        "call": 2,
+        "assign": -4
+      },
+      "lostSample": [
+        "const root = resolve(import.meta.dirname, '..')",
+        "const enclosingFunctionName = (node: ts.Node): string | undefined => {",
+        "const hasExplicitStringReturn = (node: ts.Node): boolean => {",
+        "globSync('packages/*/*/src/client/**/*.tsx', { cwd: root })",
+        "...globSync('packages/client/*/src/**/*.tsx', { cwd: root }),",
+        "...globSync('packages/client/ui-*/src/**/*.{ts,tsx}', { cwd: root }),",
+        "globSync(`${clientRoot}/**/*.{ts,tsx}`, { cwd: root })),",
+        "...globSync('apps/web/src/**/*.{ts,tsx}', { cwd: root }),",
+        "...globSync('apps/desktop/src/{main,update-coordinator}.{ts,tsx}', { cwd: root }),",
+        "...globSync('apps/desktop/renderer/*.js', { cwd: root }),",
+        "function main(): void {",
+        "findUiI18nViolations(file, readFileSync(resolve(root, file), 'utf8')))"
+      ]
+    },
+    {
+      "file": "scripts/verify-cordis-config.ts",
+      "family": 9,
+      "lost": 1,
+      "behaviourDiff": {
+        "call": 2
+      },
+      "lostSample": [
+        "if (import.meta.main) {"
+      ]
+    },
+    {
+      "file": "scripts/verify-default-product-isolation.spec.ts",
+      "family": 6,
+      "lost": 1,
+      "behaviourDiff": {
+        "case": 1,
+        "call": 4,
+        "assign": 3
+      },
+      "lostSample": [
+        "/** Source, installation, and composition regressions for default-product isolation. */"
+      ]
+    },
+    {
+      "file": "scripts/verify-default-product-isolation.ts",
+      "family": 6,
+      "lost": 13,
+      "behaviourDiff": {
+        "else": -1,
+        "return": 3,
+        "call": 7,
+        "assign": 4
+      },
+      "lostSample": [
+        "collectRuntimeLocalSourceSpecifiers,",
+        "collectRuntimeSourceSpecifiers,",
+        "const display = (path: string): string => relative(root, path).replaceAll('\\\\', '/')",
+        "const manifest = JSON.parse(readFileSync(resolve(root, path), 'utf8')) as Manifest",
+        "const html = resolve(root, 'apps/web/index.html')",
+        "if (existsSync(html)) {",
+        "if (entries.length === 0) failures.push('apps/web/index.html: missing default module entry')",
+        "scanSource(`${html}.inline-${String(index)}.js`, true, entry.textContent)",
+        "failures.push(`apps/web/index.html: external default module entry cannot be checked: ${src}`)",
+        "scanSource(resolve(root, 'apps/web', src.replace(/^\\//, '')), true)",
+        "} else failures.push('missing default Web entry apps/web/index.html')",
+        "/** Read the literal package lists that define installation-owned profile defaults and the optional bundles it ships. */"
+      ]
+    },
+    {
+      "file": "scripts/verify-export-jsdoc.ts",
+      "family": 6,
+      "lost": 1,
+      "behaviourDiff": {
+        "return": 1
+      },
+      "lostSample": [
+        "/** Resolve the declarations reachable through packages that do not export src/*. */"
+      ]
+    },
+    {
+      "file": "scripts/verify-no-unknown-casts.spec.ts",
+      "family": 5,
+      "lost": 0,
+      "behaviourDiff": {
+        "case": 1
+      },
+      "lostSample": []
+    },
+    {
+      "file": "scripts/verify-package-dependencies.spec.ts",
+      "family": 9,
+      "lost": 3,
+      "behaviourDiff": {
+        "call": 9,
+        "assign": 3
+      },
+      "lostSample": [
+        "PACKAGE_DEPENDENCY_POLICY,",
+        "type PackageDependencyPolicy,",
+        "afterEach(() => {"
+      ]
+    },
+    {
+      "file": "scripts/verify-package-dependencies.ts",
+      "family": 12,
+      "lost": 5,
+      "behaviourDiff": {},
+      "lostSample": [
+        "/** Verify and repair npm dependency sections from published Client and Host faces. */",
+        "collectRuntimeLocalSourceSpecifiers,",
+        "collectRuntimeSourcePackageUses,",
+        "collectSourcePackageUses,",
+        "function generatedHostSources(root: string, packages: readonly WorkspacePackageManifest[]): ReadonlyMap<string, string> {"
+      ]
+    },
+    {
+      "file": "scripts/verify-package-meta.spec.ts",
+      "family": 8,
+      "lost": 2,
+      "behaviourDiff": {
+        "case": 1,
+        "call": 2
+      },
+      "lostSample": [
+        "/** Plugin metadata checks use private source-only packages and real resource exports. */",
+        "dir = join(root, 'packages', 'another', 'second')"
+      ]
+    },
+    {
+      "file": "scripts/verify-package-readme-model-experience.ts",
+      "family": 12,
+      "lost": 76,
+      "behaviourDiff": {
+        "if": -1,
+        "return": 34,
+        "call": 15,
+        "assign": -22
+      },
+      "lostSample": [
+        "let structuredCount = 0",
+        "let modelContextEntryCount = 0",
+        "let omittedSectionCount = 0",
+        "let explainedNoneCount = 0",
+        "let indirectCount = 0",
+        "let verbatimBlockCount = 0",
+        "let systemPromptEntryCount = 0",
+        "let toolSchemaEntryCount = 0",
+        "let kvCacheEffectCount = 0",
+        "continue",
+        "omittedSectionCount += 1",
+        "continue"
+      ]
+    },
+    {
+      "file": "scripts/verify-translation-pairing.ts",
+      "family": 4,
+      "lost": 8,
+      "behaviourDiff": {
+        "else": 1,
+        "return": 2,
+        "call": 7
+      },
+      "lostSample": [
+        "gitBlobHash,",
+        "gitIndexPaths,",
+        "readGitIndexBlob,",
+        "storeGitBlob,",
+        "renderTranslationPairingRecord,",
+        "let request: ReturnType<typeof parseTranslationPairingCliArgs>",
+        "request = parseTranslationPairingCliArgs(process.argv.slice(2))",
+        "if (writeMode) {"
+      ]
+    },
+    {
+      "file": "scripts/verify-type-equiv.ts",
+      "family": 8,
+      "lost": 9,
+      "behaviourDiff": {
+        "call": 2
+      },
+      "lostSample": [
+        "const root = resolve(import.meta.dirname, '..')",
+        "for (const fence of markdownFences(readFileSync(resolve(root, docRel), 'utf8'))) {",
+        "const abs = resolve(root, sourceRel)",
+        "const abs = resolve(root, sourceRel)",
+        "const abs = resolve(root, sourceRel)",
+        "const abs = resolve(root, sourceRel)",
+        "const manifestRaw = readFileSync(resolve(root, 'scripts/type-equiv.manifest.json'), 'utf8')",
+        "for (const match of globSync(pattern, { cwd: root })) {",
+        "if (!existsSync(resolve(root, d))) errors.push(`manifest references ${d}, which does not exist`)"
+      ]
+    }
+  ]
+}
