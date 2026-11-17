@@ -32,10 +32,12 @@
   width: min(380px, 100%);
   padding: 0 0 24px;
   overflow: hidden;
-  border: 0;
+  border: 1px solid var(--glass-line, var(--dsw-alias-border-l2));
   border-radius: 24px;
   background: var(--dsw-alias-bg-layer-2);
   box-shadow: var(--dsw-elevation-prominent);
+  backdrop-filter: var(--glass-blur-float, blur(22px) saturate(150%));
+  -webkit-backdrop-filter: var(--glass-blur-float, blur(22px) saturate(150%));
 }
 
 .content {
@@ -110,5 +112,7 @@
 /* Dark theme: this window wears the maroon-black family gradient
  * (maroon above, black pooled at the bottom) over its surface token. */
 :global(body[data-ds-dark-theme]) .dialog {
-  background-image: linear-gradient(180deg, rgb(66, 37, 46) 0%, rgb(54, 31, 39) 30%, rgb(45, 28, 34) 55%, rgb(28, 15, 21) 82%, rgb(20, 8, 16) 100%);
+  background-color: rgba(12, 4, 7, 0.38);
+  background-image: linear-gradient(180deg, rgba(80, 24, 40, 0.28) 0%, rgba(30, 10, 16, 0.22) 45%, rgba(8, 2, 4, 0.18) 100%);
+  border-color: rgba(207, 43, 77, 0.22);
 }

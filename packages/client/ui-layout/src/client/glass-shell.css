@@ -90,29 +90,29 @@ body[data-ds-dark-theme] {
      language for home + chat): a quieter tint ladder than the earlier
      playbook values, so the lit brand backdrop stays visible through
      the panes instead of being averaged away. */
-  --glass: rgba(255, 255, 255, 0.04);
-  --glass-hi: rgba(255, 255, 255, 0.055);
-  --glass-strong: rgba(255, 255, 255, 0.07);
-  --glass-line: rgba(255, 255, 255, 0.09);
-  --glass-edge: rgba(255, 255, 255, 0.05);
-  --glass-edge-hi: rgba(255, 255, 255, 0.16);
-  --glass-line-float: rgba(255, 255, 255, 0.18);
-  --well: rgba(0, 0, 0, 0.34);
-  /* The locked recipe: blur(14px) saturate(140%) — saturation does the
+  --glass: rgba(10, 2, 5, 0.18);
+  --glass-hi: rgba(14, 4, 7, 0.28);
+  --glass-strong: rgba(20, 6, 10, 0.38);
+  --glass-line: rgba(207, 43, 77, 0.16);
+  --glass-edge: rgba(255, 120, 150, 0.1);
+  --glass-edge-hi: rgba(255, 140, 170, 0.22);
+  --glass-line-float: rgba(207, 43, 77, 0.26);
+  --well: rgba(0, 0, 0, 0.35);
+  /* The locked recipe: blur(14px) saturate(140%) - saturation does the
      depth work (blur alone averages the backdrop to mud), at the one
      strength every glass surface in the shell shares. */
-  --glass-blur: blur(14px) saturate(140%);
-  --glass-blur-float: blur(14px) saturate(140%);
-  --glass-solid: #0c0409;
+  --glass-blur: blur(18px) saturate(150%) brightness(1.02);
+  --glass-blur-float: blur(22px) saturate(160%) brightness(1.02);
+  --glass-solid: rgba(8, 2, 4, 0.42);
   /* The solid card plane inside a glass panel: one lightness step above
      the panel's composited tone, no backdrop filter of its own. Maroon-
      black, not neutral gray (Carlos, 2026-11-07): the composer's card,
      the session composer seat, TodoPanel, QueueDock and the shared
      Glass primitive all ride this one token, so the whole app's solid
      plane wears the panels' family. */
-  --glass-card-solid: #2d1c22;
-  --glass-top-light: linear-gradient(180deg, rgba(207, 43, 77, 0.09), rgba(207, 43, 77, 0.03) 42%, rgba(207, 43, 77, 0) 72%);
-  --glass-hero-glow: radial-gradient(closest-side, rgba(207, 43, 77, 0.13), rgba(207, 43, 77, 0));
+  --glass-card-solid: rgba(16, 5, 9, 0.32);
+  --glass-top-light: linear-gradient(180deg, rgba(255, 120, 150, 0.14), rgba(207, 43, 77, 0.05) 42%, rgba(207, 43, 77, 0) 72%);
+  --glass-hero-glow: radial-gradient(closest-side, rgba(207, 43, 77, 0.22), rgba(207, 43, 77, 0));
   /* Living sheen (pointer-tracked light; AppFrame's SheenTracker writes
      --px/--py on each [data-sheen-panel] occupant): the pool's colour
      stops. The wide pool is a warm white core falling into the brand
@@ -120,33 +120,33 @@ body[data-ds-dark-theme] {
      a panel's hover boost transitions instead of flipping). The module
      sheets write the gradients; the colours live here so forced colors
      can zero them in one place. */
-  --sheen-pool-core: rgba(255, 243, 228, 0.26);
-  --sheen-pool-halo: rgba(207, 43, 77, 0.10);
-  --sheen-hot-core: rgba(255, 246, 232, 0.30);
+  --sheen-pool-core: rgba(255, 70, 100, 0.24);
+  --sheen-pool-halo: rgba(207, 43, 77, 0.18);
+  --sheen-hot-core: rgba(255, 90, 120, 0.3);
   /* Specular rim: the top edge catches roughly twice the light of the
      sides, the bottom bounces a step less; equal edges read as an
      outline, not as glass. The last layer is the pane's inner glow. */
   --glass-rim:
-    inset 0 1px 1px rgba(255, 255, 255, 0.38),
-    inset 0 -1px 1px rgba(255, 255, 255, 0.3),
-    inset 1px 0 1px rgba(255, 255, 255, 0.2),
-    inset -1px 0 1px rgba(255, 255, 255, 0.2),
-    inset 0 0 24px rgba(255, 255, 255, 0.03);
+    inset 0 1px 1px rgba(255, 255, 255, 0.18),
+    inset 0 -1px 1px rgba(207, 43, 77, 0.12),
+    inset 1px 0 1px rgba(255, 255, 255, 0.08),
+    inset -1px 0 1px rgba(255, 255, 255, 0.08),
+    inset 0 0 24px rgba(207, 43, 77, 0.06);
   --glass-rim-float:
-    inset 0 1px 1px rgba(255, 255, 255, 0.45),
-    inset 0 -1px 1px rgba(255, 255, 255, 0.3),
-    inset 1px 0 1px rgba(255, 255, 255, 0.2),
-    inset -1px 0 1px rgba(255, 255, 255, 0.2),
-    inset 0 0 24px rgba(255, 255, 255, 0.04);
-  --shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
-  --shadow-lift: 0 28px 60px rgba(0, 0, 0, 0.62);
+    inset 0 1px 1px rgba(255, 255, 255, 0.22),
+    inset 0 -1px 1px rgba(207, 43, 77, 0.14),
+    inset 1px 0 1px rgba(255, 255, 255, 0.1),
+    inset -1px 0 1px rgba(255, 255, 255, 0.1),
+    inset 0 0 24px rgba(207, 43, 77, 0.08);
+  --shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+  --shadow-lift: 0 28px 60px rgba(0, 0, 0, 0.75);
   /* Layered elevation tiers (contact / mid / ambient falloff): one heavy
      shadow cannot be both crisp at the contact edge and soft at range. */
-  --shadow-panel: 0 6px 12px rgba(0, 0, 0, 0.5), 0 18px 36px rgba(0, 0, 0, 0.46), 0 44px 88px rgba(0, 0, 0, 0.38);
-  --shadow-card: 0 2px 4px rgba(0, 0, 0, 0.42), 0 8px 18px rgba(0, 0, 0, 0.32);
-  --shadow-float: 0 10px 20px rgba(0, 0, 0, 0.52), 0 30px 60px rgba(0, 0, 0, 0.48), 0 64px 128px rgba(0, 0, 0, 0.38);
-  --shadow-tile: 0 2px 4px rgba(0, 0, 0, 0.42), 0 8px 18px rgba(0, 0, 0, 0.34);
-  --shadow-well: inset 0 2px 4px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(0, 0, 0, 0.35);
+  --shadow-panel: 0 6px 12px rgba(0, 0, 0, 0.65), 0 18px 36px rgba(0, 0, 0, 0.55), 0 44px 88px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 2px 4px rgba(0, 0, 0, 0.55), 0 8px 18px rgba(0, 0, 0, 0.45);
+  --shadow-float: 0 10px 20px rgba(0, 0, 0, 0.65), 0 30px 60px rgba(0, 0, 0, 0.6), 0 64px 128px rgba(0, 0, 0, 0.5);
+  --shadow-tile: 0 2px 4px rgba(0, 0, 0, 0.55), 0 8px 18px rgba(0, 0, 0, 0.45);
+  --shadow-well: inset 0 2px 4px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(0, 0, 0, 0.45);
 }
 
 /* The sheen hover boost is a registered custom property so the panel
@@ -193,9 +193,11 @@ body[data-ds-dark-theme] {
   }
 
   body[data-ds-dark-theme] {
-    --glass: rgba(29, 17, 23, 0.97);
-    --glass-hi: rgba(29, 17, 23, 0.98);
-    --glass-strong: rgba(29, 17, 23, 0.99);
+    --glass: rgba(12, 4, 7, 0.94);
+    --glass-hi: rgba(16, 5, 9, 0.95);
+    --glass-strong: rgba(22, 7, 12, 0.96);
+    --glass-solid: rgba(8, 2, 4, 0.96);
+    --glass-card-solid: rgba(14, 5, 8, 0.95);
     --glass-blur: none;
     --glass-blur-float: none;
   }
@@ -215,9 +217,11 @@ body[data-ds-dark-theme] {
   }
 
   body[data-ds-dark-theme] {
-    --glass: #14090f;
-    --glass-hi: #1c0f15;
-    --glass-strong: #2d1c22;
+    --glass: #0a0407;
+    --glass-hi: #12070b;
+    --glass-strong: #1a0a10;
+    --glass-solid: #060204;
+    --glass-card-solid: #10060a;
     --glass-blur: none;
     --glass-blur-float: none;
   }
