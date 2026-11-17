@@ -51,6 +51,7 @@ const FLEET_PROVIDERS: ReadonlySet<string> = new Set([
   'xai',
   'zai',
   'gemini',
+  'ollama',
 ])
 
 /**
