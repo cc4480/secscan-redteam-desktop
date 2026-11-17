@@ -38,7 +38,7 @@ describe('glass shell — screenshot proof (Q-UI-GLASS truth pass)', () => {
       '--well: rgba(0, 0, 0, 0.34)',
       '--glass-blur: blur(18px) saturate(165%) brightness(1.05)',
       '--glass-blur-float: blur(22px) saturate(170%) brightness(1.06)',
-      '--glass-solid: #0d0d10',
+      '--glass-solid: #0c0409',
       '--glass-card-solid: #232329',
       '--shadow: 0 16px 40px rgba(0, 0, 0, 0.45)',
       '--shadow-lift: 0 28px 60px rgba(0, 0, 0, 0.62)',

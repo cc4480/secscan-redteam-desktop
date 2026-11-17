@@ -313,8 +313,8 @@
     radial-gradient(860px 640px at 2% 96%, rgba(56, 189, 248, 0.06), rgba(56, 189, 248, 0) 60%),
     radial-gradient(1000px 760px at 88% 112%, rgba(150, 27, 52, 0.13), rgba(150, 27, 52, 0) 62%),
     radial-gradient(700px 480px at 62% 30%, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0) 65%),
-    linear-gradient(168deg, #170a10 0%, #10060b 46%, #080409 100%);
-  background-color: #0d0509;
+    linear-gradient(168deg, #050208 0%, #170a10 46%, #33101f 100%);
+  background-color: #0a0206;
 }
 
 /* The single app-wide noise overlay: an SVG turbulence tile at dashboard
