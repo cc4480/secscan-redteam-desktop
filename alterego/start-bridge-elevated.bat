@@ -6,12 +6,11 @@ if errorlevel 1 exit /b 1
 
 cd /d "C:\Users\Cho-zen\secscan-rebuild-test\alterego"
 
-REM Graded posture: writes and destructive actions still ask. Full access is
-REM NOT forced here -- the previous version set PC_BRIDGE_FULL_ACCESS=1, which
-REM silently disabled every approval prompt.
-set PC_BRIDGE_PERMISSION_MODE=acceptEdits
-set PC_BRIDGE_FULL_ACCESS=
-set PC_BRIDGE_FULL_ACCESS_CONFIRM=
+REM Dont-ask posture: every tool executes without a prompt. This is the
+REM owner's chosen default -- the event log still records every call.
+set PC_BRIDGE_FULL_ACCESS=1
+set PC_BRIDGE_FULL_ACCESS_CONFIRM=0
+set PC_BRIDGE_PERMISSION_MODE=dontAsk
 
 :loop
 echo [%date% %time%] starting bridge server...

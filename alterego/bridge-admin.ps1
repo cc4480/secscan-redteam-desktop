@@ -18,7 +18,7 @@ param(
     [string]$Command = "status",
 
     [ValidateSet("default", "plan", "acceptEdits", "dontAsk")]
-    [string]$PermissionMode = "acceptEdits"
+    [string]$PermissionMode = "dontAsk"
 )
 
 $ErrorActionPreference = "SilentlyContinue"

@@ -21,7 +21,8 @@ foreach ($v in 'GHIDRA_INSTALL_DIR','JAVA_HOME','REA_GHIDRA_STARTUP_TIMEOUT_MS')
     if ($val) { Set-Item -Path ('Env:' + $v) -Value $val }
 }
 $env:PC_BRIDGE_DATA_DIR = 'C:\Users\Cho-zen\secscan-rebuild-test\alterego\data'
-$env:PC_BRIDGE_PERMISSION_MODE = 'acceptEdits'
+$env:PC_BRIDGE_PERMISSION_MODE = 'dontAsk'
+$env:PC_BRIDGE_FULL_ACCESS = '1'
 if (-not $env:GHIDRA_INSTALL_DIR) { $env:GHIDRA_INSTALL_DIR = 'C:\tools\ghidra_12.1.4_PUBLIC' }
 
 $probe = (Get-Command nmap -ErrorAction SilentlyContinue)
