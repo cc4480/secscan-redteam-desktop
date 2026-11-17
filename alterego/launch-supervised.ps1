@@ -15,8 +15,8 @@ $probe = (Get-Command nmap -ErrorAction SilentlyContinue)
 if (-not $probe) { Write-Output 'FATAL: nmap still not resolvable after PATH rebuild'; exit 1 }
 Write-Output ('nmap resolves: ' + $probe.Source)
 
-$py = 'C:\Users\Cho-zen\pc-mcp-bridge\pc-agent\.venv\Scripts\python.exe'
-$cwd = 'C:\Users\Cho-zen\pc-mcp-bridge'
+$py = 'C:\Users\Cho-zen\secscan-rebuild-test\alterego\pc-agent\.venv\Scripts\python.exe'
+$cwd = 'C:\Users\Cho-zen\secscan-rebuild-test\alterego'
 $log = Join-Path $cwd 'supervisor-restart.log'
 Start-Process -FilePath $py -ArgumentList 'pc-agent\supervisor.py' -WorkingDirectory $cwd -WindowStyle Minimized -RedirectStandardOutput $log -RedirectStandardError ($log + '.err')
 Write-Output ('supervisor launched; PATH entries: ' + (($env:Path -split ';') | Where-Object { $_ -match 'tools|Nmap|Wireshark|metasploit' }).Count)

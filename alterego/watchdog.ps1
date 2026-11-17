@@ -15,7 +15,7 @@
 # still down, the next 1-minute run keeps retrying - it never gives up
 # and never asks. Every action is written to watchdog.log.
 $ErrorActionPreference = 'Continue'
-$base = 'C:\Users\Cho-zen\pc-mcp-bridge'
+$base = 'C:\Users\Cho-zen\secscan-rebuild-test\alterego'
 $data = Join-Path $env:APPDATA 'pc-mcp-bridge'
 $log = Join-Path $base 'watchdog.log'
 $lockFile = Join-Path $base 'watchdog-running.txt'

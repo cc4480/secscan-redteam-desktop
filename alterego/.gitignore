@@ -1,25 +1,29 @@
 # AlterEgo bridge -- generated and runtime content must never be committed.
-# The virtualenv is rebuildable from requirements; Chrome profiles and the
-# data dir are live state. Committing any of them poisons the tree.
 
 # Python
 __pycache__/
 *.py[cod]
 *.egg-info/
+
+# Virtualenv: rebuildable; contains absolute paths and ~85 MB of binaries
 .venv/
 venv/
 
-# Browser automation profiles (hundreds of MB, regenerated per run)
+# Chrome profiles driven by the browser tools (~820 MB, regenerated)
 browser-profile/
 browser-profile-fallback/
+
+# Live runtime state: event log, jobs DB, session tokens, audit trail
+data/
 
 # Logs -- a live log makes the working tree permanently dirty
 *.log
 *.log.err
 
-# Local scratch / backups
+# Historical snapshots and local scratch
 backup-*/
 demo-evidence/
 *.bak-*
+*.bak
 *.tgz
 *.tar.gz

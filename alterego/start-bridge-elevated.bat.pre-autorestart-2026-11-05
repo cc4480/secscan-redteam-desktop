@@ -1,0 +1,5 @@
+@echo off
+cd /d "%USERPROFILE%\pc-mcp-bridge"
+set PC_BRIDGE_FULL_ACCESS=1
+pc-agent\.venv\Scripts\python pc-agent\server.py
+
