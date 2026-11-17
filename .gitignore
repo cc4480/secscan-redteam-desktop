@@ -83,3 +83,8 @@ desktop-test-logs/
 /_archive/
 /runner/
 /live/
+
+# Build/test/run output must never be tracked: a live log makes the tree
+# permanently dirty and buries real changes in the diff.
+*.log
+app-start*.txt
