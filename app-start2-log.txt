@@ -1,5 +1,0 @@
-APP START 2026-11-17T01:33:05.0133655-06:00
-$ tsx scripts/dev.ts --skip-build
-[1117/013309.075:ERROR:third_party\crashpad\crashpad\util\win\registration_protocol_win.cc:108] CreateFile: The system cannot find the file specified. (0x2)
-EPERM, Permission denied: 'C:\Users\Cho-zen\secscan-rebuild-test\apps\desktop\.desktop-build\targets\win-x64\runtime\primary-runtime'
-[ELIFECYCLE] Command failed with exit code 1.

@@ -43,6 +43,7 @@ const FLEET_PROVIDERS = new Set([
     'xai',
     'zai',
     'gemini',
+    'ollama',
 ]);
 /**
  * Create the store-backed fleet resolver over the app credentials store.
