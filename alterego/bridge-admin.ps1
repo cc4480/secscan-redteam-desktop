@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Single admin console for the AlterEgo pc-mcp-bridge (replaces the eight
   one-off *.ps1 scripts: check_state, do-restart, docker_fix, fix_handler,
@@ -18,14 +18,10 @@ param(
     [string]$Command = "status",
 
     [ValidateSet("default", "plan", "acceptEdits", "dontAsk")]
-    [string]$PermissionMode = "dontAsk"
+    [string]$PermissionMode = "acceptEdits"
 )
 
 $ErrorActionPreference = "SilentlyContinue"
-
-# Fail fast if another bridge already owns the port (see bridge-guard.ps1).
-& (Join-Path $PSScriptRoot 'bridge-guard.ps1') -Check
-if ($LASTEXITCODE -eq 1) { exit 1 }
 $Repo = "$env:USERPROFILE\pc-mcp-bridge"
 $Log = "$Repo\restart.log"
 
