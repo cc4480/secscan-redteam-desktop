@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { METHODOLOGY_EXCLUSIONS, buildCompliancePack, renderAttestationLetter, renderCompliancePackMarkdown } from "../compliance/index.js";
 import { resolveOperatorName } from "../accountability/index.js";
 import { buildEngagementMeta, renderReportHtml } from "./html.js";
-export function writeComplianceArtifacts(ctx, findings, batteryLine, safetyManifest) {
+export function writeComplianceArtifacts(ctx, findings, batteryLine, safetyManifest, endStatus = 'complete') {
     try {
         const pack = buildCompliancePack({
             engagementId: ctx.events.engagementId,
@@ -49,21 +49,31 @@ export function writeComplianceArtifacts(ctx, findings, batteryLine, safetyManif
             if (Object.prototype.hasOwnProperty.call(counts, sev))
                 counts[sev]++;
         }
-        const letterMd = renderAttestationLetter({
-            engagementId: ctx.events.engagementId,
-            client: ctx.input.client,
-            operator: resolveOperatorName(ctx.input.operatorName),
-            // v0.17.0 accountability: the letter names the tier the operator approved.
-            tier: ctx.tier.current,
-            target: ctx.input.target,
-            mode: ctx.input.mode,
-            objective: ctx.input.objective,
-            scope: ctx.input.roe.scope,
-            testStart: new Date(ctx.startedAt).toISOString(),
-            testEnd: new Date().toISOString(),
-            findingCounts: counts,
-            exclusions: METHODOLOGY_EXCLUSIONS,
-        });
+        // An attestation asserts a test was performed. A blocked, halted or dry-run
+        // engagement never performed one to completion, so it gets a withheld record
+        // instead of a letter claiming canary validation that never happened.
+        const letterMd = endStatus === 'complete'
+            ? renderAttestationLetter({
+                engagementId: ctx.events.engagementId,
+                client: ctx.input.client,
+                operator: resolveOperatorName(ctx.input.operatorName),
+                // v0.17.0 accountability: the letter names the tier the operator approved.
+                tier: ctx.tier.current,
+                target: ctx.input.target,
+                mode: ctx.input.mode,
+                objective: ctx.input.objective,
+                scope: ctx.input.roe.scope,
+                testStart: new Date(ctx.startedAt).toISOString(),
+                testEnd: new Date().toISOString(),
+                findingCounts: counts,
+                exclusions: METHODOLOGY_EXCLUSIONS,
+            })
+            : `# No attestation issued
+
+This engagement ended **${endStatus}** — no authorized test of the listed scope was
+performed to completion, so no attestation letter is issued. The engagement report
+records what did and did not run.
+`;
         writeFileSync(join(ctx.events.dir, "attestation.md"), letterMd);
         writeFileSync(join(ctx.events.dir, "attestation.html"), renderReportHtml({
             title: "Attestation Letter",

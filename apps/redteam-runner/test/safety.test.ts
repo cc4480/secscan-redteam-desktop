@@ -29,8 +29,7 @@ import {
   productionConfirmed,
   requireGraduation,
   PROTECTIONS_IN_FORCE,
-  RESIDUAL_RISKS,
-} from "../src/safety/index.js";
+  RESIDUAL_RISKS } from "../src/safety/index.js";
 import type { EngagementEvent } from "../src/types.js";
 import { runEngagement } from "../src/phases.js";
 import { readEvents } from "../src/events.js";
@@ -180,8 +179,7 @@ function ev(action: string, result: string): EngagementEvent {
     phase: "exploit",
     actor: "exploiter",
     action,
-    result,
-  };
+    result };
 }
 
 describe("buildZeroDisruptionRecord", () => {
@@ -193,8 +191,7 @@ describe("buildZeroDisruptionRecord", () => {
       ev("http_probe", "DENIED by ROE: technique T1499 is excluded for this engagement."),
       ev("target_auto_halt", "AUTO-HALT: db.internal — 5 consecutive target-distress outcomes."),
       ev("abort_engagement", "ABORTED by coordinator: operator stop"),
-      ev("http_probe", "HTTP 200 in 40ms. Snippet: ok"),
-    ];
+      ev("http_probe", "HTTP 200 in 40ms. Snippet: ok") ];
     const rec = buildZeroDisruptionRecord(events);
     assert.equal(rec.denylistRefusals, 1);
     assert.equal(rec.dosRefusals, 1);
@@ -231,8 +228,7 @@ describe("buildSafetyManifest", () => {
       acquires: 40,
       operator: "Test Operator",
       zeroDisruption: zero,
-      disruptionVerdict: disruptionVerdict(zero),
-    });
+      disruptionVerdict: disruptionVerdict(zero) });
     assert.equal(m.environment, "staging");
     assert.deepEqual(m.scopeAllowlist, ["secscan.us"]);
     assert.equal(m.rateLimit.rpsPerHost, 5);
@@ -263,8 +259,7 @@ describe("buildSafetyManifest", () => {
       acquires: 0,
       operator: "Op",
       zeroDisruption: zero,
-      disruptionVerdict: disruptionVerdict(zero),
-    });
+      disruptionVerdict: disruptionVerdict(zero) });
     assert.equal(m.environment, "production");
     assert.equal(m.productionConfirmed, true);
     assert.equal(m.rateLimit.productionCapApplied, true);
@@ -297,21 +292,18 @@ describe("safety case end-to-end (dry-run engagement)", () => {
 
   const yesVerify = async () => true;
   const opts = () => ({
-    mcpToken: "test",
     deepseekApiKey: "test",
     qwenApiKey: "test",
     engagementsDir: dir,
     registryPath: join(dir, "registry.json"),
     dryRunAgents: true,
-    deps: { verify: yesVerify },
-  });
+    deps: { verify: yesVerify } });
   const input = (extra: Partial<EngagementInput> = {}): EngagementInput => ({
     target: "secscan.us",
     mode: "red",
     objective: "safety case test",
     roe: { scope: ["secscan.us"] },
-    ...extra,
-  });
+    ...extra });
 
   it("staging engagement writes safety-manifest.json/.md with the zero-disruption record", async () => {
     const res = await runEngagement(input(), opts());

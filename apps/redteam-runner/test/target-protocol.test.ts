@@ -11,15 +11,13 @@ import {
   protocolPromptBlock,
   skillsForRole,
   TARGET_PROTOCOLS,
-  type TargetFamily,
-} from '../src/prompts/target-protocol.js'
+  type TargetFamily } from '../src/prompts/target-protocol.js'
 import { gateTool, nextStep, stepById } from '../src/protocol/step-gate.js'
 import {
   advanceProtocol,
   openProtocolState,
   protocolSummary,
-  recordException,
-} from '../src/protocol/state.js'
+  recordException } from '../src/protocol/state.js'
 
 const FAMILIES: TargetFamily[] = ['webapp', 'windows', 'linux', 'android', 'ios', 'network']
 
@@ -219,8 +217,7 @@ describe('protocol state — the engagement has a position', () => {
     const exception = recordException(state, {
       tool: 'sqlmap_exec',
       reason: 'live SQLi seen on /search while enumerating WEB-02',
-      at: '2026-11-08T11:00:00.000Z',
-    })
+      at: '2026-11-08T11:00:00.000Z' })
     assert.equal(exception.stepId, 'WEB-01')
     assert.equal(state.exceptions.length, 1)
     assert.throws(() => recordException(state, { tool: 'x', reason: 'because' }), /real reason/)
@@ -274,8 +271,7 @@ describe('A5 — every seat owns steps', () => {
       'record_finding', 'record_item_verdict', 'query_registry', 'update_target_map',
       'read_spill', 'record_killed', 'ffuf_exec', 'nikto_exec', 'sqlmap_exec',
       'bridge_http_headers', 'bridge_tls_info', 'bridge_dns_query', 'bridge_tcp_check',
-      'bridge_file_info',
-    ])
+      'bridge_file_info' ])
     for (const family of FAMILIES) {
       for (const step of TARGET_PROTOCOLS[family].steps) {
         for (const tool of step.tools) {

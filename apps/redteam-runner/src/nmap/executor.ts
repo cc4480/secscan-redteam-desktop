@@ -46,6 +46,8 @@ export interface NmapExecResult {
   binary?: string;
   version?: string;
   run?: NmapRunResult;
+  /** True when the scan exceeded its executor timeout (partial run may be present). */
+  timedOut?: boolean;
 }
 
 export class NmapExecutor {
@@ -165,6 +167,7 @@ export class NmapExecutor {
         ok: false,
         action: "scan",
         run: partial,
+        timedOut: true,
         message: `nmap exceeded the ${timeoutS}s host timeout and was killed. Partial result: ${partial.summary}. Re-run with a narrower profile or a longer REDTEAM_NMAP_TIMEOUT_S.`,
       };
     }

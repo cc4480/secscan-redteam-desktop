@@ -41,8 +41,7 @@ const REGISTRY_OPS = [
   "shell_pwsh", "speak", "system_info", "task_checkpoint", "task_create", "task_status",
   "tcp_check", "tls_info", "type_text", "uia_click", "uia_find", "uia_set_text",
   "web_fetch", "web_search", "write_file", "submit_job", "job_status", "job_result",
-  "job_cancel",
-] as const;
+  "job_cancel" ] as const;
 
 /** The cdp_* family: wire names copied exactly from AlterEgo's seams
  * definitions (~/workspace/alterego pc-agent/seams/definitions/browser.py
@@ -52,8 +51,7 @@ const REGISTRY_OPS = [
  * must surface all 77 — with the CDP teaching text — proven below. */
 const CDP_OPS = [
   "cdp_launch", "cdp_connect", "cdp_targets", "cdp_navigate", "cdp_snapshot",
-  "cdp_click", "cdp_type", "cdp_evaluate", "cdp_readback", "cdp_close",
-] as const;
+  "cdp_click", "cdp_type", "cdp_evaluate", "cdp_readback", "cdp_close" ] as const;
 
 /** The full registry once the bridge serves the CDP family: 67 + 10 = 77. */
 const REGISTRY_OPS_77 = [...REGISTRY_OPS, ...CDP_OPS] as const;
@@ -62,8 +60,7 @@ function toolInfo(name: string): BridgeToolInfo {
   return {
     name,
     description: `bridge description for ${name}`,
-    inputSchema: { type: "object", properties: { probe: { type: "string" } } },
-  };
+    inputSchema: { type: "object", properties: { probe: { type: "string" } } } };
 }
 
 interface FakeClient extends BridgeClientLike {
@@ -87,8 +84,7 @@ function fakeClient(opts?: { available?: boolean; listError?: Error; ops?: reado
     async call(name, args) {
       state.calls.push({ name, args });
       return `result of ${name}`;
-    },
-  };
+    } };
 }
 
 const BASE: JsonSchemaTool[] = [{ name: "http_probe", description: "base tool", parameters: { type: "object" } }];
@@ -100,16 +96,13 @@ function gateCtx(localHost: boolean | undefined, events: EngagementEvent[]): Ctx
       mode: "red",
       objective: "test",
       localHost,
-      roe: { scope: ["operator-pc"], blackoutWindows: [] },
-    },
+      roe: { scope: ["operator-pc"], blackoutWindows: [] } },
     events: {
       dir: "/tmp/bridge-fleet-gate-no-dir",
       append: (e: EngagementEvent) => {
         events.push(e);
-      },
-    },
-    deps: {},
-  } as unknown as Ctx;
+      } },
+    deps: {} } as unknown as Ctx;
 }
 
 describe("bridge offering gate — availability is the only gate", () => {

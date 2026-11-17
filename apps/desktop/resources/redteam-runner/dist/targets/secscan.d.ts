@@ -1,5 +1,5 @@
 /**
- * SecScan target profile — the scanner webapp (https://secscan.us).
+ * SecScan target profile — the scanner webapp (https://target.invalid).
  *
  * EXHAUSTIVE battery (v0.7.0): surface × technique. Every distinct attacker
  * intent against the real surface is one item. Surfaces: scan intake

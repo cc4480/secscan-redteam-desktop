@@ -102,7 +102,7 @@ function protocolFromModulePath(modulePath) {
 }
 function classifyMsf(args) {
     // dispatch/msf.ts resolves any action other than "run" to suggest/search —
-    // local msfrpcd queries that send nothing to the target.
+    // local module queries that send nothing to the target.
     if (args["action"] !== "run")
         return { kind: "none" };
     const modulePath = typeof args["module"] === "string" ? args["module"].toLowerCase() : "";

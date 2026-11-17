@@ -34,8 +34,7 @@ import {
   resolveOperatorName,
   ApprovalLog,
   TIER_NAMES,
-  TIER1_CHAIN_BUDGET_PER_TARGET,
-} from "../src/accountability/index.js";
+  TIER1_CHAIN_BUDGET_PER_TARGET } from "../src/accountability/index.js";
 import type { AutonomyTier, TierState, ApprovalEntry } from "../src/accountability/index.js";
 import { renderAttestationLetter } from "../src/compliance/index.js";
 import { runEngagement } from "../src/phases.js";
@@ -69,8 +68,7 @@ afterEach(() => {
 
 const FAKE_ENV: NodeJS.ProcessEnv = {
   REDTEAM_SSH_USER: "testuser",
-  REDTEAM_SSH_PASSWORD: "testpass",
-};
+  REDTEAM_SSH_PASSWORD: "testpass" };
 
 // ---------------------------------------------------------------------------
 // Tier parsing
@@ -141,8 +139,7 @@ describe("toolMinTier", () => {
     // Tier 2 — chaining
     ["msf_exec", { action: "run" }, 2],
     // Unknown tools fail closed to the highest tier
-    ["brand_new_tool", {}, 2],
-  ];
+    ["brand_new_tool", {}, 2] ];
   for (const [tool, args, want] of cases) {
     it(`${tool} ${JSON.stringify(args)} → Tier ${want}`, () => {
       assert.equal(toolMinTier(tool, args), want);
@@ -322,8 +319,7 @@ describe("attestation accountability", () => {
       testStart: "2026-10-03T00:00:00Z",
       testEnd: "2026-10-03T01:00:00Z",
       findingCounts: { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
-      exclusions: [],
-    });
+      exclusions: [] });
     assert.ok(md.includes("op"), "operator named");
     assert.ok(md.includes("Tier 2 (chain)"), "tier named");
     assert.ok(md.includes("Reviewed the findings"), "responsibilities listed");
@@ -342,16 +338,14 @@ describe("attestation accountability", () => {
       testStart: "2026-10-03T00:00:00Z",
       testEnd: "2026-10-03T01:00:00Z",
       findingCounts: { critical: 1, high: 0, medium: 0, low: 0, info: 0 },
-      exclusions: [],
-    });
+      exclusions: [] });
     const forbidden = [
       /is PCI DSS compliant/i,
       /PCI DSS (certified|certification)/i,
       /SOC 2 (certified|compliant|certification)/i,
       /ISO 27001 (certified|compliant|certification)/i,
       /hereby certifies that .* is compliant/i,
-      /attests that .* (is|are) compliant/i,
-    ];
+      /attests that .* (is|are) compliant/i ];
     for (const re of forbidden) {
       assert.ok(!re.test(md), `forbidden claim matched: ${re}`);
     }
@@ -368,8 +362,7 @@ const textOnly = (text: string): ChatResult => ({ text, toolCalls: [], provider:
 const toolCall = (name: string, args: Record<string, unknown>): ToolCallRequest => ({
   id: `call-${name}`,
   name,
-  arguments: args,
-});
+  arguments: args });
 
 function fakeSshTransport() {
   const calls: string[] = [];
@@ -378,8 +371,7 @@ function fakeSshTransport() {
       calls.push(args.command);
       return { stdout: "Linux testhost", stderr: "", code: 0, ms: 5 };
     },
-    async close() {},
-  };
+    async close() {} };
   return { t, calls };
 }
 
@@ -419,8 +411,7 @@ const SSH_ARGS = {
   attackId: "T1021",
   category: "functionality",
   targetProfile: "linux",
-  hypothesis: "tier test",
-};
+  hypothesis: "tier test" };
 
 function toolEvents(dir: string, engagementId: string, tool: string) {
   return readFileSync(join(dir, engagementId, "events.jsonl"), "utf8")
@@ -441,19 +432,16 @@ describe("dispatcher tier enforcement (integration)", () => {
     target: "10.9.0.12",
     mode: "red",
     objective: "tier enforcement test",
-    roe: { scope: ["10.9.0.12"] },
-  };
+    roe: { scope: ["10.9.0.12"] } };
 
   it("Tier 0: ssh_exec is DENIED by autonomy tier — transport never touched", async () => {
     const { t, calls } = fakeSshTransport();
     const hostExecutor = new HostExecutor({ ssh: () => t, env: FAKE_ENV });
     const res = await runEngagement({ ...base, tier: 0 }, {
-      mcpToken: "test",
       deepseekApiKey: "test",
       qwenApiKey: "test",
       engagementsDir: dir,
-      deps: { verify: async () => true, completeForRole: scriptedFiring([{ name: "ssh_exec", args: SSH_ARGS }]) as never, hostExecutor },
-    });
+      deps: { verify: async () => true, completeForRole: scriptedFiring([{ name: "ssh_exec", args: SSH_ARGS }]) as never, hostExecutor } });
     assert.equal(res.status, "complete");
     const events = toolEvents(dir, res.engagementId, "ssh_exec");
     assert.ok(events.length >= 1, "ssh_exec denial event logged");
@@ -466,7 +454,6 @@ describe("dispatcher tier enforcement (integration)", () => {
     const { t, calls } = fakeSshTransport();
     const hostExecutor = new HostExecutor({ ssh: () => t, env: FAKE_ENV });
     const res = await runEngagement({ ...base, tier: 1 }, {
-      mcpToken: "test",
       deepseekApiKey: "test",
       qwenApiKey: "test",
       engagementsDir: dir,
@@ -474,11 +461,8 @@ describe("dispatcher tier enforcement (integration)", () => {
         verify: async () => true,
         completeForRole: scriptedFiring([
           { name: "ssh_exec", args: SSH_ARGS },
-          { name: "ssh_exec", args: { ...SSH_ARGS, command: "echo second" } },
-        ]) as never,
-        hostExecutor,
-      },
-    });
+          { name: "ssh_exec", args: { ...SSH_ARGS, command: "echo second" } } ]) as never,
+        hostExecutor } });
     assert.equal(res.status, "complete");
     const events = toolEvents(dir, res.engagementId, "ssh_exec");
     assert.ok(events.length >= 2, `expected 2 ssh_exec events, got ${events.length}`);
@@ -491,7 +475,6 @@ describe("dispatcher tier enforcement (integration)", () => {
     const { t, calls } = fakeSshTransport();
     const hostExecutor = new HostExecutor({ ssh: () => t, env: FAKE_ENV });
     const res = await runEngagement({ ...base }, {
-      mcpToken: "test",
       deepseekApiKey: "test",
       qwenApiKey: "test",
       engagementsDir: dir,
@@ -499,11 +482,8 @@ describe("dispatcher tier enforcement (integration)", () => {
         verify: async () => true,
         completeForRole: scriptedFiring([
           { name: "ssh_exec", args: SSH_ARGS },
-          { name: "ssh_exec", args: { ...SSH_ARGS, command: "echo second" } },
-        ]) as never,
-        hostExecutor,
-      },
-    });
+          { name: "ssh_exec", args: { ...SSH_ARGS, command: "echo second" } } ]) as never,
+        hostExecutor } });
     assert.equal(res.status, "complete");
     assert.equal(calls.length, 2, "both steps fired at Tier 2");
   });
@@ -512,12 +492,10 @@ describe("dispatcher tier enforcement (integration)", () => {
     await assert.rejects(
       () =>
         runEngagement({ ...base, environment: "production", confirmProduction: true }, {
-          mcpToken: "test",
           deepseekApiKey: "test",
           qwenApiKey: "test",
           engagementsDir: dir,
-          deps: { verify: async () => true },
-        }),
+          deps: { verify: async () => true } }),
       /named human operator/,
     );
   });
@@ -526,24 +504,20 @@ describe("dispatcher tier enforcement (integration)", () => {
     await assert.rejects(
       () =>
         runEngagement({ ...base, environment: "production", confirmProduction: true, operatorName: "op", tier: 2 }, {
-          mcpToken: "test",
           deepseekApiKey: "test",
           qwenApiKey: "test",
           engagementsDir: dir,
-          deps: { verify: async () => true },
-        }),
+          deps: { verify: async () => true } }),
       /Tier 2 \(chain\) on PRODUCTION/,
     );
   });
 
   it("approval log, safety manifest, and compliance pack carry the tier + accountability", async () => {
     const res = await runEngagement({ ...base, tier: 1, operatorName: "op" }, {
-      mcpToken: "test",
       deepseekApiKey: "test",
       qwenApiKey: "test",
       engagementsDir: dir,
-      deps: { verify: async () => true, completeForRole: scriptedFiring([]) as never },
-    });
+      deps: { verify: async () => true, completeForRole: scriptedFiring([]) as never } });
     assert.equal(res.status, "complete");
     const eDir = join(dir, res.engagementId);
     // Approval log: tier declared, append-only.
@@ -573,12 +547,10 @@ describe("dispatcher tier enforcement (integration)", () => {
     const res = await runEngagement(
       { ...base, environment: "production", confirmProduction: true, operatorName: "op", tier: 1 },
       {
-        mcpToken: "test",
         deepseekApiKey: "test",
         qwenApiKey: "test",
         engagementsDir: dir,
-        deps: { verify: async () => true, completeForRole: scriptedFiring([]) as never },
-      },
+        deps: { verify: async () => true, completeForRole: scriptedFiring([]) as never } },
     );
     assert.equal(res.status, "complete");
     const approvals = readFileSync(join(dir, res.engagementId, "approvals.jsonl"), "utf8")

@@ -22,23 +22,7 @@
  * (shell bind/reverse, etc.), and any post module outside the allowlist.
  * All pure functions — tested directly, no network.
  */
-export declare const MSF_ENV_HOST = "REDTEAM_MSFRPC_HOST";
-export declare const MSF_ENV_PORT = "REDTEAM_MSFRPC_PORT";
-export declare const MSF_ENV_USER = "REDTEAM_MSFRPC_USER";
-export declare const MSF_ENV_PASS = "REDTEAM_MSFRPC_PASS";
-export declare const MSF_ENV_TLS = "REDTEAM_MSFRPC_TLS";
-export declare const MSFRPC_SETUP_INSTRUCTIONS: string;
-export interface MsfCredentials {
-    host: string;
-    port: number;
-    useTls: boolean;
-    user: string;
-    pass: string;
-}
-/** msfrpcd connection credentials — fail fast with setup instructions. */
-export declare function resolveMsfCredentials(env?: NodeJS.ProcessEnv): MsfCredentials;
-/** Values that must never appear in logs, errors, or events. */
-export declare function msfSecrets(creds: MsfCredentials): string[];
+export declare const MSF_NATIVE_SETUP_INSTRUCTIONS: string;
 /** True when the payload is a policy-allowed Meterpreter session payload. */
 export declare function isMsfSessionPayload(payload: string): boolean;
 export declare function checkMsfPayload(payload: string, opts?: {

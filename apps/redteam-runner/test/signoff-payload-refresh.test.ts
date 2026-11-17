@@ -45,8 +45,7 @@ afterEach(() => {
 const noRedirects = (): Record<SignOffTransition, number> => ({
   'plan→recon': 0,
   'recon→exploit': 0,
-  'exploit→report': 0,
-})
+  'exploit→report': 0 })
 
 type CompleteFn = (
   role: unknown,
@@ -73,14 +72,12 @@ function makeCtx(eventsDir: string, completeForRole: CompleteFn): Ctx {
       mode: 'red',
       objective: 'assess the shop',
       roe: { blackoutWindows: [], scope: ['shop.example.test'] },
-      fullBattery: false,
-    },
+      fullBattery: false },
     deps: { completeForRole },
     events: new EventLog(eventsDir, 'eng-signoff-payload-refresh', {
       target: 'shop.example.test',
       mode: 'red',
-      objective: 'assess the shop',
-    }),
+      objective: 'assess the shop' }),
     coverage: new Set(),
     targetCoverage: new Map(),
     itemLedger: new Map(),
@@ -94,8 +91,7 @@ function makeCtx(eventsDir: string, completeForRole: CompleteFn): Ctx {
     fingerprint: { stack: [], appType: 'unknown' },
     tier: { current: 0, chainSteps: new Map<string, number>() },
     safety: { killSwitchAborts: 0 },
-    hostKill: { aborted: false, controllers: new Set<AbortController>() },
-  } as unknown as Ctx
+    hostKill: { aborted: false, controllers: new Set<AbortController>() } } as unknown as Ctx
 }
 
 function eventsOf(action: string): EngagementEvent[] {
@@ -152,8 +148,7 @@ describe('coordinatorSignOff — re-review payload is rebuilt after a redirect (
           target: { host: 'shop.example.test', stack: ['nginx'], appType: 'spa' },
           kind: 'killed',
           hypothesis: 'default creds on /api/orders',
-          killingObservation: 'login rejected the default pair',
-        })
+          killingObservation: 'login rejected the default pair' })
         ctx.fingerprint.stack.push('nginx')
         ctx.fingerprint.appType = 'spa'
       },

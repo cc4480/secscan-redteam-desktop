@@ -44,8 +44,7 @@ function fixture(engagementId = "eng-1", withEvents = true): Fixture {
       [
         JSON.stringify({ phase: "authorize", actor: "runner", action: "verify", result: "ok" }),
         JSON.stringify({ phase: "plan", actor: "coordinator", action: "plan", result: "ok" }),
-        "",
-      ].join("\n"),
+        "" ].join("\n"),
     );
     writeFileSync(join(engagementDir, "steps.jsonl"), "{}\n");
     writeFileSync(join(engagementDir, "state.json"), "{}\n");
@@ -54,8 +53,7 @@ function fixture(engagementId = "eng-1", withEvents = true): Fixture {
     engagementId,
     hosts: [HOST],
     verifiedAt: NOW,
-    verificationProof: "dns-txt attestation",
-  });
+    verificationProof: "dns-txt attestation" });
   return { paths, store, engagementDir, scope };
 }
 
@@ -72,8 +70,7 @@ function confirmedEntry(overrides: Partial<ConfirmedFinding> = {}): ConfirmedFin
     payloadPattern: "GET /api/orders/{id+1}",
     evidenceRef: "evidence/p7.md",
     severity: "high",
-    ...overrides,
-  };
+    ...overrides };
 }
 
 function commitInput(fx: Fixture, overrides: Partial<MemoryCommitInput> = {}): MemoryCommitInput {
@@ -91,8 +88,7 @@ function commitInput(fx: Fixture, overrides: Partial<MemoryCommitInput> = {}): M
     registryEntries: [],
     recallReceiptIds: [],
     nowIso: NOW,
-    ...overrides,
-  };
+    ...overrides };
 }
 
 /** Narrow a commit receipt to its success variant (Phase 2 failures carry only status+error). */
@@ -198,8 +194,7 @@ describe("memory commit — projection lanes (§7.2)", () => {
         engagementId: "eng-2",
         scope: fx2scope,
         registryEntries: [confirmedEntry({ engagementId: "eng-2", evidenceRef: "evidence/p9.md" })],
-        nowIso: LATER,
-      }),
+        nowIso: LATER }),
     );
     assert.equal(okCommit(second).autoApplied, 1);
     const unit = fx.store.listUnits()[0]!;
@@ -217,8 +212,7 @@ describe("memory commit — projection lanes (§7.2)", () => {
       changed: "Retry budget raised to 3",
       why: "flaky target",
       measuredEffect: "fewer halts",
-      status: { kind: "superseded", by: "cycle-8" },
-    };
+      status: { kind: "superseded", by: "cycle-8" } };
     const receipt = commitEngagementMemory(
       commitInput(fx, { experience: { records: [record], skipped: 0, files: [{ uri: "EXPERIENCE.md", sha256: "a".repeat(64) }] } }),
     );
@@ -241,8 +235,7 @@ describe("memory commit — projection lanes (§7.2)", () => {
       counts: { autoApplied: 0, proposed: 1, skipped: 0 },
       audit: { legacyExperienceSkipped: 0, extractorVersions: {} },
       status: "proposed",
-      sha256: "a".repeat(64),
-    };
+      sha256: "a".repeat(64) };
     writeFileSync(join(fx.paths.proposalsDir, "eng-9-0001.json"), `${JSON.stringify(raw, null, 2)}\n`);
     expectMemoryError("SCHEMA_INVALID", () => readDiff(fx.paths, "eng-9-0001"), "DELETE_NOT_SUPPORTED_V1");
   });
@@ -315,16 +308,14 @@ describe("memory apply — approval gate (§7.3)", () => {
         derivedFromUnitIds: [],
         extractor: { name: "registry-projector", version: "1", inputHash: "h1" },
         createdAt: NOW,
-        createdBy: "runner",
-      },
+        createdBy: "runner" },
       proof: { state: "confirmed" as const, receipts: [{ kind: "registry-entry" as const, ref: "evidence/p7.md" }], registryEntryId: "vuln-0001" },
       corroboration: { independentCount: 0, sourceKeys: ["registry:eng-1"] },
       contentClass: "normal" as const,
       tags: ["idor"],
       attackIds: [],
       vulnClass: "IDOR",
-      stack: [],
-    };
+      stack: [] };
     const v1 = finalizeUnit(draft, NOW);
     fx.store.appendUnitVersion(v1, { status: "active", by: "runner", reason: "MECHANICAL_PROJECTION", at: NOW });
     const v2 = finalizeUnit({ ...draft, version: 2, body: "v2 body with the payload pattern" }, LATER);
@@ -339,8 +330,7 @@ describe("memory apply — approval gate (§7.3)", () => {
       skipped: [],
       counts: { autoApplied: 0, proposed: 1, skipped: 0 },
       audit: { legacyExperienceSkipped: 0, extractorVersions: {} },
-      status: "proposed",
-    });
+      status: "proposed" });
     writeFileSync(join(fx.paths.proposalsDir, "eng-1-0099.json"), `${JSON.stringify(diff, null, 2)}\n`);
     approveDiff(fx.paths, "eng-1-0099", { operator: "carlos-test", nowIso: LATER });
     const receipt = applyDiff(fx.paths, "eng-1-0099", LATER);
@@ -376,14 +366,11 @@ describe("memory apply — approval gate (§7.3)", () => {
           unitId: active.unitId,
           baseVersion: 1,
           baseHash: "0".repeat(64),
-          unit: { ...createOp.unit, version: 2 },
-        },
-      ],
+          unit: { ...createOp.unit, version: 2 } } ],
       skipped: [],
       counts: { autoApplied: 0, proposed: 1, skipped: 0 },
       audit: { legacyExperienceSkipped: 0, extractorVersions: {} },
-      status: "proposed",
-    });
+      status: "proposed" });
     writeFileSync(join(fx.paths.proposalsDir, "eng-1-0100.json"), `${JSON.stringify(stale, null, 2)}\n`);
     approveDiff(fx.paths, "eng-1-0100", { operator: "carlos-test", nowIso: LATER });
     const receipt = applyDiff(fx.paths, "eng-1-0100", LATER);
@@ -407,8 +394,7 @@ describe("memory apply — approval gate (§7.3)", () => {
       skipped: [],
       counts: { autoApplied: 0, proposed: 1, skipped: 0 },
       audit: { legacyExperienceSkipped: 0, extractorVersions: {} },
-      status: "proposed",
-    });
+      status: "proposed" });
     writeFileSync(join(fx.paths.proposalsDir, "eng-1-0101.json"), `${JSON.stringify(diff, null, 2)}\n`);
     approveDiff(fx.paths, "eng-1-0101", { operator: "carlos-test", nowIso: LATER });
     const receipt = applyDiff(fx.paths, "eng-1-0101", LATER);

@@ -14,8 +14,7 @@ import {
   DEFAULT_CONSOLE_TIMEOUT_MS,
   cleanConsoleOutput,
   resolveMsfConsoleBinary,
-  runConsoleOnce,
-} from '../src/msf/console.js'
+  runConsoleOnce } from '../src/msf/console.js'
 
 describe('cleanConsoleOutput', () => {
   it('strips ANSI colour codes', () => {
@@ -26,8 +25,7 @@ describe('cleanConsoleOutput', () => {
     const raw = [
       'ruby: warning: Win32API is deprecated after Ruby 1.9.1; use fiddle directly instead',
       'You can add fiddle to your Gemfile or gemspec to silence this warning.',
-      'Framework: 6.5.3-dev',
-    ].join('\n')
+      'Framework: 6.5.3-dev' ].join('\n')
     assert.equal(cleanConsoleOutput(raw), 'Framework: 6.5.3-dev')
   })
 })

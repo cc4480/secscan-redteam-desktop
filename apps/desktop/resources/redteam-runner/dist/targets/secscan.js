@@ -1,5 +1,5 @@
 /**
- * SecScan target profile — the scanner webapp (https://secscan.us).
+ * SecScan target profile — the scanner webapp (https://target.invalid).
  *
  * EXHAUSTIVE battery (v0.7.0): surface × technique. Every distinct attacker
  * intent against the real surface is one item. Surfaces: scan intake
@@ -25,10 +25,10 @@ const SECSCAN_BATTERY = [
 export const SECSCAN_PROFILE = {
     id: "secscan",
     name: "SecScan — scanner web app",
-    baseUrl: "https://secscan.us",
+    baseUrl: "https://target.invalid",
     kind: "webapp",
     authModel: "DNS TXT ownership gate (_secscan-challenge.<domain>, server-authoritative) + session auth for reports/shares; scan intake rate-limited per namespace.",
-    scopeNotes: "In-scope: secscan.us webapp surface (intake, scan lifecycle, reports, share links). Out-of-scope: anything not on the scoped host; no emails to real users; no scan/report deletion.",
+    scopeNotes: "In-scope: the declared scanner webapp target host (intake, scan lifecycle, reports, share links). Out-of-scope: anything not on the scoped host; no emails to real users; no scan/report deletion.",
     battery: SECSCAN_BATTERY,
 };
 //# sourceMappingURL=secscan.js.map

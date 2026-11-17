@@ -37,8 +37,7 @@ const SENTINELS: Record<string, string> = {
   ZZ_PLAIN_SENTINEL: 'LEAK-PLAIN',
   REDTEAM_KRB_CCACHE_B64: 'LEAK-CCACHE',
   REDTEAM_SSH_PASSWORD: 'LEAK-SSHPW',
-  REDTEAM_MSFRPC_PASS: 'LEAK-MSF',
-}
+  REDTEAM_SMB_PASSWORD: 'LEAK-SMBPW' }
 
 describe('toolChildEnv — the spawn allowlist', () => {
   it('drops every secret-shaped and unlisted var, keeps system + tool-location vars', () => {
@@ -52,8 +51,7 @@ describe('toolChildEnv — the spawn allowlist', () => {
       REDTEAM_NPING_BIN: '/opt/tools/nping',
       REDTEAM_WORDLIST: '/opt/tools/common.txt',
       REDTEAM_NUCLEI_TEMPLATES: '/opt/templates',
-      REDTEAM_FFUF_BIN: '/opt/tools/ffuf',
-    })
+      REDTEAM_FFUF_BIN: '/opt/tools/ffuf' })
     for (const k of Object.keys(SENTINELS)) assert.ok(!(k in env), `${k} must not reach a child`)
     assert.equal(env.PATH, '/usr/bin')
     assert.equal(env.SystemRoot, 'C:\\Windows')
@@ -157,8 +155,7 @@ describe('dispatchTool — a hung call is bounded, a fast call untouched', () =>
       targetCoverage: new Map(),
       probesUsed: 0,
       actions: 0,
-      nmapExecutor: executor,
-    } as never
+      nmapExecutor: executor } as never
   }
 
   it('a never-settling call returns TOOL_TIMEOUT at ~the budget and its signal aborts', async () => {
@@ -170,8 +167,7 @@ describe('dispatchTool — a hung call is bounded, a fast call untouched', () =>
         seenSignal = a.signal
         return new Promise(() => {})
       },
-      profiles: async () => ({ message: 'x' }),
-    }
+      profiles: async () => ({ message: 'x' }) }
     try {
       const t0 = Date.now()
       const d = await dispatchTool(fakeCtx(hanging), 'recon', 'recon', CALL)
@@ -195,8 +191,7 @@ describe('dispatchTool — a hung call is bounded, a fast call untouched', () =>
         seenSignal = a.signal
         return { ok: true, message: 'done', run: { hosts: [], summary: 'none', upHostCount: 0, elapsedS: 0 } }
       },
-      profiles: async () => ({ message: 'x' }),
-    }
+      profiles: async () => ({ message: 'x' }) }
     try {
       const d = await dispatchTool(fakeCtx(fast), 'recon', 'recon', CALL)
       assert.ok(d.result.includes('done'))

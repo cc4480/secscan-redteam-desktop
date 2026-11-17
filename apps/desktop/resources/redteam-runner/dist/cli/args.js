@@ -49,7 +49,7 @@ export function parseLogRotationArgs() {
 export function usage() {
     console.error(`Usage:
   redteam-runner start --target <domain|url> --mode <red|black> --objective "<text>" --scope <host> [--scope <host>...] [--out-of-scope <host>...] [--exclude <Txxxx>...] [--blackout "02:00-04:00 America/Chicago"...] [--client "<name>"] [--full-battery] [--targets secscan,seclayer,webapp,windows,linux] [--env staging|production] [--confirm-production] [--max-rps <n>] [--tier 0|1|2] [--confirm-tier2-production] [--operator "<name>"] [--local-sandbox] [--dry-run]
-  redteam-runner start --target secscan+seclayer --mode red --objective "<text>" --scope secscan.us   # full-battery unified engagement (web targets only)
+  redteam-runner start --target secscan+seclayer --mode red --objective "<text>" --scope <in-scope-host>   # full-battery unified engagement (web targets only)
   redteam-runner queue  --target ... (same flags)   # enqueue for the watcher / console
   redteam-runner watch [--queue <dir>]              # run queued jobs until aborted
   redteam-runner watch --profile <profile.json> [--once] [--trigger "<change ref>"] [--max-rps <n>] [--log-max-bytes <n>] [--log-max-archives <n>]
@@ -77,11 +77,11 @@ complete only when every cell is probed or honestly BLOCKED.
 (default: the four vendor targets; add webapp to opt in the generic client-webapp battery).
 Only applies with --full-battery. Several battery items
 carry honest prerequisites (each tagged [needs: ...] in the plan skeleton,
-e.g. the Metasploit items need msfrpcd and the Nuclei items need the nuclei
+e.g. the Metasploit items need the local Metasploit framework (msfconsole) and the Nuclei items need the nuclei
 binary); three need more than operator tooling â€” WS-064: kerberos ticket
 material, WS-065: human operator for the shadowing act, LX-041: privileged
 test client for the mount proof â€” see docs/ROADMAP.md; --scope must cover
-secscan.us for the web targets.
+the declared in-scope hosts for the selected web targets.
 
 --out-of-scope <host> [--out-of-scope <host>...]: hosts, IPs or CIDRs that must
 never be touched, even when they fall inside --scope (e.g. a third-party
@@ -156,16 +156,16 @@ redteam-runner ui [--port 8787] [--listen <addr>] [--engagements-dir <dir>]
     # and prints a warning. Env: REDTEAM_UI_TOKEN (use your own token),
     # REDTEAM_HOME or engagements default like the CLI.
 
-Env: MODEL_API_KEY (the fleet's model key; DEEPSEEK_API_KEY also supported), QWEN_API_KEY (optional since v0.6), SECSCAN_MCP_TOKEN + SECSCAN_MCP_URL (optional, service-verification opt-in only), REDTEAM_LOCAL_SANDBOX=1, REDTEAM_TEST_MODE=1 (TESTING ONLY — operator order: bypasses the mechanical restraints — ownership verification, tier enforcement, lockout interlock, rate limiting, variant cap, technique exclusions, destructive/DoS denylists — for declared in-scope targets; every bypass is event-logged and the record carries an operator self-attestation, never a fabricated proof. Scope and the out-of-scope deny list stay in force).
+Env: MODEL_API_KEY (the fleet's model key; DEEPSEEK_API_KEY also supported), QWEN_API_KEY (optional since v0.6), REDTEAM_LOCAL_SANDBOX=1, REDTEAM_TEST_MODE=1 (TESTING ONLY — operator order: bypasses the mechanical restraints — ownership verification, tier enforcement, lockout interlock, rate limiting, variant cap, technique exclusions, destructive/DoS denylists — for declared in-scope targets; every bypass is event-logged and the record carries an operator self-attestation, never a fabricated proof. Scope and the out-of-scope deny list stay in force).
 Host-exec (v0.9.0, Windows/Linux batteries): REDTEAM_SSH_USER + one of
 REDTEAM_SSH_PASSWORD / REDTEAM_SSH_KEY / REDTEAM_SSH_KEY_PATH;
 REDTEAM_SMB_USER + REDTEAM_SMB_PASSWORD (+ optional REDTEAM_SMB_DOMAIN);
 REDTEAM_WINRM_USER + REDTEAM_WINRM_PASSWORD. Test accounts only, via
 environment or Secure Vault â€” never in code, never logged.
-Metasploit bridge (v0.11.0, CVE exploit validation): REDTEAM_MSFRPC_USER +
-REDTEAM_MSFRPC_PASS (+ optional REDTEAM_MSFRPC_HOST / REDTEAM_MSFRPC_PORT /
-REDTEAM_MSFRPC_TLS=0). Requires the operator's msfrpcd running
-(msfrpcd -P <pass> -U <user> -a 127.0.0.1 -p 55553 -S) â€” fail closed otherwise.`);
+Metasploit arm (v0.11.0, CVE exploit validation): the Metasploit Framework
+installed on this host — msfconsole on PATH or REDTEAM_MSFCONSOLE_BIN set
+to its full path. Runs natively as local processes; no daemon, no
+credentials — fail closed otherwise.`);
     process.exit(2);
 }
 export function parseBlackout(s) {

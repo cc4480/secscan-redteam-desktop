@@ -38,6 +38,7 @@ import { probeHostHeaderInjection } from "#seclayer/server/aggressive/hostHeader
 import type { ProbeContext } from "#seclayer/server/redTeam/types.js";
 import type { RedTeamFinding } from "#seclayer/server/scanTypes.js";
 import type { BolaIdentity } from "#seclayer/src/types.js";
+import { isLoopbackTarget, withLoopbackOob } from "../net/oob-listener.js";
 
 export const SECLAYER_TOOL_NAMES = new Set([
   "seclayer_redteam", "seclayer_bola", "seclayer_api",
@@ -137,7 +138,11 @@ export function seclayerFindingToLive(
   };
 }
 
-/** Record a batch of module findings on the proven path and summarize. */
+/** Record a batch of module findings on the proven path and summarize.
+ * When `notRun` lists blind/OOB-dependent classes that could not execute
+ * (e.g. remote target, loopback-only collaborator unavailable), the result
+ * is reported as partially/fully unverifiable — never as clean coverage for
+ * those classes. */
 export function recordSeclayerFindings(
   ctx: Ctx,
   tool: string,
@@ -148,6 +153,7 @@ export function recordSeclayerFindings(
   // Q-FLEET-XCHECK: the seat that ran the probe tool, stamped as the
   // findings' producer. Optional so direct callers (tests) keep working.
   producer?: ActorRole,
+  notRun?: string[],
 ): DispatchResult {
   ctx.probesUsed++;
   noteCategoryCoverage(ctx, pre.category, pre.targetProfile);
@@ -169,10 +175,17 @@ export function recordSeclayerFindings(
   const order = ["critical", "high", "medium", "low", "info"];
   const sevSummary = order.filter((s) => bySev.has(s)).map((s) => `${bySev.get(s)} ${s}`).join(", ");
   const lines = recorded.slice(0, 30).map((f) => `[${f.severity}] ${f.title}`);
-  const result =
-    recorded.length === 0
-      ? `${tool} vs ${url} — 0 findings. The probes ran and proved nothing on this target; that is a clean result for these classes, not coverage of the whole battery.`
-      : `${tool} vs ${url} — ${recorded.length} finding(s) recorded (of ${raw.length} returned): ${sevSummary}.\n${lines.join("\n")}\nFindings are now in the report set — retest the fixed build with the same call to close them.`;
+  const notRunBlock = notRun && notRun.length > 0
+    ? `\nNOT RUN (unverifiable): ${notRun.join("; ")} No findings recorded for these classes and they are not covered for this target.`
+    : "";
+  let result: string;
+  if (recorded.length === 0) {
+    result = notRun && notRun.length > 0
+      ? `${tool} vs ${url} — 0 findings from probes that ran.${notRunBlock}`
+      : `${tool} vs ${url} — 0 findings. The probes ran and proved nothing on this target; that is a clean result for these classes, not coverage of the whole battery.`;
+  } else {
+    result = `${tool} vs ${url} — ${recorded.length} finding(s) recorded (of ${raw.length} returned): ${sevSummary}.\n${lines.join("\n")}\nFindings are now in the report set — retest the fixed build with the same call to close them.${notRunBlock}`;
+  }
   return { result, attackId: pre.attackId, target: url, ok: recorded.length > 0 };
 }
 
@@ -208,8 +221,19 @@ export async function handleSeclayerTools(
   const { url, headers } = pre;
   try {
     if (call.name === "seclayer_redteam") {
-      const findings = await runRedTeamProbes(url, headers, {});
-      return recordSeclayerFindings(ctx, call.name, url, findings as RawSeclayerFinding[], pre, "redteam-probe", _role);
+      const findings = await withLoopbackOob(url, (oob) =>
+        runRedTeamProbes(url, headers, oob ? { oob } : {}),
+      );
+      const notRun: string[] = [];
+      if (!isLoopbackTarget(new URL(url).hostname)) {
+        notRun.push(
+          "blind SSRF (out-of-band) was not run because the target is not loopback/local and the in-process loopback collaborator cannot receive callbacks from remote targets.",
+        );
+      }
+      return recordSeclayerFindings(
+        ctx, call.name, url, findings as RawSeclayerFinding[], pre, "redteam-probe", _role,
+        notRun.length ? notRun : undefined,
+      );
     }
     if (call.name === "seclayer_bola") {
       const identities = bolaIdentitiesFromArgs(args);
@@ -234,7 +258,23 @@ export async function handleSeclayerTools(
     if (!probe) {
       return { result: `DENIED: seclayer_aggressive probe must be one of ${Object.keys(AGGRESSIVE_PROBES).join(", ")} — got ${JSON.stringify(args["probe"] ?? null)}.`, attackId: pre.attackId, target: url, repairable: `seclayer_aggressive probe must be one of ${Object.keys(AGGRESSIVE_PROBES).join(", ")}` };
     }
-    const finding = await probe({ url, fuzzHeaders: headers });
+    if (probeName === "xxe" && !isLoopbackTarget(new URL(url).hostname)) {
+      // Blind XXE requires an OOB callback collaborator; the runner only
+      // provides a loopback listener, so remote targets cannot be verified.
+      // Report not-run/unverifiable (never clean/covered) with no coverage
+      // credit for this class.
+      ctx.probesUsed++;
+      return {
+        result:
+          `seclayer_aggressive/xxe vs ${url} — NOT RUN (unverifiable): blind XXE requires an out-of-band callback collaborator, but the target is not loopback/local so the in-process loopback collaborator cannot receive callbacks from remote targets. No finding recorded and the blind XXE class is not covered for this target.`,
+        attackId: pre.attackId,
+        target: url,
+        ok: false,
+      };
+    }
+    const finding = await withLoopbackOob(url, (oob) =>
+      probe({ url, fuzzHeaders: headers, ...(oob ? { oob } : {}) }),
+    );
     return recordSeclayerFindings(ctx, call.name, url, finding ? [finding] : [], pre, `aggressive-${probeName}`, _role);
   } catch (e) {
     return {

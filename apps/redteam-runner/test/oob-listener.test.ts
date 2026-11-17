@@ -25,11 +25,10 @@ describe("oob listener — collaborator attachment", () => {
     assert.ok(sawOob, "loopback target gets a collaborator")
   })
 
-  it("binds the engagement-supplied callback URL when one is supplied", async () => {
+  it("offers no collaborator to a remote-shaped target", async () => {
     let sawOob: { baseUrl: string } | undefined
-    const out = await withLoopbackOob("http://10.0.0.5/", async (oob) => { sawOob = oob; return "ran" }, "http://127.0.0.1:9471/oob")
+    const out = await withLoopbackOob("http://10.0.0.5/", async (oob) => { sawOob = oob; return "ran" })
     assert.equal(out, "ran")
-    assert.ok(sawOob, "supplied callback URL attaches a collaborator even to a remote-shaped target")
-    assert.equal(sawOob.baseUrl, "http://127.0.0.1:9471")
+    assert.equal(sawOob, undefined)
   })
 });

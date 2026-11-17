@@ -23,31 +23,10 @@
  * wave is NEVER silently counted complete, and its engagementId (what
  * was actually launched) stays on the record.
  */
-import type { CampaignRecord, CampaignStatus, WaveRecord, WaveRollup, WaveSeverity } from './types.js';
-export declare class CampaignStoreError extends Error {
-    constructor(message: string);
-}
-export declare const CAMPAIGN_FILE_NAME = "campaign.json";
-/** Mirror of config.ts resolution: opts → REDTEAM_CAMPAIGNS_DIR →
- *  REDTEAM_HOME/engagements/campaigns → cwd/engagements/campaigns.
- *  Campaigns sit beside the registry under the engagements home (D-6). */
-export declare function resolveCampaignsDir(opts?: {
-    campaignsDir?: string;
-    env?: NodeJS.ProcessEnv;
-    cwd?: string;
-}): string;
-export declare function campaignDir(campaignsDir: string, campaignId: string): string;
-export declare function campaignFile(campaignsDir: string, campaignId: string): string;
-/** Validate then persist a record (normalized form is what lands). */
-export declare function saveCampaignFile(path: string, rec: CampaignRecord): void;
-/** Load + validate one campaign record file. Throws CampaignSchemaError
- *  on a missing, unparsable, or invalid record — fail loud, never a
- *  quietly-invented empty campaign. */
-export declare function loadCampaignFile(path: string): CampaignRecord;
-export declare function loadCampaign(campaignsDir: string, campaignId: string): CampaignRecord;
-/** Ids of all campaigns with a record file under campaignsDir, sorted.
- *  A missing campaigns directory is an empty store, not an error. */
-export declare function listCampaignIds(campaignsDir: string): string[];
+import type { CampaignRecord, CampaignStatus } from './types.js';
+export { CampaignStoreError, CAMPAIGN_FILE_NAME, resolveCampaignsDir, campaignDir, campaignFile, saveCampaignFile, loadCampaignFile, loadCampaign, listCampaignIds, transactCampaign, applyCampaignTransition, recordTransition, } from './store-io.js';
+export { beginWave, computeRollup, recordWaveOutcome, settleFailedWave } from './store-wave.js';
+export type { BeginWaveInput, EngagementResultLike } from './store-wave.js';
 export interface CreateCampaignInput {
     id: string;
     name: string;
@@ -70,75 +49,6 @@ export interface CreateCampaignInput {
  * id already exists — creation never overwrites an existing record.
  */
 export declare function createCampaign(campaignsDir: string, input: CreateCampaignInput, now?: Date): CampaignRecord;
-/**
- * Atomic read-modify-write transaction on one campaign record
- * (registry transact precedent). The mutator runs against the freshly
- * loaded record; the result is validated and saved atomically, with
- * updatedAt refreshed. If the mutator throws, nothing is written.
- */
-export declare function transactCampaign<T>(campaignsDir: string, campaignId: string, fn: (rec: CampaignRecord) => T, now?: Date): T;
-/** Append a transition entry and move the status. This is the SINGLE
- *  transition writer for campaign records: seq always equals the
- *  entry's index in transitions[] (creation is seq 0), so the audit
- *  spine stays gapless and duplicate-free no matter which module
- *  records the move. Callers outside the store (lifecycle, executor)
- *  must use this — never push transition entries by hand. */
-export declare function applyCampaignTransition(rec: CampaignRecord, to: CampaignStatus, reason: string, opts?: {
-    waveIndex?: number;
-    now?: Date;
-}): void;
-/** Record a lifecycle status change (the executor/lifecycle's path for
- *  transitions not owned by beginWave/recordWaveOutcome — arm, pause,
- *  resume, stop, complete). */
-export declare function recordTransition(campaignsDir: string, campaignId: string, to: CampaignStatus, reason: string, opts?: {
-    waveIndex?: number;
-    now?: Date;
-}): CampaignRecord;
-export interface BeginWaveInput {
-    engagementId: string;
-    aim?: string;
-    planRef?: string;
-}
-/**
- * Mark a wave launched: the wave becomes "running" with its engagement
- * id and launch time; the campaign moves to "wave-running". The gate
- * (gate.ts assertLaunchAllowed) is consulted by the caller BEFORE this —
- * beginWave enforces launch bookkeeping, not authorization. Throws if
- * the wave was already launched (any non-"planned" state).
- */
-export declare function beginWave(campaignsDir: string, campaignId: string, waveIndex: number, input: BeginWaveInput, now?: Date): WaveRecord;
-/** The structural subset of EngagementResult the harvest consumes — the
- *  real EngagementResult satisfies it; tests may pass canned results. */
-export interface EngagementResultLike {
-    status: string;
-    blockedReason?: string;
-    reportPath?: string;
-    findings: Array<{
-        status: 'confirmed' | 'killed' | 'deferred';
-        severity: WaveSeverity;
-    }>;
-}
-/** Mechanical rollup over a finished engagement's findings. */
-export declare function computeRollup(findings: EngagementResultLike['findings']): WaveRollup;
-/**
- * Harvest a finished engagement into its wave record: outcome + rollup
- * land, the wave takes the mapped terminal status, and the campaign
- * moves to "complete" when the wave cap is reached, else
- * "awaiting-advance". Throws on a non-terminal engagement status — an
- * outcome is only ever recorded for a finished run.
- */
-export declare function recordWaveOutcome(campaignsDir: string, campaignId: string, waveIndex: number, result: EngagementResultLike, now?: Date): WaveRecord;
-/**
- * Settle a wave whose engagement call THREW before producing an
- * EngagementResult (the executor's failure path): the wave becomes
- * "failed" with an outcome whose engagementStatus is "error" and whose
- * blockedReason carries the thrown message — the record shows the
- * launch happened and how it died, and the wave never sits "running"
- * forever. The campaign moves on exactly as for a harvested outcome
- * (cap → "complete", else "awaiting-advance"). Returns the settled
- * wave, or null when the wave was not running (already settled).
- */
-export declare function settleFailedWave(campaignsDir: string, campaignId: string, waveIndex: number, message: string, now?: Date): WaveRecord | null;
 export interface ResumeRepair {
     id: string;
     interruptedWaves: number[];

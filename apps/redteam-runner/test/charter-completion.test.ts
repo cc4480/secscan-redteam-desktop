@@ -28,21 +28,17 @@ function makeCtx(events: CapturedEvent[]): Ctx {
       mode: 'red',
       objective: 'assess the external attack surface',
       client: 'Example Owner LLC',
-      roe: { scope: ['example.com'] },
-    },
+      roe: { scope: ['example.com'] } },
     events: {
       engagementId: 'example.com-4242',
-      append: (e: CapturedEvent) => events.push(e),
-    },
-  } as unknown as Ctx
+      append: (e: CapturedEvent) => events.push(e) } } as unknown as Ctx
 }
 
 const ANCHOR_TEXT = [
   'engagement: example.com-4242 for Example Owner LLC',
   'scope: example.com',
   'objective: assess the external attack surface',
-  'artifact: a falsification-ready finding',
-].join('\n')
+  'artifact: a falsification-ready finding' ].join('\n')
 
 function result(text: string, toolCalls: ChatResult['toolCalls'] = []): ChatResult {
   return { text, toolCalls, provider: 'deepseek', model: 'deepseek-chat' }
@@ -67,9 +63,7 @@ function seams(over: {
       fallbackCall: async () => {
         state.fallbackCalls++
         return result(over.fallbackText ?? 'RECOVERED ARTIFACT')
-      },
-    },
-  }
+      } } }
 }
 
 describe('charterEngagementFor', () => {
@@ -96,8 +90,7 @@ describe('createCharteredComplete', () => {
     const complete = createCharteredComplete(makeCtx(events), 'recon', s as never)
     const messages: ChatMessage[] = [
       { role: 'system', content: 'PERSONA: recon specialist' },
-      { role: 'user', content: 'map the surface' },
-    ]
+      { role: 'user', content: 'map the surface' } ]
     const res = await complete('recon', messages, {})
     assert.equal(res.text, 'working')
     assert.equal(state.elicitations, 1)
@@ -129,13 +122,11 @@ describe('createCharteredComplete', () => {
   it('runs the fallback chain on a refusal and keeps the refused text out of context', async () => {
     const events: CapturedEvent[] = []
     const { seams: s, state } = seams({
-      call: async () => result("I can't help with that request."),
-    })
+      call: async () => result("I can't help with that request.") })
     const complete = createCharteredComplete(makeCtx(events), 'exploit', s as never)
     const messages: ChatMessage[] = [
       { role: 'system', content: 'PERSONA: exploiter' },
-      { role: 'user', content: 'build the payload' },
-    ]
+      { role: 'user', content: 'build the payload' } ]
     const res = await complete('exploiter', messages, {})
     assert.equal(res.text, 'RECOVERED ARTIFACT')
     assert.ok(state.fallbackCalls >= 1)
@@ -148,8 +139,7 @@ describe('createCharteredComplete', () => {
     const events: CapturedEvent[] = []
     const { seams: s } = seams({
       call: async () => result("I can't help with that request."),
-      fallbackText: "I can't help with that request.",
-    })
+      fallbackText: "I can't help with that request." })
     const complete = createCharteredComplete(makeCtx(events), 'exploit', s as never)
     const res = await complete('exploiter', [{ role: 'user', content: 'build the payload' }], {})
     assert.equal(res.text, '')
@@ -164,20 +154,17 @@ describe('createCharteredComplete', () => {
       call: async (messages) => {
         heads.push(messages[0].content)
         return result('working')
-      },
-    })
+      } })
     const complete = createCharteredComplete(makeCtx(events), 'recon', s as never)
     await complete('recon', [
       { role: 'system', content: 'PERSONA: recon specialist' },
-      { role: 'user', content: 'map the surface' },
-    ], {})
+      { role: 'user', content: 'map the surface' } ], {})
     // The reflector/repair shape: a brand-new array built around the raw
     // persona, never seen by this completion before (agents.ts askReflection
     // and the tool-repair side channel both construct one per call).
     const side: ChatMessage[] = [
       { role: 'system', content: 'PERSONA: recon specialist' },
-      { role: 'user', content: 'reflect on the stuck batch' },
-    ]
+      { role: 'user', content: 'reflect on the stuck batch' } ]
     const res = await complete('recon', side, { tools: [] })
     assert.equal(res.text, 'working')
     assert.equal(heads.length, 2)
@@ -195,13 +182,11 @@ describe('createCharteredComplete', () => {
       call: async (messages) => {
         heads.push(messages[0].content)
         return result('working')
-      },
-    })
+      } })
     const complete = createCharteredComplete(makeCtx(events), 'recon', s as never)
     const messages: ChatMessage[] = [
       { role: 'system', content: 'PERSONA: recon specialist' },
-      { role: 'user', content: 'map the surface' },
-    ]
+      { role: 'user', content: 'map the surface' } ]
     await complete('recon', messages, {})
     const lengthAfterFirst = messages.length
     await complete('recon', messages, {})
@@ -216,9 +201,7 @@ describe('createCharteredComplete', () => {
     const { seams: s, state } = seams({
       call: async () =>
         result("I can't help but notice the parameter reflects input.", [
-          { id: 'c1', name: 'http_get', arguments: {} } as never,
-        ]),
-    })
+          { id: 'c1', name: 'http_get', arguments: {} } as never ]) })
     const complete = createCharteredComplete(makeCtx(events), 'exploit', s as never)
     const res = await complete('exploiter', [{ role: 'user', content: 'probe it' }], {})
     assert.equal(res.toolCalls.length, 1)
@@ -234,8 +217,7 @@ function policyError(): ProviderError {
     status: 400,
     code: 'safety_blocked',
     message:
-      '[llm-router] Meta HTTP 400: {"error":{"code":"safety_blocked","message":"Request blocked by the safety system: the submitted content may violate policy."}}',
-  })
+      '[llm-router] Meta HTTP 400: {"error":{"code":"safety_blocked","message":"Request blocked by the safety system: the submitted content may violate policy."}}' })
 }
 
 describe('createCharteredComplete — thrown-policy containment (W2)', () => {
@@ -247,15 +229,13 @@ describe('createCharteredComplete — thrown-policy containment (W2)', () => {
         seen.push(messages)
         if (seen.length === 1) throw policyError()
         return result('RECOVERED BY REISSUE')
-      },
-    })
+      } })
     const complete = createCharteredComplete(makeCtx(events), 'exploit', s as never)
     const rawDump = `batch dump ${'x'.repeat(3000)} RAW_DUMP_TAIL_MARKER`
     const res = await complete('exploiter', [
       { role: 'system', content: 'PERSONA: exploiter' },
       { role: 'user', content: 'work the batch' },
-      { role: 'user', content: rawDump },
-    ], {})
+      { role: 'user', content: rawDump } ], {})
     assert.equal(res.text, 'RECOVERED BY REISSUE')
     assert.equal(state.primaryCalls, 2, 'original call + exactly one re-issue')
     assert.equal(state.fallbackCalls, 0, 'fallback chain not needed when the re-issue recovers')
@@ -274,13 +254,11 @@ describe('createCharteredComplete — thrown-policy containment (W2)', () => {
     const { seams: s, state } = seams({
       call: async () => {
         throw policyError()
-      },
-    })
+      } })
     const complete = createCharteredComplete(makeCtx(events), 'exploit', s as never)
     const res = await complete('exploiter', [
       { role: 'system', content: 'PERSONA: exploiter' },
-      { role: 'user', content: 'build the payload' },
-    ], {})
+      { role: 'user', content: 'build the payload' } ], {})
     assert.equal(res.text, 'RECOVERED ARTIFACT', 'the fallback chain answers instead of the throw propagating')
     assert.equal(state.primaryCalls, 2, 'original + one re-issue, then the chain')
     assert.ok(state.fallbackCalls >= 1)
@@ -294,8 +272,7 @@ describe('createCharteredComplete — thrown-policy containment (W2)', () => {
     const { seams: s, state } = seams({
       call: async () => {
         throw boom
-      },
-    })
+      } })
     const complete = createCharteredComplete(makeCtx(events), 'exploit', s as never)
     await assert.rejects(
       complete('exploiter', [{ role: 'user', content: 'probe it' }], {}),
@@ -314,8 +291,7 @@ describe('createCharteredComplete — thrown-policy containment (W2)', () => {
       call: async () => {
         calls++
         throw calls === 1 ? policyError() : boom
-      },
-    })
+      } })
     const complete = createCharteredComplete(makeCtx(events), 'exploit', s as never)
     await assert.rejects(
       complete('exploiter', [{ role: 'user', content: 'probe it' }], {}),
@@ -377,8 +353,7 @@ describe('createCharteredComplete — soft refusal on artifact tasks (M6)', () =
     const complete = createCharteredComplete(makeCtx(events), 'exploit', s as never)
     const res = await complete('exploiter', [{ role: 'user', content: 'build the payload' }], {
       artifactTask: true,
-      artifactCheck: (text: string) => text.includes('PAYLOAD-OK'),
-    })
+      artifactCheck: (text: string) => text.includes('PAYLOAD-OK') })
     assert.equal(res.text, recovered)
     assert.ok(state.fallbackCalls >= 1)
     assert.ok(events.some(e => e.action === 'refusal_detected' && e.result.includes('soft_refusal')))
@@ -398,8 +373,7 @@ describe('createCharteredComplete — artifact context inside the fallback chain
     // chain would accept it as the answer.
     const { seams: s, state } = seams({
       call: async () => result(SOFT_PROSE),
-      fallbackText: SOFT_PROSE,
-    })
+      fallbackText: SOFT_PROSE })
     const complete = createCharteredComplete(makeCtx(events), 'report', s as never)
     const res = await complete('reporter', [{ role: 'user', content: 'write the report' }], {})
     assert.equal(res.text, '', 'the chain refuses the artifact-less prose on every hop')
@@ -417,8 +391,7 @@ describe('createCharteredComplete — artifact context inside the fallback chain
     const substitute = 'Instead, I can explain how the findings are organized.\n\n```json\n{"findings": []}\n```'
     const { seams: s, state } = seams({
       call: async () => result(SOFT_PROSE),
-      fallbackText: substitute,
-    })
+      fallbackText: substitute })
     const complete = createCharteredComplete(makeCtx(events), 'report', s as never)
     const res = await complete('reporter', [{ role: 'user', content: 'write the report' }], {})
     assert.equal(res.text, '', 'the prose substitute is refused inside the chain, artifact or not')
@@ -441,9 +414,7 @@ describe('createCharteredComplete — anchor elicitation containment (L1)', () =
         fallbackCall: async () => {
           state.fallbackCalls++
           return result(over.fallbackText ?? 'RECOVERED ARTIFACT')
-        },
-      },
-    }
+        } } }
   }
 
   it('contains a thrown policy rejection during elicitation — the condensed re-issue recovers the anchor', async () => {
@@ -456,8 +427,7 @@ describe('createCharteredComplete — anchor elicitation containment (L1)', () =
           throw policyError()
         }
         return result(ANCHOR_TEXT)
-      },
-    })
+      } })
     const complete = createCharteredComplete(makeCtx(events), 'exploit', s as never)
     const res = await complete('exploiter', [{ role: 'user', content: 'probe it' }], {})
     assert.equal(res.text, 'working')
@@ -474,8 +444,7 @@ describe('createCharteredComplete — anchor elicitation containment (L1)', () =
       elicit: async () => {
         throw policyError()
       },
-      fallbackText: ANCHOR_TEXT,
-    })
+      fallbackText: ANCHOR_TEXT })
     const complete = createCharteredComplete(makeCtx(events), 'exploit', s as never)
     const res = await complete('exploiter', [{ role: 'user', content: 'probe it' }], {})
     assert.equal(res.text, 'working')
@@ -491,8 +460,7 @@ describe('createCharteredComplete — anchor elicitation containment (L1)', () =
     const { seams: s, state } = elicitationSeams({
       elicit: async () => {
         throw new Error('provider down')
-      },
-    })
+      } })
     const complete = createCharteredComplete(makeCtx(events), 'exploit', s as never)
     const res = await complete('exploiter', [{ role: 'user', content: 'probe it' }], {})
     assert.equal(res.text, 'working')
@@ -507,8 +475,7 @@ describe('condensedReissueMessages', () => {
     const out = condensedReissueMessages([
       { role: 'system', content: 'CHARTERED HEAD' },
       { role: 'user', content: 'do the step' },
-      { role: 'user', content: `observation ${'y'.repeat(3000)} TAIL_MARKER` },
-    ], makeCtx([]))
+      { role: 'user', content: `observation ${'y'.repeat(3000)} TAIL_MARKER` } ], makeCtx([]))
     assert.equal(out[0].content, 'CHARTERED HEAD')
     const user = out[out.length - 1].content
     assert.ok(user.includes('<verified_engagement>'))
@@ -521,8 +488,7 @@ describe('condensedReissueMessages', () => {
     const ctx = makeCtx([])
     const out = condensedReissueMessages([
       { role: 'system', content: 'CHARTERED HEAD' },
-      { role: 'user', content: 'do the step' },
-    ], ctx)
+      { role: 'user', content: 'do the step' } ], ctx)
     const user = out[out.length - 1].content
     const standard = buildEngagementInjection(verifiedRecordFor(ctx))
     assert.ok(
@@ -548,13 +514,11 @@ describe('createCharteredComplete — the §3 fallback keeps the fleet prompt (H
       fallbackCall: async (_route: unknown, assembled: { messages: ChatMessage[] }) => {
         assembledHeads.push(assembled.messages.map(m => m.content).join('\n'))
         return result('RECOVERED ARTIFACT')
-      },
-    }
+      } }
     const complete = createCharteredComplete(makeCtx(events), 'exploit', s as never)
     const res = await complete('exploiter', [
       { role: 'system', content: 'PERSONA: exploiter — FLEET PROMPT MARKER' },
-      { role: 'user', content: 'build the payload' },
-    ], {})
+      { role: 'user', content: 'build the payload' } ], {})
     assert.equal(res.text, 'RECOVERED ARTIFACT')
     assert.ok(assembledHeads.length >= 1, 'the fallback chain ran')
     assert.ok(

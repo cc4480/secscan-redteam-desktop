@@ -57,23 +57,20 @@ function fakeCtx(opts: { scope: string[]; environment?: string; productionConfir
       dir: '/tmp/net-dispatch-test-no-such-dir',
       engagementId: 'eng-net-test',
       append: (e: FakeEvent) => appended.push(e),
-      updateState: () => {},
-    },
+      updateState: () => {} },
     tier: { current: opts.tier ?? 2, declared: 2, chainSteps: new Map<string, number>() },
     safety: {
       limiter,
       lockout: new CredentialAttemptGuard(),
       rpsPerHost: 5,
       environment: opts.environment ?? 'staging',
-      productionConfirmed: opts.productionConfirmed ?? false,
-    },
+      productionConfirmed: opts.productionConfirmed ?? false },
     itemLedger: new Map(),
     opsecCooldown: new Set<string>(),
     coverage: new Set<string>(),
     targetCoverage: new Map(),
     probesUsed: 0,
-    consecutive5xx: 0,
-  } as unknown as Ctx
+    consecutive5xx: 0 } as unknown as Ctx
   return { ctx, appended }
 }
 
@@ -177,15 +174,13 @@ describe('net_exec dispatch — NEGATIVE CONTROL', () => {
     const packet = await dispatchTool(ctx, 'exploiter', 'exploit',
       call({
         action: 'packet_send', host: '10.255.255.1', packetProtocol: 'tcp', destPort: 80,
-        category: 'validation', attackId: 'T1046',
-      }))
+        category: 'validation', attackId: 'T1046' }))
     assert.match(packet.result, /DENIED by scope/, packet.result)
 
     const flood = await dispatchTool(ctx, 'exploiter', 'exploit',
       call({
         action: 'flood', host: '10.255.255.1', port: echoPort, floodMode: 'udp',
-        ratePerSec: 10, durationMs: 100, category: 'validation', attackId: 'T1046',
-      }))
+        ratePerSec: 10, durationMs: 100, category: 'validation', attackId: 'T1046' }))
     assert.match(flood.result, /DENIED by scope/, flood.result)
 
     assert.deepEqual(counts, { socketOpen: 0, socketSend: 0, sendPacket: 0, flood: 0 },
@@ -224,8 +219,7 @@ describe('net_exec dispatch — handler gates behind scope', () => {
     const r = await dispatchTool(ctx, 'recon', 'recon',
       call({
         action: 'flood', host: '127.0.0.1', port: echoPort, floodMode: 'udp',
-        ratePerSec: 10, durationMs: 100, category: 'validation', attackId: 'T1046',
-      }))
+        ratePerSec: 10, durationMs: 100, category: 'validation', attackId: 'T1046' }))
     assert.match(r.result, /exploit phase only/, r.result)
     assert.equal(counts.flood, 0)
   })
@@ -237,8 +231,7 @@ describe('net_exec dispatch — handler gates behind scope', () => {
     const r = await dispatchTool(ctx, 'exploiter', 'exploit',
       call({
         action: 'flood', host: '127.0.0.1', port: echoPort, floodMode: 'udp',
-        ratePerSec: 10, durationMs: 100, category: 'validation', attackId: 'T1046',
-      }))
+        ratePerSec: 10, durationMs: 100, category: 'validation', attackId: 'T1046' }))
     assert.match(r.result, /production confirmation/, r.result)
     assert.equal(counts.flood, 0)
   })
@@ -250,8 +243,7 @@ describe('net_exec dispatch — handler gates behind scope', () => {
     const r = await dispatchTool(ctx, 'exploiter', 'exploit',
       call({
         action: 'flood', host: '127.0.0.1', port: echoPort, floodMode: 'tcp-connect',
-        ratePerSec: 50, durationMs: 300, concurrency: 4, category: 'validation', attackId: 'T1046',
-      }))
+        ratePerSec: 50, durationMs: 300, concurrency: 4, category: 'validation', attackId: 'T1046' }))
     assert.match(r.result, /flood tcp-connect/, r.result)
     assert.equal(counts.flood, 1)
     assert.ok(netEvents(appended).some((e) => e.result.includes('flood')), 'the flood run is in the audit log')

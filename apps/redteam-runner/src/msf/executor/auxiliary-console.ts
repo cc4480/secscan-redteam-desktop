@@ -2,14 +2,14 @@
  * Console fallback for auxiliary module runs.
  *
  * An auxiliary module scans and reports; it opens no session, so a one-shot
- * `msfconsole -x` can carry it and exit without losing anything. That is exactly the
- * line between what the console can do and what still needs `msfrpcd`, and this
- * module sits on the safe side of it: it returns `null` for anything else, so the
- * caller keeps its existing daemon path untouched.
+ * native `msfconsole -x` can carry it and exit without losing anything. This
+ * module is native-only: it never depends on an RPC daemon/credentials and
+ * returns `null` only for ineligible cases (exploit/session work or no local
+ * console available), so the caller keeps its existing path untouched.
  *
  * It is called AFTER the executor's safety ordering - module denylist, destructive
  * command check, option sanitisation and forced RHOSTS/RHOST from the scope-checked
- * host - so the console receives the same options the daemon would have.
+ * host - so the console receives the same options the regular path would have.
  */
 
 import { existsSync } from 'node:fs'
@@ -30,11 +30,12 @@ export interface AuxiliaryConsoleArgs {
 }
 
 /**
- * Run an auxiliary module through a one-shot console when no daemon is seated.
+ * Run an auxiliary module through a one-shot native console when a local console
+ * is available. Native-only: no RPC daemon/credentials are considered.
  * @param deps - executor dependencies, including the environment.
  * @param args - host, module and timeout.
  * @param options - already-sanitised datastore options, RHOSTS forced from scope.
- * @returns a result when the console carried the run; `null` to keep the daemon path.
+ * @returns a result when the console carried the run; `null` when ineligible or unavailable.
  */
 export async function tryAuxiliaryConsole(
   deps: MsfDeps,
@@ -44,11 +45,9 @@ export async function tryAuxiliaryConsole(
   // An exploit opens a session; a one-shot console exits and takes it along.
   if (args.moduleType !== 'auxiliary') return null
   const env = deps.env ?? process.env
-  const user = (env['REDTEAM_MSFRPC_USER'] ?? '').trim()
-  const pass = (env['REDTEAM_MSFRPC_PASS'] ?? '').trim()
-  // A seated daemon answers in milliseconds and is the primary path.
-  if (user !== '' && pass !== '') return null
   const binary = resolveMsfConsoleBinary(env)
+  // Respect an explicit operator-supplied binary path; otherwise require the
+  // resolved default/well-known binary to actually exist before taking this path.
   if (env['REDTEAM_MSF_CONSOLE_BIN'] === undefined && !existsSync(binary)) return null
 
   const started = Date.now()

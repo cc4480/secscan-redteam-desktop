@@ -26,17 +26,8 @@
 import { type VerifiedEngagementRecord } from '@secscan/redteam-fleet-skills';
 import type { Ctx } from '../context.js';
 import type { PromptContext } from './shared.js';
-/** The fleet seats this module assembles prompts for. */
-export type FleetSeatRole = 'coordinator' | 'recon' | 'exploiter' | 'reporter' | 'coder' | 'publisher';
-/** The knob sources and record a production prompt context carries. */
-export interface FleetPromptInput {
-    /** The verified engagement record (see {@link verifiedRecordFor}). */
-    record: VerifiedEngagementRecord;
-    /** Fleet-wide CHARTER knob text (Prompt Pack §4), when a source exists. */
-    charterKnobs?: string;
-    /** Per-engagement ENGAGEMENT knob text; wins over the charter text. */
-    engagementKnobs?: string;
-}
+import { type FleetSeatRole } from './fleet-seats.js';
+export type { FleetPromptInput, FleetSeatRole } from './fleet-seats.js';
 /**
  * Resolve the fleet-skills package root. Candidates cover, in order: the
  * REDTEAM_FLEET_SKILLS_ROOT override, the installed workspace package
@@ -77,25 +68,4 @@ export declare function fleetPackageRoot(): string;
  *   fleet prompt is never assembled from an unattested record
  */
 export declare function verifiedRecordFor(ctx: Ctx): VerifiedEngagementRecord;
-/**
- * Assemble one seat's complete system prompt through the fleet package,
- * in the pack order (see the module header). Contexts that carry no
- * fleet input — the agent-docs canonical context and unit fixtures —
- * return the seat text unchanged, byte for byte.
- *
- * The SESSIONS knob narrows the record's session rule at assembly: with
- * SESSIONS=off in the charter/engagement knob sources, the injection
- * renders the no-sessions rule instead of the W8 session rule.
- *
- * Black-team mode (`ctx.mode === 'black'`) swaps the seat's soul for
- * the SMITH mask and binds the blackteam skill full-body (see below).
- *
- * @param role - the fleet seat the prompt is for
- * @param seatText - the runner's existing role prompt (the seat delta)
- * @param ctx - the prompt context; carries the fleet input in production
- * @returns the assembled system prompt, or `seatText` unchanged when the
- *   context carries no fleet input
- * @throws Error when a mapped soul or skill body is missing from the
- *   fleet package (a broken package must fail loud, not prompt silently)
- */
 export declare function buildFleetPrompt(role: FleetSeatRole, seatText: string, ctx: PromptContext): string;

@@ -1,7 +1,7 @@
 SecScan RedTeam
 SecScan RedTeam
-连接 SecScan MCP 访问
-粘贴本机用于 SecScan 扫描、Seclayer 扫描与对抗引擎的令牌。它们只保存在本机，不会写入安装包。
+连接对抗引擎运行器访问
+粘贴本机用于对抗引擎运行器控制台的令牌。它只保存在本机，不会写入安装包。
 对抗引擎运行器令牌 [password]
 运行器控制台地址 [url]
 保存位置：/profile/engagement-credentials.json

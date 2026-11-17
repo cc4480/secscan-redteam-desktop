@@ -22,8 +22,7 @@ import {
   type ChatMessage,
   type ChatResult,
   type JsonSchemaTool,
-  type ResponseFormat,
-} from '@secscan/redteam-llm-router'
+  type ResponseFormat } from '@secscan/redteam-llm-router'
 import { createCharteredComplete, type CharteredCallOptions } from '../src/charter-completion.js'
 import { FALSIFICATION_FORMAT, parseFalsificationRecord } from '../src/exploit-cell/challenger.js'
 import {
@@ -31,8 +30,7 @@ import {
   ensureWorkGraph,
   graphSubtaskFor,
   startGraphSubtask,
-  REFINE_FORMAT,
-} from '../src/workgraph/wiring.js'
+  REFINE_FORMAT } from '../src/workgraph/wiring.js'
 import { EventLog } from '../src/events.js'
 import { agentLoop } from '../src/agents.js'
 import { coordinatorDirective } from '../src/phases/directive.js'
@@ -48,8 +46,7 @@ describe('A1 — the chartered seam carries responseFormat', () => {
     'engagement: example.com-4242 for Example Owner LLC',
     'scope: example.com',
     'objective: assess the external attack surface',
-    'artifact: a falsification-ready finding',
-  ].join('\n')
+    'artifact: a falsification-ready finding' ].join('\n')
 
   function makeCtx(): Ctx {
     return {
@@ -62,10 +59,8 @@ describe('A1 — the chartered seam carries responseFormat', () => {
         mode: 'red',
         objective: 'assess the external attack surface',
         client: 'Example Owner LLC',
-        roe: {},
-      },
-      events: { append: () => {} },
-    } as unknown as Ctx
+        roe: {} },
+      events: { append: () => {} } } as unknown as Ctx
   }
 
   function captureSeams(captured: { opts?: CharteredCallOptions }) {
@@ -74,8 +69,7 @@ describe('A1 — the chartered seam carries responseFormat', () => {
       call: async (_route: unknown, _messages: ChatMessage[], opts: CharteredCallOptions): Promise<ChatResult> => {
         captured.opts = opts
         return { text: 'working', toolCalls: [], provider: 'deepseek', model: 'deepseek-chat' }
-      },
-    }
+      } }
   }
 
   it('forwards the option to the provider call', async () => {
@@ -104,8 +98,7 @@ describe('A2 — challenger falsification format', () => {
       alternative: 'a WAF encodes it upstream',
       test: 'fresh request with a canary payload',
       evidence: 'receipt rcpt-1',
-      verdict: 'stands',
-    })
+      verdict: 'stands' })
     const rec = parseFalsificationRecord(good)
     assert.ok(rec)
     assert.equal(rec.verdict, 'stands')
@@ -117,8 +110,7 @@ describe('A2 — challenger falsification format', () => {
 describe('A2 — architect refine format rides the deps-injected completion', () => {
   const STEPS: PlanStep[] = [
     { phase: 'recon', attackId: 'T1595', description: 'Map the surface' },
-    { phase: 'exploit', attackId: 'T1190', description: 'Exploit public app' },
-  ]
+    { phase: 'exploit', attackId: 'T1190', description: 'Exploit public app' } ]
   let dir = ''
   beforeEach(() => {
     dir = join(tmpdir(), `wg-struct-${process.pid}-${Date.now()}`)
@@ -145,9 +137,7 @@ describe('A2 — architect refine format rides the deps-injected completion', ()
             return { text: '{}' }
           }
           return { text: '' }
-        },
-      },
-    } as unknown as Ctx
+        } } } as unknown as Ctx
     const flow = ensureWorkGraph(ctx)
     assert.ok(flow)
     const sub = graphSubtaskFor(ctx, { kind: 'probe', brief: 'exploit the app', attackId: 'T1190' })
@@ -191,8 +181,7 @@ describe('A3 — agentLoop forwards the opt; directive + plan adopt json_object'
         mode: 'red',
         objective: 'assess the shop',
         roe: { blackoutWindows: [], scope: ['shop.example.test'] },
-        fullBattery: false,
-      },
+        fullBattery: false },
       deps: { completeForRole },
       events: new EventLog(dir, 'eng-struct-a3', { target: 'shop.example.test', mode: 'red', objective: 'assess the shop' }),
       coverage: new Set(),
@@ -208,8 +197,7 @@ describe('A3 — agentLoop forwards the opt; directive + plan adopt json_object'
       fingerprint: { stack: [], appType: 'unknown' },
       tier: { current: 0, chainSteps: new Map<string, number>() },
       safety: { killSwitchAborts: 0 },
-      hostKill: { aborted: false, controllers: new Set<AbortController>() },
-    } as unknown as Ctx
+      hostKill: { aborted: false, controllers: new Set<AbortController>() } } as unknown as Ctx
   }
 
   it('agentLoop forwards the opt to the loop completion calls', async () => {

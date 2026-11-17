@@ -12,8 +12,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
   derivedTotals, parseHostInventory, readHostInventory, reconcileInventory,
-  type HostInventoryArtifact,
-} from "../src/report/host-inventory.js";
+  type HostInventoryArtifact } from "../src/report/host-inventory.js";
 import { inventorySection } from "../src/report/html/inventory-sections.js";
 import { renderEngagementReportHtml, type EngagementReportInput } from "../src/report/html/render.js";
 import { gradeBanner, gradeFindings } from "../src/report/grading.js";
@@ -29,55 +28,43 @@ export function fixtureInventory(over: Record<string, unknown> = {}): Record<str
       collector: "pc-agent local collect v1",
       system: [
         { label: "OS", value: "Windows 11 Pro 25H2" },
-        { label: "CPU", value: "Intel i5-7600" },
-      ],
+        { label: "CPU", value: "Intel i5-7600" } ],
       volumes: [
         { name: "C:", fileSystem: "NTFS", sizeBytes: 512_110_190_592, freeBytes: 84_000_000_000 },
         { name: "D:", fileSystem: "NTFS", sizeBytes: 1_024_000_000_000, freeBytes: 400_000_000_000 },
-        { name: "E:", fileSystem: "exFAT", sizeBytes: 2_048_000_000_000, freeBytes: 900_000_000_000 },
-      ],
+        { name: "E:", fileSystem: "exFAT", sizeBytes: 2_048_000_000_000, freeBytes: 900_000_000_000 } ],
       accounts: [
         { name: "Cho-zen", kind: "local user", enabled: true, groups: ["Administrators"] },
-        { name: "Guest", kind: "local user", enabled: false, groups: ["Guests"] },
-      ],
+        { name: "Guest", kind: "local user", enabled: false, groups: ["Guests"] } ],
       patches: [
         { id: "KB5066133", installedOn: "2026-10-12" },
-        { id: "KB5065426", installedOn: "2026-09-09" },
-      ],
+        { id: "KB5065426", installedOn: "2026-09-09" } ],
       processes: [
         { name: "System", pid: 4 },
-        { name: "explorer.exe", pid: 900, user: "Cho-zen", cpuPercent: 1.5, memoryPercent: 2.25 },
-      ],
+        { name: "explorer.exe", pid: 900, user: "Cho-zen", cpuPercent: 1.5, memoryPercent: 2.25 } ],
       defender: [{ label: "RealTimeProtection", value: "On" }],
       remoteConfig: [
         { label: "SMBv1", value: "Disabled" },
-        { label: "RDP", value: "Enabled (NLA)" },
-      ],
+        { label: "RDP", value: "Enabled (NLA)" } ],
       hardening: [{ label: "UAC EnableLUA", value: "1" }],
       software: [
         { name: "Docker Desktop", version: "4.34.0", publisher: "Docker Inc." },
-        { name: "Evil <script>alert(1)</script> App", version: "1.0", publisher: "Nobody" },
-      ],
+        { name: "Evil <script>alert(1)</script> App", version: "1.0", publisher: "Nobody" } ],
       filesystem: {
         totalsByVolume: [
           { volume: "C:", files: 100, bytes: 5_000_000 },
-          { volume: "D:", files: 50, bytes: 9_000_000 },
-        ],
+          { volume: "D:", files: 50, bytes: 9_000_000 } ],
         categories: [{ category: "Executables", files: 40, bytes: 4_000_000 }],
         largestDirectories: [{ path: "C:\\Users", bytes: 3_000_000 }],
         largestFiles: [{ path: "C:\\pagefile.sys", bytes: 2_000_000 }],
         recentExecutables: [{ path: "C:\\Users\\Cho-zen\\Downloads\\tool.exe", modifiedAt: "2026-10-30T10:00:00.000Z" }],
-        coverage: "User areas and system roots inventoried.",
-      },
+        coverage: "User areas and system roots inventoried." },
       sensitive: {
         categories: [{ category: "Credential files", files: 3 }],
         credentialLocations: [{ location: "%USERPROFILE%\\.aws\\credentials", present: false }],
-        stores: [{ store: "Windows Credential Manager", entries: 12 }],
-      },
+        stores: [{ store: "Windows Credential Manager", entries: 12 }] },
       totals: { volumes: 3, accounts: 2, patches: 2, software: 2, files: 150 },
-      ...over,
-    },
-  };
+      ...over } };
 }
 
 function okArtifact(over: Record<string, unknown> = {}): HostInventoryArtifact {
@@ -115,8 +102,7 @@ describe("host-inventory artifact contract", () => {
     const raw = fixtureInventory();
     const inv = raw["inventory"] as Record<string, unknown>;
     (inv["sensitive"] as Record<string, unknown>)["categories"] = [
-      { category: "Keys", files: 1, contents: "AKIA-SECRET-VALUE" },
-    ];
+      { category: "Keys", files: 1, contents: "AKIA-SECRET-VALUE" } ];
     const art = parseHostInventory(raw);
     assert.equal(art.status, "ok");
     if (art.status !== "ok") return;
@@ -215,16 +201,13 @@ describe("inventory sections", () => {
         collector: "local-host collector (pc-agent channel) v1",
         system: [
           { label: "OS", value: "Windows" },
-          { label: "Hostname", value: "CHO-ZEN1" },
-        ],
+          { label: "Hostname", value: "CHO-ZEN1" } ],
         volumes: [],
         accounts: [],
         patches: [],
         patchLevel: "Patch level not collected: the pc-agent channel has no patch-enumeration op (Q-RP-11 v1).",
         software: [],
-        totals: { volumes: 0, accounts: 0, patches: 0, software: 0, files: 0 },
-      },
-    };
+        totals: { volumes: 0, accounts: 0, patches: 0, software: 0, files: 0 } } };
     const html = inventorySection(parseHostInventory(raw));
     assert.ok(html.includes("Volumes"));
     assert.ok(html.includes("Local accounts, groups and privilege"));
@@ -263,8 +246,7 @@ const meta: ReportMeta = {
   startedAt: "2026-10-31T16:00:00.000Z",
   generatedAt: "2026-10-31T16:40:00.000Z",
   findings: { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
-  battery: { total: 0, confirmed: 0, executedClean: 0, killed: 0, blocked: 0, na: 0, pending: 0 },
-};
+  battery: { total: 0, confirmed: 0, executedClean: 0, killed: 0, blocked: 0, na: 0, pending: 0 } };
 
 function renderInput(over: Partial<EngagementReportInput> = {}): EngagementReportInput {
   return {
@@ -281,11 +263,9 @@ function renderInput(over: Partial<EngagementReportInput> = {}): EngagementRepor
     coverage: {
       fullBattery: false, cells: [],
       totals: { total: 0, confirmed: 0, executedClean: 0, killed: 0, blocked: 0, na: 0, pending: 0 },
-      probesUsed: 0, planOnly: [], notCovered: [],
-    },
+      probesUsed: 0, planOnly: [], notCovered: [] },
     activity: { eventCount: 0, rows: [], totalActions: 0, decisions: [], danglingCauses: [] },
-    ...over,
-  };
+    ...over };
 }
 
 describe("full report wiring", () => {

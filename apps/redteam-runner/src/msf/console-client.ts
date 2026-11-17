@@ -10,7 +10,7 @@
  *  - `sessions` prints either "No active sessions." or a session table.
  */
 
-import type { ModuleSearchSource, MsfModule } from './client.js'
+import type { ModuleSearchSource, MsfModule } from './local-client.js'
 import { DEFAULT_CONSOLE_TIMEOUT_MS, runConsoleOnce, type ConsoleRunResult } from './console.js'
 
 /** One row of the `search` table, as the console prints it. */
@@ -121,9 +121,9 @@ export async function listSessionsViaConsole(
 /**
  * The console-backed module source.
  *
- * Satisfies the same narrow interface as the RPC client, so the search and suggest
- * paths work on a host with no `msfrpcd`. Each call pays one console boot (about 29
- * seconds warm); that is the cost of not running a daemon.
+ * Satisfies the same narrow interface as the primary native client, so the search
+ * and suggest paths can work through a one-shot console. Each call pays one
+ * console boot (about 29 seconds warm) as a native fallback.
  */
 export class MsfConsoleModuleSource implements ModuleSearchSource {
   /**

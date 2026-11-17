@@ -27,8 +27,7 @@ const baseBody: UiLaunchRequest = {
   target: "https://example.com",
   mode: "red",
   objective: "scan it",
-  scope: ["example.com"],
-};
+  scope: ["example.com"] };
 
 describe("toEngagementInput — UI route deny list (S3-H8)", () => {
   it("copies a supplied outOfScope into roe.outOfScope", () => {
@@ -45,8 +44,7 @@ describe("toEngagementInput — UI route deny list (S3-H8)", () => {
       scope: ["example.com"],
       excludedTechniques: null,
       blackoutWindows: [],
-      stopConditions: [],
-    });
+      stopConditions: [] });
   });
 
   it("an empty outOfScope is omitted, mirroring the CLI's length-gated shape", () => {
@@ -66,8 +64,7 @@ describe("toEngagementInput — UI route deny list (S3-H8)", () => {
     const input = toEngagementInput({
       ...baseBody,
       scope: ["example.com"],
-      outOfScope: ["status.example.com"],
-    });
+      outOfScope: ["status.example.com"] });
     const guard = ScopeGuard.fromRoe(input.roe);
     assert.equal(guard.denyLoaded, true);
     const denied = guard.checkHost("status.example.com");
@@ -92,8 +89,7 @@ describe("engagement_launch — chat tool deny list (S3-H8)", () => {
     const built = buildLaunchBody({
       target: "https://example.com",
       objective: "scan it",
-      outOfScope: [" status.example.com ", "10.9.9.9"],
-    });
+      outOfScope: [" status.example.com ", "10.9.9.9"] });
     assert.ok("body" in built);
     if (!("body" in built)) return;
     assert.deepEqual(built.body.outOfScope, ["status.example.com", "10.9.9.9"]);
@@ -118,8 +114,7 @@ describe("engagement_launch — chat tool deny list (S3-H8)", () => {
     const built = buildLaunchBody({
       target: "https://example.com",
       objective: "scan it",
-      outOfScope: ["status.example.com"],
-    });
+      outOfScope: ["status.example.com"] });
     assert.ok("body" in built);
     if (!("body" in built)) return;
     const input = toEngagementInput(built.body);
@@ -150,8 +145,7 @@ describe("engagement_launch invocation (S3-H8)", () => {
       objective: "scan it",
       scope: ["example.com"],
       outOfScope: ["status.example.com"],
-      dryRun: true,
-    });
+      dryRun: true });
     assert.equal(out.status, 202, JSON.stringify(out.body));
     const id = (out.body as { id?: string }).id ?? "";
     assert.ok(id, "launch returns an engagement id");

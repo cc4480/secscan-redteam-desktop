@@ -16,8 +16,7 @@ import {
   BATTERY_CATEGORIES,
   batteryChecklistText,
   batteryItemsFor,
-  lookupBatteryItem,
-} from "../src/battery.js";
+  lookupBatteryItem } from "../src/battery.js";
 import { lookupTechnique } from "../src/attack.js";
 import { readEvents, readState } from "../src/events.js";
 import { runEngagement } from "../src/phases.js";
@@ -77,9 +76,7 @@ describe("battery coverage enforcement", () => {
         url: "https://secscan.us/probe",
         category,
         attackId: "T1190",
-        hypothesis: `battery test ${category}`,
-      },
-    });
+        hypothesis: `battery test ${category}` } });
     const textOnly = (text: string): ChatResult => ({ text, toolCalls: [], provider: "fake", model: "fake" });
     const taskJson = (tasks: object[], finish: boolean, note: string): ChatResult =>
       textOnly("```json " + JSON.stringify({ tasks, finish, note }) + " ```");
@@ -106,8 +103,7 @@ describe("battery coverage enforcement", () => {
             return taskJson(
               [
                 { kind: "probe", brief: "test functionality abuse", attackId: "T1190", category: "functionality", maxTurns: 4 },
-                { kind: "probe", brief: "test validation rigor", attackId: "T1190", category: "validation", maxTurns: 4 },
-              ],
+                { kind: "probe", brief: "test validation rigor", attackId: "T1190", category: "validation", maxTurns: 4 } ],
               false,
               "covering missing categories",
             );
@@ -143,27 +139,22 @@ describe("battery coverage enforcement", () => {
   }
 
   const fakeProber = {
-    probe: async () => ({ status: 200, headers: {}, bodySnippet: "ok", ms: 5 }),
-  };
+    probe: async () => ({ status: 200, headers: {}, bodySnippet: "ok", ms: 5 }) };
 
   it("nudges the exploiter until all three categories are probed", async () => {
     const input: EngagementInput = {
       target: "secscan.us",
       mode: "red",
       objective: "battery test",
-      roe: { scope: ["secscan.us"] },
-    };
+      roe: { scope: ["secscan.us"] } };
     const res = await runEngagement(input, {
-      mcpToken: "test",
       deepseekApiKey: "test",
       qwenApiKey: "test",
       engagementsDir: dir,
       deps: {
         verify: async () => true,
         completeForRole: scriptedLlm() as never,
-        prober: fakeProber,
-      },
-    });
+        prober: fakeProber } });
     assert.equal(res.status, "complete");
     const engDir = join(dir, res.engagementId);
     const state = readState(engDir);
@@ -191,12 +182,10 @@ describe("battery coverage enforcement", () => {
       target: "secscan.us",
       mode: "black",
       objective: "battery test",
-      roe: { scope: ["secscan.us"] },
-    };
+      roe: { scope: ["secscan.us"] } };
     const seen: string[] = [];
     const llm = scriptedLlm();
     const res = await runEngagement(input, {
-      mcpToken: "test",
       deepseekApiKey: "test",
       qwenApiKey: "test",
       engagementsDir: dir,
@@ -208,9 +197,7 @@ describe("battery coverage enforcement", () => {
           }
           return llm(role, messages, opts);
         }) as never,
-        prober: fakeProber,
-      },
-    });
+        prober: fakeProber } });
     assert.equal(res.status, "complete");
     const prompt = seen[0] ?? "";
     assert.ok(prompt.includes("BLACK mode"), "exploiter prompt must carry the black-mode brief");

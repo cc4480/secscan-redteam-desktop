@@ -18,8 +18,7 @@ import {
   parseIpv4,
   parseIpv4Packet,
   tcpByteToFlags,
-  tcpFlagsToByte,
-} from '../src/net/packets.js'
+  tcpFlagsToByte } from '../src/net/packets.js'
 import {
   FLOOD_MAX_CONCURRENCY,
   FLOOD_MAX_DURATION_MS,
@@ -29,8 +28,7 @@ import {
   resolveFloodParams,
   resolveNpingBinary,
   validatePacketSpec,
-  type PacketSpec,
-} from '../src/net/policy.js'
+  type PacketSpec } from '../src/net/policy.js'
 
 describe('internetChecksum', () => {
   it('matches the RFC 1071 worked example', () => {
@@ -42,8 +40,7 @@ describe('internetChecksum', () => {
   })
   it('a header carrying its own checksum sums to zero', () => {
     const pkt = buildIpv4Packet({
-      sourceIp: '10.0.0.1', destIp: '10.0.0.2', protocol: 6, payload: Buffer.alloc(0),
-    })
+      sourceIp: '10.0.0.1', destIp: '10.0.0.2', protocol: 6, payload: Buffer.alloc(0) })
     assert.equal(internetChecksum(pkt.subarray(0, 20)), 0)
   })
 })
@@ -64,11 +61,9 @@ describe('tcp flag byte conversion', () => {
 describe('byte-exact packet construction (independent reference vectors)', () => {
   it('TCP SYN packet matches the reference bytes', () => {
     const seg = buildTcpSegment('10.0.0.1', '10.0.0.2', {
-      sourcePort: 12345, destPort: 80, seq: 1, ack: 0, flags: ['syn'], window: 8192,
-    })
+      sourcePort: 12345, destPort: 80, seq: 1, ack: 0, flags: ['syn'], window: 8192 })
     const pkt = buildIpv4Packet({
-      sourceIp: '10.0.0.1', destIp: '10.0.0.2', protocol: 6, ttl: 64, identification: 0x1234, payload: seg,
-    })
+      sourceIp: '10.0.0.1', destIp: '10.0.0.2', protocol: 6, ttl: 64, identification: 0x1234, payload: seg })
     assert.equal(
       pkt.toString('hex'),
       '45000028123440004006149a0a0000010a000002303900500000000100000000500220004b560000',
@@ -77,11 +72,9 @@ describe('byte-exact packet construction (independent reference vectors)', () =>
   it('TCP PSH+ACK packet with payload matches the reference bytes', () => {
     const seg = buildTcpSegment('192.168.0.10', '192.168.0.20', {
       sourcePort: 40000, destPort: 443, seq: 100, ack: 200, flags: ['psh', 'ack'], window: 4096,
-      payload: Buffer.from('hi'),
-    })
+      payload: Buffer.from('hi') })
     const pkt = buildIpv4Packet({
-      sourceIp: '192.168.0.10', destIp: '192.168.0.20', protocol: 6, ttl: 32, identification: 7, payload: seg,
-    })
+      sourceIp: '192.168.0.10', destIp: '192.168.0.20', protocol: 6, ttl: 32, identification: 7, payload: seg })
     assert.equal(
       pkt.toString('hex'),
       '4500002a000740002006d958c0a8000ac0a800149c4001bb00000064000000c85018100016cb00006869',
@@ -89,11 +82,9 @@ describe('byte-exact packet construction (independent reference vectors)', () =>
   })
   it('UDP datagram packet matches the reference bytes', () => {
     const dg = buildUdpDatagram('10.1.1.1', '10.1.1.2', {
-      sourcePort: 5353, destPort: 53, payload: Buffer.from('ab'),
-    })
+      sourcePort: 5353, destPort: 53, payload: Buffer.from('ab') })
     const pkt = buildIpv4Packet({
-      sourceIp: '10.1.1.1', destIp: '10.1.1.2', protocol: 17, payload: dg,
-    })
+      sourceIp: '10.1.1.1', destIp: '10.1.1.2', protocol: 17, payload: dg })
     assert.equal(
       pkt.toString('hex'),
       '4500001e00004000401124cb0a0101010a01010214e90035000a73556162',
@@ -102,8 +93,7 @@ describe('byte-exact packet construction (independent reference vectors)', () =>
   it('ICMP echo packet matches the reference bytes', () => {
     const msg = buildIcmpMessage({ type: 8, code: 0, id: 0x1234, seq: 1, payload: Buffer.from('ping') })
     const pkt = buildIpv4Packet({
-      sourceIp: '172.16.0.5', destIp: '172.16.0.6', protocol: 1, payload: msg,
-    })
+      sourceIp: '172.16.0.5', destIp: '172.16.0.6', protocol: 1, payload: msg })
     assert.equal(
       pkt.toString('hex'),
       '45000020000040004001e2b1ac100005ac100006080006fa1234000170696e67',
@@ -195,23 +185,19 @@ describe('buildNpingArgv', () => {
     const spec: PacketSpec = {
       protocol: 'tcp', destIp: '10.0.0.2', sourceIp: '10.0.0.1', sourcePort: 12345, destPort: 80,
       tcpFlags: ['syn', 'ack'], seq: 1, ack: 2, window: 8192, ttl: 64, identification: 4660,
-      payloadHex: '6869', count: 2,
-    }
+      payloadHex: '6869', count: 2 }
     assert.deepEqual(buildNpingArgv('/usr/bin/nping', spec), [
       '/usr/bin/nping', '--tcp', '-c', '2', '-p', '80', '-g', '12345',
       '--source-ip', '10.0.0.1', '--ttl', '64', '--id', '4660',
       '--flags', 'syn,ack', '--seq', '1', '--ack', '2', '--win', '8192',
-      '--data', '6869', '10.0.0.2',
-    ])
+      '--data', '6869', '10.0.0.2' ])
   })
   it('builds the ICMP argv with echo fields and no port', () => {
     const spec: PacketSpec = {
-      protocol: 'icmp', destIp: '10.0.0.2', icmpType: 8, icmpCode: 0, icmpId: 4660, icmpSeq: 3, count: 1,
-    }
+      protocol: 'icmp', destIp: '10.0.0.2', icmpType: 8, icmpCode: 0, icmpId: 4660, icmpSeq: 3, count: 1 }
     assert.deepEqual(buildNpingArgv('nping', spec), [
       'nping', '--icmp', '-c', '1', '--icmp-type', '8', '--icmp-code', '0',
-      '--icmp-id', '4660', '--icmp-seq', '3', '10.0.0.2',
-    ])
+      '--icmp-id', '4660', '--icmp-seq', '3', '10.0.0.2' ])
   })
 })
 
@@ -224,8 +210,7 @@ describe('resolveNpingBinary', () => {
 describe('resolveFloodParams — the hard caps', () => {
   it('clamps every above-cap value DOWN to the constants and names each clamp', () => {
     const r = resolveFloodParams({
-      floodMode: 'udp', ratePerSec: 99999, durationMs: 999999, concurrency: 9999, payloadBytes: 99999,
-    })
+      floodMode: 'udp', ratePerSec: 99999, durationMs: 999999, concurrency: 9999, payloadBytes: 99999 })
     assert.ok(r.ok)
     assert.equal(r.params.ratePerSec, FLOOD_MAX_RATE_PER_SEC)
     assert.equal(r.params.durationMs, FLOOD_MAX_DURATION_MS)

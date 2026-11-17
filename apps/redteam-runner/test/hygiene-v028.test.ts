@@ -26,8 +26,7 @@ import type { EngagementPhase } from "../src/types.js";
 const KEYS = {
   SECSCAN_MCP_TOKEN: "test-mcp-token",
   DEEPSEEK_API_KEY: "test-deepseek-key",
-  QWEN_API_KEY: "test-qwen-key",
-};
+  QWEN_API_KEY: "test-qwen-key" };
 
 describe("item 1: env-var numerics fail fast naming the variable", () => {
   it("rejects REDTEAM_MAX_RPS=abc", () => {
@@ -106,17 +105,14 @@ describe("item 5: tier refusal before the rate limiter", () => {
         safety: {
           killSwitchAborts: 0,
           autoHalt: { isHalted: () => false, haltReason: () => undefined },
-          limiter: { acquire: async () => { acquireCalls++; } },
-        },
+          limiter: { acquire: async () => { acquireCalls++; } } },
         tier: { current: 0, chainSteps: new Map<string, number>() },
         itemLedger: undefined,
         events: {
           dir: tmp,
           append: (e: { action: string; result: string }) => {
             appended.push({ action: e.action, result: e.result });
-          },
-        },
-      } as unknown as Ctx;
+          } } } as unknown as Ctx;
       const res = await dispatchTool(
         ctx,
         "exploiter",
@@ -144,18 +140,13 @@ describe("item 6: agent reasoning is redacted before the audit log", () => {
         completeForRole: async () => ({
           text: "done",
           reasoning: "noted the contact analyst@client.example in the error page",
-          toolCalls: [],
-        }),
-      },
+          toolCalls: [] }) },
       events: {
         append: (e: { action: string; result: string }) => {
           appended.push({ action: e.action, result: e.result });
-        },
-      },
-    } as unknown as Ctx;
+        } } } as unknown as Ctx;
     await agentLoop(ctx, "recon", "recon" as EngagementPhase, "sys", "user", [], 3, {
-      onIdle: () => null,
-    });
+      onIdle: () => null });
     const reasoning = appended.find((e) => e.action === "reasoning");
     assert.ok(reasoning, "reasoning event appended");
     assert.ok(!reasoning!.result.includes("analyst@client.example"), "PII redacted from reasoning");
@@ -167,8 +158,7 @@ const GOOD_JOB = {
   target: "target.example",
   mode: "red",
   objective: "assess",
-  roe: { scope: ["target.example"] },
-};
+  roe: { scope: ["target.example"] } };
 
 describe("item 7: queue intake validation", () => {
   it("accepts a well-formed job", () => {
@@ -198,8 +188,7 @@ describe("item 7: queue intake validation", () => {
       ...GOOD_JOB,
       targets: ["windows"],
       tier: 1,
-      environment: "staging",
-    });
+      environment: "staging" });
     assert.equal(input.tier, 1);
     assert.equal(input.environment, "staging");
   });

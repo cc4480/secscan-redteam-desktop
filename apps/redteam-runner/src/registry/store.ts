@@ -110,20 +110,20 @@ export function transactRegistryFile<T>(path: string, fn: (reg: VulnerabilityReg
 }
 
 // ---------------------------------------------------------------------------
-// Seed: the v0.3.x secscan.us engagement (2026-10-01). The registry is born
+// Seed: example baseline engagement. The registry is born
 // with real, evidence-backed intelligence — 10 killed hypotheses and 4
 // findings — so the very first live engagement already reasons from history.
 // ---------------------------------------------------------------------------
 
 const SEED_FP: TargetFingerprint = {
-  host: 'secscan.us',
+  host: 'target.invalid',
   stack: ['react-spa', 'cloudflare-edge', 'bearer-rest-api'],
   appType: 'security-scanner-saas',
   notes: '1.27MB JS bundle; /api/v1 bearer API + /api/* web namespace; SPA shell; Cloudflare edge',
 }
 
 const SEED_DATE = '2026-10-01T12:45:00.000Z'
-const SEED_ENG = 'secscan-us-2026-10-01'
+const SEED_ENG = 'seed-2026-10-01'
 
 export function seedRegistry(): VulnerabilityRegistry {
   const reg = emptyRegistry()
@@ -193,8 +193,8 @@ export function seedRegistry(): VulnerabilityRegistry {
     {
       engagementId: SEED_ENG,
       target: SEED_FP,
-      hypothesis: 'www.secscan.us hostname confusion / reflection',
-      killingObservation: 'GET https://www.secscan.us/ → clean 301 to https://secscan.us/, no hostname reflection.',
+      hypothesis: 'hostname confusion / reflection',
+      killingObservation: 'GET https://www.target.invalid/ → clean 301 to https://target.invalid/, no hostname reflection.',
       vulnClass: 'host confusion',
     },
     {

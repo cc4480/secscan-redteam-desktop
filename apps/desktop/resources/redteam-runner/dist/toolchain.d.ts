@@ -23,7 +23,7 @@
  */
 /** The environment variable the desktop supervisor exports for the payload. */
 export declare const TOOLS_DIR_ENV = "REDTEAM_TOOLS_DIR";
-export type ExternalToolId = "nmap" | "nuclei" | "ffuf" | "gobuster" | "john" | "sqlmap" | "nikto";
+export type ExternalToolId = "nmap" | "nuclei" | "ffuf" | "gobuster" | "john" | "sqlmap" | "nikto" | "msfconsole";
 /** Where a resolved binary came from. */
 export type ResolveSource = "explicit" | "tools-dir" | "path";
 /**

@@ -1,20 +1,17 @@
 /**
  * LocalMsfClient — native local execution of the Metasploit Framework.
  *
- * Replaces the retired msfrpcd bridge (MessagePack RPC to a daemon that
- * might not even be running — the operator's live symptom). The framework
- * installed on THIS host is driven as `msfconsole` child processes: module
- * search runs one-shot (`msfconsole -q -x "search …; exit"`), module runs
- * write the same console command stream the RPC console used (`use`,
- * `set`, `set PAYLOAD`/`set CMD`, `run`) to a dedicated process, and
- * Meterpreter interaction goes through `sessions -i` / `background` in the
- * process that opened the session.
+ * The framework installed on THIS host is driven as local `msfconsole` child
+ * processes (no daemon, no RPC, no credentials/listener): module search runs
+ * one-shot (`msfconsole -q -x "search …; exit"`), module runs write the
+ * console command stream (`use`, `set`, `set PAYLOAD`/`set CMD`, `run`) to a
+ * dedicated process, and Meterpreter interaction goes through `sessions -i` /
+ * `background` in the process that opened the session.
  *
  * Process/session state lives in the shared runtime (console-runtime.ts);
- * client instances are thin facades over it. There are no credentials and
- * no network listener. What MAY run (module/payload policy) is unchanged
- * and lives in policy.ts; this module owns only the client operations.
- * All methods fail closed: a missing/unrunnable framework throws
+ * client instances are thin facades over it. What MAY run (module/payload
+ * policy) is unchanged and lives in policy.ts; this module owns only the client
+ * operations. All methods fail closed: a missing/unrunnable framework throws
  * MsfAuthError with setup instructions; session hygiene never throws.
  */
 
@@ -50,6 +47,15 @@ export interface MsfModule {
   rank: string;
   description: string;
   disclosureDate?: string;
+}
+
+/**
+ * A source of Metasploit module search results. Both the native console source
+ * and any other implementation satisfy this one method, so the search and
+ * suggest paths are agnostic about how modules are listed.
+ */
+export interface ModuleSearchSource {
+  searchModules(query: string): Promise<MsfModule[]>;
 }
 
 export interface ConsoleRunResult {

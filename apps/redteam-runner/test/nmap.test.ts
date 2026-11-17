@@ -21,8 +21,7 @@ import {
   resolveNmapBinary,
   resolveNmapTimeoutS,
   NMAP_PROFILES,
-  NMAP_ALLOWED_SCRIPT_CATEGORIES,
-} from "../src/nmap/policy.js";
+  NMAP_ALLOWED_SCRIPT_CATEGORIES } from "../src/nmap/policy.js";
 import { NmapExecutor } from "../src/nmap/executor.js";
 import { parseNmapXml, type SpawnFn } from "../src/nmap/runner.js";
 import { toolMinTier } from "../src/accountability/tiers.js";
@@ -53,8 +52,7 @@ describe("nmap policy — the agent never reaches the command line", () => {
       target: "10.0.0.5",
       profile: findProfile("service")!,
       rateLimit: 7,
-      timeoutS: 60,
-    });
+      timeoutS: 60 });
     assert.equal(argv[0], "nmap");
     assert.ok(argv.includes("-sV"), "profile flags present");
     assert.ok(argv.includes("--max-rate"), "rate limit handed to nmap itself");
@@ -66,20 +64,17 @@ describe("nmap policy — the agent never reaches the command line", () => {
       target: "-oN-/etc/passwd",
       profile: findProfile("quick")!,
       rateLimit: 5,
-      timeoutS: 60,
-    });
+      timeoutS: 60 });
     assert.equal(argv[argv.length - 1], "-oN-/etc/passwd", "target is last");
     assert.equal(argv[argv.length - 2], "--", "preceded by the end-of-options marker");
   });
 
   it("emits --script only with validated categories", () => {
     const without = buildNmapRunArgv("nmap", {
-      target: "h", profile: findProfile("quick")!, rateLimit: 5, timeoutS: 60,
-    });
+      target: "h", profile: findProfile("quick")!, rateLimit: 5, timeoutS: 60 });
     assert.ok(!without.includes("--script"), "no --script when none requested");
     const with_ = buildNmapRunArgv("nmap", {
-      target: "h", profile: findProfile("quick")!, rateLimit: 5, timeoutS: 60, scriptCategories: ["safe"],
-    });
+      target: "h", profile: findProfile("quick")!, rateLimit: 5, timeoutS: 60, scriptCategories: ["safe"] });
     assert.equal(with_[with_.indexOf("--script") + 1], "safe");
   });
 
@@ -202,8 +197,7 @@ describe("nmap executor", () => {
   it("reports a timeout as PARTIAL, never as clean", async () => {
     const exec = new NmapExecutor({
       spawn: async () => ({ stdout: REAL_XML, stderr: "", code: null, timedOut: true }),
-      env: { REDTEAM_NMAP_BIN: "nmap" },
-    });
+      env: { REDTEAM_NMAP_BIN: "nmap" } });
     const r = await exec.scan({ target: "h", profile: "full", rateLimit: 10 });
     assert.equal(r.ok, false, "a killed scan is not ok");
     assert.match(r.message, /timeout/i);
@@ -212,8 +206,7 @@ describe("nmap executor", () => {
 
   it("surfaces a non-zero exit with the stderr reason", async () => {
     const exec = new NmapExecutor({
-      spawn: async () => ({ stdout: "", stderr: "Failed to resolve target.", code: 1, timedOut: false }),
-    });
+      spawn: async () => ({ stdout: "", stderr: "Failed to resolve target.", code: 1, timedOut: false }) });
     const r = await exec.scan({ target: "nope.invalid", profile: "quick", rateLimit: 10 });
     assert.equal(r.ok, false);
     assert.match(r.message, /Failed to resolve/);

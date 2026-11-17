@@ -330,6 +330,31 @@ export async function runScan(targetUrl: string, tier: string, onStep?: StepCall
       for (const finding of buildTlsFindings(observation, finalUrl)) {
         vulnerabilities.push(vuln(finding))
       }
+      if (tlsGrade === 'C' || tlsGrade === 'F') {
+        const letter = tlsGrade
+        const reason =
+          letter === 'F'
+            ? 'the presented certificate fails validation (expired, not yet valid, hostname mismatch, or an untrusted chain)'
+            : 'the server still accepts TLS 1.0, deprecated by RFC 8996, so a client that offers it can be forced onto a protocol exposed to downgrade and BEAST/POODLE-class attacks'
+        vulnerabilities.push(vuln({
+          name: 'Weak TLS Configuration (SSL Labs Grade: C–F)',
+          severity: letter === 'F' ? 'high' : 'medium',
+          category: 'Transport Security',
+          description:
+            `Native TLS assessment graded this endpoint ${letter} based on the engine's own handshakes and certificate facts. ` +
+            `This falls in the catalog's weak band (C–F): ${reason}.`,
+          evidence:
+            `Native TLS grade ${letter} for ${finalUrl}: ${reason}. ` +
+            `Graded locally from this engine's own handshakes and certificate facts; no external grading service was consulted.`,
+          solution:
+            letter === 'F'
+              ? 'Deploy a valid, trusted certificate for this hostname with a current validity window and complete intermediate chain, then re-test.'
+              : 'Disable TLS 1.0 and TLS 1.1 on the server. Require TLS 1.2 or higher (TLS 1.3 preferred) with strong cipher suites.',
+          cweId: letter === 'F' ? 'CWE-295' : 'CWE-327',
+          cvssScore: letter === 'F' ? 7.4 : 5.3,
+          wstgId: 'WSTG-CRYP-01',
+        }))
+      }
     }
   }
 

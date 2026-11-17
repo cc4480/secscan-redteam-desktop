@@ -30,7 +30,7 @@ import { resolveWordlist } from '../xtool/wordlist.js'
 import { pcAgentConfigured } from '../host-exec/pc-agent.js'
 import { browserConfigured, BROWSER_SETUP_GUIDANCE } from '../browser/cdp.js'
 import { poolSnapshots } from '@secscan/redteam-llm-router'
-import { probeTcp, resolvedDetail, type ReadinessItem, type ReadinessReport } from './readiness-items.js'
+import { resolvedDetail, type ReadinessItem, type ReadinessReport } from './readiness-items.js'
 import { credentialPoolItem } from './readiness-format.js'
 export { credentialPoolItem, formatReadiness } from './readiness-format.js'
 export type { ReadinessItem, ReadinessReport, ReadinessState } from './readiness-items.js'
@@ -38,6 +38,8 @@ export { probeBinary, probeTcp } from './readiness-items.js'
 import { resolveArsenalConfig } from '../arsenal/config.js'
 import { readArsenalIndexMeta, type ArsenalIndexMeta } from '../arsenal/index-store.js'
 import { ARSENAL_EMPTY_FIX } from '../arsenal/tools.js'
+import { msfBinaryPresent, resolveMsfConsoleCommand } from '../msf/prereq.js'
+import { MSF_NATIVE_SETUP_INSTRUCTIONS } from '../msf/policy.js'
 
 
 /**
@@ -124,41 +126,22 @@ export async function readinessReport(env: NodeJS.ProcessEnv = process.env): Pro
     required: true,
   })
 
-  // --- Metasploit RPC daemon ----------------------------------------------
-  const rpcHost = (env['REDTEAM_MSFRPC_HOST'] ?? '127.0.0.1').trim() || '127.0.0.1'
-  const rpcPort = Number((env['REDTEAM_MSFRPC_PORT'] ?? '55553').trim() || 55553)
-  const rpcConfigured = Boolean((env['REDTEAM_MSFRPC_USER'] ?? '').trim() && (env['REDTEAM_MSFRPC_PASS'] ?? '').trim())
-  if (!rpcConfigured) {
-    items.push({
-      id: 'msfrpcd',
-      label: 'Metasploit RPC bridge (msfrpcd)',
-      state: 'not-configured',
-      fix: 'Start msfrpcd on loopback and set REDTEAM_MSFRPC_USER / REDTEAM_MSFRPC_PASS (plus HOST/PORT/TLS as needed). The MSF exploit arm is then available; without it the battery still runs.',
-      required: false,
-    })
-  } else {
-    const reachable = await probeTcp(rpcHost, rpcPort)
-    items.push({
-      id: 'msfrpcd',
-      label: 'Metasploit RPC bridge (msfrpcd)',
-      state: reachable ? 'ready' : 'unreachable',
-      detail: `${rpcHost}:${rpcPort}`,
-      fix: reachable
-        ? undefined
-        : `Credentials are set but nothing is listening on ${rpcHost}:${rpcPort} — start msfrpcd (msfrpcd -P <pass> -U <user> -a ${rpcHost} -p ${rpcPort} -S).`,
-      required: false,
-    })
-  }
+  // --- Metasploit native framework ---------------------------------------
+  // Native-only: the arm runs the local msfconsole install (no daemon, no RPC
+  // credentials/listener). Availability means the binary resolves and executes.
+  const msfResolved = resolveMsfConsoleCommand(env)
+  const msfReady = msfBinaryPresent(env)
+  items.push({
+    id: 'msfconsole',
+    label: 'Metasploit native framework (msfconsole)',
+    state: msfReady ? 'ready' : 'missing',
+    detail: resolvedDetail(msfResolved, msfReady),
+    fix: msfReady ? undefined : MSF_NATIVE_SETUP_INSTRUCTIONS,
+    required: false,
+  })
 
   // --- credentials the engine reads from the environment -------------------
   const secrets: ReadinessItem[] = [
-    {
-      id: 'secscan_token',
-      label: 'SecScan MCP token (service verification opt-in only)',
-      state: (env['SECSCAN_MCP_TOKEN'] ?? '').trim() ? 'ready' : 'missing',
-      fix: 'Only needed with REDTEAM_VERIFY_VIA_SERVICE=1: ownership verification otherwise comes from the engagement record, in-house. Set SECSCAN_MCP_TOKEN (Secure Vault → lands in the environment) to use the service check.',
-      required: (env['REDTEAM_VERIFY_VIA_SERVICE'] ?? '').trim() === '1',
-    },
     {
       id: 'deepseek_key',
       label: 'Model provider key (agent loops)',
@@ -168,13 +151,6 @@ export async function readinessReport(env: NodeJS.ProcessEnv = process.env): Pro
           : 'missing',
       fix: 'Set MODEL_API_KEY (Meta Model API, Secure Vault). No live engagement can run without a model provider key.',
       required: true,
-    },
-    {
-      id: 'seclayer_key',
-      label: 'Seclayer API key (Seclayer MCP / scans)',
-      state: (env['SECLAYER_API_KEY'] ?? '').trim() ? 'ready' : 'missing',
-      fix: 'Optional: add the Seclayer API key in the MCP setup step, or set SECLAYER_API_KEY, to use the Seclayer MCP server and its scan tools.',
-      required: false,
     },
   ]
   items.push(...secrets)

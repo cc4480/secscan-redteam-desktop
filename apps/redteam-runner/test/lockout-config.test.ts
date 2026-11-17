@@ -40,8 +40,7 @@ describe('resolveConfig — lockout fields (spec §7 Config)', () => {
     const guard = new CredentialAttemptGuard({
       lockoutThreshold: cfg.lockoutThreshold,
       totalFailureCeiling: cfg.lockoutTotalFailures,
-      opaqueRunsPerHost: cfg.lockoutOpaqueRuns,
-    })
+      opaqueRunsPerHost: cfg.lockoutOpaqueRuns })
     assert.deepEqual(guard.config, { lockoutThreshold: 7, totalFailureCeiling: 40, opaqueRunsPerHost: 2 })
     assert.equal(guard.failureLimit, 6)
   })

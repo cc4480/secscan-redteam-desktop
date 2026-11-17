@@ -81,18 +81,15 @@ describe("kill switch removed — engagement completion under engaged stop state
       target: "secscan.us",
       mode: "red",
       objective: "kill-switch removal control",
-      roe: { scope: ["secscan.us"] },
-    };
+      roe: { scope: ["secscan.us"] } };
     const res = await runEngagement(input, {
-      mcpToken: "test",
       deepseekApiKey: "test",
       qwenApiKey: "test",
       engagementsDir: dir,
       registryPath: join(dir, "registry.json"),
       engagementId,
       dryRunAgents: true,
-      deps: { verify: async () => true },
-    });
+      deps: { verify: async () => true } });
     assert.equal(res.status, "complete", "the engagement must run to completion — no stop signal may halt it");
     // The stop files were never consumed or acted on.
     assert.ok(existsSync(join(dir, "ESTOP")), "ESTOP sentinel left untouched");
@@ -117,14 +114,12 @@ describe("kill switch removed — distress storm never refuses", () => {
         dir: "/tmp/noks-test-no-such-dir",
         engagementId: "eng-noks",
         append: (e: { action: string; result: string }) => appended.push(e),
-        updateState: () => {},
-      },
+        updateState: () => {} },
       tier: { current: 2, declared: 2, chainSteps: new Map<string, number>() },
       safety: {
         limiter: new TargetRateLimiter({ rpsPerHost: 1000, burst: 1000 }, () => 0),
         lockout: new CredentialAttemptGuard(),
-        rpsPerHost: 5,
-      },
+        rpsPerHost: 5 },
       itemLedger: new Map(),
       opsecCooldown: new Set<string>(),
       coverage: new Set<string>(),
@@ -135,16 +130,13 @@ describe("kill switch removed — distress storm never refuses", () => {
         probe: async () => {
           probes++;
           return { status: 500, ms: 3, headers: {}, bodySnippet: "internal error", bodyBytes: 14 };
-        },
-      },
-    } as unknown as Ctx;
+        } } } as unknown as Ctx;
 
     for (let i = 0; i < 6; i++) {
       const call: ToolCallRequest = {
         id: `call-storm-${i}`,
         name: "http_probe",
-        arguments: { method: "GET", url: `http://${host}/p${i}` },
-      };
+        arguments: { method: "GET", url: `http://${host}/p${i}` } };
       const r = await dispatchTool(ctx, "exploiter", "exploit", call);
       assert.ok(!r.result.startsWith("HALTED"), `call ${i} must not be auto-halt refused: ${r.result.slice(0, 120)}`);
     }
@@ -174,10 +166,7 @@ describe("kill switch removed — operator mode under engaged ESTOP", () => {
             probe: async (req: { url: string }) => {
               probes++;
               return { status: 200, ms: 1, headers: {}, bodySnippet: `OK ${req.url}`, bodyBytes: 42 };
-            },
-          } as never,
-        },
-      });
+            } } as never } });
       installOperatorDispatcher(dispatcher);
       const tool = EXEC_TOOLS_BY_NAME.get("http_probe");
       assert.ok(tool, "http_probe is on the executor surface");

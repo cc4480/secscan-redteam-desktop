@@ -1,17 +1,3 @@
-/**
- * App-data Foundry store: the live-case registry scans feed.
- *
- * Layout under <engagementsRoot>/../foundry-store/:
- *   registry.json          append-only index of every registered case
- *   bundles/<case-id>/case.json   the case record itself
- *   sanitizer-notes.jsonl  counts/reasons for dropped cases (never content)
- *   loop-state.json        Gold Loop cycle state (written by loop.ts)
- *
- * Registration is idempotent: a case id is derived deterministically from
- * the source engagement id + the case content hash, and re-registering the
- * same (engagement, content) pair adds nothing. Registry entries are never
- * mutated or removed by the pipeline — new entries append.
- */
 /** Vuln families the Foundry classifies into; anything else is unclassified. */
 export type FoundryFamily = 'sqli' | 'ssrf' | 'traversal' | 'xss' | 'unclassified';
 /** Case tiers. GOLD is never assigned by this pipeline (editor-adjudicated). */

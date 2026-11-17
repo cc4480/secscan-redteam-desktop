@@ -28,14 +28,12 @@ import {
   localVerificationProof,
   toHostInventoryArtifact,
   writeHostInventoryArtifact,
-  type LocalChannel,
-} from '../src/local-host/index.js'
+  type LocalChannel } from '../src/local-host/index.js'
 import { PC_AGENT_TOOLS, PC_OBSERVE_OPERATIONS } from '../src/tools/pc-agent.js'
 
 const SYSTEM_INFO = JSON.stringify({
   system: 'Windows', release: '11', version: '10.0.26200', machine: 'AMD64',
-  hostname: 'CHO-ZEN1', user: 'Cho-zen', cpu_percent: 12.5, mem_percent: 40,
-})
+  hostname: 'CHO-ZEN1', user: 'Cho-zen', cpu_percent: 12.5, mem_percent: 40 })
 
 type Tier2Name = keyof typeof LOCAL_TIER2_BLOCKS
 type ShellFixtures = Partial<Record<Tier2Name, string | Error>>
@@ -45,22 +43,17 @@ type ShellFixtures = Partial<Record<Tier2Name, string | Error>>
 const SHELL_FIXTURES: Record<Tier2Name, string> = {
   volumes: JSON.stringify([
     { name: 'C:', fileSystem: 'NTFS', sizeBytes: 500107862016, freeBytes: 120440463360 },
-    { name: 'D:', fileSystem: 'NTFS', sizeBytes: 2000398934016, freeBytes: 900000000000 },
-  ]),
+    { name: 'D:', fileSystem: 'NTFS', sizeBytes: 2000398934016, freeBytes: 900000000000 } ]),
   accounts: JSON.stringify([
     { name: 'Cho-zen', kind: 'local user', enabled: true, groups: ['Administrators', 'Users'] },
-    { name: 'looko', kind: 'local user', enabled: false, groups: ['Users'] },
-  ]),
+    { name: 'looko', kind: 'local user', enabled: false, groups: ['Users'] } ]),
   patches: JSON.stringify([
     { id: 'KB5066133', installedOn: '2026-10-12' },
-    { id: 'KB5065426', installedOn: '2026-09-09' },
-  ]),
+    { id: 'KB5065426', installedOn: '2026-09-09' } ]),
   software: JSON.stringify([
     { name: 'Docker Desktop', version: '4.34.0', publisher: 'Docker Inc.' },
     { name: 'Docker Desktop', version: '4.34.0', publisher: 'Docker Inc.' },
-    { name: 'Git', version: '2.47.0' },
-  ]),
-}
+    { name: 'Git', version: '2.47.0' } ]) }
 
 interface RecordedCall { tool: string; args: Record<string, unknown> }
 
@@ -80,8 +73,7 @@ function stubChannel(
     system_info: SYSTEM_INFO,
     // The real bridge's envelope form: { count, processes: [{ pid, exe, parent }] }.
     list_processes: '{"count": 2, "processes": [{"pid": 4, "exe": "System"}, {"pid": 900, "exe": "explorer.exe", "parent": 4}]}',
-    list_dir: 'file-a.txt\nfile-b.txt',
-  }
+    list_dir: 'file-a.txt\nfile-b.txt' }
   const channel: LocalChannel = {
     async call(tool, args) {
       calls.push({ tool, args })
@@ -103,8 +95,7 @@ function stubChannel(
       const answer = answers[tool]
       if (answer === undefined) throw new Error(`stub has no answer for ${tool}`)
       return answer
-    },
-  }
+    } }
   return { channel, calls }
 }
 
@@ -228,8 +219,7 @@ describe('local-host tier-2 blocks (fixed shell scripts)', () => {
       shellCalls.map((c) => c.args),
       (['volumes', 'accounts', 'patches', 'software'] as const).map((name) => ({
         script: LOCAL_TIER2_BLOCKS[name].script,
-        timeout_s: LOCAL_TIER2_BLOCKS[name].timeoutS,
-      })),
+        timeout_s: LOCAL_TIER2_BLOCKS[name].timeoutS })),
     )
     for (const block of Object.values(LOCAL_TIER2_BLOCKS)) {
       assert.equal(block.script.includes(OPTS.declaredHostname), false, 'a fixed script carries no target data')
@@ -336,8 +326,7 @@ describe('local-host artifact (pair contract)', () => {
     // mapped from the bridge's envelope rows (exe -> name, parent dropped).
     assert.deepEqual(artifact.inventory.processes, [
       { name: 'System', pid: 4 },
-      { name: 'explorer.exe', pid: 900 },
-    ])
+      { name: 'explorer.exe', pid: 900 } ])
     // Optional blocks the collector cannot fill are omitted, not emptied.
     assert.equal('filesystem' in artifact.inventory, false)
     assert.equal('sensitive' in artifact.inventory, false)
@@ -428,8 +417,7 @@ describe('local-host live channel (env-gated)', () => {
         const respond = (text: string, headers: Record<string, string> = {}) => ({
           ok: true, status: 200,
           headers: { get: (name: string) => headers[name.toLowerCase()] ?? null },
-          text: async () => text,
-        })
+          text: async () => text })
         if (body.method === 'initialize') return respond(JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} }), { 'mcp-session-id': 's1' })
         if (body.method === 'notifications/initialized') return respond('')
         const payload = body.params?.name === 'system_info' ? SYSTEM_INFO : body.params?.name === 'list_processes' ? '[]' : 'entry'

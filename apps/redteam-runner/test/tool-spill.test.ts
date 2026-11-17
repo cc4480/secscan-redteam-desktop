@@ -18,8 +18,7 @@ import {
   readdirSync,
   rmSync,
   symlinkSync,
-  writeFileSync,
-} from 'node:fs'
+  writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -28,8 +27,7 @@ import {
   SPILL_THRESHOLD_CHARS,
   readSpill,
   spillNotice,
-  spillToolResult,
-} from '../src/tool-spill.js'
+  spillToolResult } from '../src/tool-spill.js'
 import { handleBookkeepingTools } from '../src/dispatch/bookkeeping.js'
 import { agentLoop } from '../src/agents.js'
 import { EventLog } from '../src/events.js'
@@ -236,8 +234,7 @@ describe('readSpill — paging and sandbox (T-S6)', () => {
         'spill/sub/0001-ffuf_exec.txt',
         'spill\\0001-ffuf_exec.txt',
         'spill/..',
-        '',
-      ]
+        '' ]
       for (const p of bad) {
         const r = readSpill({ dir, path: p })
         assert.equal(r.ok, false, `refused: ${JSON.stringify(p)}`)
@@ -342,10 +339,8 @@ function seededRegistry(): VulnerabilityRegistry {
       attackId: 'T1190',
       payloadPattern: payload,
       evidenceRef: 'steps.jsonl',
-      severity: 'high' as const,
-    })),
-    killed: [],
-  }
+      severity: 'high' as const })),
+    killed: [] }
 }
 
 function loopCtx(dir: string, completeForRole: CompleteFn, registry: VulnerabilityRegistry): Ctx {
@@ -375,15 +370,13 @@ function loopCtx(dir: string, completeForRole: CompleteFn, registry: Vulnerabili
     coverage: new Set(),
     targetCoverage: new Map(),
     itemLedger: new Map(),
-    opsecCooldown: new Set<string>(),
-  } as unknown as Ctx
+    opsecCooldown: new Set<string>() } as unknown as Ctx
 }
 
 const toolTurn = (name: string, args: Record<string, unknown> = {}) => ({
   text: '',
   toolCalls: [{ id: `c-${Math.random()}`, name, arguments: args }],
-  usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
-})
+  usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 } })
 const idleTurn = { text: 'done', usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 } }
 
 describe('agentLoop spill seam (T-S1, T-S4)', () => {
@@ -397,8 +390,7 @@ describe('agentLoop spill seam (T-S1, T-S4)', () => {
         registry,
         registryPath: undefined,
         registryHits: [],
-        fingerprint: { stack: [], appType: 'unknown' },
-      } as unknown as Ctx
+        fingerprint: { stack: [], appType: 'unknown' } } as unknown as Ctx
       const direct = await handleBookkeepingTools(
         probeCtx,
         'recon',

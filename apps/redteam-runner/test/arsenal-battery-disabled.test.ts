@@ -67,8 +67,7 @@ describe('§6.1.3 disabled mode (REDTEAM_ARSENAL_ENABLED=0)', () => {
     const res = await fetch(`${base}/mcp`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
-    })
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }) })
     assert.equal(res.status, 200)
     const body = (await res.json()) as { result?: { tools?: Array<{ name: string }> } }
     const names = (body.result?.tools ?? []).map(t => t.name)
@@ -86,9 +85,7 @@ describe('§6.1.3 disabled mode (REDTEAM_ARSENAL_ENABLED=0)', () => {
         jsonrpc: '2.0',
         id: 2,
         method: 'tools/call',
-        params: { name: 'arsenal_search', arguments: { query: 'ssrf' } },
-      }),
-    })
+        params: { name: 'arsenal_search', arguments: { query: 'ssrf' } } }) })
     const body = (await res.json()) as { error?: { code: number }; result?: { isError?: boolean } }
     assert.equal(body.error?.code, -32602, 'a disabled tool must be indistinguishable from an unknown tool')
   })

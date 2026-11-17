@@ -4,8 +4,9 @@
  * Store: types, record/load/save, and the v0.3.x seed. Querying lives in
  * query.ts. (Module doc comment preserved on the registry.ts barrel.)
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { atomicWriteFileSync } from "../atomic.js";
 import { MemoryError } from '../memory/errors.js';
 import { emptyRegistry } from './types.js';
 export * from './types.js';
@@ -50,21 +51,9 @@ export function loadRegistryFile(path) {
  * below refuses to overwrite, so the write path must never produce one.
  */
 function writeRegistryFile(path, reg) {
-    const tmp = `${path}.tmp-${process.pid}-${Date.now().toString(36)}`;
-    try {
-        writeFileSync(tmp, JSON.stringify(reg, null, 2));
-        try {
-            renameSync(tmp, path);
-        }
-        catch {
-            rmSync(path, { force: true });
-            renameSync(tmp, path);
-        }
-    }
-    finally {
-        if (existsSync(tmp))
-            rmSync(tmp, { force: true });
-    }
+    // One shared atomic replace: a failed rename moves the live file aside
+    // instead of deleting it, so an AV lock can never cost the registry.
+    atomicWriteFileSync(path, JSON.stringify(reg, null, 2));
 }
 /** Persist the registry (creates parent dirs). Called after every verdict write-through and at engagement end. */
 export function saveRegistryFile(path, reg) {
@@ -103,18 +92,18 @@ export function transactRegistryFile(path, fn) {
     return out;
 }
 // ---------------------------------------------------------------------------
-// Seed: the v0.3.x secscan.us engagement (2026-10-01). The registry is born
+// Seed: example baseline engagement. The registry is born
 // with real, evidence-backed intelligence — 10 killed hypotheses and 4
 // findings — so the very first live engagement already reasons from history.
 // ---------------------------------------------------------------------------
 const SEED_FP = {
-    host: 'secscan.us',
+    host: 'target.invalid',
     stack: ['react-spa', 'cloudflare-edge', 'bearer-rest-api'],
     appType: 'security-scanner-saas',
     notes: '1.27MB JS bundle; /api/v1 bearer API + /api/* web namespace; SPA shell; Cloudflare edge',
 };
 const SEED_DATE = '2026-10-01T12:45:00.000Z';
-const SEED_ENG = 'secscan-us-2026-10-01';
+const SEED_ENG = 'seed-2026-10-01';
 export function seedRegistry() {
     const reg = emptyRegistry();
     const killed = [
@@ -176,8 +165,8 @@ export function seedRegistry() {
         {
             engagementId: SEED_ENG,
             target: SEED_FP,
-            hypothesis: 'www.secscan.us hostname confusion / reflection',
-            killingObservation: 'GET https://www.secscan.us/ → clean 301 to https://secscan.us/, no hostname reflection.',
+            hypothesis: 'hostname confusion / reflection',
+            killingObservation: 'GET https://www.target.invalid/ → clean 301 to https://target.invalid/, no hostname reflection.',
             vulnClass: 'host confusion',
         },
         {

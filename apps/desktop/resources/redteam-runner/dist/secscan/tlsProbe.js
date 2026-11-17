@@ -209,6 +209,17 @@ export async function probeTargetTls(targetUrl, options = {}) {
     return probeTls(connectHost, port, { ...options, servername: hostname });
 }
 /**
+ * Native TLS finding names emitted by buildTlsFindings (5 app-only native TLS
+ * checks). Exposed for machine-checkable manifest/count evidence.
+ */
+export const NATIVE_TLS_CHECK_NAMES = [
+    'Weak TLS — Legacy Protocol Accepted',
+    'Expired TLS Certificate',
+    'TLS Certificate Not Yet Valid',
+    'TLS Certificate Hostname Mismatch',
+    'Untrusted TLS Certificate',
+];
+/**
  * Findings derived from an observation — facts only, every evidence string
  * quotes values the probe itself observed. Returns finding bodies without
  * ids; scanner.ts wraps them through its vuln() path. An unreachable or

@@ -52,15 +52,12 @@ function authorizeCtx(testMode: boolean) {
       mode: 'red',
       objective: 'test-mode authorize proof',
       operatorName: 'Test Operator',
-      roe: { scope: ['example.com', '192.168.1.10'], outOfScope: [] },
-    },
-    config: { testMode, verifyViaService: false, mcpEndpoint: '', mcpToken: '', localSandbox: false },
+      roe: { scope: ['example.com', '192.168.1.10'], outOfScope: [] } },
+    config: { testMode, localSandbox: false },
     deps: {},
     events: {
       append: (e: { action: string; result: string }) => appended.push(e),
-      updateState: () => undefined,
-    },
-  } as unknown as Ctx
+      updateState: () => undefined } } as unknown as Ctx
   return { ctx, appended }
 }
 
@@ -158,8 +155,7 @@ function fakeCtx(testMode: boolean) {
     events: {
       dir: '/tmp/test-mode-test-no-such-dir',
       engagementId: 'eng-test-mode-test',
-      append: (e: { action: string; result: string; target?: string }) => appended.push(e),
-    },
+      append: (e: { action: string; result: string; target?: string }) => appended.push(e) },
     tier: { current: 2, declared: 2, chainSteps: new Map<string, number>() },
     safety: { limiter, lockout: guard, rpsPerHost: 5 },
     itemLedger: new Map(),
@@ -169,16 +165,13 @@ function fakeCtx(testMode: boolean) {
     probesUsed: 0,
     consecutive5xx: 0,
     prober: {
-      probe: async () => ({ status: 200, ms: 1, bodySnippet: 'ok' }),
-    },
+      probe: async () => ({ status: 200, ms: 1, bodySnippet: 'ok' }) },
     hostExecutor: {
       killSwitch: undefined,
       sshExec: async (a: { host: string; command: string }) => {
         sshCommands.push(a.command)
         return { ...FAIL_SSH, summary: FAIL_SSH.summary.replaceAll('{host}', a.host) }
-      },
-    },
-  } as unknown as Ctx
+      } } } as unknown as Ctx
   return { ctx, appended, sshCommands, guard, host }
 }
 

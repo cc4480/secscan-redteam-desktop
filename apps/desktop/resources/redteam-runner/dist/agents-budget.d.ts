@@ -33,10 +33,4 @@ export declare function safetyHalt(ctx: Ctx): string | null;
 export declare function budgetExhausted(ctx: Ctx): string | null;
 /** Default tool-call repair budget per agentLoop invocation (RC Item 6). */
 export declare const DEFAULT_REPAIR_CAP = 3;
-/**
- * The repair steering for one tagged result: the defect, the tool's
- * schema, and the original arguments, per the Item 6 design. The model
- * answers with exactly one corrected call; the name may change only for
- * an unknown-tool defect, and then only to an offered tool.
- */
 export declare function buildRepairPrompt(call: ToolCallRequest, d: DispatchResult, tools: JsonSchemaTool[], spent: number, cap: number): string;

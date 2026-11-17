@@ -35,8 +35,7 @@ import {
   countVariants,
   variantCountLine,
   VARIANT_LIST_TOOL,
-  VARIANT_CLASSES,
-} from "../src/variants/index.js";
+  VARIANT_CLASSES } from "../src/variants/index.js";
 import { EXPLOIT_TOOLS, RECON_TOOLS } from "../src/tools.js";
 import { toolMinTier } from "../src/accountability/index.js";
 
@@ -46,8 +45,7 @@ function fakeCtx(cap = 25): Ctx {
   return {
     itemLedger: buildItemLedger([...FULL_BATTERY_TARGETS]),
     variantCap: cap,
-    events: { append: (e: { action: string; result: string }) => void appended.push(e) },
-  } as unknown as Ctx;
+    events: { append: (e: { action: string; result: string }) => void appended.push(e) } } as unknown as Ctx;
 }
 
 describe("variant libraries", () => {
@@ -61,8 +59,7 @@ describe("variant libraries", () => {
     ["ssrf", SSRF_VARIANTS],
     ["redirect", REDIRECT_VARIANTS],
     ["auth", AUTH_VARIANTS],
-    ["headers", HEADER_VARIANTS],
-  ];
+    ["headers", HEADER_VARIANTS] ];
   for (const [name, lib] of libs) {
     it(`${name}: non-empty, every payload tagged with kind + whatItTests`, () => {
       assert.ok(lib.length >= 8, `${name} should have a real library, got ${lib.length}`);

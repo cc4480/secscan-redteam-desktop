@@ -141,14 +141,14 @@ describe('runRunnerReadiness', () => {
 
   it('never leaks an environment token into a failure reason', async () => {
     const child = new FakeChild()
-    const pending = run(child, { env: { SECSCAN_MCP_TOKEN: 's3cret-token-value' } })
+    const pending = run(child, { env: { REDTEAM_UI_TOKEN: 's3cret-token-value' } })
     child.stderr.write('diagnostic line\n')
     child.emitExit(1)
 
     const result = await pending
     expect(result.ok).toBe(false)
     if (!result.ok) {
-      expect(result.reason).not.toContain('SECSCAN_MCP_TOKEN')
+      expect(result.reason).not.toContain('REDTEAM_UI_TOKEN')
       expect(result.reason).not.toContain('s3cret-token-value')
     }
   })

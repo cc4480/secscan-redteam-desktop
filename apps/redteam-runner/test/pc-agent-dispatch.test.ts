@@ -24,8 +24,7 @@ function fakeFetch(payload: string): FetchLike {
       ok: true,
       status: 200,
       headers: { get: (name: string) => headers[name.toLowerCase()] ?? null },
-      text: async () => text,
-    })
+      text: async () => text })
     if (body.method === 'initialize') return respond(JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} }), { 'mcp-session-id': 's1' })
     if (body.method === 'notifications/initialized') return respond('')
     return respond(JSON.stringify({ jsonrpc: '2.0', id: 2, result: { content: [{ type: 'text', text: payload }] } }))

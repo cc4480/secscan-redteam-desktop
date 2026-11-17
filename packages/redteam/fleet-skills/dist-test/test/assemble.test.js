@@ -221,3 +221,55 @@ test('assembly defaults knobs when none are supplied', () => {
 test('assembly refuses a record with no targets', () => {
     assert.throws(() => assembleFleetPrompt({ master: 'M', record: makeRecord({ targets: [] }) }), /targets/);
 });
+test('trinity assembly carries the trinity soul, trinity seat, and defers grade/sign authority', () => {
+    const promptsDir = join(bundledSkillsRoot(), '..', 'prompts');
+    const soul = readFileSync(join(promptsDir, 'souls', 'trinity.md'), 'utf8');
+    const seatDelta = readFileSync(join(promptsDir, 'seats', 'trinity.md'), 'utf8');
+    const prompt = assembleFleetPrompt({
+        master: 'MASTER-TEXT',
+        soul,
+        seatDelta,
+        record: makeRecord(),
+    });
+    const masterAt = prompt.indexOf('MASTER-TEXT');
+    const soulAt = prompt.indexOf('# TRINITY — Reporter / Evidence Narrator');
+    const injectionAt = prompt.indexOf('<verified_engagement>');
+    const seatAt = prompt.indexOf('<seat:trinity>');
+    assert.ok(masterAt !== -1, 'master present');
+    assert.ok(soulAt !== -1, 'trinity soul present');
+    assert.ok(seatAt !== -1, 'trinity seat present');
+    assert.ok(masterAt < soulAt && soulAt < injectionAt && injectionAt < seatAt, 'assembly order preserved');
+    assert.ok(prompt.includes('Defer grading to the anchored evaluator flow'), 'grading deferred');
+    assert.ok(prompt.includes('Defer final sign-off to the Scribe/publisher seat'), 'sign-off deferred');
+    assert.ok(prompt.includes('assessment incomplete — posture not determined'), 'coverage honesty preserved');
+});
+test('publisher seat assembly carries the scribe soul and publisher signing seat with cycle budget', () => {
+    const metas = discoverSkills([bundledSkillsRoot()]);
+    const byName = new Map(metas.map(meta => [meta.name, meta]));
+    const skillBodies = ['findings-grading-reporting', 'html-report-design'].map(name => {
+        const meta = byName.get(name);
+        assert.ok(meta, `bundled skill present: ${name}`);
+        return { name, body: loadSkillBody(meta) };
+    });
+    const promptsDir = join(bundledSkillsRoot(), '..', 'prompts');
+    const soul = readFileSync(join(promptsDir, 'souls', 'scribe.md'), 'utf8');
+    const seatDelta = readFileSync(join(promptsDir, 'seats', 'publisher.md'), 'utf8');
+    const prompt = assembleFleetPrompt({
+        master: 'MASTER-TEXT',
+        soul,
+        seatDelta,
+        record: makeRecord(),
+        skillIndex: skillIndexBlock(metas),
+        skillBodies,
+    });
+    const soulAt = prompt.indexOf('# The SCRIBE — Artifact Owner / Publisher');
+    const seatAt = prompt.indexOf('<seat:publisher>');
+    assert.ok(soulAt !== -1, 'scribe soul present');
+    assert.ok(seatAt > soulAt, 'publisher seat follows soul');
+    assert.ok(prompt.includes('<skill_content name="findings-grading-reporting">'), 'grading skill body bound');
+    assert.ok(prompt.includes('<skill_content name="html-report-design">'), 'design skill body bound');
+    assert.ok(prompt.includes('SCRIBE_MAX_CYCLES = 2'), 'default knobs carry scribe cycle budget');
+    assert.ok(prompt.includes('REJECT with itemized defects'), 'publisher verdict contract present');
+    assert.ok(prompt.includes('stamped UNSIGNED'), 'unsigned fallback preserved');
+    assert.ok(prompt.includes('Never probe targets'), 'publisher hard limits preserved');
+});

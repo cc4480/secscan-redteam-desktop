@@ -132,11 +132,9 @@ describe('arsenal provisioning — served surface', () => {
     bindForProfile()
     const browse = await toolJson('arsenal_browse', {})
     assert.deepEqual(browse, {
-      error: { code: 'ARSENAL_INDEX_EMPTY', fix: 'Run: redteam-runner arsenal refresh' },
-    })
+      error: { code: 'ARSENAL_INDEX_EMPTY', fix: 'Run: redteam-runner arsenal refresh' } })
     const search = await toolJson('arsenal_search', { query: 'nmap' })
     assert.deepEqual(search, {
-      error: { code: 'ARSENAL_INDEX_EMPTY', fix: 'Run: redteam-runner arsenal refresh' },
-    })
+      error: { code: 'ARSENAL_INDEX_EMPTY', fix: 'Run: redteam-runner arsenal refresh' } })
   })
 })

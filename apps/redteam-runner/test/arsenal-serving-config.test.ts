@@ -27,8 +27,7 @@ import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
   resolveArsenalConfig,
-  resolveArsenalServingConfig,
-} from '../src/arsenal/config.js'
+  resolveArsenalServingConfig } from '../src/arsenal/config.js'
 import { buildAndSwapArsenalIndex } from '../src/arsenal/index-store.js'
 import { ARSENAL_TOOLS_BY_NAME, bindArsenalConfig } from '../src/arsenal/tools.js'
 import type { ArsenalBuildData } from '../src/arsenal/index-store.js'
@@ -52,8 +51,7 @@ function fixtureData(): ArsenalBuildData {
         topic: 'Wordlists',
         fetchedAt: BUILT_AT,
         entryCount: 1,
-        fetchError: null,
-      },
+        fetchError: null },
       {
         slug: 'payloadsallthethings',
         name: 'PayloadsAllTheThings',
@@ -62,9 +60,7 @@ function fixtureData(): ArsenalBuildData {
         topic: 'Web Hacking',
         fetchedAt: BUILT_AT,
         entryCount: 1,
-        fetchError: null,
-      },
-    ],
+        fetchError: null } ],
     entries: [
       {
         name: 'JWT Wordlist',
@@ -73,8 +69,7 @@ function fixtureData(): ArsenalBuildData {
         collectionSlug: 'seclists',
         tags: ['topic:wordlists', 'collection:seclists', 'wordlist'],
         targets: ['WA'],
-        battery: ['F-10', 'functionality'],
-      },
+        battery: ['F-10', 'functionality'] },
       {
         name: 'SSRF Payloads',
         url: 'https://example.invalid/payloadsallthethings/ssrf',
@@ -82,10 +77,7 @@ function fixtureData(): ArsenalBuildData {
         collectionSlug: 'payloadsallthethings',
         tags: ['topic:web-hacking', 'collection:payloadsallthethings', 'payloads'],
         targets: ['WA'],
-        battery: ['F-9'],
-      },
-    ],
-  }
+        battery: ['F-9'] } ] }
 }
 
 let base = ''

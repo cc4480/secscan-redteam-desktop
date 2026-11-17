@@ -50,8 +50,7 @@ afterEach(() => {
 const noRedirects = (): Record<SignOffTransition, number> => ({
   'plan→recon': 0,
   'recon→exploit': 0,
-  'exploit→report': 0,
-})
+  'exploit→report': 0 })
 
 type CompleteFn = (
   role: unknown,
@@ -78,14 +77,12 @@ function makeCtx(eventsDir: string, completeForRole: CompleteFn, redirects: Reco
       mode: 'red',
       objective: 'assess the shop',
       roe: { blackoutWindows: [], scope: ['shop.example.test'] },
-      fullBattery: false,
-    },
+      fullBattery: false },
     deps: { completeForRole },
     events: new EventLog(eventsDir, 'eng-signoff-redirect-budget', {
       target: 'shop.example.test',
       mode: 'red',
-      objective: 'assess the shop',
-    }),
+      objective: 'assess the shop' }),
     coverage: new Set(),
     targetCoverage: new Map(),
     itemLedger: new Map(),
@@ -99,8 +96,7 @@ function makeCtx(eventsDir: string, completeForRole: CompleteFn, redirects: Reco
     fingerprint: { stack: [], appType: 'unknown' },
     tier: { current: 0, chainSteps: new Map<string, number>() },
     safety: { killSwitchAborts: 0 },
-    hostKill: { aborted: false, controllers: new Set<AbortController>() },
-  } as unknown as Ctx
+    hostKill: { aborted: false, controllers: new Set<AbortController>() } } as unknown as Ctx
 }
 
 function eventsOf(action: string): EngagementEvent[] {
@@ -143,8 +139,7 @@ describe('coordinatorSignOff — per-gate redirect budgets (S2-H7)', () => {
     // infrastructure blocker; exploit→report's first REDIRECT must still
     // be funded from its own gate budget.
     const { completeForRole, signOffSystems } = signOffScript({
-      'exploit→report': ['REDIRECT: zero tasks cannot advance to report', 'SIGN-OFF: approved'],
-    })
+      'exploit→report': ['REDIRECT: zero tasks cannot advance to report', 'SIGN-OFF: approved'] })
     const redirects = { ...noRedirects(), 'recon→exploit': 2 }
     const ctx = makeCtx(dir, completeForRole, redirects)
 
@@ -163,8 +158,7 @@ describe('coordinatorSignOff — per-gate redirect budgets (S2-H7)', () => {
 
   it('an exhausted gate ships UNSIGNED on its own count (Q-NOHALT): no halt, no corrective work, the unsigned transition is recorded', async () => {
     const { completeForRole } = signOffScript({
-      'exploit→report': ['REDIRECT: zero tasks cannot advance to report'],
-    })
+      'exploit→report': ['REDIRECT: zero tasks cannot advance to report'] })
     const redirects = { ...noRedirects(), 'exploit→report': 2 }
     const ctx = makeCtx(dir, completeForRole, redirects)
 
@@ -178,8 +172,7 @@ describe('coordinatorSignOff — per-gate redirect budgets (S2-H7)', () => {
 
   it('a fresh gate funds exactly two redirects, then ships UNSIGNED on the third', async () => {
     const { completeForRole } = signOffScript({
-      'exploit→report': ['REDIRECT: more work needed'],
-    })
+      'exploit→report': ['REDIRECT: more work needed'] })
     const ctx = makeCtx(dir, completeForRole, noRedirects())
 
     await coordinatorSignOff(ctx, 'exploit→report', () => 'exploit summary payload')
@@ -207,12 +200,10 @@ function deniedBatch(n: number): ChatResult {
     toolCalls: Array.from({ length: n }, (_, i) => ({
       id: `c-${Date.now()}-${i}-${Math.random()}`,
       name: 'no_such_tool',
-      arguments: {},
-    })),
+      arguments: {} })),
     provider: 'fake',
     model: 'fake',
-    usage: USAGE,
-  }
+    usage: USAGE }
 }
 
 function wallModel(): CompleteFn {
@@ -237,8 +228,7 @@ describe('agentLoop wall redirect — its own budget (S2-H7)', () => {
     const allSpent: Record<SignOffTransition, number> = {
       'plan→recon': 2,
       'recon→exploit': 2,
-      'exploit→report': 2,
-    }
+      'exploit→report': 2 }
     const ctx = makeCtx(dir, wallModel(), { ...allSpent })
     await agentLoop(ctx, 'exploiter', 'exploit', 's', 'u', [], 12, { reflectorCap: 0 })
     assert.equal(eventsOf('redirect_rerecon').length, 1, 'the wall redirect still fires on its own budget')

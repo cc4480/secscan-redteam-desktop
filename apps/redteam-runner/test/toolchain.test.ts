@@ -28,8 +28,7 @@ import {
   resolveExternalBinary,
   toolEnvNames,
   toolsDir,
-  type ResolvedBinary,
-} from '../src/toolchain.js'
+  type ResolvedBinary } from '../src/toolchain.js'
 import { XTOOLS, findXTool } from '../src/xtool/registry.js'
 import { binPresent, resolveBinPath } from '../src/xtool/executor.js'
 import { NMAP_ENV_BIN } from '../src/nmap/policy.js'
@@ -84,8 +83,7 @@ describe('toolchain resolver: precedence', () => {
   it('keeps a set-but-missing explicit value authoritative and reports it not-found', () => {
     const root = tree([`nmap/nmap${EXE}`])
     const r = resolveExternalBinary('nmap', {
-      env: { REDTEAM_TOOLS_DIR: root, REDTEAM_NMAP_BIN: join(root, 'gone', `nmap${EXE}`) },
-    })
+      env: { REDTEAM_TOOLS_DIR: root, REDTEAM_NMAP_BIN: join(root, 'gone', `nmap${EXE}`) } })
     // Never silently swap in the bundled copy: the report must name what was
     // asked for and say it is missing, not claim a different binary ran.
     assert.equal(r.source, 'explicit')
@@ -96,8 +94,7 @@ describe('toolchain resolver: precedence', () => {
     const empty = tree([])
     assert.deepEqual(pick(resolveExternalBinary('nmap', { env: { REDTEAM_TOOLS_DIR: empty } })), {
       path: 'nmap',
-      source: 'path',
-    })
+      source: 'path' })
     assert.deepEqual(
       pick(resolveExternalBinary('ffuf', { env: { REDTEAM_TOOLS_DIR: '/no/such/tools/dir' }, exists: () => false })),
       { path: 'ffuf', source: 'path' },
@@ -105,8 +102,7 @@ describe('toolchain resolver: precedence', () => {
     // No REDTEAM_TOOLS_DIR at all: the pre-toolchain resolution, unchanged.
     assert.deepEqual(pick(resolveExternalBinary('nuclei', { env: {}, exists: () => false })), {
       path: 'nuclei',
-      source: 'path',
-    })
+      source: 'path' })
   })
 
   it('accepts an injected existence check, so tests need no real files', () => {

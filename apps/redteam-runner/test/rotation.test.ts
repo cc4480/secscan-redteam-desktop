@@ -15,8 +15,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
-  writeFileSync,
-} from "node:fs";
+  writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
@@ -24,8 +23,7 @@ import {
   DEFAULT_LOG_MAX_BYTES,
   maybeRotateLog,
   resolveLogRotationConfig,
-  type LogRotationConfig,
-} from "../src/safety/rotation.js";
+  type LogRotationConfig } from "../src/safety/rotation.js";
 import { EventLog, readEvents } from "../src/events.js";
 import { appendHistory } from "../src/continuous/watch/helpers.js";
 import { loadWatchProfile } from "../src/continuous/profile.js";
@@ -191,8 +189,7 @@ describe("watch profile logRetention", () => {
         engagement: { target: "t", mode: "red", objective: "o", roe: { scope: ["t"] } },
         cadence: { intervalHours: 24 },
         scopeValidUntil: "2030-01-01T00:00:00Z",
-        logRetention: lr,
-      }),
+        logRetention: lr }),
     );
     return p;
   }

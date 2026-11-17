@@ -12,7 +12,7 @@
 import { isDomainVerified, parseVerifiedDomains } from './verify.js'
 
 export interface ServerVerificationConfig {
-  /** MCP endpoint, e.g. https://secscan.us/api/mcp */
+  /** MCP endpoint, e.g. https://example.invalid/api/mcp */
   endpoint: string
   /** MCP-scope bearer token (an API-scope token is rejected by the server). */
   token: string

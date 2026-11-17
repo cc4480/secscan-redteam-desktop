@@ -9,8 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import {
-  defaultBridgeTokenFile, readBridgeToken, resolveBridgeConfig, resolveBridgeEndpoint,
-} from "../src/bridge/config.js";
+  defaultBridgeTokenFile, readBridgeToken, resolveBridgeConfig, resolveBridgeEndpoint } from "../src/bridge/config.js";
 
 describe("bridge token file default", () => {
   it("resolves under the home directory with posix separators", () => {
@@ -50,8 +49,7 @@ describe("resolveBridgeConfig", () => {
   it("reads url and token file from the environment", () => {
     const config = resolveBridgeConfig({
       PC_BRIDGE_URL: "https://pc.example.test",
-      PC_BRIDGE_TOKEN_FILE: "/tmp/somewhere/token",
-    });
+      PC_BRIDGE_TOKEN_FILE: "/tmp/somewhere/token" });
     assert.equal(config.url, "https://pc.example.test");
     assert.equal(config.endpoint, "https://pc.example.test/mcp");
     assert.equal(config.tokenFile, "/tmp/somewhere/token");

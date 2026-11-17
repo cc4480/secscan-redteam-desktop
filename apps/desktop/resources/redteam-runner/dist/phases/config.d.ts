@@ -3,14 +3,10 @@
  */
 import { type ResolvedRunnerConfig } from '../types.js';
 export declare function resolveConfig(env: NodeJS.ProcessEnv, opts?: {
-    mcpToken?: string;
     deepseekApiKey?: string;
     /** Meta Model API key. Env MODEL_API_KEY (META_API_KEY fallback). The fleet's provider key. */
     modelApiKey?: string;
-    /** Opt-in service verification (env REDTEAM_VERIFY_VIA_SERVICE=1). Default: verification from the engagement record. */
-    verifyViaService?: boolean;
     qwenApiKey?: string;
-    mcpEndpoint?: string;
     maxReconTurns?: number;
     maxExploitProbes?: number;
     /** Progress-aware round caps (see ResolvedRunnerConfig). Env REDTEAM_SOFT_ROUND_CAP / REDTEAM_HARD_ROUND_CAP. */

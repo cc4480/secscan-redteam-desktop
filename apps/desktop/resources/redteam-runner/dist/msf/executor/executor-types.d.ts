@@ -4,17 +4,11 @@
  * executor.ts re-exports all three, so every importer and the msf barrel
  * keep the same surface.
  */
-import { type MsfRequestFn } from '../protocol.js';
+import { type MsfSpawnFn } from '../local-client.js';
 export interface MsfDeps {
-    /** Injectable transport (default: HTTPS to the operator's msfrpcd). */
-    request?: MsfRequestFn;
+    /** Injectable msfconsole process spawner (default: spawn the real local binary). Tests drive a scripted fake console. */
+    spawn?: MsfSpawnFn;
     env?: NodeJS.ProcessEnv;
-    /** Override msfrpcd endpoint (tests). */
-    endpoint?: {
-        host: string;
-        port: number;
-        useTls: boolean;
-    };
     /**
      * TEST MODE (REDTEAM_TEST_MODE): module/payload policy and the canary
      * destructive check are bypassed. Set from the resolved runner config
@@ -32,9 +26,9 @@ export interface MsfResult {
     /** Redacted, capped output. */
     output: string;
     ms: number;
-    /** Set when the safety core refused before contacting msfrpcd. */
+    /** Set when the safety core refused before any local process was spawned. */
     refused?: string;
-    /** Set when a Meterpreter-payload run opened a session (W8): the runner-issued handle + daemon id. */
+    /** Set when a Meterpreter-payload run opened a session (W8): the runner-issued handle + runtime session id. */
     session?: {
         handle: string;
         daemonId: string;

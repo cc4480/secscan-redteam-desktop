@@ -20,8 +20,7 @@ function result(over: Partial<TaskResult>): TaskResult {
     probesBefore: 0, probesAfter: 0,
     findingsBefore: 0, findingsAfter: 0,
     killedBefore: 0, killedAfter: 0,
-    ...over,
-  } as TaskResult
+    ...over } as TaskResult
 }
 
 const totalOf = (rs: TaskResult[], key: 'probes' | 'findings' | 'killed'): number =>
@@ -34,8 +33,7 @@ describe('parallel chunk accounting', () => {
     const chunk = [
       result({ probesBefore: 10, probesAfter: 16, findingsBefore: 0, findingsAfter: 2 }),
       result({ probesBefore: 11, probesAfter: 16, findingsBefore: 0, findingsAfter: 2 }),
-      result({ probesBefore: 12, probesAfter: 16, findingsBefore: 1, findingsAfter: 2 }),
-    ]
+      result({ probesBefore: 12, probesAfter: 16, findingsBefore: 1, findingsAfter: 2 }) ]
     reconcileChunkDeltas(chunk)
     assert.equal(totalOf(chunk, 'probes'), 6, 'the chunk probed 6 times, not 18')
     assert.equal(totalOf(chunk, 'findings'), 2, 'the chunk confirmed 2 findings, not 6')
@@ -44,8 +42,7 @@ describe('parallel chunk accounting', () => {
   it('marks every result in the chunk as shared', () => {
     const chunk = [
       result({ probesBefore: 5, probesAfter: 9 }),
-      result({ probesBefore: 5, probesAfter: 9 }),
-    ]
+      result({ probesBefore: 5, probesAfter: 9 }) ]
     reconcileChunkDeltas(chunk)
     assert.deepEqual(chunk.map((r) => r.attribution), ['shared', 'shared'])
   })
@@ -53,8 +50,7 @@ describe('parallel chunk accounting', () => {
   it('gives the attributed task the whole chunk delta and the siblings none', () => {
     const chunk = [
       result({ probesBefore: 5, probesAfter: 9 }),
-      result({ probesBefore: 6, probesAfter: 9 }),
-    ]
+      result({ probesBefore: 6, probesAfter: 9 }) ]
     reconcileChunkDeltas(chunk)
     assert.equal(chunk[0]!.probesAfter - chunk[0]!.probesBefore, 4)
     assert.equal(chunk[1]!.probesAfter - chunk[1]!.probesBefore, 0)

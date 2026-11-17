@@ -45,7 +45,6 @@ A public installer is not published yet: the current build (0.1.7-rc.7) is in fi
 On first run, the welcome flow asks for one required key and offers two optional ones:
 
 1. **Meta Model API key** (required) — the fleet's models. Set it in the app, or provide `MODEL_API_KEY` in the environment.
-2. **SecScan MCP token** (optional, recommended) — unlocks domain verification and the SecScan service's scans and monitors. Mint one at [secscan.us](https://secscan.us) → Settings → AI editors.
 3. **Seclayer API key** (optional) — unlocks the Seclayer service as a second opinion. Create one in the Seclayer dashboard → Developer / API Keys.
 
 Keys you enter are stored in the app's per-user credential store, encrypted with the operating system's keychain (Electron `safeStorage`); on Windows the store refuses plaintext by design. See [MCP services](docs/product/mcp-services.md) and [Configuration](docs/product/configuration.md).

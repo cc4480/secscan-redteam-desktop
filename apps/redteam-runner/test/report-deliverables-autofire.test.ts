@@ -35,8 +35,7 @@ import {
   deliverableToolFields,
   finalizeDeliverables,
   verifyDeliverables,
-  type ReportModel,
-} from '../src/report/deliverables.js'
+  type ReportModel } from '../src/report/deliverables.js'
 
 const SEVEN = [...DELIVERABLE_FILES]
 
@@ -44,14 +43,10 @@ const FINDINGS_JSON = JSON.stringify({
   findings: [
     {
       id: 'F-1', severity: 'critical', title: 'Fixture critical flaw', attackIds: ['T1190'],
-      evidence: 'fixture evidence one', fix: 'Apply the fixture patch.', retest: 'Re-probe the fixture.', status: 'confirmed',
-    },
+      evidence: 'fixture evidence one', fix: 'Apply the fixture patch.', retest: 'Re-probe the fixture.', status: 'confirmed' },
     {
       id: 'F-2', severity: 'low', title: 'Fixture low flaw', attackIds: ['T1190'],
-      evidence: 'fixture evidence two', fix: 'Tighten the fixture header.', retest: 'Re-check the fixture header.', status: 'confirmed',
-    },
-  ],
-})
+      evidence: 'fixture evidence two', fix: 'Tighten the fixture header.', retest: 'Re-check the fixture header.', status: 'confirmed' } ] })
 
 /** The same two findings as a task's VERDICTS block — the path real
  * findings take into the live record (mergeVerdictBlock). Since the
@@ -63,9 +58,7 @@ const FINDINGS_JSON = JSON.stringify({
 const LIVE_VERDICTS = JSON.stringify({
   verdicts: [
     { kind: 'confirmed', severity: 'critical', title: 'Fixture critical flaw', attackId: 'T1190', evidence: 'fixture evidence one' },
-    { kind: 'confirmed', severity: 'low', title: 'Fixture low flaw', attackId: 'T1190', evidence: 'fixture evidence two' },
-  ],
-})
+    { kind: 'confirmed', severity: 'low', title: 'Fixture low flaw', attackId: 'T1190', evidence: 'fixture evidence two' } ] })
 
 /** The battery suite's scripted LLM, with a parameterized reporter and
  * an optional sign-off refusal (the deterministic halt trigger). */
@@ -77,8 +70,7 @@ function scriptedLlm(opts: { reporterFindings?: string; refuseSignOff?: boolean;
   const probe = (category: string, id: number): ToolCallRequest => ({
     id: `call-${id}`,
     name: 'http_probe',
-    arguments: { method: 'GET', url: 'https://secscan.us/probe', category, attackId: 'T1190', hypothesis: `battery test ${category}` },
-  })
+    arguments: { method: 'GET', url: 'https://secscan.us/probe', category, attackId: 'T1190', hypothesis: `battery test ${category}` } })
   const textOnly = (text: string): ChatResult => ({ text, toolCalls: [], provider: 'fake', model: 'fake' })
   const taskJson = (tasks: object[], finish: boolean, note: string): ChatResult =>
     textOnly('```json ' + JSON.stringify({ tasks, finish, note }) + ' ```')
@@ -98,8 +90,7 @@ function scriptedLlm(opts: { reporterFindings?: string; refuseSignOff?: boolean;
           return taskJson(
             [
               { kind: 'probe', brief: 'test functionality abuse', attackId: 'T1190', category: 'functionality', maxTurns: 4 },
-              { kind: 'probe', brief: 'test validation rigor', attackId: 'T1190', category: 'validation', maxTurns: 4 },
-            ],
+              { kind: 'probe', brief: 'test validation rigor', attackId: 'T1190', category: 'validation', maxTurns: 4 } ],
             false,
             'covering missing categories',
           )
@@ -148,14 +139,13 @@ describe('deliverable autofire (Q-DELIVERABLES-AUTOFIRE)', () => {
   })
 
   const runOpts = (llm: ReturnType<typeof scriptedLlm>, extra: Record<string, unknown> = {}) => ({
-    mcpToken: 'test',
+
     deepseekApiKey: 'test',
     qwenApiKey: 'test',
     engagementsDir: dir,
     registryPath: join(dir, 'registry.json'),
     deps: { verify: async () => true, completeForRole: llm as never, prober: fakeProber },
-    ...extra,
-  })
+    ...extra })
 
   it('a completed engagement emits all seven artifacts and names them on the record', async () => {
     const input: EngagementInput = { target: 'secscan.us', mode: 'red', objective: 'deliverables test', roe: { scope: ['secscan.us'] } }
@@ -230,8 +220,7 @@ describe('deliverable autofire (Q-DELIVERABLES-AUTOFIRE)', () => {
       target: 'example.com',
       mode: 'red',
       objective: 'blocked test',
-      roe: { scope: ['example.com', '192.168.1.10'] },
-    }
+      roe: { scope: ['example.com', '192.168.1.10'] } }
     const res = await runEngagement(input, runOpts(scriptedLlm(), { testMode: false, localSandbox: false }))
     assert.equal(res.status, 'blocked')
     assert.equal(res.deliverableFailed, undefined)
@@ -255,14 +244,13 @@ describe('deliverable autofire (Q-DELIVERABLES-AUTOFIRE)', () => {
   it('a dry run emits the set, marked dry-run', async () => {
     const input: EngagementInput = { target: 'secscan.us', mode: 'red', objective: 'dry run test', roe: { scope: ['secscan.us'] } }
     const res = await runEngagement(input, {
-      mcpToken: 'test',
+
       deepseekApiKey: 'test',
       qwenApiKey: 'test',
       engagementsDir: dir,
       registryPath: join(dir, 'registry.json'),
       dryRunAgents: true,
-      deps: { verify: async () => true },
-    })
+      deps: { verify: async () => true } })
     assert.equal(res.status, 'complete')
     const engDir = join(dir, res.engagementId)
     assertFullSet(engDir)
@@ -319,8 +307,7 @@ describe('deliverable autofire (Q-DELIVERABLES-AUTOFIRE)', () => {
     const engDir = join(dir, 'eng-finalize-unit')
     mkdirSync(engDir, { recursive: true })
     const log = new EventLog(engDir, 'eng-finalize-unit', {
-      target: 'secscan.us', mode: 'red', objective: 'unit',
-    })
+      target: 'secscan.us', mode: 'red', objective: 'unit' })
     for (const name of SEVEN.filter(n => n !== 'report.txt')) {
       // Files only — finalize verifies presence, not content.
       writeFileSync(join(engDir, name), 'x')

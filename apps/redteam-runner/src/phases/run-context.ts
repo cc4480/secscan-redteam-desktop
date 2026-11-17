@@ -56,7 +56,7 @@ export function buildEngagementContext(opts: BuildEngagementContextOptions): Ctx
     config,
     deps,
     events,
-    mcp: deps.mcp ?? new McpClient({ endpoint: config.mcpEndpoint, token: config.mcpToken }),
+    mcp: deps.mcp ?? new McpClient(),
     prober: deps.prober ?? new WebProber({ scopeHosts: hosts, minDelayMs: config.probeDelayMs, allowPrivateHosts: (config.localSandbox && allHostsPrivateOrLoopback(hosts)) || config.testMode, attestedHost: host => attestedHostAllowed(ctx, host) }),
     hostExecutor: deps.hostExecutor ?? new HostExecutor({ testMode: config.testMode }),
     msfExecutor: deps.msfExecutor ?? new MsfExecutor({ testMode: config.testMode }),

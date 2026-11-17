@@ -27,28 +27,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assembleFleetPrompt, discoverSkills, loadSkillBody, resolveKnobs, skillIndexBlock, } from '@secscan/redteam-fleet-skills';
-/** Soul asset (prompts/souls/<name>.md in the fleet package) per seat. */
-const SOUL_BY_ROLE = {
-    coordinator: 'morpheus',
-    recon: 'operator',
-    exploiter: 'neo',
-    reporter: 'architect',
-    coder: 'tank',
-    publisher: 'scribe',
-};
-/**
- * Layer-2 skill bodies attached per seat: the skills whose tool families
- * the seat's phase actually drives (tools/compose.ts phase sets). Every
- * other skill stays Layer-1 (index only) until it triggers.
- */
-const SKILLS_BY_ROLE = {
-    coordinator: ['redteam-ops-coordination'],
-    recon: ['deep-research-osint', 'webapp-scan'],
-    exploiter: ['webapp-exploit', 'browser-action-execution'],
-    reporter: ['findings-grading-reporting', 'html-report-design'],
-    coder: ['exploit-coding-toolbuilding'],
-    publisher: ['findings-grading-reporting', 'html-report-design'],
-};
+import { SKILLS_BY_ROLE, SOUL_BY_ROLE } from './fleet-seats.js';
 /**
  * Resolve the fleet-skills package root. Candidates cover, in order: the
  * REDTEAM_FLEET_SKILLS_ROOT override, the installed workspace package
@@ -104,13 +83,28 @@ function fleetAssets() {
         souls.set(name, read(join('prompts', 'souls', `${name}.md`)));
     }
     const metas = discoverSkills([join(root, 'skills')]);
+    // Only the bodies a seat can actually bind are read. The catalogue is large
+    // (the installed cybersecurity set), and a seat binds its own SKILLS_BY_ROLE
+    // plus the black-team mask — so loading every body here cost one file read
+    // per shipped skill at every engagement start and used none of them.
+    const needed = new Set([
+        ...Object.values(SKILLS_BY_ROLE).flat(),
+        'blackteam-adversary-emulation',
+    ]);
     const skillBodies = new Map();
-    for (const meta of metas)
-        skillBodies.set(meta.name, loadSkillBody(meta));
+    for (const meta of metas) {
+        if (needed.has(meta.name))
+            skillBodies.set(meta.name, loadSkillBody(meta));
+    }
     assetsCache = {
         master: read(join('prompts', 'master.md')),
         souls,
-        skillIndex: skillIndexBlock(metas),
+        // Only what a seat can bind. Every seat prompt carries this index, so the whole
+        // installed catalogue (~461 KB across 827 skills) would ride along in EVERY
+        // prompt and buy nothing - a seat uses its own SKILLS_BY_ROLE bodies. The wider
+        // catalogue stays loadable by name through load_skill; a search affordance is the
+        // honest way to surface it.
+        skillIndex: skillIndexBlock(metas.filter(meta => needed.has(meta.name))),
         skillBodies,
     };
     return assetsCache;
@@ -216,9 +210,25 @@ export function verifiedRecordFor(ctx) {
  * @throws Error when a mapped soul or skill body is missing from the
  *   fleet package (a broken package must fail loud, not prompt silently)
  */
+function compactVerifiedEngagement(record) {
+    const scope = record.targets.join(', ') || '(none)';
+    const out = record.outOfScope?.length ? ` Out-of-scope (deny): ${record.outOfScope.join(', ')}.` : '';
+    return [
+        '## Verified engagement (attested)',
+        `- Engagement: ${record.engagementId}`,
+        `- Owner/operator: ${record.owner} / ${record.operator}`,
+        `- Proof: ${record.proofMethod} @ ${record.verifiedAt}`,
+        `- Targets in scope: ${scope}.${out}`,
+        `- Access: ${record.accessLevel}. Sessions allowed: ${record.sessionsAllowed ? 'yes' : 'no'}.`,
+        `- ROE: ${record.roe}`,
+    ].join('\n');
+}
 export function buildFleetPrompt(role, seatText, ctx) {
     if (!ctx.fleet)
         return seatText;
+    if (ctx.compactLocal) {
+        return `${compactVerifiedEngagement(ctx.fleet.record)}\n\n${seatText}`;
+    }
     const assets = fleetAssets();
     const knobs = resolveKnobs(ctx.fleet.charterKnobs, ctx.fleet.engagementKnobs);
     const record = {

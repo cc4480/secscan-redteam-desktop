@@ -1,0 +1,173 @@
+/**
+ * The fleet skill registry: discovery over ordered roots, the Layer-1 index
+ * block, and on-demand loading of skill bodies and bundled references.
+ *
+ * Loading is three-layered (the ZCode-derived model the library documents):
+ * Layer 1 is {@link skillIndexBlock} — names and trigger descriptions only,
+ * always in context. Layer 2 is {@link loadSkillBody} — the full `SKILL.md`
+ * text, loaded when a skill triggers. Layer 3 is {@link listReferences} —
+ * `references/`, `scripts/`, and `assets/` files, loaded on demand.
+ *
+ * Roots are precedence-ordered: when two roots carry the same skill name,
+ * the earlier root's copy shadows the later one (first wins), which is how
+ * an engagement-specific variant overrides the bundled library.
+ */
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { dirname, join, relative, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { parseSkillFrontmatter } from './frontmatter.js';
+/** Subdirectories of a skill bundle whose files Layer 3 can load. */
+const REFERENCE_DIRS = ['references', 'scripts', 'assets'];
+/**
+ * Discover the skills under ordered roots. Each root directly contains one
+ * directory per skill, and a directory counts as a skill only when it holds
+ * a `SKILL.md`. Entries are visited in directory-name order within a root,
+ * and roots in the order given.
+ *
+ * @param roots - skill roots in precedence order; a root that does not
+ *   exist is skipped
+ * @returns the discovered skills, earlier-root copies shadowing later ones
+ * @throws Error naming the file when a `SKILL.md` has invalid frontmatter
+ *   or its frontmatter name does not match its directory name
+ */
+export function discoverSkills(roots) {
+    const byName = new Map();
+    for (const root of roots) {
+        if (!existsSync(root))
+            continue;
+        const entries = readdirSync(root, { withFileTypes: true })
+            .filter(entry => entry.isDirectory())
+            .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+        for (const entry of entries) {
+            const dir = join(root, entry.name);
+            const skillFile = join(dir, 'SKILL.md');
+            if (!existsSync(skillFile))
+                continue;
+            let frontmatter;
+            try {
+                frontmatter = parseSkillFrontmatter(readFileSync(skillFile, 'utf8'));
+            }
+            catch (err) {
+                throw new Error(`discoverSkills: invalid skill file ${skillFile}: ${err instanceof Error ? err.message : String(err)}`);
+            }
+            if (frontmatter.name !== entry.name) {
+                throw new Error(`discoverSkills: invalid skill file ${skillFile}: frontmatter name "${frontmatter.name}" does not match directory name "${entry.name}"`);
+            }
+            if (byName.has(frontmatter.name))
+                continue;
+            const meta = {
+                name: frontmatter.name,
+                description: frontmatter.description,
+                dir,
+                skillFile,
+            };
+            if (frontmatter.userInvocable !== undefined)
+                meta.userInvocable = frontmatter.userInvocable;
+            byName.set(meta.name, meta);
+        }
+    }
+    return [...byName.values()];
+}
+/**
+ * Load a skill's full `SKILL.md` text (Layer 2). Callers load the body when
+ * the skill triggers; reading it is a required step before the seat uses
+ * the skill's tool family.
+ *
+ * @param meta - the skill's registry metadata
+ * @returns the complete file text, frontmatter included
+ */
+export function loadSkillBody(meta) {
+    return readFileSync(meta.skillFile, 'utf8');
+}
+/**
+ * Load a skill's full `SKILL.md` text (Layer 2) by name — the seat-facing
+ * counterpart to {@link loadSkillBody}. A caller holding only a name from
+ * the Layer-1 index resolves it against ordered roots (same precedence
+ * and shadowing as {@link discoverSkills}) and receives the body.
+ *
+ * @param roots - skill roots in precedence order
+ * @param name - the skill name exactly as listed in the Layer-1 index
+ * @returns the complete file text, frontmatter included
+ * @throws Error naming the skill and listing the available names when no
+ *   root carries a skill by that name
+ */
+export function loadSkillBodyByName(roots, name) {
+    const metas = discoverSkills(roots);
+    const meta = metas.find(candidate => candidate.name === name);
+    if (!meta) {
+        throw new Error(`loadSkillBodyByName: no skill named "${name}"; available: ${metas.map(m => m.name).join(', ') || '(none)'}`);
+    }
+    return loadSkillBody(meta);
+}
+/**
+ * Collect the files a bundle carries under `references/`, `scripts/`, and
+ * `assets/`, recursively.
+ *
+ * @param meta - the skill's registry metadata
+ * @returns sorted paths relative to the skill directory, using forward
+ *   slashes (for example `references/checks.md`); empty when the bundle
+ *   carries none
+ */
+export function listReferences(meta) {
+    const found = [];
+    const walk = (dir) => {
+        for (const entry of readdirSync(dir, { withFileTypes: true })) {
+            const path = join(dir, entry.name);
+            if (entry.isDirectory())
+                walk(path);
+            else if (entry.isFile())
+                found.push(relative(meta.dir, path).split(sep).join('/'));
+        }
+    };
+    for (const name of REFERENCE_DIRS) {
+        const dir = join(meta.dir, name);
+        if (existsSync(dir))
+            walk(dir);
+    }
+    return found.sort();
+}
+/**
+ * Render the Layer-1 index block for a set of skills: names and trigger
+ * descriptions only, so a seat can decide which skill to load without the
+ * full texts in context.
+ *
+ * @param metas - the skills to list, in listing order
+ * @returns the `<fleet_skills_index>` block as prompt text
+ */
+export function skillIndexBlock(metas) {
+    const lines = [
+        '<fleet_skills_index>',
+        'Fleet skills available to this seat, listed by name and trigger description (Layer 1 of 3). ' +
+            'This index is the whole of what is loaded so far: when a task matches a skill, load its full ' +
+            'SKILL.md text (Layer 2) before using its tools, and load its references/, scripts/, or ' +
+            'assets/ files (Layer 3) only when a step names them.',
+        ...metas.map(meta => `- ${meta.name}: ${meta.description}`),
+        '</fleet_skills_index>',
+    ];
+    return lines.join('\n');
+}
+/**
+ * Resolve this package's bundled `skills/` directory. Candidates are tried
+ * relative to this module so the same code resolves from the source tree
+ * (`src/` beside `skills/`), the compiled test tree (`dist-test/src/` two
+ * levels below it), the built library (`lib/` beside it), and the desktop
+ * payload layout, where the vendor step places the skill assets under
+ * `lib/fleet-skills/skills/` beside the bundled module and the package's
+ * own `skills/` directory is not shipped.
+ *
+ * @returns the first candidate path that exists
+ * @throws Error naming the searched candidates when none exists
+ */
+export function bundledSkillsRoot() {
+    const moduleDir = dirname(fileURLToPath(import.meta.url));
+    const candidates = [
+        join(moduleDir, '..', 'skills'),
+        join(moduleDir, '..', '..', 'skills'),
+        join(moduleDir, 'fleet-skills', 'skills'),
+    ];
+    for (const candidate of candidates) {
+        if (existsSync(candidate))
+            return candidate;
+    }
+    throw new Error(`bundledSkillsRoot: bundled skills directory not found; searched: ${candidates.join(', ')}`);
+}

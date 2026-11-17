@@ -2,9 +2,9 @@
  * Engagement-level gating. Every check fails closed: uncertainty → deny.
  *
  * Layers (all must pass before aggressive work):
- *  1. Ownership verification: by default the engagement record's operator
- *     attestation; server-authoritative (auth-gate's isServerVerified)
- *     only when the operator opts into service verification.
+ *  1. Ownership verification: domain ownership proven by the in-app DNS TXT
+ *     challenge recorded in the local verified-domain store, or an explicit
+ *     operator attestation when supplied by the caller. No external service.
  *  2. Scope: every probed/scanned URL's hostname must be an exact in-scope host.
  *  3. Technique exclusions: always-excluded + mode defaults + ROE exclusions.
  *  4. Blackout windows: the runner pauses, it does not skip.
@@ -12,8 +12,12 @@
  */
 
 import { isIP } from "node:net";
-import { isServerVerified as authGateIsServerVerified } from "@secscan/redteam-auth-gate";
-import { extractDomain } from "@secscan/redteam-auth-gate";
+import {
+  extractDomain,
+  defaultVerificationStoreFile,
+  type StoreDoc,
+} from "@secscan/redteam-auth-gate";
+import { readFile } from "node:fs/promises";
 import { resolveExcludedTechniques } from "./attack.js";
 import { isPrivateOrLoopbackHost } from "./prober.js";
 import type { BlackoutWindow, EngagementMode, RulesOfEngagement } from "./types.js";
@@ -30,7 +34,7 @@ export function scopeHosts(roe: RulesOfEngagement): string[] {
     try {
       hosts.push(extractDomain(entry));
     } catch {
-      // Unparseable scope entry — fail closed downstream by matching nothing.
+      // Unparseable scope entry - fail closed downstream by matching nothing.
     }
   }
   return [...new Set(hosts)];
@@ -91,7 +95,7 @@ export function techniqueAllowed(
 ): boolean {
   if (!attackId) return true; // unmapped actions are allowed; the mapping is advisory
   // TEST MODE (operator order): only the operator's own ROE exclusions
-  // apply — the always-excluded set (T1499) and the mode defaults are
+  // apply - the always-excluded set (T1499) and the mode defaults are
   // bypassed for testing. The bypass is engagement-level and recorded by
   // the authorize phase's test_mode_active event.
   if (opts?.testMode) {
@@ -102,50 +106,48 @@ export function techniqueAllowed(
   return !excluded.includes(attackId.toUpperCase());
 }
 
-export interface ServerGateConfig {
-  mcpEndpoint: string;
-  mcpToken: string;
-}
-
 export interface CheckAuthorizationOptions {
   /**
-   * The engagement record's ownership attestation (operator attestation /
-   * proofMethod text), when verification is taken from the record — the
-   * default basis. When set, the gate returns it as the verdict reason and
-   * the server check is never consulted. Unset means the caller opted into
-   * service verification and the server check decides.
+   * Explicit operator attestation recorded on the engagement. When provided it
+   * is accepted as the verification basis without consulting the local DNS
+   * challenge store. Use for test/sandbox flows that intentionally bypass DNS.
    */
   attestedProof?: string;
   /**
-   * LOCAL SANDBOX MODE ONLY. When true, skips the server verification call
-   * — but ONLY when `domain` itself resolves to a private/loopback host
-   * (e.g. localhost, 127.0.0.1, a RFC1918 address). For any real-looking
-   * domain this flag has zero effect: the server check still runs and the
-   * engagement still fails closed exactly as before. This exists so a
-   * locally-hosted sandbox target (Juice Shop/DVWA on 127.0.0.1) can be
-   * engaged without needing DNS TXT ownership proof, which can't exist for
-   * a loopback address anyway. Default false; must be explicitly opted
-   * into (CLI --local-sandbox / REDTEAM_LOCAL_SANDBOX=1), never implied.
+   * LOCAL SANDBOX MODE ONLY. When true, skips DNS/store ownership proof for a
+   * target that itself resolves to a private/loopback host (e.g. localhost,
+   * 127.0.0.1, RFC1918). For any non-private domain this flag has no effect.
    */
   allowLocalSandbox?: boolean;
+  /** Path to the local verified-domains store. Defaults to the app store. */
+  storeFile?: string;
+}
+
+function normalizeDomainKey(domain: string): string {
+  return domain.trim().toLowerCase().replace(/\.$/, "");
+}
+
+async function isLocallyVerified(domain: string, storeFile?: string): Promise<boolean> {
+  const file = storeFile ?? defaultVerificationStoreFile();
+  try {
+    const raw = await readFile(file, "utf8");
+    const parsed = JSON.parse(raw) as Partial<StoreDoc> | null;
+    if (!parsed || typeof parsed !== "object") return false;
+    const verified = (parsed as { verified?: unknown }).verified;
+    if (!verified || typeof verified !== "object") return false;
+    return normalizeDomainKey(domain) in (verified as Record<string, unknown>);
+  } catch {
+    return false;
+  }
 }
 
 /**
- * The authorization gate. Default basis: the engagement record's operator
- * attestation (opts.attestedProof) — allowed, with the attestation as the
- * recorded proof, and no service call. When no attestation is supplied the
- * caller opted into service verification: the SecScan server must positively
- * list the domain as verified, and network errors, timeouts, missing
- * token → denied (fail closed).
- * `verify` is injectable so unit tests never touch the network.
+ * Authorization gate. Fail closed: only an explicit attestation, local-sandbox
+ * private target, or a domain recorded as verified in the app-local DNS TXT
+ * store is allowed. No external service is consulted.
  */
 export async function checkAuthorization(
   domain: string,
-  cfg: ServerGateConfig,
-  verify: (
-    domain: string,
-    cfg: { endpoint: string; token: string },
-  ) => Promise<boolean> = (d, c) => authGateIsServerVerified(d, c),
   opts: CheckAuthorizationOptions = {},
 ): Promise<GateVerdict> {
   let target: string;
@@ -158,7 +160,7 @@ export async function checkAuthorization(
     return {
       allowed: true,
       reason:
-        `LOCAL SANDBOX MODE: ${target} is a private/loopback target — server ownership ` +
+        `LOCAL SANDBOX MODE: ${target} is a private/loopback target - ownership ` +
         `verification was skipped (no DNS TXT proof is possible for a loopback address). ` +
         `This bypass never applies to a non-private domain.`,
     };
@@ -166,73 +168,47 @@ export async function checkAuthorization(
   if (opts.attestedProof) {
     return { allowed: true, reason: opts.attestedProof };
   }
-  let verified = false;
-  try {
-    verified = await verify(target, { endpoint: cfg.mcpEndpoint, token: cfg.mcpToken });
-  } catch {
-    verified = false;
-  }
+  const verified = await isLocallyVerified(target, opts.storeFile);
   if (!verified) {
     return {
       allowed: false,
       reason:
-        `domain ${target} is not ownership-verified (server check). ` +
-        `Publish the SecScan challenge (start_domain_verification → TXT at ` +
-        `_secscan-challenge.${target}) and re-run. Both red and black modes ` +
-        `require this proof — covert means covert vs the blue team, never vs ` +
-        `the authorization gate.`,
+        `domain ${target} is not ownership-verified in the local app store. ` +
+        `Run verify_domain_start for ${target}, publish the TXT record at ` +
+        `_secscan-challenge.${target}, then run verify_domain_check. Both red and black ` +
+        `modes require this proof - covert means covert vs the blue team, never vs the authorization gate.`,
     };
   }
-  return { allowed: true };
+  return { allowed: true, reason: `${target} is verified in the local app store (DNS TXT challenge).` };
 }
 
 export interface ScopeAuthorizationOptions {
   /**
-   * The engagement record's ownership attestation, as in
-   * {@link CheckAuthorizationOptions.attestedProof}: when set, an in-scope
-   * public host is covered by the attestation and the server check is never
-   * consulted for it. The structural rules below (empty scope, private
-   * hosts, sandbox containment) apply unchanged under either basis.
+   * Explicit operator attestation covering declared in-scope hosts. When set,
+   * public domains in scope are accepted on that attestation basis.
    */
   attestedProof?: string;
   /**
-   * LOCAL SANDBOX MODE ONLY. When true, the whole engagement is restricted to
-   * private/loopback hosts: every scope entry must be private too, because a
-   * sandbox bypass for the target says nothing about ownership of anything else.
+   * LOCAL SANDBOX MODE ONLY. When true, every host in scope must be
+   * private/loopback so a loopback target can never combine with public scope.
    */
   allowLocalSandbox?: boolean;
   /** The engagement target, already verified by {@link checkAuthorization}. */
   verifiedTarget?: string;
+  /** Path to the local verified-domains store. Defaults to the app store. */
+  storeFile?: string;
 }
 
 /**
- * Verify ownership for EVERY host the engagement may touch, not just its target.
- *
- * Members of the ROE scope list are checked for exact-hostname membership by the
- * prober, but membership only proves the operator listed them — it does not prove
- * the client owns them. Without this pass, an engagement against one verified
- * domain could probe any number of other public hosts, which is precisely the
- * authorization the product claims to enforce.
- *
- * Rules, all fail closed:
- *  - empty scope: denied (there is nothing an engagement may legitimately probe);
- *  - local sandbox: every host must be private/loopback, so a loopback target can
- *    never be combined with a public host in scope;
- *  - otherwise: the target needs no second call; an IP-literal scope entry is a
- *    host-engagement target authorized by the ROE (domain verification cannot
- *    apply to an address); every other host must be verified — by the
- *    engagement record's attestation on the default basis, or server-verified
- *    when the operator opted into service verification.
- *
- * `verify` is injectable so unit tests never touch the network.
+ * Verify ownership for EVERY host the engagement may touch. Fail closed.
+ * - empty scope: denied
+ * - local sandbox: every host must be private/loopback
+ * - otherwise: target needs no second check; IP-literal entries are ROE-authorized
+ *   host-engagement targets; every other domain must be locally verified (DNS TXT
+ *   store) unless covered by an explicit attestation.
  */
 export async function checkScopeAuthorization(
   hosts: readonly string[],
-  cfg: ServerGateConfig,
-  verify: (
-    domain: string,
-    cfg: { endpoint: string; token: string },
-  ) => Promise<boolean> = (d, c) => authGateIsServerVerified(d, c),
   opts: ScopeAuthorizationOptions = {},
 ): Promise<GateVerdict> {
   const unique = [...new Set(hosts.map((h) => h.trim().toLowerCase()).filter((h) => h !== ""))];
@@ -255,7 +231,7 @@ export async function checkScopeAuthorization(
           reason:
             `LOCAL SANDBOX MODE cannot cover scope host ${host}: sandbox mode skips ownership ` +
             `verification for a private/loopback target, so every host in scope must be private ` +
-            `too. Remove ${host} from scope, or verify it as a domain and run without local sandbox.`,
+            `too. Remove ${host} from scope, or verify it locally and run without local sandbox.`,
         };
       }
       continue;
@@ -271,25 +247,17 @@ export async function checkScopeAuthorization(
           `and is never implied by the engagement request.`,
       };
     }
-    // An IP-literal scope entry is a host-engagement target: the client authorizes it
-    // through the ROE and credentials, and domain verification cannot apply to an address.
+    // IP-literal scope entry: authorized by ROE/credentials; DNS verification N/A.
     if (isIP(host) !== 0) continue;
-    // Record basis: the operator's attestation covers every host they
-    // declared in scope; no server call is made for it.
     if (opts.attestedProof) continue;
-    let verified = false;
-    try {
-      verified = await verify(host, { endpoint: cfg.mcpEndpoint, token: cfg.mcpToken });
-    } catch {
-      verified = false;
-    }
+    const verified = await isLocallyVerified(host, opts.storeFile);
     if (!verified) {
       return {
         allowed: false,
         reason:
-          `scope host ${host} is not ownership-verified (server check). Every domain in scope ` +
-          `must be verified on its own: start_domain_verification for ${host}, publish the TXT ` +
-          `record, then re-run. Listing a host in scope never substitutes for proving it.`,
+          `scope host ${host} is not ownership-verified in the local app store. Every domain in scope ` +
+          `must be verified on its own: verify_domain_start for ${host}, publish the TXT record, ` +
+          `then verify_domain_check. Listing a host in scope never substitutes for proving it.`,
       };
     }
   }

@@ -38,8 +38,7 @@ function fakeCtx(verificationProof?: string): Ctx {
     fingerprint: "seam-test-target",
     registryPath: join(mkdtempSync(join(tmpdir(), "seclayer-seam-")), "registry.json"),
     registry: { confirmed: [], killed: [] },
-    events: { engagementId: "seclayer-seam-test", updateState: () => {}, append: () => {} },
-  } as unknown as Ctx;
+    events: { engagementId: "seclayer-seam-test", updateState: () => {}, append: () => {} } } as unknown as Ctx;
 }
 
 const ARGS = { url: "https://target.example", category: "validation" };
@@ -51,8 +50,7 @@ describe("seclayer seam — finding mapping", () => {
       payload: "id='",
       severity: "critical",
       description: "desc",
-      evidence: { demonstration: "We injected and the row came back.", signal: { quote: "ORA-01756" } },
-    };
+      evidence: { demonstration: "We injected and the row came back.", signal: { quote: "ORA-01756" } } };
     const f = seclayerFindingToLive(raw, "T1190", "redteam-probe");
     assert.equal(f.severity, "critical");
     assert.equal(f.title, "SQL Injection (error-based)");
@@ -152,8 +150,7 @@ function finding(overrides: Partial<Finding> = {}): Finding {
     fix: "fix it",
     retest: "retest it",
     status: "confirmed",
-    ...overrides,
-  };
+    ...overrides };
 }
 
 describe("seclayer grading seam — the report's grading voice", () => {
@@ -180,8 +177,7 @@ describe("seclayer grading seam — the report's grading voice", () => {
     assert.equal(clean.grade, "A");
     const mixed = gradeFindings([
       finding({ severity: "critical", status: "killed" }),
-      finding({ severity: "critical", status: "deferred", id: "F-2" }),
-    ]);
+      finding({ severity: "critical", status: "deferred", id: "F-2" }) ]);
     assert.equal(mixed.score, 100);
     assert.equal(mixed.activeCount, 0);
   });

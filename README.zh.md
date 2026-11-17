@@ -44,7 +44,6 @@
 首次运行时，欢迎流程会要求一个必需密钥，并提供两个可选密钥：
 
 1. **Meta Model API 密钥**（必需）——舰队的模型。在应用中设置，或在环境中提供 `MODEL_API_KEY`。
-2. **SecScan MCP 令牌**（可选，推荐）——解锁域名验证以及 SecScan 服务的扫描与监控。在 [secscan.us](https://secscan.us) → Settings → AI editors 签发。
 3. **Seclayer API 密钥**（可选）——将 Seclayer 服务解锁为第二意见。在 Seclayer 控制台 → Developer / API Keys 创建。
 
 您输入的密钥存储于应用的每用户凭据库，以操作系统的密钥链加密（Electron `safeStorage`）；在 Windows 上，该存储按设计拒绝明文。参见 [MCP 服务](docs/product/mcp-services.md)与[配置](docs/product/configuration.md)。

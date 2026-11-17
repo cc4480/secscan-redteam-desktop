@@ -119,6 +119,11 @@ export declare function probeTls(host: string, port: number, options?: TlsProbeO
  */
 export declare function probeTargetTls(targetUrl: string, options?: TlsProbeOptions): Promise<TlsObservation>;
 /**
+ * Native TLS finding names emitted by buildTlsFindings (5 app-only native TLS
+ * checks). Exposed for machine-checkable manifest/count evidence.
+ */
+export declare const NATIVE_TLS_CHECK_NAMES: readonly ["Weak TLS — Legacy Protocol Accepted", "Expired TLS Certificate", "TLS Certificate Not Yet Valid", "TLS Certificate Hostname Mismatch", "Untrusted TLS Certificate"];
+/**
  * Findings derived from an observation — facts only, every evidence string
  * quotes values the probe itself observed. Returns finding bodies without
  * ids; scanner.ts wraps them through its vuln() path. An unreachable or

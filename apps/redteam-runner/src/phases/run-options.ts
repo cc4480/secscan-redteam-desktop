@@ -6,15 +6,11 @@
 import { type RunnerDeps } from "../context.js";
 
 export interface RunOptions {
-  mcpToken?: string;
   deepseekApiKey?: string;
   /** Meta Model API key (env MODEL_API_KEY preferred). The fleet's provider key. */
   modelApiKey?: string;
-  /** Opt-in service verification (env REDTEAM_VERIFY_VIA_SERVICE=1). Default: verification from the engagement record. */
-  verifyViaService?: boolean;
   /** Alibaba Model Studio key. Optional since v0.6 (DeepSeek-only policy — no role routes to Qwen); threaded through so reinstating Qwen needs no config change. Env QWEN_API_KEY preferred. */
   qwenApiKey?: string;
-  mcpEndpoint?: string;
   /** Override the generated engagement ID (the console passes its request ID for correlation). */
   engagementId?: string;
   maxReconTurns?: number;

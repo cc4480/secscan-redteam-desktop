@@ -50,8 +50,7 @@ describe("nuclei adoption — the executor-timeout path is typed", () => {
     stderr: "",
     exitCode: null,
     killed: true,
-    timedOut: true,
-  })) as unknown as SpawnFn;
+    timedOut: true })) as unknown as SpawnFn;
 
   function fakeCtx(): never {
     return {
@@ -65,18 +64,15 @@ describe("nuclei adoption — the executor-timeout path is typed", () => {
       nucleiExecutor: new NucleiExecutor({
         env: { REDTEAM_NUCLEI_BIN: "/usr/bin/nuclei" },
         spawn: timedOutSpawn,
-        probeBinary: async () => true,
-      }),
-      nuclei: { templateExecutions: 0, templatesRun: 0, findings: 0 },
-    } as never;
+        probeBinary: async () => true }),
+      nuclei: { templateExecutions: 0, templatesRun: 0, findings: 0 } } as never;
   }
 
   it("a timed-out run returns errorCode TOOL_TIMEOUT, not the old ABORTED free text", async () => {
     const call: ToolCallRequest = {
       id: "call-nuclei-timeout",
       name: "nuclei_exec",
-      arguments: { action: "run", host: HOST, category: "functionality", targetProfile: "windows", attackId: "T1595.002" },
-    };
+      arguments: { action: "run", host: HOST, category: "functionality", targetProfile: "windows", attackId: "T1595.002" } };
     const r = await handleNucleiTools(fakeCtx(), "exploiter", "exploit", call, call.arguments as Record<string, unknown>);
     assert.ok(r);
     assert.equal(r.errorCode, TOOL_TIMEOUT);

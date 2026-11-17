@@ -24,8 +24,7 @@ import {
   type Harness2Paths,
   type PatchLayer,
   type ProbeVerdict,
-  type Proposal,
-} from "../src/harness2/contract.js";
+  type Proposal } from "../src/harness2/contract.js";
 import {
   AdoptRefusedError,
   adoptVerdict,
@@ -45,12 +44,10 @@ import {
   showExperience,
   supersedeExperience,
   type ExperienceRecord,
-  type ExperienceStatus,
-} from "../src/harness2/experience.js";
+  type ExperienceStatus } from "../src/harness2/experience.js";
 import {
   experiencePath as packageExperiencePath,
-  sanitizeTargetClass as packageSanitizeTargetClass,
-} from "../src/harness2/package-experience.js";
+  sanitizeTargetClass as packageSanitizeTargetClass } from "../src/harness2/package-experience.js";
 import { activeLayerIds } from "../src/harness2/layers.js";
 
 const SAFE_YAML = "probeHints:\n  memory: |\n    Check /robots.txt before directory brute force.\n";
@@ -68,8 +65,7 @@ function sampleProposal(over: Partial<Proposal> = {}): Proposal {
     component: "memory",
     yaml: SAFE_YAML,
     rationale: "High-yield runs checked robots.txt before brute forcing.",
-    ...over,
-  };
+    ...over };
 }
 
 function sampleLayer(over: Partial<PatchLayer> = {}): PatchLayer {
@@ -79,8 +75,7 @@ function sampleLayer(over: Partial<PatchLayer> = {}): PatchLayer {
     yaml: SAFE_YAML,
     adoptedAt: "2026-10-18T09:30:00.000Z",
     evidenceRunId: "run-alpha",
-    ...over,
-  };
+    ...over };
 }
 
 function sampleVerdict(over: Partial<ProbeVerdict> = {}): ProbeVerdict {
@@ -92,8 +87,7 @@ function sampleVerdict(over: Partial<ProbeVerdict> = {}): ProbeVerdict {
     candidateRuns: 4,
     reason: "candidate beats base on vulnsFound and steps",
     tokensSpent: 4321,
-    ...over,
-  };
+    ...over };
 }
 
 function sampleRecord(over: Partial<ExperienceRecord> = {}): ExperienceRecord {
@@ -106,8 +100,7 @@ function sampleRecord(over: Partial<ExperienceRecord> = {}): ExperienceRecord {
     why: "run-alpha, run-beta",
     measuredEffect: "vulnsFound +2, n=4 base / 4 candidate runs",
     status: ACTIVE,
-    ...over,
-  };
+    ...over };
 }
 
 /** A record with no layer: the heading token is `general`. */
@@ -120,8 +113,7 @@ function generalRecord(over: Partial<ExperienceRecord> = {}): ExperienceRecord {
     why: "run-alpha",
     measuredEffect: "steps -1, n=2",
     status: ACTIVE,
-    ...over,
-  };
+    ...over };
 }
 
 /** Write a raw EXPERIENCE.md body for one class. */
@@ -178,8 +170,7 @@ describe("section 7 entry format", () => {
         "- Why (motivating run_ids): run-alpha, run-beta",
         "- Measured effect (metric deltas + sample size): vulnsFound +2, n=4 base / 4 candidate runs",
         "- Status: active",
-        "",
-      ].join("\n"),
+        "" ].join("\n"),
     );
     assert.equal(renderFullText([], "nginx"), "# EXPERIENCE - nginx\n", "empty class is header-only, never empty");
     assert.equal(renderExperience, renderFullText, "renderExperience stays an alias of the full-text renderer");
@@ -189,8 +180,7 @@ describe("section 7 entry format", () => {
     const records: ExperienceRecord[] = [
       sampleRecord(),
       generalRecord({ date: "2026-10-19", status: { kind: "superseded", by: "wp-new" } }),
-      sampleRecord({ date: "2026-10-20", status: { kind: "reverted", reason: "steps regressed, FPs flat", date: "2026-10-21" } }),
-    ];
+      sampleRecord({ date: "2026-10-20", status: { kind: "reverted", reason: "steps regressed, FPs flat", date: "2026-10-21" } }) ];
     const text = renderFullText(records, "wordpress");
     const parsed = parseExperience(text, "wordpress");
     assert.equal(parsed.skipped, 0);
@@ -239,8 +229,7 @@ describe("section 7 entry format", () => {
         "- Measured effect (metric deltas + sample size): none",
         "- Status: active",
         "## 2026-10-22 - wp-hint",
-        "- Target class: wordpress",
-      ].join("\n"),
+        "- Target class: wordpress" ].join("\n"),
     );
     const report = readExperienceReport(paths, "wordpress");
     assert.equal(report.exists, true);
@@ -340,8 +329,7 @@ describe("adoptVerdict", () => {
       "patches:\n  src\\safety\\rotation.ts: {}\n",
       "component: guardrails\n",
       "targets: [auth-gate]\n",
-      "patches:\n  src / gate.ts: {}\n",
-    ];
+      "patches:\n  src / gate.ts: {}\n" ];
     for (const yaml of guardrailYamls) {
       assert.throws(
         () => adoptVerdict({ paths, proposal: sampleProposal(), layer: sampleLayer({ yaml }), verdict: sampleVerdict(), approve: true }),
@@ -430,8 +418,7 @@ describe("rollback", () => {
       reason: "imported layer failed review",
       changed: "rolled back layer \"wp-imported\"",
       why: "run-z",
-      measuredEffect: "vulnsFound -1.2, n=6",
-    });
+      measuredEffect: "vulnsFound -1.2, n=6" });
     assert.equal(appended.marked, 0, "nothing to flip when there is no active adoption record");
     assert.deepEqual(appended.entry.status, { kind: "reverted", reason: "imported layer failed review", date: "2026-10-22" });
     assert.deepEqual(readExperience(paths, "wordpress"), [appended.entry]);

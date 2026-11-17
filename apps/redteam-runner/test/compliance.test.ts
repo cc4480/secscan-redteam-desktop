@@ -19,15 +19,13 @@ import {
   invalidMappedControlIds,
   renderAttestationLetter,
   renderCompliancePackMarkdown,
-  unmappedBatteryTechniques,
-} from "../src/compliance.js";
+  unmappedBatteryTechniques } from "../src/compliance.js";
 import type { CompliancePackInput } from "../src/compliance.js";
 import { emptyRegistry, recordConfirmed } from "../src/registry.js";
 import {
   buildSafetyManifest,
   buildZeroDisruptionRecord,
-  disruptionVerdict,
-} from "../src/safety/index.js";
+  disruptionVerdict } from "../src/safety/index.js";
 import type { Finding } from "../src/types.js";
 
 describe("compliance control catalog", () => {
@@ -45,8 +43,7 @@ describe("compliance control catalog", () => {
       "SOC-CC6.1",
       "SOC-CC6.6",
       "SOC-CC7.1",
-      "ISO-A.8.8",
-    ]) {
+      "ISO-A.8.8" ]) {
       assert.ok(ids.includes(want), `catalog missing ${want}`);
     }
   });
@@ -94,8 +91,7 @@ function mockInput(): CompliancePackInput {
     payloadPattern: "' OR 1=1--",
     evidenceRef: "eng-old/events.jsonl",
     severity: "high",
-    date: "2026-09-01T00:00:00.000Z",
-  });
+    date: "2026-09-01T00:00:00.000Z" });
   recordConfirmed(registry, {
     engagementId: "eng-new",
     target: { host: "example.com", stack: [], appType: "webapp" },
@@ -105,8 +101,7 @@ function mockInput(): CompliancePackInput {
     payloadPattern: "parameter still injectable",
     evidenceRef: "eng-new/events.jsonl",
     severity: "medium",
-    date: "2026-10-01T00:00:00.000Z",
-  });
+    date: "2026-10-01T00:00:00.000Z" });
   const findings: Finding[] = [
     {
       id: "F-1",
@@ -116,8 +111,7 @@ function mockInput(): CompliancePackInput {
       evidence: "canary REDTEAM-MARKER-7 echoed in response",
       fix: "Use parameterized queries.",
       retest: "Re-ran probe after fix — marker no longer reflected.",
-      status: "confirmed",
-    },
+      status: "confirmed" },
     {
       id: "F-2",
       severity: "info",
@@ -126,9 +120,7 @@ function mockInput(): CompliancePackInput {
       evidence: "Server: nginx/1.18.0",
       fix: "Suppress version banner.",
       retest: "(pending)",
-      status: "confirmed",
-    },
-  ];
+      status: "confirmed" } ];
   return {
     engagementId: "eng-new",
     client: "Acme Corp",
@@ -142,8 +134,7 @@ function mockInput(): CompliancePackInput {
     testStart: "2026-10-01T09:00:00.000Z",
     testEnd: "2026-10-01T10:00:00.000Z",
     findings,
-    registry,
-  };
+    registry };
 }
 
 describe("compliance evidence pack", () => {
@@ -195,8 +186,7 @@ describe("compliance evidence pack", () => {
       "## 4. Findings → controls",
       "## 5. Retest evidence",
       "## 6. Honest limits",
-      "does not declare the client compliant or certified",
-    ]) {
+      "does not declare the client compliant or certified" ]) {
       assert.ok(md.includes(section), `missing: ${section}`);
     }
   });
@@ -215,8 +205,7 @@ describe("compliance evidence pack", () => {
       acquires: 0,
       operator: "Test Op",
       zeroDisruption: buildZeroDisruptionRecord([]),
-      disruptionVerdict: disruptionVerdict(buildZeroDisruptionRecord([])),
-    });
+      disruptionVerdict: disruptionVerdict(buildZeroDisruptionRecord([])) });
     const md = renderCompliancePackMarkdown(buildCompliancePack({ ...input, safety: manifest }));
     assert.ok(md.includes("## 3. Safety case (mechanical protections, runner-enforced)"));
     assert.ok(md.includes("canary-or-gated-session"));
@@ -239,8 +228,7 @@ describe("attestation letter", () => {
       testStart: "2026-10-01T09:00:00.000Z",
       testEnd: "2026-10-01T10:00:00.000Z",
       findingCounts: { critical: 0, high: 0, medium: 1, low: 0, info: 1 },
-      exclusions: ["Denial of service"],
-    });
+      exclusions: ["Denial of service"] });
   }
 
   it("contains scope, dates, methodology, exclusions, validation standard", () => {
@@ -262,8 +250,7 @@ describe("attestation letter", () => {
       /SOC 2 (certified|compliant|certification)/i,
       /ISO 27001 (certified|compliant|certification)/i,
       /hereby certifies that .* is compliant/i,
-      /attests that .* (is|are) compliant/i,
-    ];
+      /attests that .* (is|are) compliant/i ];
     for (const re of forbidden) {
       assert.ok(!re.test(l), `forbidden claim matched: ${re}`);
     }

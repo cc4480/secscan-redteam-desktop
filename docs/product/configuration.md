@@ -15,9 +15,6 @@ SecScan RedTeam is configured through three channels, in a deliberate order of p
 
 | Variable | Meaning |
 |---|---|
-| `SECSCAN_MCP_TOKEN` | Runner-only, and only with `REDTEAM_VERIFY_VIA_SERVICE=1`: the token the runner presents when it asks the hosted SecScan service to confirm a domain. Domain verification is in-house by default (the app's own DNS TXT challenge) and the fleet profile has no SecScan connection; this variable has no effect without the opt-in. |
-| `SECSCAN_MCP_URL` | Endpoint override for that same opt-in service check. Default `https://secscan.us/api/mcp`. |
-| `REDTEAM_VERIFY_VIA_SERVICE` | Set to `1` in the runner's environment to use the hosted-service domain check above instead of the in-house verifier. Off by default. |
 | `REDTEAM_MSFCONSOLE_BIN` | Full path to the local `msfconsole` binary when it is not on PATH. The Metasploit arm runs the framework installed on this host; there is no daemon and no RPC credential variable. |
 | `REDTEAM_MCP_URL` | Point the harness at an operator-run runner console instead of the bundled one (e.g. `https://console.example.test/mcp`). Setting it suppresses the bundled console. |
 | `REDTEAM_UI_TOKEN` | The runner console's token. The desktop supervisor generates one per install when the operator has not set one; an operator-run console needs a token at or above the strength floor. |
@@ -49,9 +46,13 @@ The bundle composes in a fixed order — base profiles, then the redteam bundle,
 
 The console binds **loopback only** (`127.0.0.1`, default port `8787`); the bundled supervisor picks a free loopback port when 8787 is taken and never listens on a network interface. Treat `REDTEAM_MCP_URL` overrides with the same care as the tooling itself: the console drives live testing tools, and its token is the only thing standing between a caller and them.
 
+## Telemetry
+
+Session telemetry is disabled by default (`DISABLED`). When an uploading mode is explicitly enabled, the default OTLP/HTTP logs exporter URL is `http://127.0.0.1:4318/v1/logs` unless configured otherwise.
+
 ## Desktop build
 
 | Variable | Meaning |
 |---|---|
 | `DSH_DESKTOP_APP_ID` | The application ID baked into the desktop package (`.env.windows` / `.env.macos` in `apps/desktop`). Shipped value: `com.secscan.redteam`. |
-| `DSH_TELEMETRY_DISABLED` | Set to `1` to disable product telemetry. The installer CI sets it for its own runs. |
+| `DSH_TELEMETRY_DISABLED` | Set to `1` to disable product telemetry. |

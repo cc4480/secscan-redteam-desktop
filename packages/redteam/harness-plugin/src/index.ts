@@ -1,30 +1,14 @@
 /**
  * secscan-redteam harness plugin.
  *
- * v0.3: the engagement is a TEAM, not one agent.
+ * The plugin turns a session into an engagement team: it installs the
+ * `tools/pre-execute` authorization gate, registers the engagement doctrine as
+ * system-prompt sections, and composes team/role prompts. SecScan and SecLayer
+ * capabilities run as native runner tools with no external scan service, token,
+ * or SecLayer MCP hop; only the runner console and AlterEgo bridge remain as
+ * documented MCP connections.
  *
- * v0.2 moved the SecScan connection to the harness-native MCP client (the old
- * design spawned a legacy `@seclayer/mcp` stdio server against the retired
- * seclayer.io X-API-Key backend). That is unchanged.
- *
- * v0.4: the `@seclayer/mcp` stdio row returns — as part of the MCP keys
- * surface only. The operator seats a Seclayer API key in the credential
- * vault; the mcp-seclayer row names it in `secretEnv` and the MCP client
- * resolves it into the child's spawn env, so its tools are available to the
- * operator's session like the SecScan MCP tools. This changes nothing about
- * how scans are run: the engagement doctrine below is untouched, and a scan
- * is still never a service scan.
- *
- * v0.5: removed the `@seclayer/mcp` stdio row from both bundle patches. SecLayer
- * testing is the runner's native in-process suites — no operator Seclayer key
- * exists anymore and there is no account, credit, or backend to seat. Doctrine
- * now teaches the native tool surface (seclayer_redteam, seclayer_bola,
- * seclayer_api, seclayer_webhook, seclayer_dast, seclayer_aggressive), including
- * the blind-SSRF limitation: OOB checks no-op in this build and must be reported
- * as not-run, never claimed.
- *
- * What v0.3 adds: the plugin now drives the harness Agent Teams layer so a
- * single session becomes an engagement team. On apply it:
+ * On apply it:
  *
  *   1. Installs the auth gate as a `tools/pre-execute` hook: any scan call that
  *      explicitly requests active/intrusive testing against a domain without
@@ -69,7 +53,7 @@ import type { AssembleContext } from '@deepseek-ai/dsh-system-prompt'
 import type { Context, PluginModule } from './harness-types.js'
 import { installAuthGate } from './auth-gate.js'
 import { REDTEAM_PROFILE } from './redteam-profile.js'
-import { deferredToolNames, isDeferredTool, isLocalAssembly, isTightWindow, localProfileText, tinyToolNames } from './local-profile.js'
+import { deferredToolNames, isDeferredTool, isFullWindow, isLocalAssembly, isTightWindow, localProfileText, tinyToolNames } from './local-profile.js'
 import { FleetBriefError, fleetBriefs } from './role-briefs.js'
 
 export const name = 'secscan-redteam'
@@ -650,6 +634,7 @@ export function apply(ctx: Context): void {
   // tools the local route declines to pay for, so their schemas are not sent.
   // This reduces model-visible input, the request header still records the tool
   // list that actually went out, and the scan-facing schemas stay mounted.
+  // Large windows receive the full assembled profile and keep the full tool set.
   ctx.on('system-prompt/assemble', async (assembly, context, next) => {
     const resolved = await next()
     if (!isLocalAssembly(context)) return resolved
@@ -660,6 +645,7 @@ export function apply(ctx: Context): void {
       const tiny = tinyToolNames()
       return { ...resolved, tools: resolved.tools.filter(tool => tiny.has(tool.name)) }
     }
+    if (isFullWindow(window)) return resolved
     const deferred = deferredToolNames()
     if (deferred === undefined || deferred.size === 0) return resolved
     const kept = resolved.tools.filter(tool => !isDeferredTool(tool.name, deferred))

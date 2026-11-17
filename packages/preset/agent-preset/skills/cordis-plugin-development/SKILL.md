@@ -34,6 +34,6 @@ The files below live in this skill's base directory, which the `skill` tool repo
 | Connecting an MCP server through a configuration-only bundle | `references/mcp-bundle.md` |
 | Verification limits when no browser control is available | `references/verification.md` |
 | UI plugin starting point, four files | `templates/decoration/package.json`, `templates/decoration/cordis.patch.yml`, `templates/decoration/index.js`, `templates/decoration/client.js` |
-| MCP bundle starting point, two files | `templates/mcp/package.json`, `templates/mcp/cordis.patch.yml` |
+| Configuration-only bundle starting point, two files (e.g. MCP) | `templates/mcp/package.json`, `templates/mcp/cordis.patch.yml` |
 | Loader patch dialect and the list of installable plugin packages | the `cordis-composition-reference` skill |
 | Choosing extension points, contexts, and state mechanisms for upgrade stability and performance | `references/practices.md` |

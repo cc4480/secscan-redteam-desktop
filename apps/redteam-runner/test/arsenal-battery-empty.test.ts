@@ -21,8 +21,7 @@ const ARSENAL_ENV_KEYS = [
   'REDTEAM_ARSENAL_DB_PATH',
   'REDTEAM_ARSENAL_SOURCE_REPO',
   'REDTEAM_ARSENAL_REFRESH_INTERVAL_HOURS',
-  'REDTEAM_ARSENAL_MAX_ENTRIES_PER_COLLECTION',
-]
+  'REDTEAM_ARSENAL_MAX_ENTRIES_PER_COLLECTION' ]
 
 let tmp = ''
 let base = ''
@@ -40,8 +39,7 @@ async function rpc(method: string, params: Record<string, unknown>): Promise<{ s
   const res = await fetch(`${base}/mcp`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-  })
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) })
   const raw = await res.text()
   let body: RpcBody = {}
   try {
@@ -97,8 +95,7 @@ describe('§6.1.4 empty-index typed result', () => {
   for (const [tool, args] of [
     ['arsenal_search', { query: 'anything' }],
     ['arsenal_browse', {}],
-    ['arsenal_recommend', { task: 'anything' }],
-  ] as Array<[string, Record<string, unknown>]>) {
+    ['arsenal_recommend', { task: 'anything' }] ] as Array<[string, Record<string, unknown>]>) {
     it(`${tool} returns the ARSENAL_INDEX_EMPTY block with the fix string`, async () => {
       const { status, body } = await rpc('tools/call', { name: tool, arguments: args })
       assert.equal(status, 200, 'empty index is a typed result, not a transport error')

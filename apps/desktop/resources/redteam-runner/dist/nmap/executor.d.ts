@@ -30,6 +30,8 @@ export interface NmapExecResult {
     binary?: string;
     version?: string;
     run?: NmapRunResult;
+    /** True when the scan exceeded its executor timeout (partial run may be present). */
+    timedOut?: boolean;
 }
 export declare class NmapExecutor {
     private readonly spawn;

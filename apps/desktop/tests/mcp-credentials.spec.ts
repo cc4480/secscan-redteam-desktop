@@ -360,7 +360,7 @@ describe('setup form values', () => {
   it('accepts a real token and rejects the ways one arrives wrong', () => {
     expect(isMcpTokenValue(`  ${SAMPLE}  `)).toBe(true)
     expect(isMcpTokenValue(RUNNER)).toBe(true)
-    for (const value of ['', 'short', 'has space', '密钥-token-value', 'SECSCAN_MCP_TOKEN=ssk_value', '"ssk_quoted-value"', '\'ssk_quoted-value\'', '`ssk_quoted-value`']) {
+    for (const value of ['', 'short', 'has space', '密钥-token-value', 'REDTEAM_UI_TOKEN=runner_value', '"ssk_quoted-value"', '\'ssk_quoted-value\'', '`ssk_quoted-value`']) {
       expect(isMcpTokenValue(value), value).toBe(false)
     }
   })

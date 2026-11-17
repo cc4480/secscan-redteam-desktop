@@ -22,8 +22,7 @@ import {
   FIXTURE_ENTRIES,
   FIXTURE_GENERATION,
   FIXTURE_SOURCE_COMMIT,
-  buildFixtureIndex,
-} from './arsenal-battery-fixture.js'
+  buildFixtureIndex } from './arsenal-battery-fixture.js'
 
 const ARSENAL_ENV_KEYS = [
   'REDTEAM_ARSENAL_ENABLED',
@@ -31,8 +30,7 @@ const ARSENAL_ENV_KEYS = [
   'REDTEAM_ARSENAL_SOURCE_REPO',
   'REDTEAM_ARSENAL_REFRESH_INTERVAL_HOURS',
   'REDTEAM_ARSENAL_MAX_ENTRIES_PER_COLLECTION',
-  'REDTEAM_HOME',
-]
+  'REDTEAM_HOME' ]
 
 interface JsonRpcResponse {
   jsonrpc?: string
@@ -79,8 +77,7 @@ async function rpc(
   const res = await fetch(`${base}/mcp`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ jsonrpc: '2.0', id: opts.id ?? 1, method, params }),
-  })
+    body: JSON.stringify({ jsonrpc: '2.0', id: opts.id ?? 1, method, params }) })
   const raw = await res.text()
   let body: JsonRpcResponse = {}
   try {
@@ -141,12 +138,10 @@ before(async () => {
     ...toolsMod.TOOLS.map((t: { name: string }) => t.name),
     execMod.LIST_LIVE_TOOL.name,
     ...execMod.EXEC_TOOLS.map((t: { name: string }) => t.name),
-    ...arsenalNames,
-  ])
+    ...arsenalNames ])
   compositionCounts = {
     cockpitAndEngagement: toolsMod.TOOLS.length,
-    exec: execMod.EXEC_TOOLS.length,
-  }
+    exec: execMod.EXEC_TOOLS.length }
 
   const srv = await serverMod.startUiServer({ port: 0, engagementsDir })
   token = srv.token

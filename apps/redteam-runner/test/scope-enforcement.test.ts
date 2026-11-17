@@ -29,8 +29,7 @@ function baseCtx(over: Record<string, unknown> = {}): Ctx {
     probesUsed: 0,
     hostKill: { controllers: new Set() },
     safety: { rpsPerHost: 5 },
-    ...over,
-  } as unknown as Ctx;
+    ...over } as unknown as Ctx;
 }
 
 const call = (name: string): ToolCallRequest => ({ name } as unknown as ToolCallRequest);
@@ -39,14 +38,12 @@ describe("nmap_exec scope enforcement", () => {
   it("refuses an out-of-scope host before the executor runs", async () => {
     let scanned: string | null = null;
     const ctx = baseCtx({
-      nmapExecutor: { scan: async (a: { target: string }) => { scanned = a.target; return { ok: true, message: "ok", run: { hosts: [] } }; } },
-    });
+      nmapExecutor: { scan: async (a: { target: string }) => { scanned = a.target; return { ok: true, message: "ok", run: { hosts: [] } }; } } });
     const r = await handleNmapTools(ctx, "recon", "recon", call("nmap_exec"), {
       action: "scan",
       host: "evil.example",
       targetProfile: "linux",
-      profile: "quick",
-    });
+      profile: "quick" });
     assert.ok(r, "handled");
     assert.match(r.result, /DENIED by scope/, "the refusal is a scope denial");
     assert.match(r.result, /evil\.example/, "names the refused host");
@@ -56,8 +53,7 @@ describe("nmap_exec scope enforcement", () => {
   it("lets an in-scope host through to the executor", async () => {
     let scanned: string | null = null;
     const ctx = baseCtx({
-      nmapExecutor: { scan: async (a: { target: string }) => { scanned = a.target; return { ok: true, message: "ok", run: { hosts: [] } }; } },
-    });
+      nmapExecutor: { scan: async (a: { target: string }) => { scanned = a.target; return { ok: true, message: "ok", run: { hosts: [] } }; } } });
     // The scan path also presence-gates the resolved nmap binary (S4-H2);
     // this test's subject is scope, so name a binary that exists (the test
     // runner's own node) and restore the env afterwards.
@@ -68,8 +64,7 @@ describe("nmap_exec scope enforcement", () => {
         action: "scan",
         host: "seclayer.app",
         targetProfile: "linux",
-        profile: "quick",
-      });
+        profile: "quick" });
       assert.ok(r);
       assert.ok(!/DENIED/.test(r.result), "in-scope is not denied");
       assert.equal(scanned, "seclayer.app", "the executor received the in-scope host");
@@ -97,8 +92,7 @@ describe("network xtool scope enforcement", () => {
     const r = await handleXTool(ctx, "recon", "recon", call("sqlmap_exec"), {
       action: "run",
       host: "https://evil.example/id",
-      targetProfile: "linux",
-    });
+      targetProfile: "linux" });
     assert.ok(r, "handled");
     assert.match(r.result, /DENIED by scope/, "refused as out of scope");
     assert.match(r.result, /evil\.example/);
@@ -118,8 +112,7 @@ describe("network xtool scope enforcement", () => {
     const ctx = baseCtx();
     const r = await handleXTool(ctx, "recon", "recon", call("john_exec"), {
       action: "run",
-      host: "C:\\Users\\someone\\hashes.txt",
-    });
+      host: "C:\\Users\\someone\\hashes.txt" });
     assert.ok(r);
     assert.ok(!/DENIED by scope/.test(r.result), "john is exempt from the network scope check");
   });

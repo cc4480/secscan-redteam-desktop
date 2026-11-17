@@ -28,16 +28,14 @@ import {
   stepsPath,
   sumStepTokens,
   TOOL_ERROR_PREFIX,
-  type StepRecord,
-} from '../src/harness2/steps.js'
+  type StepRecord } from '../src/harness2/steps.js'
 import {
   SPEC5_FILE_NAME,
   buildSpec5Rows,
   deriveFailureMode,
   deriveTargetSubclass,
   isCrashed,
-  type Spec5RunFacts,
-} from '../src/harness2/spec5.js'
+  type Spec5RunFacts } from '../src/harness2/spec5.js'
 import {
   TOKEN_CAPTURE_STATUS,
   ZERO_TOKEN_TOTALS,
@@ -49,8 +47,7 @@ import {
   deriveTargetClass,
   isToolAction,
   toTrajectoryEvents,
-  writeTrajectory,
-} from '../src/harness2/trajectory.js'
+  writeTrajectory } from '../src/harness2/trajectory.js'
 import type { Ctx } from '../src/context.js'
 import type { EngagementEvent, Finding } from '../src/types.js'
 
@@ -72,8 +69,7 @@ function confirmedFinding(): Finding {
     evidence: 'payload reflected unencoded',
     fix: 'encode',
     retest: 'curl',
-    status: 'confirmed',
-  }
+    status: 'confirmed' }
 }
 
 function sampleMetrics(finishedAt: string): TrajectoryRecord['metrics'] {
@@ -88,8 +84,7 @@ function sampleMetrics(finishedAt: string): TrajectoryRecord['metrics'] {
     steps: 3,
     startedAtMs: Date.parse('2026-10-18T00:00:00.000Z'),
     finishedAtMs: Date.parse(finishedAt),
-    harness: { runnerVersion: 'test', layerIds: [], componentHashes: {} },
-  })
+    harness: { runnerVersion: 'test', layerIds: [], componentHashes: {} } })
 }
 
 describe('buildHarnessStamp', () => {
@@ -167,8 +162,7 @@ describe('captureRunMetrics', () => {
       tokensOut: 340,
       startedAtMs: Date.parse('2026-10-18T00:00:00.000Z'),
       finishedAtMs: Date.parse('2026-10-18T00:00:02.500Z'),
-      harness: { runnerVersion: '0.0.0', layerIds: [], componentHashes: {} },
-    })
+      harness: { runnerVersion: '0.0.0', layerIds: [], componentHashes: {} } })
     assert.equal(metrics.runId, 'eng-42')
     assert.equal(metrics.engagementId, 'eng-42')
     assert.equal(metrics.outcome, 'success')
@@ -194,8 +188,7 @@ describe('captureRunMetrics', () => {
       falsePositives: 0,
       exploitsAttempted: 0,
       exploitsSucceeded: 0,
-      steps: 0,
-    })
+      steps: 0 })
     assert.equal(metrics.outcome, 'failure')
     assert.equal(metrics.tokensIn, ZERO_TOKEN_TOTALS.tokensIn)
     assert.equal(metrics.tokensOut, ZERO_TOKEN_TOTALS.tokensOut)
@@ -221,8 +214,7 @@ describe('captureRunMetrics', () => {
       exploitsSucceeded: 1,
       steps: 1,
       tokensIn: meter.totals.tokensIn,
-      tokensOut: meter.totals.tokensOut,
-    })
+      tokensOut: meter.totals.tokensOut })
     assert.equal(metrics.tokensIn, 150)
     assert.equal(metrics.tokensOut, 25)
   })
@@ -255,10 +247,8 @@ describe('toTrajectoryEvents', () => {
         action: 'http_probe',
         attackId: 'T1190',
         target: 'shop.example.test',
-        result: '200 OK',
-      },
-      { ts: 't4', seq: 4, engagementId: 'e', phase: 'exploit', actor: 'exploiter', action: 'record_finding', result: 'recorded' },
-    ]
+        result: '200 OK' },
+      { ts: 't4', seq: 4, engagementId: 'e', phase: 'exploit', actor: 'exploiter', action: 'record_finding', result: 'recorded' } ]
     const normalized = toTrajectoryEvents(events)
     assert.equal(normalized.length, 4)
     assert.deepEqual(normalized[0], {
@@ -267,8 +257,7 @@ describe('toTrajectoryEvents', () => {
       actor: 'runner',
       action: 'engagement_start',
       result: 'started',
-      isToolCall: false,
-    })
+      isToolCall: false })
     assert.equal(normalized[1]!.isToolCall, false)
     assert.equal(normalized[2]!.isToolCall, true)
     assert.equal(normalized[2]!.attackId, 'T1190')
@@ -292,8 +281,7 @@ describe('writeTrajectory', () => {
     const dir = tempDir('h2-trajectory-')
     const record: TrajectoryRecord = {
       metrics: sampleMetrics('2026-10-18T00:00:05.000Z'),
-      events: [{ ts: 't', phase: 'recon', actor: 'runner', action: 'engagement_start', result: 'ok', isToolCall: false }],
-    }
+      events: [{ ts: 't', phase: 'recon', actor: 'runner', action: 'engagement_start', result: 'ok', isToolCall: false }] }
     const result = writeTrajectory(dir, record)
     assert.equal(result.written, true)
     const trajectory = JSON.parse(readFileSync(join(dir, 'trajectory.json'), 'utf8')) as TrajectoryRecord
@@ -339,8 +327,7 @@ describe('captureEngagementTrajectory finish-path wiring', () => {
       actions: overrides.actions ?? 2,
       startedAt: Date.now() - 1000,
       liveFindings: [],
-      killedLive: [],
-    } as unknown as Ctx
+      killedLive: [] } as unknown as Ctx
   }
 
   it('writes both artifacts for a completed run and never throws', () => {
@@ -355,8 +342,7 @@ describe('captureEngagementTrajectory finish-path wiring', () => {
       target: 'shop.example.test',
       ctx: fakeCtx(),
       events,
-      environment: {},
-    })
+      environment: {} })
     assert.notEqual(metrics, null)
     assert.equal(metrics!.outcome, 'success')
     assert.equal(metrics!.vulnsFound, 1)
@@ -380,8 +366,7 @@ describe('captureEngagementTrajectory finish-path wiring', () => {
       target: 'shop.example.test',
       ctx: fakeCtx(),
       events,
-      environment: {},
-    })
+      environment: {} })
     assert.equal(metrics!.outcome, 'aborted')
   })
 
@@ -398,8 +383,7 @@ describe('captureEngagementTrajectory finish-path wiring', () => {
         target: 'shop.example.test',
         ctx: fakeCtx(),
         events,
-        environment: {},
-      })
+        environment: {} })
     })
     assert.equal(outcome, null)
   })
@@ -472,8 +456,7 @@ describe('section-5 step journal (steps.jsonl)', () => {
         role: 'prompt',
         tool_name: null,
         content: 'kept',
-        tokens: 7,
-      })
+        tokens: 7 })
       writeFileSync(stepsPath(dir), `${valid}\n{broken json\n${JSON.stringify({ seq: 2, role: 'bogus', content: 'no' })}\n`)
       const rows = readSteps(dir)
       assert.equal(rows.length, 1)
@@ -509,8 +492,7 @@ describe('agentLoop section-5 instrumentation (agents.ts)', () => {
       input: { roe: { blackoutWindows: [] } },
       deps: { completeForRole },
       events: new EventLog(dir, 'eng-loop', { target: 'shop.example.test', mode: 'red', objective: 'test' }),
-      safety: {},
-    } as unknown as Ctx
+      safety: {} } as unknown as Ctx
   }
 
   it("journals the full outgoing prompt and the response's tokens", async () => {
@@ -518,8 +500,7 @@ describe('agentLoop section-5 instrumentation (agents.ts)', () => {
     try {
       const ctx = loopCtx(dir, async () => ({
         text: 'done',
-        usage: { promptTokens: 80, completionTokens: 20, totalTokens: 100 },
-      }))
+        usage: { promptTokens: 80, completionTokens: 20, totalTokens: 100 } }))
       await agentLoop(ctx, 'recon', 'recon', 'SYSTEM-INSTRUCTION', 'USER-INSTRUCTION', [], 1, { onIdle: () => null })
       const rows = readSteps(dir)
       assert.equal(rows.length, 1)
@@ -539,8 +520,7 @@ describe('agentLoop section-5 instrumentation (agents.ts)', () => {
       const ctx = loopCtx(dir, async () => ({
         text: '',
         toolCalls: [{ id: 'call-1', name: 'http_probe', arguments: { url: 'https://shop.example.test/?q=1' } }],
-        usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
-      }))
+        usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 } }))
       // The bare fake ctx (no tier state, no safety machinery) makes
       // dispatchTool throw before any traffic; the loop journals the
       // failed dispatch as an ERROR observation, then rejects — the
@@ -583,8 +563,7 @@ function section5Metrics(over: Partial<RunMetrics> = {}): RunMetrics {
     tokensOut: 40,
     startedAtMs: Date.parse(S5_STARTED),
     finishedAtMs: Date.parse(S5_FINISHED),
-    harness: { runnerVersion: 'test', layerIds: ['base', 'wp-hardening'], componentHashes: {} },
-  })
+    harness: { runnerVersion: 'test', layerIds: ['base', 'wp-hardening'], componentHashes: {} } })
   return { ...base, ...over }
 }
 
@@ -606,8 +585,7 @@ function section5Facts(over: Partial<Spec5RunFacts> = {}, metricsOver: Partial<R
     targetIds: ['webapp'],
     appType: 'wordpress',
     stack: ['nginx', 'wordpress'],
-    ...over,
-  }
+    ...over }
 }
 
 describe('section-5 runs and metrics rows', () => {
@@ -658,10 +636,8 @@ describe('section-5 runs and metrics rows', () => {
       {
         name: 'missed vulnerability',
         metrics: { outcome: 'partial', vulnsFound: 0, exploitsSucceeded: 0 },
-        expect: 'missed-vuln',
-      },
-      { name: 'clean success', over: {}, expect: 'none' },
-    ]
+        expect: 'missed-vuln' },
+      { name: 'clean success', over: {}, expect: 'none' } ]
     for (const entry of cases) {
       assert.equal(
         deriveFailureMode(section5Facts(entry.over ?? {}, entry.metrics ?? {})),
@@ -690,8 +666,7 @@ describe('section-5 finish-path wiring', () => {
       actions: 4,
       startedAt: Date.parse(S5_STARTED),
       liveFindings: [],
-      killedLive: [],
-    } as unknown as Ctx
+      killedLive: [] } as unknown as Ctx
   }
 
   it('writes run.json with the section-5 rows and counts the step journal', () => {
@@ -712,8 +687,7 @@ describe('section-5 finish-path wiring', () => {
         targetIds: ['webapp'],
         ctx: fakeCtx(),
         events,
-        environment: {},
-      })
+        environment: {} })
       assert.notEqual(metrics, null)
       assert.equal(existsSync(join(dir, SPEC5_FILE_NAME)), true)
       const rows = JSON.parse(readFileSync(join(dir, SPEC5_FILE_NAME), 'utf8')) as {

@@ -10,15 +10,13 @@ import { MemoryError } from "../src/memory/errors.js";
 import {
   collapseCandidates,
   scoreCandidates,
-  type CollapseCandidate,
-} from "../src/memory/collapse.js";
+  type CollapseCandidate } from "../src/memory/collapse.js";
 import { assertScopeBinding, deriveMemoryScope, scopeEligible } from "../src/memory/scope.js";
 import { deriveTrust, evaluateCorroboration } from "../src/memory/trust.js";
 import type {
   MemoryScope,
   MemoryUnit,
-  TrustDerivationInput,
-} from "../src/memory/types.js";
+  TrustDerivationInput } from "../src/memory/types.js";
 
 const NOW = "2026-10-31T13:00:00.000Z";
 
@@ -28,8 +26,7 @@ function trustInput(overrides: Partial<TrustDerivationInput>): TrustDerivationIn
     corroboration: { independentCount: 1, sourceKeys: ["trajectory:eng-1"] },
     contentClass: "normal",
     sourceRefs: [{ kind: "trajectory", uri: "eng-1/trajectory.json" }],
-    ...overrides,
-  };
+    ...overrides };
 }
 
 describe("memory trust derivation (brief §4.3)", () => {
@@ -40,9 +37,7 @@ describe("memory trust derivation (brief §4.3)", () => {
           state: "proven",
           receipts: [{ kind: "proof-bundle", ref: "eng-1/proof/bundle.json" }],
           cellState: "proven",
-          negativeControlReceiptRef: "eng-1/proof/negative-control.json",
-        },
-      }),
+          negativeControlReceiptRef: "eng-1/proof/negative-control.json" } }),
       NOW,
     );
     assert.equal(trust.tier, "proven");
@@ -56,8 +51,7 @@ describe("memory trust derivation (brief §4.3)", () => {
       () =>
         deriveTrust(
           trustInput({
-            proof: { state: "proven", receipts: [], cellState: "proven", negativeControlReceiptRef: "nc" },
-          }),
+            proof: { state: "proven", receipts: [], cellState: "proven", negativeControlReceiptRef: "nc" } }),
           NOW,
         ),
       (err: unknown) => err instanceof MemoryError && err.code === "TRUST_OVERCLAIM",
@@ -72,9 +66,7 @@ describe("memory trust derivation (brief §4.3)", () => {
             proof: {
               state: "proven",
               receipts: [{ kind: "proof-bundle", ref: "eng-1/proof/bundle.json" }],
-              cellState: "detected",
-            },
-          }),
+              cellState: "detected" } }),
           NOW,
         ),
       (err: unknown) => err instanceof MemoryError && err.code === "TRUST_OVERCLAIM",
@@ -87,10 +79,8 @@ describe("memory trust derivation (brief §4.3)", () => {
         proof: {
           state: "confirmed",
           receipts: [{ kind: "registry-entry", ref: "entry-9" }],
-          registryEntryId: "entry-9",
-        },
-        sourceRefs: [{ kind: "registry-entry", uri: "registry.json", registryEntryId: "entry-9" }],
-      }),
+          registryEntryId: "entry-9" },
+        sourceRefs: [{ kind: "registry-entry", uri: "registry.json", registryEntryId: "entry-9" }] }),
       NOW,
     );
     assert.equal(trust.tier, "confirmed");
@@ -110,9 +100,7 @@ describe("memory trust derivation (brief §4.3)", () => {
         proof: {
           state: "killed",
           receipts: [{ kind: "registry-entry", ref: "entry-10" }],
-          registryEntryId: "entry-10",
-        },
-      }),
+          registryEntryId: "entry-10" } }),
       NOW,
     );
     assert.equal(trust.tier, "killed");
@@ -123,8 +111,7 @@ describe("memory trust derivation (brief §4.3)", () => {
     const trust = deriveTrust(
       trustInput({
         proof: { state: "deferred", receipts: [{ kind: "evidence", ref: "eng-1/evidence.txt" }] },
-        corroboration: { independentCount: 5, sourceKeys: ["registry:a", "operator:carlos", "registry:b", "experience:c", "registry:d"] },
-      }),
+        corroboration: { independentCount: 5, sourceKeys: ["registry:a", "operator:carlos", "registry:b", "experience:c", "registry:d"] } }),
       NOW,
     );
     assert.equal(trust.tier, "single-source");
@@ -135,8 +122,7 @@ describe("memory trust derivation (brief §4.3)", () => {
   it("two independent corroborations derive corroborated 0.65", () => {
     const trust = deriveTrust(
       trustInput({
-        corroboration: { independentCount: 2, sourceKeys: ["trajectory:eng-1", "registry:eng-2"] },
-      }),
+        corroboration: { independentCount: 2, sourceKeys: ["trajectory:eng-1", "registry:eng-2"] } }),
       NOW,
     );
     assert.equal(trust.tier, "corroborated");
@@ -147,8 +133,7 @@ describe("memory trust derivation (brief §4.3)", () => {
     const trust = deriveTrust(
       trustInput({
         contentClass: "target-derived-untrusted",
-        sourceRefs: [{ kind: "target-response", uri: "eng-1/recon/page.html" }],
-      }),
+        sourceRefs: [{ kind: "target-response", uri: "eng-1/recon/page.html" }] }),
       NOW,
     );
     assert.equal(trust.tier, "untrusted-target");
@@ -160,8 +145,7 @@ describe("memory trust derivation (brief §4.3)", () => {
       trustInput({
         contentClass: "target-derived-untrusted",
         corroboration: { independentCount: 2, sourceKeys: ["target-content:eng-1", "registry:eng-2"] },
-        sourceRefs: [{ kind: "target-response", uri: "eng-1/recon/page.html" }],
-      }),
+        sourceRefs: [{ kind: "target-response", uri: "eng-1/recon/page.html" }] }),
       NOW,
     );
     assert.equal(trust.tier, "corroborated");
@@ -178,8 +162,7 @@ describe("memory trust derivation (brief §4.3)", () => {
       evaluateCorroboration(existing, {
         sourceClass: "target-content",
         sourceKey: "target-content:eng-2",
-        artifactSha256: "aa11",
-      }),
+        artifactSha256: "aa11" }),
       { counted: false, reason: "SAME_ARTIFACT" },
     );
     assert.deepEqual(
@@ -203,8 +186,7 @@ function candidate(overrides: Partial<CollapseCandidate>): CollapseCandidate {
     scopeKey: "scope-a",
     hasScope: true,
     hasTrustBlock: true,
-    ...overrides,
-  };
+    ...overrides };
 }
 
 describe("memory collapse (brief §6)", () => {
@@ -213,22 +195,17 @@ describe("memory collapse (brief §6)", () => {
       candidate({
         unitId: "mem_c1", sourceClass: "registry", sourceKey: "registry:eng-1",
         claim: "SQL injection in login form allows auth bypass", tags: ["sqli"],
-        vulnClass: "SQL Injection", baseScore: 0.85, tier: "confirmed",
-      }),
+        vulnClass: "SQL Injection", baseScore: 0.85, tier: "confirmed" }),
       candidate({
         unitId: "mem_c2", sourceClass: "registry", sourceKey: "registry:eng-1",
         claim: "SQL injection in search parameter is not exploitable",
-        vulnClass: "SQL Injection", baseScore: 0.8, tier: "killed",
-      }),
+        vulnClass: "SQL Injection", baseScore: 0.8, tier: "killed" }),
       candidate({
         unitId: "mem_c3", sourceClass: "experience", sourceKey: "experience:eng-2",
-        claim: "Login form rate limiting blocks brute force attempts", baseScore: 0.45,
-      }),
+        claim: "Login form rate limiting blocks brute force attempts", baseScore: 0.45 }),
       candidate({
         unitId: "mem_c4", sourceClass: "trajectory", sourceKey: "trajectory:eng-2",
-        claim: "SQL injection probe on search parameter failed", baseScore: 0.45,
-      }),
-    ];
+        claim: "SQL injection probe on search parameter failed", baseScore: 0.45 }) ];
     const scored = scoreCandidates(pool, "sql injection login form");
     const byId = new Map(scored.map((s) => [s.candidate.unitId, s]));
     const close = (actual: number, expected: number) =>
@@ -258,24 +235,21 @@ describe("memory collapse (brief §6)", () => {
     const samePool = scoreCandidates(
       [
         candidate({ unitId: "mem_p1", sourceClass: "trajectory", sourceKey: "trajectory:eng-1", claim: shared }),
-        candidate({ unitId: "mem_p2", sourceClass: "trajectory", sourceKey: "trajectory:eng-2", claim: shared }),
-      ],
+        candidate({ unitId: "mem_p2", sourceClass: "trajectory", sourceKey: "trajectory:eng-2", claim: shared }) ],
       "alpha",
     );
     assert.equal(samePool[0]!.boostCount, 0);
     const sameKey = scoreCandidates(
       [
         candidate({ unitId: "mem_k1", sourceClass: "trajectory", sourceKey: "trajectory:eng-1", claim: shared }),
-        candidate({ unitId: "mem_k2", sourceClass: "experience", sourceKey: "trajectory:eng-1", claim: shared }),
-      ],
+        candidate({ unitId: "mem_k2", sourceClass: "experience", sourceKey: "trajectory:eng-1", claim: shared }) ],
       "alpha",
     );
     assert.equal(sameKey[0]!.boostCount, 0);
     const independent = scoreCandidates(
       [
         candidate({ unitId: "mem_i1", sourceClass: "trajectory", sourceKey: "trajectory:eng-1", claim: shared }),
-        candidate({ unitId: "mem_i2", sourceClass: "experience", sourceKey: "experience:eng-2", claim: shared }),
-      ],
+        candidate({ unitId: "mem_i2", sourceClass: "experience", sourceKey: "experience:eng-2", claim: shared }) ],
       "alpha",
     );
     assert.equal(independent[0]!.boostCount, 1);
@@ -287,8 +261,7 @@ describe("memory collapse (brief §6)", () => {
     const scored = scoreCandidates(
       [
         candidate({ unitId: "mem_d1", sourceClass: "registry", sourceKey: "registry:eng-1", claim: shared, vulnClass: "XSS", baseScore: 0.8, tier: "killed" }),
-        candidate({ unitId: "mem_d2", sourceClass: "trajectory", sourceKey: "trajectory:eng-2", claim: shared, vulnClass: "XSS", baseScore: 0.85, tier: "confirmed" }),
-      ],
+        candidate({ unitId: "mem_d2", sourceClass: "trajectory", sourceKey: "trajectory:eng-2", claim: shared, vulnClass: "XSS", baseScore: 0.85, tier: "confirmed" }) ],
       "alpha",
     );
     assert.equal(scored[0]!.boostCount, 0);
@@ -301,9 +274,7 @@ describe("memory collapse (brief §6)", () => {
         candidate({
           unitId: "mem_u1", sourceClass: "target-content", sourceKey: "target-content:eng-1",
           claim: "alpha bravo charlie", baseScore: 0.2, tier: "untrusted-target",
-          contentClass: "target-derived-untrusted", independentCount: 1,
-        }),
-      ],
+          contentClass: "target-derived-untrusted", independentCount: 1 }) ],
       "alpha bravo charlie",
     );
     assert.equal(capped[0]!.untrusted, true);
@@ -313,9 +284,7 @@ describe("memory collapse (brief §6)", () => {
         candidate({
           unitId: "mem_u2", sourceClass: "target-content", sourceKey: "target-content:eng-1",
           claim: "alpha bravo charlie", baseScore: 0.65, tier: "corroborated",
-          contentClass: "target-derived-untrusted", independentCount: 2,
-        }),
-      ],
+          contentClass: "target-derived-untrusted", independentCount: 2 }) ],
       "alpha bravo charlie",
     );
     assert.equal(lifted[0]!.untrusted, false);
@@ -326,8 +295,7 @@ describe("memory collapse (brief §6)", () => {
     const result = collapseCandidates(
       [
         candidate({ unitId: "mem_s1", sourceClass: "registry", sourceKey: "registry:eng-1", claim: "alpha bravo", baseScore: 1, tier: "proven" }),
-        candidate({ unitId: "mem_w1", sourceClass: "operator", sourceKey: "operator:carlos", claim: "zebra xylophone quiver", baseScore: 0.45 }),
-      ],
+        candidate({ unitId: "mem_w1", sourceClass: "operator", sourceKey: "operator:carlos", claim: "zebra xylophone quiver", baseScore: 0.45 }) ],
       { query: "alpha bravo" },
     );
     assert.deepEqual(result.survivors.map((s) => s.candidate.unitId), ["mem_s1"]);
@@ -338,8 +306,7 @@ describe("memory collapse (brief §6)", () => {
     const pool = [
       candidate({ unitId: "mem_z", sourceClass: "registry", sourceKey: "registry:eng-9", claim: "alpha bravo charlie delta india juliet", baseScore: 0.85, tier: "confirmed" }),
       candidate({ unitId: "mem_x", sourceClass: "experience", sourceKey: "experience:eng-1", claim: "alpha bravo charlie delta echo foxtrot", baseScore: 0.45 }),
-      candidate({ unitId: "mem_y", sourceClass: "trajectory", sourceKey: "trajectory:eng-2", claim: "alpha bravo charlie delta echo foxtrot golf", baseScore: 0.45 }),
-    ];
+      candidate({ unitId: "mem_y", sourceClass: "trajectory", sourceKey: "trajectory:eng-2", claim: "alpha bravo charlie delta echo foxtrot golf", baseScore: 0.45 }) ];
     const result = collapseCandidates(pool, { query: "alpha bravo charlie delta" });
     assert.deepEqual(result.survivors.map((s) => s.candidate.unitId), ["mem_z", "mem_x"]);
     assert.deepEqual(result.suppressedDuplicates, ["mem_y"]);
@@ -358,8 +325,7 @@ describe("memory collapse (brief §6)", () => {
           sourceKey: `${classes[i % 4]}:eng-${i}`,
           claim: `common topic${i} detail${i}`,
           baseScore: 0.85,
-          tier: "confirmed",
-        }),
+          tier: "confirmed" }),
       );
     }
     const result = collapseCandidates(pool, { query: "common" });
@@ -378,8 +344,7 @@ describe("memory collapse (brief §6)", () => {
     const twins = collapseCandidates(
       [
         candidate({ unitId: "mem_t2", sourceClass: "trajectory", sourceKey: "trajectory:eng-1", claim: "zebra xylophone quiver" }),
-        candidate({ unitId: "mem_t1", sourceClass: "operator", sourceKey: "operator:carlos", claim: "jungle waffle harbor" }),
-      ],
+        candidate({ unitId: "mem_t1", sourceClass: "operator", sourceKey: "operator:carlos", claim: "jungle waffle harbor" }) ],
       { query: "nomatch" },
     );
     assert.deepEqual(twins.survivors.map((s) => s.candidate.unitId), ["mem_t1", "mem_t2"]);
@@ -422,8 +387,7 @@ function unitWithScope(scope: MemoryScope): MemoryUnit {
       derivedFromUnitIds: [],
       extractor: { name: "registry-projector", version: "1", inputHash: "00" },
       createdAt: NOW,
-      createdBy: "runner",
-    },
+      createdBy: "runner" },
     proof: { state: "confirmed", receipts: [{ kind: "registry-entry", ref: "e1" }], registryEntryId: "e1" },
     trust: { tier: "confirmed", baseScore: 0.85, derivedAt: NOW, derivation: ["RECEIPT_LINKED"] },
     corroboration: { independentCount: 1, sourceKeys: ["registry:eng-0"] },
@@ -433,8 +397,7 @@ function unitWithScope(scope: MemoryScope): MemoryUnit {
     stack: [],
     views: { l0: "example", l1: "example", sourceHash: "00", generatedAt: NOW, generator: "deterministic-v1", stale: false },
     retrieval: { retrievalCount: 0 },
-    hash: "00",
-  };
+    hash: "00" };
 }
 
 function targetScope(hosts: string[]): MemoryScope {
@@ -443,8 +406,7 @@ function targetScope(hosts: string[]): MemoryScope {
     scopeKey: `key-${hosts.join("-")}`,
     hosts,
     stack: [],
-    originEngagementIds: ["eng-0"],
-  };
+    originEngagementIds: ["eng-0"] };
 }
 
 describe("memory scope gate (brief §4.2)", () => {
@@ -452,8 +414,7 @@ describe("memory scope gate (brief §4.2)", () => {
     engagementId: "eng-b",
     hosts: ["b.example.test"],
     verifiedAt: NOW,
-    verificationProof: "operator attestation",
-  });
+    verificationProof: "operator attestation" });
 
   it("scope derivation refuses an unverified engagement", () => {
     assert.throws(
@@ -471,8 +432,7 @@ describe("memory scope gate (brief §4.2)", () => {
       engagementId: "eng-c",
       hosts: ["example.test"],
       verifiedAt: NOW,
-      verificationProof: "operator attestation",
-    });
+      verificationProof: "operator attestation" });
     assert.equal(scopeEligible(unitWithScope(targetScope(["api.example.test"])), scope), true);
   });
 
@@ -502,8 +462,7 @@ describe("memory scope gate (brief §4.2)", () => {
       hosts: [],
       targetClass: "nextjs-app",
       stack: ["nextjs"],
-      originEngagementIds: ["eng-0"],
-    });
+      originEngagementIds: ["eng-0"] });
     assert.equal(scopeEligible(classUnit, engagementScope), false);
     assert.equal(scopeEligible(classUnit, engagementScope, { targetClass: "nextjs-app" }), true);
     assert.equal(scopeEligible(classUnit, engagementScope, { stack: ["NextJS"] }), true);
@@ -512,12 +471,10 @@ describe("memory scope gate (brief §4.2)", () => {
 
 describe("memory write gate — assertScopeBinding (brief §4.2 rules 2–3)", () => {
   const globalScope: MemoryScope = {
-    kind: "global-procedural", scopeKey: "global", hosts: [], stack: [], originEngagementIds: [],
-  };
+    kind: "global-procedural", scopeKey: "global", hosts: [], stack: [], originEngagementIds: [] };
   const classScope: MemoryScope = {
     kind: "target-class", scopeKey: "class-nextjs", hosts: [], targetClass: "nextjs-app",
-    stack: ["nextjs"], originEngagementIds: ["eng-0"],
-  };
+    stack: ["nextjs"], originEngagementIds: ["eng-0"] };
   const tooBroad = (err: unknown) => err instanceof MemoryError && err.code === "SCOPE_TOO_BROAD";
 
   it("target-derived content under global or class scope is rejected loud", () => {

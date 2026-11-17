@@ -52,8 +52,7 @@ function loopCtx(dir: string, completeForRole: CompleteFn): Ctx {
     coverage: new Set(),
     targetCoverage: new Map(),
     itemLedger: new Map(),
-    opsecCooldown: new Set<string>(),
-  } as unknown as Ctx;
+    opsecCooldown: new Set<string>() } as unknown as Ctx;
 }
 
 function readEvents(dir: string): EngagementEvent[] {
@@ -66,8 +65,7 @@ function readEvents(dir: string): EngagementEvent[] {
 const toolTurn = (name: string, args: Record<string, unknown> = {}) => ({
   text: "",
   toolCalls: [{ id: `c-${Math.random()}`, name, arguments: args }],
-  usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
-});
+  usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 } });
 const idleTurn = { text: "done", usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 } };
 
 /** Scripted model: returns the given responses in order, then idles. */
@@ -86,8 +84,7 @@ describe("progress-aware round caps", () => {
           toolTurn("update_target_map", { entries: [{ area: "/a", method: "GET" }] }),
           toolTurn("update_target_map", { entries: [{ area: "/b", method: "GET" }] }),
           toolTurn("update_target_map", { entries: [{ area: "/c", method: "GET" }] }),
-          idleTurn,
-        ]),
+          idleTurn ]),
       );
       await agentLoop(ctx, "recon", "recon", "s", "u", [], 10, { roundCaps: { softCapRounds: 2 } });
       const evs = readEvents(dir);
@@ -130,8 +127,7 @@ describe("progress-aware round caps", () => {
           toolTurn("update_target_map", { entries: [{ area: "/b", method: "GET" }] }),
           toolTurn("update_target_map", { entries: [{ area: "/c", method: "GET" }] }),
           toolTurn("update_target_map", { entries: [{ area: "/d", method: "GET" }] }),
-          toolTurn("update_target_map", { entries: [{ area: "/e", method: "GET" }] }),
-        ]),
+          toolTurn("update_target_map", { entries: [{ area: "/e", method: "GET" }] }) ]),
       );
       await agentLoop(ctx, "recon", "recon", "s", "u", [], 10, { roundCaps: { softCapRounds: 100, hardCapRounds: 3 } });
       const evs = readEvents(dir);
@@ -151,8 +147,7 @@ describe("progress-aware round caps", () => {
         dir,
         scripted([
           toolTurn("update_target_map", { entries: [{ area: "/a", method: "GET" }] }),
-          toolTurn("update_target_map", { entries: [{ area: "/b", method: "GET" }] }),
-        ]),
+          toolTurn("update_target_map", { entries: [{ area: "/b", method: "GET" }] }) ]),
       );
       await agentLoop(ctx, "recon", "recon", "s", "u", [], 2, {});
       const caps = readEvents(dir).filter((e) => e.action === "iteration_cap");

@@ -46,7 +46,7 @@ export const SECLAYER_REDTEAM_TOOL: JsonSchemaTool = {
   name: "seclayer_redteam",
   description:
     GATE +
-    "Run the embedded Seclayer RED_TEAM probe set against ONE in-scope root URL: real exploit attempts for SQL injection, reflected XSS, OS command injection, reflected SSRF, and blind (out-of-band) SSRF. Each hit returns a PROVEN-grade receipt (the signal is a literal substring of the captured response); a probe that cannot prove its technique returns nothing. Blind SSRF no-ops unless a collaborator is configured in-process (it is not, in this build). " +
+    "Run the embedded Seclayer RED_TEAM probe set against ONE in-scope root URL: real exploit attempts for SQL injection, reflected XSS, OS command injection, reflected SSRF, and blind (out-of-band) SSRF. Each hit returns a PROVEN-grade receipt (the signal is a literal substring of the captured response, or the recorded callback for a blind class); a probe that cannot prove its technique returns nothing. Blind SSRF uses an in-process loopback collaborator for loopback targets only; remote targets cannot receive callbacks in this build, so the blind class is reported as not-run for them. " +
     "Include attackId (a real ATT&CK ID such as 'T1190'), category, targetProfile ('seclayer' for the Seclayer battery, 'webapp' for a client web application), and a one-sentence hypothesis.",
   parameters: { type: "object", properties: { ...COMMON }, required: ["url", "category"] },
 };
@@ -86,7 +86,7 @@ export const SECLAYER_DAST_TOOL: JsonSchemaTool = {
   name: "seclayer_dast",
   description:
     GATE +
-    "Run ONE embedded Seclayer DAST-unique probe, selected by `probe`: csrf (tokenless-form + SameSite=None posture, from cookieLines + forms you captured), stored_xss (payload persistence through discovered formTargets), dom_xss (DOM sink execution — needs headless rendering enabled in-process; a clean no-op otherwise), price_manipulation (checkout total tampering via postUrls), prototype_pollution (JSON __proto__ gadget via postUrls), deserialization (serialized-object markers in cookieLines), credential_chain (exposed backend key pairs — pass pageText to extract from, or pairs directly), auth_rate_limit (credential-verification endpoints accepting unlimited attempts, via postUrls), llm (prompt-injection / memory-poisoning / insecure-tool-use probes against discovered LLM endpoints), edge_function (auth differentials on edge-function URLs found in texts), i18n (locale-prefix auth bypass: /en gated but /es not, over discovered paths), weak_session (log in ONCE with the owner-supplied credentials at loginTarget and test the issued session token for predictability). " +
+    "Run ONE embedded Seclayer DAST-unique probe, selected by `probe`: csrf (tokenless-form + SameSite=None posture, from cookieLines + forms you captured), stored_xss (payload persistence through discovered formTargets), dom_xss (DOM sink execution — needs headless rendering enabled in-process; a clean no-op otherwise), price_manipulation (checkout total tampering via postUrls), prototype_pollution (JSON __proto__ gadget via postUrls), deserialization (serialized-object markers in cookieLines), credential_chain (exposed backend key pairs — pass pageText to extract from, or pairs directly), auth_rate_limit (credential-verification endpoints accepting unlimited attempts, via postUrls), llm (prompt-injection / memory-poisoning / insecure-tool-use probes against discovered LLM endpoints; insecure-tool-use uses an in-process loopback collaborator for loopback targets only), edge_function (auth differentials on edge-function URLs found in texts), i18n (locale-prefix auth bypass: /en gated but /es not, over discovered paths), weak_session (log in ONCE with the owner-supplied credentials at loginTarget and test the issued session token for predictability). " +
     "Supply the discovery inputs the selected probe needs (formTargets / postUrls / cookieLines / forms / texts / paths / pairs / pageText / discovered / loginTarget + username + password). Include attackId, category, targetProfile, and a one-sentence hypothesis.",
   parameters: {
     type: "object",
@@ -117,7 +117,7 @@ export const SECLAYER_AGGRESSIVE_TOOL: JsonSchemaTool = {
   name: "seclayer_aggressive",
   description:
     GATE +
-    "Run ONE embedded Seclayer aggressive probe, selected by `probe`, against ONE in-scope root URL: ssti (server-side template injection), nosql (NoSQL operator injection), xxe (XML external entity — out-of-band receipt when a collaborator is configured, differential otherwise), crlf (CRLF / response-splitting injection), host_header (host-header injection / password-reset poisoning). Each returns a finding only when it proves the technique. " +
+    "Run ONE embedded Seclayer aggressive probe, selected by `probe`, against ONE in-scope root URL: ssti (server-side template injection), nosql (NoSQL operator injection), xxe (XML external entity — out-of-band receipt via an in-process loopback collaborator for loopback targets, differential otherwise), crlf (CRLF / response-splitting injection), host_header (host-header injection / password-reset poisoning). Each returns a finding only when it proves the technique. " +
     "Include attackId, category, targetProfile, and a one-sentence hypothesis.",
   parameters: {
     type: "object",

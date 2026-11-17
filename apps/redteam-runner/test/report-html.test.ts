@@ -27,14 +27,12 @@ const meta: ReportMeta = {
   startedAt: "2026-01-01T00:00:00.000Z",
   generatedAt: "2026-01-01T01:00:00.000Z",
   findings: { critical: 1, high: 2, medium: 0, low: 1, info: 3 },
-  battery: { total: 418, confirmed: 1, executedClean: 3, killed: 20, blocked: 0, na: 380, pending: 12 },
-};
+  battery: { total: 418, confirmed: 1, executedClean: 3, killed: 20, blocked: 0, na: 380, pending: 12 } };
 
 const html = renderReportHtml({
   title: "Penetration Test Report",
   meta,
-  markdown: "## Summary\n\n- **[high] SQL injection** in the `id` param.\n- [info] informational note.\n\n`<script>alert(1)</script>` stays escaped.",
-});
+  markdown: "## Summary\n\n- **[high] SQL injection** in the `id` param.\n- [info] informational note.\n\n`<script>alert(1)</script>` stays escaped." });
 
 describe("report HTML — self-contained and safe", () => {
   it("is a full document", () => {
@@ -86,8 +84,7 @@ describe("report HTML — shape without a strip", () => {
     const bare = renderReportHtml({
       title: "Attestation",
       meta: { ...meta, findings: { critical: 0, high: 0, medium: 0, low: 0, info: 0 }, battery: undefined },
-      markdown: "# x",
-    });
+      markdown: "# x" });
     assert.match(bare, />0</);
   });
 });
@@ -99,10 +96,8 @@ describe("report HTML — hostile metadata", () => {
       meta: {
         ...meta,
         client: '"><img src=x onerror=alert(1)>',
-        objective: "<b>bold</b> objective",
-      },
-      markdown: "# x",
-    });
+        objective: "<b>bold</b> objective" },
+      markdown: "# x" });
     assert.ok(!hostile.includes('"><img src=x onerror='), "attribute injection neutralised");
     assert.ok(!hostile.includes("<b>bold</b>"), "objective HTML escaped");
   });

@@ -32,8 +32,7 @@ const FIXTURE_RECORD: VerifiedEngagementRecord = {
   outOfScope: ['staging.example.com'],
   accessLevel: 'verified-domain',
   roe: 'Mode: RED. Scope: app.example.com, example.com.',
-  sessionsAllowed: true,
-}
+  sessionsAllowed: true }
 
 function fixtureCtx(fleet: boolean): PromptContext {
   return {
@@ -42,8 +41,7 @@ function fixtureCtx(fleet: boolean): PromptContext {
     target: 'example.com',
     scopeHosts: ['app.example.com', 'example.com'],
     roe: { scope: ['app.example.com', 'example.com'], outOfScope: ['staging.example.com'] },
-    ...(fleet ? { fleet: { record: FIXTURE_RECORD } } : {}),
-  }
+    ...(fleet ? { fleet: { record: FIXTURE_RECORD } } : {}) }
 }
 
 const ALL_SKILLS = [
@@ -55,8 +53,7 @@ const ALL_SKILLS = [
   'html-report-design',
   'redteam-ops-coordination',
   'webapp-exploit',
-  'webapp-scan',
-]
+  'webapp-scan' ]
 
 describe('fleet prompt assembly', () => {
   it('assembles the coordinator prompt in pack order with the MORPHEUS soul', () => {
@@ -94,27 +91,22 @@ describe('fleet prompt assembly', () => {
         prompt: coordinatorPrompt(fixtureCtx(true)),
         soul: '# MORPHEUS — Coordinator',
         bodies: ['redteam-ops-coordination'],
-        foreignBody: 'webapp-exploit',
-      },
+        foreignBody: 'webapp-exploit' },
       {
         prompt: reconPrompt(fixtureCtx(true)),
         soul: '# The OPERATOR — Recon / Research',
         bodies: ['deep-research-osint', 'webapp-scan'],
-        foreignBody: 'webapp-exploit',
-      },
+        foreignBody: 'webapp-exploit' },
       {
         prompt: exploiterPrompt(fixtureCtx(true)),
         soul: '# NEO — Exploiter',
         bodies: ['webapp-exploit', 'browser-action-execution'],
-        foreignBody: 'deep-research-osint',
-      },
+        foreignBody: 'deep-research-osint' },
       {
         prompt: reporterPrompt(fixtureCtx(true)),
         soul: '# The ARCHITECT — Evaluator / Reporter',
         bodies: ['findings-grading-reporting', 'html-report-design'],
-        foreignBody: 'webapp-scan',
-      },
-    ]
+        foreignBody: 'webapp-scan' } ]
     for (const c of cases) {
       assert.ok(c.prompt.includes(c.soul), `soul present: ${c.soul}`)
       for (const body of c.bodies) {
@@ -211,9 +203,7 @@ describe('verifiedRecordFor — the authorize record mapping', () => {
         client: 'Example Owner LLC',
         operatorName: 'Named Operator',
         roe: { scope: ['app.example.com', 'example.com'], outOfScope: ['staging.example.com'] },
-        ...(over.input ?? {}),
-      },
-    } as Ctx
+        ...(over.input ?? {}) } } as Ctx
   }
 
   it('maps the stamped authorize output onto the fleet record', () => {
@@ -236,8 +226,7 @@ describe('verifiedRecordFor — the authorize record mapping', () => {
       fakeCtx({
         proof: 'Credentialed access attested',
         verifiedAt: '2026-11-01T05:00:00.000Z',
-        input: { accessLevel: 'credentialed', sessionsAllowed: false },
-      }),
+        input: { accessLevel: 'credentialed', sessionsAllowed: false } }),
     )
     assert.equal(record.accessLevel, 'credentialed')
     assert.equal(record.sessionsAllowed, false)

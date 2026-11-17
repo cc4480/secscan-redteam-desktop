@@ -12,8 +12,7 @@ import {
   MAX_PARALLEL_CALLS,
   executeToolGroup,
   partitionToolCalls,
-  type ToolCallGroup,
-} from "../src/dispatch/parallel-batch.js";
+  type ToolCallGroup } from "../src/dispatch/parallel-batch.js";
 import { type Ctx } from "../src/context.js";
 import { type ActorRole, type EngagementPhase } from "../src/types.js";
 import { type ToolCallRequest } from "@secscan/redteam-llm-router";
@@ -52,24 +51,21 @@ describe("partitionToolCalls", () => {
     assert.deepEqual(shapes(groups), [
       { parallel: true, n: 2 },
       { parallel: false, n: 1 },
-      { parallel: true, n: 2 },
-    ]);
+      { parallel: true, n: 2 } ]);
   });
 
   it("an exact duplicate inside one response runs sequentially after its twin", () => {
     const groups = partitionToolCalls([probe("http://h/a"), probe("http://h/a")], hostOf, true);
     assert.deepEqual(shapes(groups), [
       { parallel: false, n: 1 },
-      { parallel: false, n: 1 },
-    ]);
+      { parallel: false, n: 1 } ]);
   });
 
   it("an ineligible phase gets one sequential group per call, exactly the old behavior", () => {
     const groups = partitionToolCalls([probe("http://h/a"), probe("http://h/b")], hostOf, false);
     assert.deepEqual(shapes(groups), [
       { parallel: false, n: 1 },
-      { parallel: false, n: 1 },
-    ]);
+      { parallel: false, n: 1 } ]);
   });
 
   it("caps a parallel group at MAX_PARALLEL_CALLS", () => {
@@ -77,8 +73,7 @@ describe("partitionToolCalls", () => {
     const groups = partitionToolCalls(calls, hostOf, true);
     assert.deepEqual(shapes(groups), [
       { parallel: true, n: MAX_PARALLEL_CALLS },
-      { parallel: false, n: 1 },
-    ]);
+      { parallel: false, n: 1 } ]);
   });
 
   it("a duplicate of a call in an earlier size-flushed group still runs sequentially", () => {
@@ -86,8 +81,7 @@ describe("partitionToolCalls", () => {
     const groups = partitionToolCalls(calls, hostOf, true);
     assert.deepEqual(shapes(groups), [
       { parallel: true, n: MAX_PARALLEL_CALLS },
-      { parallel: false, n: 1 },
-    ]);
+      { parallel: false, n: 1 } ]);
     assert.equal(groups[1]?.calls[0]?.arguments["url"], "http://h/a");
   });
 });
@@ -105,8 +99,7 @@ describe("executeToolGroup", () => {
     };
     const group: ToolCallGroup = {
       parallel: true,
-      calls: [probe("http://h/a"), probe("http://h/b"), probe("http://h/c")],
-    };
+      calls: [probe("http://h/a"), probe("http://h/b"), probe("http://h/c")] };
     const t0 = Date.now();
     const settled = await executeToolGroup(CTX, ROLE, PHASE, group, stub);
     const elapsed = Date.now() - t0;
@@ -145,8 +138,7 @@ describe("executeToolGroup", () => {
     };
     const group: ToolCallGroup = {
       parallel: true,
-      calls: [probe("http://h/a"), probe("http://h/bad"), probe("http://h/c")],
-    };
+      calls: [probe("http://h/a"), probe("http://h/bad"), probe("http://h/c")] };
     const settled = await executeToolGroup(CTX, ROLE, PHASE, group, stub);
     assert.equal(settled[0]?.d?.result, "ok");
     assert.equal(settled[1]?.error?.message, "boom");

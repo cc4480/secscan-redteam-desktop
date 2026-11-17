@@ -14,8 +14,7 @@ import {
   loadRegistry,
   readSanitizerNotes,
   registerCase,
-  type FoundryCase,
-} from '../src/foundry/store.js'
+  type FoundryCase } from '../src/foundry/store.js'
 import { classifyFinding } from '../src/foundry/classify.js'
 
 function tmpStore(): string {
@@ -32,8 +31,7 @@ function sampleCase(engagementId: string): FoundryCase {
     methodMix: [],
     payloadClass: 'tautology-quote',
     proofType: 'cell-proven',
-    techFingerprints: ['wordpress'],
-  }
+    techFingerprints: ['wordpress'] }
   const contentHash = caseContentHash(pattern)
   return {
     id: caseIdFor(engagementId, contentHash),
@@ -53,8 +51,7 @@ function sampleCase(engagementId: string): FoundryCase {
     sourceEngagementId: engagementId,
     lineage: null,
     createdAt: '2026-10-25T00:00:00.000Z',
-    contentHash,
-  }
+    contentHash }
 }
 
 describe('foundry store', () => {

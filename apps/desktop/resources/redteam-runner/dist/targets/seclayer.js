@@ -1,5 +1,5 @@
 /**
- * SecLayer target profile — the MCP/API layer (https://secscan.us/api/mcp).
+ * SecLayer target profile — the MCP/API layer (https://target.invalid/api/mcp).
  *
  * EXHAUSTIVE battery (v0.7.0): surface × technique. Surfaces: MCP
  * initialize/handshake, capability negotiation, tools/list, tools/call for
@@ -23,7 +23,7 @@ const SECLAYER_BATTERY = [
 export const SECLAYER_PROFILE = {
     id: "seclayer",
     name: "SecLayer — MCP/API layer",
-    baseUrl: "https://secscan.us/api/mcp",
+    baseUrl: "https://target.invalid/api",
     kind: "mcp-api",
     authModel: "API-key auth per account; Streamable HTTP, MCP 2025-03-26, server secscan v1.1.0. Tools: seclayer_scan, seclayer_list_scans, seclayer_get_report.",
     scopeNotes: "In-scope: /api/mcp JSON-RPC surface. Same host as the webapp — path-scoped, not host-scoped. WAF quirk: Python urllib gets 403; curl with a normal UA works.",

@@ -33,6 +33,12 @@ export const ALWAYS_ALLOWED_TOOLS = new Set([
     'reverify',
     'engagement_status',
     'engagement_report',
+    // Reading back an output the runner itself spilled. This never touches the
+    // target: it is the second half of a tool result the seat already received, and
+    // without it a seat is blind to everything past the spill cap. Observed live: a
+    // registry query spilled at WIN-01 and the read that would have consumed it was
+    // refused as "outside step WIN-01".
+    'read_spill',
 ]);
 /**
  * Build the refusal reason for a tool outside the step.

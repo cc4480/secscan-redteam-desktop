@@ -36,8 +36,7 @@ function live(over: Partial<LiveFinding> = {}): LiveFinding {
     attackId: 'T1190',
     evidence: 'recorded evidence',
     producer: 'exploiter',
-    ...over,
-  }
+    ...over }
 }
 
 function makeCtx(liveFindings: LiveFinding[], script: Script) {
@@ -68,8 +67,7 @@ function makeCtx(liveFindings: LiveFinding[], script: Script) {
     liveFindings,
     killedLive: [],
     peerKilledLive: [],
-    peerDeferredLive: [],
-  } as unknown as Ctx
+    peerDeferredLive: [] } as unknown as Ctx
   const log = (): EngagementEvent[] =>
     readFileSync(join(dir, 'events.jsonl'), 'utf8')
       .trim()
@@ -89,8 +87,7 @@ function reportFinding(over: Partial<Finding> = {}): Finding {
     fix: 'fix it',
     retest: 're-test it',
     status: 'confirmed',
-    ...over,
-  }
+    ...over }
 }
 
 describe('selectChecker — producer and checker are never the same seat', () => {
@@ -111,8 +108,7 @@ describe('parsePeerVerdict — off-shape answers are not verdicts', () => {
     assert.deepEqual(parsePeerVerdict('{"verdict":"upheld","rationale":"evidence proves it"}'), {
       verdict: 'upheld',
       severity: undefined,
-      rationale: 'evidence proves it',
-    })
+      rationale: 'evidence proves it' })
     assert.equal(parsePeerVerdict('```json\n{"verdict":"killed","rationale":"benign"}\n```')?.verdict, 'killed')
   })
 
@@ -140,14 +136,12 @@ describe('the reviewer pass — outcomes change what reaches the reporter', () =
       live({ title: 'SQL injection in login', severity: 'high' }),
       live({ title: 'Missing TLS on admin panel', severity: 'critical' }),
       live({ title: 'Reflected XSS in search', severity: 'medium' }),
-      live({ title: 'Weak session cookie flags', severity: 'low', producer: 'architect' }),
-    ]
+      live({ title: 'Weak session cookie flags', severity: 'low', producer: 'architect' }) ]
     const { ctx, seenRoles, log } = makeCtx(findings, [
       ['SQL injection in login', { verdict: 'upheld', rationale: 'error-based proof in evidence' }],
       ['Missing TLS on admin panel', { verdict: 'downgraded', severity: 'medium', rationale: 'login is behind SSO; impact overstated' }],
       ['Reflected XSS in search', { verdict: 'killed', rationale: 'marker reflected inside an escaped attribute — benign' }],
-      ['Weak session cookie flags', { verdict: 'needs-evidence', rationale: 'no session fixation demonstrated' }],
-    ])
+      ['Weak session cookie flags', { verdict: 'needs-evidence', rationale: 'no session fixation demonstrated' }] ])
     await peerReviewPhase(ctx)
 
     // Every challenge went to a seat other than the finding's producer:
@@ -198,8 +192,7 @@ describe('the reviewer pass — outcomes change what reaches the reporter', () =
       reportFinding({ id: 'F-2', title: 'Missing TLS on admin panel', severity: 'critical' }),
       reportFinding({ id: 'F-3', title: 'Reflected XSS in search', severity: 'medium' }),
       reportFinding({ id: 'F-4', title: 'Weak session cookie flags', severity: 'low' }),
-      reportFinding({ id: 'F-5', title: 'Reporter-only invention', severity: 'low' }),
-    ]
+      reportFinding({ id: 'F-5', title: 'Reporter-only invention', severity: 'low' }) ]
     applyPeerVerdicts(parsed, { live: ctx.liveFindings, killed: ctx.peerKilledLive, deferred: ctx.peerDeferredLive })
     assert.equal(parsed[0]!.producer, 'exploiter')
     assert.equal(parsed[0]!.peerReview?.verdict, 'upheld')
@@ -248,8 +241,7 @@ describe('the reviewer pass — outcomes change what reaches the reporter', () =
       [
         ['Finding one', new Error('provider safety rejection (simulated)')],
         ['Finding two', 'I reviewed it and it seems fine, trust me'],
-        ['Finding three', { verdict: 'upheld', rationale: 'proof is in the record' }],
-      ],
+        ['Finding three', { verdict: 'upheld', rationale: 'proof is in the record' }] ],
     )
     await peerReviewPhase(ctx)
     assert.equal(ctx.liveFindings.length, 3)

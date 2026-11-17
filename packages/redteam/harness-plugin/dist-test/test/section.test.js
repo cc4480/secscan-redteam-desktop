@@ -27,7 +27,17 @@ const SMALL_LOCAL_CONTEXT = {
         },
     },
 };
-/** Assembly context for a roomy local window. */
+/** Assembly context for a mid-sized local window (lean tier). */
+const MID_LOCAL_CONTEXT = {
+    agent: {
+        options: { provider: 'local' },
+        session: {
+            requestHeader: () => ({ config: { provider: 'local' } }),
+            requestContext: () => ({ provider: 'local', model: 'qwen', contextWindow: 16_384 }),
+        },
+    },
+};
+/** Assembly context for a roomy local window (full tier). */
 const ROOMY_LOCAL_CONTEXT = {
     agent: {
         options: { provider: 'local' },
@@ -38,15 +48,7 @@ const ROOMY_LOCAL_CONTEXT = {
     },
 };
 /** Assembly context whose routed request names the local provider. */
-const LOCAL_CONTEXT = {
-    agent: {
-        options: { provider: 'local' },
-        session: {
-            requestHeader: () => ({ config: { provider: 'local' } }),
-            requestContext: () => ({ provider: 'local', model: 'qwen', contextWindow: 32_768 }),
-        },
-    },
-};
+const LOCAL_CONTEXT = ROOMY_LOCAL_CONTEXT;
 function captureApply(context = REMOTE_CONTEXT) {
     const registered = [];
     const hooks = [];
@@ -199,15 +201,17 @@ describe('apply', () => {
             assert.ok(!raw.includes(fragment), `deleted executionPrompt fragment survived: ${fragment}`);
         }
     });
-    it('replaces the deployment prompt with the compact profile on the local route', () => {
-        const local = captureApply(LOCAL_CONTEXT);
+    it('replaces the deployment prompt with the local profile on the local route', () => {
+        const lean = captureApply(MID_LOCAL_CONTEXT);
+        const full = captureApply(LOCAL_CONTEXT);
         const remote = captureApply();
-        // The local doctrine is the lean brief, far smaller than the deployment prompt.
-        assert.ok(local.sections[0].text.length > 0);
-        assert.ok(local.sections[0].text.length < remote.sections[0].text.length / 2);
-        assert.match(local.sections[0].text, /fleet opening \(lean\)/);
-        // The profile carries its own soul, so the deployment SOUL is suppressed.
-        assert.equal(local.sections[1].text, '');
+        assert.ok(lean.sections[0].text.length > 0);
+        assert.ok(lean.sections[0].text.length < remote.sections[0].text.length / 2);
+        assert.match(lean.sections[0].text, /fleet opening \(lean\)/);
+        assert.ok(full.sections[0].text.length > lean.sections[0].text.length);
+        // Local profiles carry their own operating content, so the deployment SOUL is suppressed.
+        assert.equal(lean.sections[1].text, '');
+        assert.equal(full.sections[1].text, '');
         // Every other route is untouched.
         assert.equal(remote.sections[1].text, defaultSoulText());
     });
@@ -219,7 +223,7 @@ describe('apply', () => {
         const priced = Math.ceil(text.length / 4);
         assert.ok(priced < 16_384, `local prompt priced at ${priced} tokens must stay under half the window`);
     });
-    it('defers the indexed Layer-1 tool schemas from the local assembly only', async () => {
+    it('defers the indexed Layer-1 tool schemas from the lean local assembly only', async () => {
         const { listeners } = captureApply();
         const assemble = listeners.get('system-prompt/assemble');
         assert.ok(assemble !== undefined, 'the assemble listener is registered');
@@ -230,8 +234,10 @@ describe('apply', () => {
             { name: 'mcp__secscan__scan_url' },
             { name: 'bash' },
         ];
-        const local = await assemble(withTools(schemas), LOCAL_CONTEXT, async () => withTools(schemas));
-        assert.deepEqual(local.tools.map(tool => tool.name), ['mcp__redteam__nmap_exec', 'mcp__secscan__scan_url', 'bash']);
+        const mid = await assemble(withTools(schemas), MID_LOCAL_CONTEXT, async () => withTools(schemas));
+        assert.deepEqual(mid.tools.map(tool => tool.name), ['mcp__redteam__nmap_exec', 'mcp__secscan__scan_url', 'bash']);
+        const full = await assemble(withTools(schemas), ROOMY_LOCAL_CONTEXT, async () => withTools(schemas));
+        assert.deepEqual(full.tools.map(tool => tool.name), schemas.map(tool => tool.name));
         const remote = await assemble(withTools(schemas), REMOTE_CONTEXT, async () => withTools(schemas));
         assert.deepEqual(remote.tools.map(tool => tool.name), schemas.map(tool => tool.name));
     });
@@ -241,35 +247,32 @@ describe('apply', () => {
         assert.equal(isDeferredTool('mcp__redteam__doctor_jobs', new Set(['doctor'])), false);
         assert.equal(isDeferredTool('bash', new Set(['doctor'])), false);
     });
-    it('gives a small local window the tight brief, and a roomy one the lean brief', () => {
+    it('selects tight, lean, and full profiles by context window', () => {
         const small = captureApply(SMALL_LOCAL_CONTEXT);
+        const mid = captureApply(MID_LOCAL_CONTEXT);
         const roomy = captureApply(ROOMY_LOCAL_CONTEXT);
         const tightChars = small.sections[0].text.length;
-        const leanChars = roomy.sections[0].text.length;
+        const leanChars = mid.sections[0].text.length;
+        const fullChars = roomy.sections[0].text.length;
         assert.match(small.sections[0].text, /compact operating brief/);
         assert.ok(tightChars < leanChars, `tight brief (${tightChars}) must be smaller than the lean brief (${leanChars})`);
+        assert.ok(leanChars < fullChars, `lean brief (${leanChars}) must be smaller than the full profile (${fullChars})`);
         // Under 2,000 tokens at the token meter's four-characters-per-token price.
         assert.ok(Math.ceil(tightChars / 4) <= 2_000, 'tight brief stays under the 2,000-token ceiling');
         // The hard rule survives the compression: scans are engagements, never service scans.
         assert.match(small.sections[0].text, /mcp__redteam__engagement_launch/);
         assert.match(small.sections[0].text, /never a SecScan or Seclayer\s+service scan/);
-        // Roomier local windows open on the lean brief, not the full profile (F2).
-        assert.match(roomy.sections[0].text, /fleet opening \(lean\)/);
+        // Mid-sized local windows open on the lean brief.
+        assert.match(mid.sections[0].text, /^# SecScan Red Team — fleet opening \(lean\)/);
         assert.ok(Math.ceil(leanChars / 4) <= 2_000, `lean brief priced at ${Math.ceil(leanChars / 4)} tokens must stay under the 2,000-token ceiling`);
-    });
-    it('a fresh local session opens on the lean brief', () => {
-        const roomy = captureApply(ROOMY_LOCAL_CONTEXT);
-        // The first fleet section IS the lean opening, priced in the low thousands
-        // of tokens at the meter's four-characters-per-token price — the fix for
-        // the five-figure first-turn prefill on CPU-served local models.
-        assert.match(roomy.sections[0].text, /^# SecScan Red Team — fleet opening \(lean\)/);
-        const priced = Math.ceil(roomy.sections[0].text.length / 4);
-        assert.ok(priced <= 2_000, `lean opening priced at ${priced} tokens`);
-        // The lean brief carries its own stance, so the deployment SOUL stays suppressed.
-        assert.equal(roomy.sections[1].text, '');
-        // The hard rules ride in the lean text: engagements, never service scans.
-        assert.match(roomy.sections[0].text, /mcp__redteam__engagement_launch/);
-        assert.match(roomy.sections[0].text, /no MCP servers/);
+        assert.equal(mid.sections[1].text, '');
+        assert.match(mid.sections[0].text, /mcp__redteam__engagement_launch/);
+        assert.match(mid.sections[0].text, /Only the in-app runner and AlterEgo bridge MCP hops are used internally/);
+        assert.doesNotMatch(mid.sections[0].text, /no MCP servers/);
+        // Roomy local windows get the full assembled profile.
+        assert.doesNotMatch(roomy.sections[0].text, /^# SecScan Red Team — fleet opening \(lean\)/);
+        assert.doesNotMatch(roomy.sections[0].text, /compact operating brief/);
+        assert.ok(fullChars > 4_000, `full profile (${fullChars} chars) should be materially larger than lean`);
     });
     it('keeps only the engagement tools on a window too small for a tool surface', async () => {
         const { listeners } = captureApply();
@@ -296,15 +299,7 @@ describe('apply', () => {
         ]);
         // A roomy local window keeps everything except the deferred Layer-1 set.
         const roomy = await assemble(withTools(schemas), ROOMY_LOCAL_CONTEXT, async () => withTools(schemas));
-        assert.deepEqual(roomy.tools.map(tool => tool.name), [
-            'mcp__redteam__engagement_launch',
-            'mcp__redteam__engagement_status',
-            'mcp__redteam__engagement_report',
-            'read',
-            'bash',
-            'mcp__secscan__scan_url',
-            'write',
-        ]);
+        assert.deepEqual(roomy.tools.map(tool => tool.name), schemas.map(tool => tool.name));
     });
     it('no longer teaches the service scan as the recon baseline', () => {
         const { sections } = captureApply();

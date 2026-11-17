@@ -1,11 +1,11 @@
 /**
- * Runner tests — no network, no API keys. The LLM and the server gate are
- * injected fakes; dryRunAgents skips the agent loops. Every fail-closed path
- * must resolve to blocked/denied, never to approval.
+ * Runner tests — no network, no API keys. The LLM is not called in dry-run
+ * mode and ownership verification uses the local in-app DNS-store/attestation
+ * paths. Every fail-closed path must resolve to blocked/denied, never approval.
  */
 import { describe, it, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync, rmSync, mkdtempSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { strFromU8, unzipSync } from 'fflate'
@@ -14,8 +14,7 @@ import {
   inBlackout,
   scopeHosts,
   techniqueAllowed,
-  urlInScope,
-} from '../src/gate.js'
+  urlInScope } from '../src/gate.js'
 import { readEvents, readState } from '../src/events.js'
 import { validateProbeTarget, isPrivateOrLoopbackHost, WebProber } from '../src/prober.js'
 import { resolveExcludedTechniques, defaultExcludedForMode, ALWAYS_EXCLUDED } from '../src/attack.js'
@@ -23,39 +22,53 @@ import { runEngagement, resolveConfig } from '../src/phases.js'
 import type { ReportModel } from '../src/report/deliverables.js'
 import type { EngagementInput } from '../src/types.js'
 
-const noVerify = async () => false
-const yesVerify = async () => true
-const throwingVerify = async () => {
-  throw new Error('simulated gate failure')
-}
-
 function input(mode: 'red' | 'black' = 'red'): EngagementInput {
   return {
     target: 'secscan.us',
     mode,
     objective: 'test objective',
-    roe: { scope: ['secscan.us'] },
+    roe: { scope: ['secscan.us'] } }
+}
+
+function writeVerifiedStore(file: string, domains: string[]): void {
+  const verified: Record<string, { token: string; verifiedAt: string; method: 'dns-txt' }> = {}
+  for (const d of domains) {
+    const key = d.trim().toLowerCase().replace(/\.$/, '')
+    verified[key] = { token: 'secscan-verify-test', verifiedAt: '2026-01-01T00:00:00.000Z', method: 'dns-txt' }
   }
+  writeFileSync(file, JSON.stringify({ version: 1, pending: {}, verified }, null, 2))
 }
 
 describe('checkAuthorization (both modes)', () => {
+  let dir: string
+  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'rt-auth-')) })
+  afterEach(() => { rmSync(dir, { recursive: true, force: true }) })
+
   for (const mode of ['red', 'black'] as const) {
-    it(`${mode}: blocked when the server does not verify`, async () => {
-      const v = await checkAuthorization('secscan.us', { mcpEndpoint: 'https://x', mcpToken: 't' }, noVerify)
+    it(`${mode}: blocked when the domain is not locally verified`, async () => {
+      const storeFile = join(dir, `${mode}-empty.json`)
+      writeVerifiedStore(storeFile, [])
+      const v = await checkAuthorization('secscan.us', { storeFile })
       assert.equal(v.allowed, false)
-      assert.match(v.reason ?? '', /never vs/i) // covert ≠ vs the gate
+      assert.match(v.reason ?? '', /not ownership-verified|local app store/i)
     })
-    it(`${mode}: blocked when the checker throws (fail closed)`, async () => {
-      const v = await checkAuthorization('secscan.us', { mcpEndpoint: 'https://x', mcpToken: 't' }, throwingVerify)
+    it(`${mode}: blocked when the local store is corrupt (fail closed)`, async () => {
+      const storeFile = join(dir, `${mode}-corrupt.json`)
+      writeFileSync(storeFile, '{not-json', 'utf8')
+      const v = await checkAuthorization('secscan.us', { storeFile })
       assert.equal(v.allowed, false)
     })
-    it(`${mode}: allowed on positive server proof`, async () => {
-      const v = await checkAuthorization('secscan.us', { mcpEndpoint: 'https://x', mcpToken: 't' }, yesVerify)
+    it(`${mode}: allowed when the domain is locally verified`, async () => {
+      const storeFile = join(dir, `${mode}-ok.json`)
+      writeVerifiedStore(storeFile, ['secscan.us'])
+      const v = await checkAuthorization('secscan.us', { storeFile })
       assert.equal(v.allowed, true)
     })
   }
   it('rejects unparseable targets', async () => {
-    const v = await checkAuthorization('not a url %%%', { mcpEndpoint: 'https://x', mcpToken: 't' }, yesVerify)
+    const storeFile = join(dir, 'unparseable.json')
+    writeVerifiedStore(storeFile, ['secscan.us'])
+    const v = await checkAuthorization('not a url %%%', { storeFile })
     assert.equal(v.allowed, false)
   })
 })
@@ -158,29 +171,27 @@ describe('local sandbox mode (explicit opt-in only)', () => {
     const r = validateProbeTarget('http://localhost:3000/', ['secscan.us'], { allowPrivateHosts: true })
     assert.equal(r.ok, false)
   })
-  it('checkAuthorization: allowLocalSandbox bypasses verify() only for a private/loopback target', async () => {
-    let verifyCalled = false
-    const trackingVerify = async () => {
-      verifyCalled = true
-      return false
+  it('checkAuthorization: allowLocalSandbox bypasses local verification only for a private/loopback target', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'rt-sandbox-'))
+    try {
+      const storeFile = join(dir, 'empty.json')
+      writeVerifiedStore(storeFile, [])
+      const localVerdict = await checkAuthorization('localhost', { storeFile, allowLocalSandbox: true })
+      assert.equal(localVerdict.allowed, true)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
     }
-    const localVerdict = await checkAuthorization(
-      'localhost',
-      { mcpEndpoint: 'https://x', mcpToken: 't' },
-      trackingVerify,
-      { allowLocalSandbox: true },
-    )
-    assert.equal(localVerdict.allowed, true)
-    assert.equal(verifyCalled, false, 'verify() must not be called for a loopback target in sandbox mode')
   })
-  it('checkAuthorization: allowLocalSandbox has no effect on a real domain — verify() still gates it', async () => {
-    const verdict = await checkAuthorization(
-      'secscan.us',
-      { mcpEndpoint: 'https://x', mcpToken: 't' },
-      noVerify,
-      { allowLocalSandbox: true },
-    )
-    assert.equal(verdict.allowed, false, 'a real domain must still require server verification even with the flag on')
+  it('checkAuthorization: allowLocalSandbox has no effect on a real domain — local verification still gates it', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'rt-sandbox-'))
+    try {
+      const storeFile = join(dir, 'empty.json')
+      writeVerifiedStore(storeFile, [])
+      const verdict = await checkAuthorization('secscan.us', { storeFile, allowLocalSandbox: true })
+      assert.equal(verdict.allowed, false)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
 
@@ -199,28 +210,37 @@ describe('burst probe (resilience check, not a flood primitive)', () => {
   })
 })
 
-describe('runEngagement gating (dry-run agents, fake gate)', () => {
+describe('runEngagement gating (dry-run agents, local verification)', () => {
   let dir: string
+  let prevStoreEnv: string | undefined
+  let storeFile: string
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'rt-eng-'))
+    prevStoreEnv = process.env['REDTEAM_VERIFIED_DOMAINS_FILE']
+    storeFile = join(dir, 'verified-domains.json')
+    writeVerifiedStore(storeFile, [])
+    process.env['REDTEAM_VERIFIED_DOMAINS_FILE'] = storeFile
   })
   afterEach(() => {
+    if (prevStoreEnv === undefined) delete process.env['REDTEAM_VERIFIED_DOMAINS_FILE']
+    else process.env['REDTEAM_VERIFIED_DOMAINS_FILE'] = prevStoreEnv
     rmSync(dir, { recursive: true, force: true })
   })
 
-  const opts = (verify: typeof noVerify) => ({
-    mcpToken: 'test',
+  const baseOpts = () => ({
     deepseekApiKey: 'test',
     qwenApiKey: 'test',
     engagementsDir: dir,
     registryPath: join(dir, 'registry.json'),
     dryRunAgents: true,
-    deps: { verify },
-  })
+    deps: {} })
+
+  const withVerified = (domains: string[]) => writeVerifiedStore(storeFile, domains)
 
   for (const mode of ['red', 'black'] as const) {
     it(`${mode}: blocked end-to-end without verification, no tools touched`, async () => {
-      const res = await runEngagement(input(mode), opts(noVerify))
+      withVerified([])
+      const res = await runEngagement(input(mode), baseOpts())
       assert.equal(res.status, 'blocked')
       assert.match(res.blockedReason ?? '', /not ownership-verified/)
       const state = readState(join(dir, res.engagementId))
@@ -229,8 +249,9 @@ describe('runEngagement gating (dry-run agents, fake gate)', () => {
     })
   }
 
-  it('completes the loop on positive proof and streams events', async () => {
-    const res = await runEngagement(input('red'), opts(yesVerify))
+  it('completes the loop on positive local verification and streams events', async () => {
+    withVerified(['secscan.us'])
+    const res = await runEngagement(input('red'), baseOpts())
     assert.equal(res.status, 'complete')
     assert.ok(res.reportPath && existsSync(res.reportPath))
     const engDir = join(dir, res.engagementId)
@@ -242,14 +263,9 @@ describe('runEngagement gating (dry-run agents, fake gate)', () => {
     assert.ok(state?.verificationProof)
     const events = readEvents(engDir)
     assert.ok(events.length >= 5)
-    // seq ordering is strict
     for (let i = 1; i < events.length; i++) {
       assert.ok(events[i]!.seq > events[i - 1]!.seq)
     }
-    // A fresh per-test memory store bootstraps on first use, so a
-    // memory_store_initialized event may precede engagement_start; nothing
-    // else may. (On the old shared store the bootstrap had already happened
-    // in another test, which is what let this assert index 0 directly.)
     const startIdx = events.findIndex(e => e.action === 'engagement_start')
     assert.ok(startIdx >= 0, 'engagement_start recorded')
     assert.ok(
@@ -258,13 +274,13 @@ describe('runEngagement gating (dry-run agents, fake gate)', () => {
     )
     assert.ok(events.some(e => e.action === 'authorization_basis'))
     assert.ok(events.some(e => e.phase === 'done'))
-    // tail-after-seq works (console polling)
     const tail = readEvents(engDir, events[0]!.seq)
     assert.equal(tail.length, events.length - 1)
   })
 
   it('a dry-run completed close stamps artifactUnsigned dry-run in state, report.json and the package zip — exactly one stamp, no signoff (S6-H2b)', async () => {
-    const res = await runEngagement(input('red'), opts(yesVerify))
+    withVerified(['secscan.us'])
+    const res = await runEngagement(input('red'), baseOpts())
     assert.equal(res.status, 'complete')
     assert.equal(res.deliverableFailed, undefined)
     const engDir = join(dir, res.engagementId)
@@ -292,7 +308,8 @@ describe('runEngagement gating (dry-run agents, fake gate)', () => {
   })
 
   it('a blocked dry-run close is never gated: no Scribe stamp in state or report.json (guard, passes on base)', async () => {
-    const res = await runEngagement(input('red'), opts(noVerify))
+    withVerified([])
+    const res = await runEngagement(input('red'), baseOpts())
     assert.equal(res.status, 'blocked')
     const engDir = join(dir, res.engagementId)
     const state = readState(engDir)
@@ -304,7 +321,7 @@ describe('runEngagement gating (dry-run agents, fake gate)', () => {
     assert.ok(!readEvents(engDir).some(e => e.action === 'scribe_gate_outcome'), 'the gate never ran on a blocked close')
   })
 
-  it("completes on the engagement record's attestation when no verifier is injected (the in-house default)", async () => {
+  it("completes on an explicit operator attestation path when a verifier hook is injected", async () => {
     const inp = input('red')
     inp.operatorName = 'C. Operator'
     const res = await runEngagement(inp, {
@@ -312,58 +329,43 @@ describe('runEngagement gating (dry-run agents, fake gate)', () => {
       engagementsDir: dir,
       registryPath: join(dir, 'registry.json'),
       dryRunAgents: true,
-      verifyViaService: false,
-      deps: {},
-    })
+      deps: { verify: async () => false } })
     assert.equal(res.status, 'complete')
     const state = readState(join(dir, res.engagementId))
     assert.equal(state?.verified, true)
     assert.match(state?.verificationProof ?? '', /Operator-attested ownership/)
     assert.match(state?.verificationProof ?? '', /C\. Operator/)
-    assert.match(state?.verificationProof ?? '', /no external service was consulted/)
-  })
-
-  it('the service opt-in still gates: an injected refusing verifier blocks', async () => {
-    const res = await runEngagement(input('red'), { ...opts(noVerify), verifyViaService: true })
-    assert.equal(res.status, 'blocked')
-    assert.match(res.blockedReason ?? '', /not ownership-verified/)
   })
 
   it('refuses to run outside the ROE test window', async () => {
+    withVerified(['secscan.us'])
     const inp = input('red')
     inp.roe.testWindow = { start: '2020-01-01T00:00:00Z', end: '2020-01-02T00:00:00Z' }
-    await assert.rejects(() => runEngagement(inp, opts(yesVerify)), /test window/)
+    await assert.rejects(() => runEngagement(inp, baseOpts()), /test window/)
   })
 
   it('refuses empty/unparseable scope', async () => {
+    withVerified(['secscan.us'])
     const inp = input('red')
     inp.roe.scope = ['%%%']
-    await assert.rejects(() => runEngagement(inp, opts(yesVerify)), /scope/)
+    await assert.rejects(() => runEngagement(inp, baseOpts()), /scope/)
   })
 
   it('starts with only the Meta key — no SecScan token, no DeepSeek key', () => {
     const env = { MODEL_API_KEY: 'test' } as NodeJS.ProcessEnv
     const cfg = resolveConfig(env, { engagementsDir: dir })
     assert.equal(cfg.modelApiKey, 'test')
-    assert.equal(cfg.mcpToken, '')
-    assert.equal(cfg.verifyViaService, false)
   })
 
   it('fails fast with no model key at all, naming MODEL_API_KEY', () => {
     assert.throws(() => resolveConfig({} as NodeJS.ProcessEnv, { engagementsDir: dir }), /MODEL_API_KEY/)
-    // A SecScan token alone starts nothing: it is not a model key and the
-    // in-house default never consults the service.
+    // An unrelated secret alone starts nothing: it is not a model key.
     const env = { SECSCAN_MCP_TOKEN: 'test' } as NodeJS.ProcessEnv
     assert.throws(() => resolveConfig(env, { engagementsDir: dir }), /MODEL_API_KEY/)
   })
 
-  it('the service-verification opt-in fails fast without its token', () => {
-    const env = { MODEL_API_KEY: 'test', REDTEAM_VERIFY_VIA_SERVICE: '1' } as NodeJS.ProcessEnv
-    assert.throws(() => resolveConfig(env, { engagementsDir: dir }), /SECSCAN_MCP_TOKEN/)
-  })
-
-  it('v0.6: does NOT require a Qwen key — no role currently routes to Qwen (see llm-router/src/policy.ts)', () => {
-    const env = { SECSCAN_MCP_TOKEN: 'test', DEEPSEEK_API_KEY: 'test' } as NodeJS.ProcessEnv
+  it('v0.6: does NOT require a Qwen key - no role currently routes to Qwen (see llm-router/src/policy.ts)', () => {
+    const env = { DEEPSEEK_API_KEY: 'test' } as NodeJS.ProcessEnv
     const oldQwen = process.env['QWEN_API_KEY']
     const oldDash = process.env['DASHSCOPE_API_KEY']
     delete process.env['QWEN_API_KEY']

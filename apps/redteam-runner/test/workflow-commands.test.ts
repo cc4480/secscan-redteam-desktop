@@ -8,11 +8,9 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
-  COMMANDS, commandHelp, findCommand, parseCommand, planCommand,
-} from '../src/workflows/commands.js'
+  COMMANDS, commandHelp, findCommand, parseCommand, planCommand } from '../src/workflows/commands.js'
 import {
-  PROTOCOL_PHASES, PROTOCOL_ROLES, PROTOCOL_RULES, REPORT_CONTRACT, protocolViolations,
-} from '../src/workflows/protocol.js'
+  PROTOCOL_PHASES, PROTOCOL_ROLES, PROTOCOL_RULES, REPORT_CONTRACT, protocolViolations } from '../src/workflows/protocol.js'
 
 describe('operator commands', () => {
   it('exposes the full command set', () => {

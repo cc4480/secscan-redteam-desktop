@@ -59,7 +59,6 @@ import {
 import { DesktopUpdateJournal } from './update-journal.ts'
 import { DesktopRedteamRunner, redteamRunnerResources } from './redteam-runner.ts'
 import { provisionArsenalIndex } from './arsenal-provisioning.ts'
-import { DesktopMetasploit, findMetasploitHome } from './redteam-msf.ts'
 import { runRunnerReadiness } from './readiness.ts'
 import { probeMcpServers } from './mcp-server-status.ts'
 import { DesktopUpdatePreparationError } from './update-error.ts'
@@ -465,19 +464,6 @@ async function main(): Promise<void> {
     ipcMain,
     windows: () => BrowserWindow.getAllWindows().map(window => window.webContents),
   })
-  /**
-   * The Metasploit RPC bridge this application starts when the machine already has a
-   * Framework installation.
-   *
-   * msfrpcd is the one external dependency the product cannot ship (Framework is a
-   * large, separately-licensed tree), so the operator-facing promise is narrower than
-   * for the bundled tools: if Framework exists, its daemon is started on loopback with
-   * a password this process generates and stopped with the app - the operator does not
-   * run `msfrpcd` by hand, does not pick a port, and does not paste credentials. If it
-   * does not exist, nothing is started and the readiness report keeps the Metasploit
-   * items blocked; a missing optional daemon never fails the launch.
-   */
-  const metasploit = new DesktopMetasploit(findMetasploitHome(process.env), process.env, {})
   let quitting = false
   let startup: Promise<void> | undefined
   let workspaceRecovery: Promise<void> | undefined
@@ -672,7 +658,7 @@ async function main(): Promise<void> {
   }
   stopForRecovery = async () => {
     // The recovery dialog restarts or exits this process; the console must go with it either way.
-    await Promise.all([backend.close(), engagementRunner.stop(), metasploit.stop()])
+    await Promise.all([backend.close(), engagementRunner.stop()])
   }
 
   const reconcileBackend = (): Promise<void> => {
@@ -1422,8 +1408,6 @@ async function main(): Promise<void> {
       backend.close(),
       // The engagement engine is a child of this process: it must not outlive the window it serves.
       engagementRunner.stop(),
-      // Same for the optional RPC daemon; a stopped console must not leave it holding a port.
-      metasploit.stop(),
     ])
       .catch((error: unknown) => { console.error(error) }).finally(() => { app.quit() })
   })
@@ -1478,12 +1462,6 @@ async function main(): Promise<void> {
   // the profile, and a console that is not listening yet would leave the engagement tools
   // silently absent. A console that cannot start is a startup failure this build shows,
   // not something an operator has to infer from missing tools.
-  //
-  // The optional msfrpcd goes first: the runner child inherits this process's environment at
-  // spawn time, so a daemon started after it would leave the Metasploit items blocked for the
-  // whole engagement. A Framework install that cannot start is logged, never fatal - the
-  // daemon is an enhancement, not a prerequisite for a web/host engagement.
-  await metasploit.start().catch((error: unknown) => { console.error(error) })
   await engagementRunner.start()
   automaticCheck()
   await reconcileBackend().catch(() => undefined)

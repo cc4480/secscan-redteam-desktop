@@ -28,8 +28,7 @@ function draftFinding(claim: string, host = "a.example.test"): UnitDraft {
     engagementId: "eng-1",
     hosts: [host],
     verifiedAt: NOW,
-    verificationProof: "dns-txt attestation",
-  });
+    verificationProof: "dns-txt attestation" });
   return {
     schemaVersion: 1,
     unitId: computeUnitId(scope.scopeKey, "finding", claim, "registry-entry:vuln-0001"),
@@ -44,20 +43,17 @@ function draftFinding(claim: string, host = "a.example.test"): UnitDraft {
       derivedFromUnitIds: [],
       extractor: { name: "registry-projector", version: "1", inputHash: "input-hash" },
       createdAt: NOW,
-      createdBy: "runner",
-    },
+      createdBy: "runner" },
     proof: {
       state: "confirmed",
       receipts: [{ kind: "registry-entry", ref: "evidence/p7.md" }],
-      registryEntryId: "vuln-0001",
-    },
+      registryEntryId: "vuln-0001" },
     corroboration: { independentCount: 0, sourceKeys: ["registry:eng-1"] },
     contentClass: "normal",
     tags: ["bola"],
     attackIds: ["T1190"],
     vulnClass: "IDOR",
-    stack: [],
-  };
+    stack: [] };
 }
 
 function appendFinding(store: ReturnType<typeof openMemoryStore>, claim: string, status: "active" | "proposed" = "active"): MemoryUnit {
@@ -93,8 +89,7 @@ describe("memory schema + scope binding (brief §11)", () => {
     const unit = finalizeUnit(draftFinding("the login at https://a.example.test/login accepts replayed tokens"), NOW);
     const reScoped: MemoryUnit = {
       ...unit,
-      scope: { kind: "target-class", scopeKey: "class-x", hosts: [], targetClass: "saas", stack: [], originEngagementIds: ["eng-1"] },
-    };
+      scope: { kind: "target-class", scopeKey: "class-x", hosts: [], targetClass: "saas", stack: [], originEngagementIds: ["eng-1"] } };
     expectMemoryError("SCOPE_TOO_BROAD", () => assertScopeBinding(reScoped));
   });
 
@@ -103,8 +98,7 @@ describe("memory schema + scope binding (brief §11)", () => {
     const reScoped: MemoryUnit = {
       ...unit,
       kind: "target-fact",
-      scope: { kind: "global-procedural", scopeKey: "global", hosts: [], stack: [], originEngagementIds: ["eng-1"] },
-    };
+      scope: { kind: "global-procedural", scopeKey: "global", hosts: [], stack: [], originEngagementIds: ["eng-1"] } };
     expectMemoryError("SCOPE_TOO_BROAD", () => assertScopeBinding(reScoped));
   });
 
@@ -115,8 +109,7 @@ describe("memory schema + scope binding (brief §11)", () => {
       kind: "target-derived-claim",
       provenance: { ...unit.provenance, sourceClass: "target-content" },
       contentClass: "target-derived-untrusted",
-      scope: { kind: "target-class", scopeKey: "class-x", hosts: [], targetClass: "saas", stack: [], originEngagementIds: ["eng-1"] },
-    };
+      scope: { kind: "target-class", scopeKey: "class-x", hosts: [], targetClass: "saas", stack: [], originEngagementIds: ["eng-1"] } };
     expectMemoryError("SCOPE_TOO_BROAD", () => assertScopeBinding(reScoped));
   });
 
@@ -219,10 +212,7 @@ describe("memory store (brief §11)", () => {
         state: "confirmed" as const,
         receipts: Array.from({ length: 6 }, (_, i) => ({
           kind: "evidence" as const,
-          ref: `evidence/${"y".repeat(300)}-${i}.md`,
-        })),
-      },
-    };
+          ref: `evidence/${"y".repeat(300)}-${i}.md` })) } };
     expectMemoryError("VIEW_BUDGET_EXCEEDED", () => generateUnitViews(fatInput));
   });
 

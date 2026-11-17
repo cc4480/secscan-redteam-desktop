@@ -24,7 +24,7 @@
  * the router's own default. Values are never logged and never included
  * in error strings.
  */
-import type { FleetConfigResolver } from "@secscan/redteam-llm-router";
+import type { FleetConfigResolver } from '@secscan/redteam-llm-router';
 /**
  * Create the store-backed fleet resolver over the app credentials store.
  * Both documents are loaded once here: a malformed document fails loud

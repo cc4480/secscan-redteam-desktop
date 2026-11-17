@@ -21,15 +21,13 @@ import { type Finding } from "../src/types.js";
 export const parityFindings: Finding[] = [
   { id: "F-1", severity: "critical", title: "Cross-tenant object access (BOLA)", attackIds: ["T1190"], evidence: "Object of another tenant returned without an ownership check.", fix: "Enforce per-object authorization on every API read. Verify the requesting identity owns the object before returning it.", retest: "Repeat with the second identity; expect 403.", status: "confirmed", accountableOperator: "Carlos" },
   { id: "F-2", severity: "low", title: "Missing Content Security Policy header", attackIds: [], evidence: "No CSP header on the app responses.", fix: "Add a Content-Security-Policy header. Start with default-src 'self'.", retest: "Fetch the app root; expect the header.", status: "confirmed", accountableOperator: "Carlos" },
-  { id: "F-3", severity: "info", title: "robots.txt discloses hidden paths", attackIds: [], evidence: "Disallow entries name internal paths.", fix: "Remove internal paths from robots.txt.", retest: "Fetch robots.txt; expect no internal paths.", status: "confirmed", accountableOperator: "Carlos" },
-];
+  { id: "F-3", severity: "info", title: "robots.txt discloses hidden paths", attackIds: [], evidence: "Disallow entries name internal paths.", fix: "Remove internal paths from robots.txt.", retest: "Fetch robots.txt; expect no internal paths.", status: "confirmed", accountableOperator: "Carlos" } ];
 
 const ARMS_RAN = [
   "bola", "api", "webhook", "redteam",
   "aggressive_ssti", "aggressive_nosql", "aggressive_xxe", "aggressive_crlf", "aggressive_host_header",
   "csrf", "dom_xss", "deserialization", "prototype_pollution", "price_manipulation",
-  "auth_rate_limit", "i18n", "edge_function", "secscan-engine",
-];
+  "auth_rate_limit", "i18n", "edge_function", "secscan-engine" ];
 
 export function parityDetailInput(over: Partial<DetailInput> = {}): DetailInput {
   return {
@@ -43,23 +41,19 @@ export function parityDetailInput(over: Partial<DetailInput> = {}): DetailInput 
     findings: [
       { id: "F-1", title: "Cross-tenant object access (BOLA)", severity: "critical", tier: "confirmed", attackIds: ["T1190"], sourceLabel: "bola-idor", signals: [], fix: parityFindings[0]!.fix },
       { id: "F-2", title: "Missing Content Security Policy header", severity: "low", tier: "confirmed", attackIds: [], sourceLabel: "Injection Defense", signals: ["WSTG-CONF-12", "CWE-79"], fix: parityFindings[1]!.fix },
-      { id: "F-3", title: "robots.txt discloses hidden paths", severity: "info", tier: "confirmed", attackIds: [], sourceLabel: "Information Disclosure", signals: [], fix: parityFindings[2]!.fix },
-    ],
+      { id: "F-3", title: "robots.txt discloses hidden paths", severity: "info", tier: "confirmed", attackIds: [], sourceLabel: "Information Disclosure", signals: [], fix: parityFindings[2]!.fix } ],
     coverage: {
       totals: { total: 22, confirmed: 1, executedClean: 16, killed: 1, blocked: 4, na: 0, pending: 0 },
       probesUsed: 36,
       fullBattery: true,
       notCovered: ["credential_chain", "stored_xss", "weak_session", "llm"],
       planOnly: [],
-      arms: ARMS_RAN.map((name) => ({ name, state: "ran" as const })),
-    },
+      arms: ARMS_RAN.map((name) => ({ name, state: "ran" as const })) },
     surface: {
       tlsGrade: "A",
       servedVia: "Cloudflare",
-      technologies: ["Cloudflare", "Railway", "Bolt.new", "Tailwind CSS", "Bootstrap", "Ruby on Rails"],
-    },
-    ...over,
-  };
+      technologies: ["Cloudflare", "Railway", "Bolt.new", "Tailwind CSS", "Bootstrap", "Ruby on Rails"] },
+    ...over };
 }
 
 export function parityMeta(over: Partial<ReportMeta> = {}): ReportMeta {
@@ -79,8 +73,7 @@ export function parityMeta(over: Partial<ReportMeta> = {}): ReportMeta {
     generatedAt: "2026-10-28T10:00:00.000Z",
     findings: { critical: 1, high: 0, medium: 0, low: 1, info: 1 },
     battery: { total: 22, confirmed: 1, executedClean: 16, killed: 1, blocked: 4, na: 0, pending: 0 },
-    ...over,
-  };
+    ...over };
 }
 
 export function parityRenderInput(over: Partial<EngagementReportInput> = {}): EngagementReportInput {
@@ -101,12 +94,10 @@ export function parityRenderInput(over: Partial<EngagementReportInput> = {}): En
       totals: { total: 22, confirmed: 1, executedClean: 16, killed: 1, blocked: 4, na: 0, pending: 0 },
       probesUsed: 36,
       planOnly: [],
-      notCovered: ["credential_chain", "stored_xss", "weak_session", "llm"],
-    },
+      notCovered: ["credential_chain", "stored_xss", "weak_session", "llm"] },
     activity: { eventCount: 0, rows: [], totalActions: 0, decisions: [], danglingCauses: [] },
     detail: buildReportDetail(parityDetailInput()),
-    ...over,
-  };
+    ...over };
 }
 
 const html = renderEngagementReportHtml(parityRenderInput());
@@ -137,8 +128,7 @@ describe("report detail — anatomy", () => {
       "Priority Actions",
       "Pillar Coverage",
       "Surface &amp; Coverage Detail",
-      "Artifacts:",
-    ];
+      "Artifacts:" ];
     let last = -1;
     for (const m of marks) {
       const i = html.indexOf(m);
@@ -222,15 +212,11 @@ describe("report detail — baseline render", () => {
         { id: "F-1", title: "Cross-tenant object access (BOLA)", severity: "critical", tier: "confirmed", attackIds: ["T1190"], sourceLabel: "", signals: [], fix: "" },
         { id: "F-2", title: "Missing Content Security Policy header", severity: "low", tier: "confirmed", attackIds: [], sourceLabel: "", signals: [], fix: "" },
         { id: "F-3", title: "Outdated TLS configuration", severity: "medium", tier: "confirmed", attackIds: [], sourceLabel: "", signals: [], fix: "" },
-        { id: "F-4", title: "Verbose server banner", severity: "info", tier: "confirmed", attackIds: [], sourceLabel: "", signals: [], fix: "" },
-      ],
-    },
-  });
+        { id: "F-4", title: "Verbose server banner", severity: "info", tier: "confirmed", attackIds: [], sourceLabel: "", signals: [], fix: "" } ] } });
   const withBase = renderEngagementReportHtml(
     parityRenderInput({
       meta: parityMeta({ baseline: { engagementId: "eng-2026-10-20-base", startedAt: "2026-10-20T09:00:00.000Z", score: 16, grade: "F" } }),
-      detail: buildReportDetail(baselineInput),
-    }),
+      detail: buildReportDetail(baselineInput) }),
   );
 
   it("cover carries the delta line with correct signs (+4 score, −1 findings)", () => {
@@ -246,10 +232,8 @@ describe("report detail — baseline render", () => {
         meta: parityMeta({ baseline: { engagementId: "eng-2026-10-20-base", startedAt: "2026-10-20T09:00:00.000Z" } }),
         detail: buildReportDetail(
           parityDetailInput({
-            baseline: { ...baselineInput.baseline!, score: undefined, grade: undefined },
-          }),
-        ),
-      }),
+            baseline: { ...baselineInput.baseline!, score: undefined, grade: undefined } }),
+        ) }),
     );
     const changed = section(countsOnly, "What Changed");
     assert.match(changed, /predates recorded scores/);
@@ -302,8 +286,7 @@ describe("report detail — per-finding Impact blocks (Q-RP-4)", () => {
     const deferred: Finding = {
       id: "F-9", severity: "high", title: "Unverified session flaw", attackIds: [],
       evidence: "Flagged, awaiting verification.", fix: "Verify first.", retest: "n/a",
-      status: "deferred", accountableOperator: "Carlos",
-    };
+      status: "deferred", accountableOperator: "Carlos" };
     const rendered = renderEngagementReportHtml(
       parityRenderInput({
         findings: [...parityFindings, deferred],
@@ -312,11 +295,8 @@ describe("report detail — per-finding Impact blocks (Q-RP-4)", () => {
             tierCounts: { proven: 0, confirmed: 3, deferred: 1 },
             findings: [
               ...parityDetailInput().findings,
-              { id: "F-9", title: "Unverified session flaw", severity: "high", tier: "deferred", attackIds: [], sourceLabel: "weak-session", signals: [], fix: "Verify first." },
-            ],
-          }),
-        ),
-      }),
+              { id: "F-9", title: "Unverified session flaw", severity: "high", tier: "deferred", attackIds: [], sourceLabel: "weak-session", signals: [], fix: "Verify first." } ] }),
+        ) }),
     );
     assert.ok(!card(rendered, "F-9").includes("Impact"), "no Impact asserted before verification");
   });
@@ -334,10 +314,8 @@ describe("report detail — zero findings", () => {
           worstConfirmed: null,
           findingsBySeverity: { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
           tierCounts: { proven: 0, confirmed: 0, deferred: 0 },
-          findings: [],
-        }),
-      ),
-    }),
+          findings: [] }),
+      ) }),
   );
 
   it("omits risk areas, renders the zero priority entry and zero impact sentence", () => {

@@ -17,8 +17,7 @@ import {
   projectApprovals,
   projectFindings,
   projectCausalChain,
-  projectDanglingCauses,
-} from "../src/events/projections.js";
+  projectDanglingCauses } from "../src/events/projections.js";
 import type { EngagementEvent } from "../src/types.js";
 
 let n = 0;
@@ -31,16 +30,15 @@ function ev(p: Partial<EngagementEvent> & { seq: number; action: string }): Enga
     phase: "recon",
     actor: "runner",
     result: "",
-    ...p,
-  } as EngagementEvent;
+    ...p } as EngagementEvent;
 }
 
 describe("redact", () => {
   it("collects only non-trivial secret values from the environment", () => {
     const secrets = collectSecrets({
       DEEPSEEK_API_KEY: "sk-abcdef123456",
-      SECSCAN_MCP_TOKEN: "ssk_1234567890abcdef",
-      REDTEAM_MSFRPC_PASS: "ab", // too short — must be dropped
+      SECLAYER_API_KEY: "ssk_1234567890abcdef",
+      REDTEAM_SSH_PASSWORD: "ab", // too short — must be dropped
     } as NodeJS.ProcessEnv);
     assert.ok(secrets.includes("sk-abcdef123456"));
     assert.ok(secrets.includes("ssk_1234567890abcdef"));
@@ -51,8 +49,7 @@ describe("redact", () => {
     const out = redact({
       tool: "shell_exec",
       args: { cmd: "x", token: "TOP", nested: { password: "PW", ok: "keep" } },
-      list: [{ apiKey: "K1" }],
-    }, []);
+      list: [{ apiKey: "K1" }] }, []);
     const j = JSON.stringify(out);
     assert.ok(!j.includes("TOP") && !j.includes("PW") && !j.includes("K1"), j);
     assert.ok(j.includes("<redacted>"));

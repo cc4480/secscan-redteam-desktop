@@ -5,7 +5,7 @@
  * PATH) and probed by actually executing it (LocalMsfClient.login). There
  * are no credentials — `secrets` is always empty and exists only because
  * callers thread it into their redaction calls.
- * (Native replacement for the retired msfrpcd authedClient.)
+ * (Native local msfconsole client factory.)
  */
 
 import { resolveExternalBinary } from "../../toolchain.js";

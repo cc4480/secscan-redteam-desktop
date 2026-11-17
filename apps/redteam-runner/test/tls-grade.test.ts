@@ -11,8 +11,7 @@ import assert from 'node:assert/strict'
 import {
   WEAK_TLS_CATALOG_CHECK,
   weakTlsCatalogFinding,
-  weakTlsSeverity,
-} from '../src/net/tls-grade.js'
+  weakTlsSeverity } from '../src/net/tls-grade.js'
 
 describe('weakTlsSeverity', () => {
   it('fires only inside the catalog C–F band', () => {

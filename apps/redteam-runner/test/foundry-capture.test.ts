@@ -30,16 +30,14 @@ function stateFinding(title: string, status: Finding['status'] = 'confirmed'): F
     evidence: 'GET https://shop.example.test/search?q=1 returned the hidden row',
     fix: 'parameterize',
     retest: 'replay',
-    status,
-  }
+    status }
 }
 
 const BASE_INPUT = {
   engagementId: 'eng-cap',
   target: 'shop.example.test',
   techFingerprints: ['wordpress'],
-  autoLoop: false as const,
-}
+  autoLoop: false as const }
 
 describe('foundry capture', () => {
   it('tiers a plain confirmed finding BRONZE and a cell-proven + independently confirmed finding SILVER', () => {
@@ -49,9 +47,7 @@ describe('foundry capture', () => {
       storeDir: store,
       stateFindings: [stateFinding('SQL injection in search')],
       liveFindings: [
-        { severity: 'high', title: 'SQL injection in search', vulnClass: 'sql-injection', attackId: 'T1190', evidence: 'https://shop.example.test/search?q=x', payload: "' OR '1'='1' -- " },
-      ],
-    })
+        { severity: 'high', title: 'SQL injection in search', vulnClass: 'sql-injection', attackId: 'T1190', evidence: 'https://shop.example.test/search?q=x', payload: "' OR '1'='1' -- " } ] })
     assert.equal(bronze.added, 1)
     assert.equal(bronze.error, null)
     const cases = listCases(store)
@@ -67,9 +63,7 @@ describe('foundry capture', () => {
       storeDir: store,
       stateFindings: [stateFinding('SQL injection in login')],
       liveFindings: [
-        { severity: 'high', title: 'SQL injection in login', vulnClass: 'sql-injection', attackId: 'T1190', evidence: 'https://shop.example.test/login?u=x', payload: "' OR '1'='1' -- ", cellState: 'proven' as const },
-      ],
-    })
+        { severity: 'high', title: 'SQL injection in login', vulnClass: 'sql-injection', attackId: 'T1190', evidence: 'https://shop.example.test/login?u=x', payload: "' OR '1'='1' -- ", cellState: 'proven' as const } ] })
     assert.equal(silver.added, 1)
     const silverCase = listCases(store).find(c => c.sourceEngagementId === 'eng-cap-2')
     assert.equal(silverCase?.tier, 'SILVER')
@@ -84,9 +78,7 @@ describe('foundry capture', () => {
       storeDir: store,
       stateFindings: [],
       liveFindings: [
-        { severity: 'high', title: 'SSRF in preview', vulnClass: 'ssrf', attackId: 'T1190', evidence: '', payload: 'http://127.0.0.1/admin', cellState: 'proven' as const },
-      ],
-    })
+        { severity: 'high', title: 'SSRF in preview', vulnClass: 'ssrf', attackId: 'T1190', evidence: '', payload: 'http://127.0.0.1/admin', cellState: 'proven' as const } ] })
     assert.equal(result.added, 1)
     assert.equal(listCases(store)[0]?.tier, 'BRONZE')
   })
@@ -100,9 +92,7 @@ describe('foundry capture', () => {
       liveFindings: [
         // The severity slot carries an email — the projected pattern trips
         // the DLP re-scan, so the case must be dropped, never repaired.
-        { severity: 'admin@evil.example.com', title: 'SQL injection in search', vulnClass: 'sql-injection', attackId: 'T1190', evidence: '', payload: "' OR '1'='1' -- " },
-      ],
-    })
+        { severity: 'admin@evil.example.com', title: 'SQL injection in search', vulnClass: 'sql-injection', attackId: 'T1190', evidence: '', payload: "' OR '1'='1' -- " } ] })
     assert.equal(result.added, 0)
     assert.equal(result.dropped, 1)
     assert.ok(result.dropReasons.some(r => r.startsWith('dlp:')))
@@ -119,9 +109,7 @@ describe('foundry capture', () => {
       storeDir: store,
       stateFindings: [stateFinding('Reflected XSS in search')],
       liveFindings: [
-        { severity: 'medium', title: 'Reflected XSS in search', vulnClass: 'cross-site-scripting', attackId: 'T1190', evidence: 'https://shop.example.test/search?q=x', payload: '<script>alert(1)</script>' },
-      ],
-    }
+        { severity: 'medium', title: 'Reflected XSS in search', vulnClass: 'cross-site-scripting', attackId: 'T1190', evidence: 'https://shop.example.test/search?q=x', payload: '<script>alert(1)</script>' } ] }
     const first = captureFoundryCases(input)
     const second = captureFoundryCases(input)
     assert.equal(first.added, 1)
@@ -136,8 +124,7 @@ describe('foundry capture', () => {
       ...BASE_INPUT,
       storeDir: store,
       stateFindings: [stateFinding('Verbose banner disclosure')],
-      liveFindings: [],
-    })
+      liveFindings: [] })
     assert.equal(result.added, 1)
     assert.equal(listCases(store)[0]?.family, 'unclassified')
   })
@@ -150,8 +137,7 @@ describe('foundry capture', () => {
       ...BASE_INPUT,
       storeDir: join(blocker, 'foundry-store'),
       stateFindings: [stateFinding('SQL injection in search')],
-      liveFindings: [],
-    })
+      liveFindings: [] })
     assert.equal(result.added, 0)
     assert.ok(result.error !== null || result.dropped > 0)
   })
@@ -167,8 +153,7 @@ describe('completion-hook failure isolation', () => {
       actions: 2,
       startedAt: Date.now() - 1000,
       liveFindings,
-      killedLive: [],
-    } as unknown as Ctx
+      killedLive: [] } as unknown as Ctx
   }
 
   it('a sabotaged Foundry store cannot stop trajectory capture or completion', () => {
@@ -187,11 +172,9 @@ describe('completion-hook failure isolation', () => {
         engagementId: 'eng-iso',
         target: 'shop.example.test',
         ctx: fakeCtx([
-          { severity: 'high', title: 'SQL injection in search', vulnClass: 'sql-injection', attackId: 'T1190', evidence: 'https://shop.example.test/search?q=x', payload: "' OR '1'='1' -- ", cellState: 'proven' },
-        ]),
+          { severity: 'high', title: 'SQL injection in search', vulnClass: 'sql-injection', attackId: 'T1190', evidence: 'https://shop.example.test/search?q=x', payload: "' OR '1'='1' -- ", cellState: 'proven' } ]),
         events,
-        environment: { REDTEAM_FOUNDRY_AUTO_LOOP: '0' },
-      })
+        environment: { REDTEAM_FOUNDRY_AUTO_LOOP: '0' } })
     })
     // The engagement's own capture completed normally...
     assert.notEqual(metrics, null)
@@ -215,11 +198,9 @@ describe('completion-hook failure isolation', () => {
       engagementId: 'eng-hook',
       target: 'shop.example.test',
       ctx: fakeCtx([
-        { severity: 'high', title: 'SQL injection in search', vulnClass: 'sql-injection', attackId: 'T1190', evidence: 'https://shop.example.test/search?q=x', payload: "' OR '1'='1' -- ", cellState: 'proven' },
-      ]),
+        { severity: 'high', title: 'SQL injection in search', vulnClass: 'sql-injection', attackId: 'T1190', evidence: 'https://shop.example.test/search?q=x', payload: "' OR '1'='1' -- ", cellState: 'proven' } ]),
       events,
-      environment: { REDTEAM_FOUNDRY_AUTO_LOOP: '0' },
-    })
+      environment: { REDTEAM_FOUNDRY_AUTO_LOOP: '0' } })
     assert.notEqual(metrics, null)
     const store = join(root, 'foundry-store')
     const cases = listCases(store)

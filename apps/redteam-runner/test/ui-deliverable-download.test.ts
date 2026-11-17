@@ -28,8 +28,7 @@ const FIXTURE: Record<string, Buffer> = {
   'report.txt': Buffer.from('Fixture report — plain text.\n', 'utf8'),
   'findings.csv': Buffer.from('id,severity\nF-1,high\n', 'utf8'),
   'report.docx': Buffer.from([0x50, 0x4b, 0x03, 0x04, 0xde, 0xad, 0xbe, 0xef]),
-  'report-package.zip': Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04]),
-}
+  'report-package.zip': Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04]) }
 const GAP_FILE = 'report.txt'
 
 let tmp = ''

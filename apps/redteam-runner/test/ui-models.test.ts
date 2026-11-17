@@ -30,8 +30,7 @@ function fakeRes(): { res: ServerResponse; captured: Captured } {
     end(chunk?: string) {
       captured.body = chunk ?? ''
       return res
-    },
-  }
+    } }
   return { res: res as unknown as ServerResponse, captured }
 }
 
@@ -94,24 +93,19 @@ function seedLocalModels(state: Record<string, unknown> | null): LocalFixture {
       file: LOCAL_MODEL_FILE,
       path: modelPath,
       sizeBytes: 18,
-      downloadedAt: 1,
-    }],
-  }))
+      downloadedAt: 1 }] }))
   writeFileSync(join(dir, 'settings.json'), JSON.stringify({
     activeModelId: LOCAL_MODEL_ID,
     contextLength: 32768,
     threads: 4,
-    startOnLaunch: false,
-  }))
+    startOnLaunch: false }))
   if (state !== null) writeFileSync(join(dir, 'server-state.json'), JSON.stringify(state))
   return {
     dir,
     env: {
       DSH_LOCAL_MODELS_DIR: dir,
       REDTEAM_LLM_PROVIDER: 'meta',
-      MODEL_API_KEY: 'test-key-not-real',
-    },
-  }
+      MODEL_API_KEY: 'test-key-not-real' } }
 }
 
 async function localModelOf(
@@ -131,8 +125,7 @@ describe('GET /api/models — local model entry', () => {
     status: 'running',
     baseUrl: LOCAL_BASE_URL,
     modelId: LOCAL_MODEL_ID,
-    updatedAt: 1,
-  }
+    updatedAt: 1 }
 
   it('lists the active local model while its server provably serves it', async () => {
     const fixture = seedLocalModels(runningState)
@@ -146,8 +139,7 @@ describe('GET /api/models — local model entry', () => {
       provider: 'local',
       model: LOCAL_MODEL_ID,
       label: 'Qwen3.6-35B-A3B-Fixture · Local',
-      baseUrl: LOCAL_BASE_URL,
-    })
+      baseUrl: LOCAL_BASE_URL })
   })
 
   it('omits the entry when the published state says the server is stopped', async () => {

@@ -130,7 +130,7 @@ export function buildOperatorCtx(opts: OperatorOptions = {}): Ctx {
     config,
     deps,
     events,
-    mcp: deps.mcp ?? new McpClient({ endpoint: config.mcpEndpoint, token: config.mcpToken }),
+    mcp: deps.mcp ?? new McpClient(),
     prober:
       deps.prober ??
       new WebProber({ scopeHosts: [], minDelayMs: config.probeDelayMs, allowPrivateHosts: true }),

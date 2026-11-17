@@ -10,8 +10,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
   PC_AGENT_ACTION_TOOLS, PC_AGENT_ALLOWED_TOOLS, PC_AGENT_OBSERVE_TOOLS, PC_AGENT_ROBOT_TOOLS,
-  createPcAgentClient, parsePcAgentReceipt, pcAgentToolTier, type FetchLike,
-} from '../src/host-exec/pc-agent.js'
+  createPcAgentClient, parsePcAgentReceipt, pcAgentToolTier, type FetchLike } from '../src/host-exec/pc-agent.js'
 
 const cfg = { url: 'http://127.0.0.1:8765/mcp', token: 'x'.repeat(24) }
 
@@ -25,8 +24,7 @@ function fakeFetch(payload: string): FetchLike {
       ok: true,
       status: 200,
       headers: { get: (name: string) => (name.toLowerCase() === 'mcp-session-id' ? sessionId ?? null : null) },
-      text: async () => text,
-    })
+      text: async () => text })
     if (body.method === 'initialize') {
       return respond(JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} }), 'session-1')
     }

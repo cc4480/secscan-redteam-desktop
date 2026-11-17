@@ -52,8 +52,7 @@ describe('parseModuleSearch', () => {
       name: 'auxiliary/scanner/portscan/ftpbounce',
       fullname: 'auxiliary/scanner/portscan/ftpbounce',
       rank: 'normal',
-      description: 'FTP Bounce Port Scanner',
-    })
+      description: 'FTP Bounce Port Scanner' })
     // A description containing a quoted token and a space survives intact.
     assert.equal(modules[3]?.description, 'TCP "XMas" Port Scanner')
     assert.equal(modules[7]?.fullname, 'auxiliary/scanner/http/wordpress_pingback_access')

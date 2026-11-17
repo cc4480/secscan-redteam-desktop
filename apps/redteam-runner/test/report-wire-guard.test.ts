@@ -30,14 +30,12 @@ const META: ReportMeta = {
   verified: true,
   objective: "Assess",
   startedAt: "2026-11-01T08:00:00.000Z",
-  generatedAt: "2026-11-01T09:00:00.000Z",
-};
+  generatedAt: "2026-11-01T09:00:00.000Z" };
 
 const FINDING: Finding = {
   id: "F-1", severity: "high", title: "Fixture flaw", attackIds: ["T1190"],
   evidence: "fixture evidence", fix: "Apply the fixture patch.", retest: "Re-probe.",
-  status: "confirmed", accountableOperator: "Carlos",
-};
+  status: "confirmed", accountableOperator: "Carlos" };
 
 function makeDeps(dir: string, over: { roe?: unknown; detailInput?: DetailInput } = {}): WireDeps {
   const events = new EventLog(dir, "eng-wire-guard", { target: "example.com", mode: "red", objective: "Assess" });
@@ -49,8 +47,7 @@ function makeDeps(dir: string, over: { roe?: unknown; detailInput?: DetailInput 
       fullBattery: false,
       localHost: false,
       environment: "staging",
-      roe: "roe" in over ? over.roe : { scope: ["example.com"] },
-    },
+      roe: "roe" in over ? over.roe : { scope: ["example.com"] } },
     config: { dryRunAgents: false },
     coverage: new Set(["validation"]),
     targetCoverage: new Map(),
@@ -59,8 +56,7 @@ function makeDeps(dir: string, over: { roe?: unknown; detailInput?: DetailInput 
     plan: null,
     verifiedAt: "2026-11-01T07:55:00.000Z",
     verificationProof: "Operator-attested ownership",
-    events,
-  } as unknown as Ctx;
+    events } as unknown as Ctx;
   return {
     ctx,
     meta: META,
@@ -73,8 +69,7 @@ function makeDeps(dir: string, over: { roe?: unknown; detailInput?: DetailInput 
     totals: { total: 1, confirmed: 1, executedClean: 0, killed: 0, blocked: 0, na: 0, pending: 0 },
     planOnly: [],
     events: [],
-    ...(over.detailInput ? { detailInput: over.detailInput } : {}),
-  };
+    ...(over.detailInput ? { detailInput: over.detailInput } : {}) };
 }
 
 function detailFailedEvents(dir: string) {
@@ -112,8 +107,7 @@ describe("wire derivation guard", () => {
         tierCounts: { proven: 0, confirmed: 1, deferred: 0 },
         findings: [null as never],
         coverage: {},
-        surface: {},
-      } as unknown as DetailInput;
+        surface: {} } as unknown as DetailInput;
       const input = buildEngagementReportInput(makeDeps(dir, { detailInput }));
       assert.equal(input.detail, undefined);
       assert.ok(input.matter, "the healthy derivation is unaffected");

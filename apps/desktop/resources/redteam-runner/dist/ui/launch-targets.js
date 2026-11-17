@@ -8,7 +8,7 @@ import { userInfo } from 'node:os';
  * Clean a target as typed in conversation: trim, drop surrounding quotes,
  * and strip trailing sentence punctuation. A target typed at the end of a
  * sentence carries its punctuation with it — the keeper's first console
- * launch (eng-2026-10-28-df5a1c0d) took "https://secscan.us," verbatim and
+ * launch took a target URL with trailing punctuation verbatim and
  * the comma became part of the host the scope check saw. Inner characters
  * are never touched: a port or path keeps its punctuation.
  *
@@ -34,13 +34,13 @@ export function targetHost(cleaned) {
         const host = new URL(cleaned).hostname;
         if (host)
             return host;
-        // "secscan.us:8443" parses as a URL with scheme "secscan.us:" and an
+        // "example.invalid:8443" parses as a URL with scheme "example.invalid:" and an
         // empty host — fall through to the bare-host reading below.
     }
     catch {
         // Not a URL at all: also the bare-host reading below.
     }
-    // A bare host ("secscan.us", optionally with a port) is a normal way to
+    // A bare host ("example.invalid", optionally with a port) is a normal way to
     // name a target in chat.
     if (/^[A-Za-z0-9.-]+(:\d+)?$/.test(cleaned))
         return cleaned.replace(/:\d+$/, '');

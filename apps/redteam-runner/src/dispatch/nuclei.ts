@@ -10,12 +10,14 @@ import { BATTERY_CATEGORIES, type BatteryCategory } from "../battery.js";
 import { type TargetId, isTargetId } from "../targets.js";
 import { techniqueAllowed } from "../gate.js";
 import { sleep } from "../util.js";
-import { type Ctx } from "../context.js";
+import { redactPii } from "../safety/index.js";
+import { type Ctx, type LiveFinding } from "../context.js";
 import { type ActorRole, type EngagementPhase } from "../types.js";
 import type { ToolCallRequest } from "@secscan/redteam-llm-router";
 import { type DispatchResult } from "./types.js";
 import { toolTimeoutResult } from "./timeout.js";
 import { noteCategoryCoverage, strListArg } from "./prelude.js";
+import { syncLiveFindingsToState, writeFindingToRegistry } from "./verdicts.js";
 import { mapTemplateToBattery, overlapHint, resolveNucleiTimeoutS } from "../nuclei/index.js";
 
 function strArg(args: Record<string, unknown>, key: string): string | undefined {
@@ -89,6 +91,26 @@ export async function handleNucleiTools(ctx: Ctx, _role: ActorRole, phase: Engag
     ctx.nuclei.templateExecutions++;
     ctx.nuclei.templatesRun += res.templatesExecuted && res.templatesExecuted > 0 ? res.templatesExecuted : 0;
     ctx.nuclei.findings += res.findings.length;
+    // Normalize nuclei findings into the shared live findings/registry path
+    // (same evidence hygiene as secscan/seclayer: redact + cap before record).
+    // Guard: minimal/mock contexts (e.g. unit tests) may omit live finding
+    // plumbing; keep honest counters/hints working without side effects.
+    if (Array.isArray(ctx.liveFindings) && res.findings.length > 0) {
+      const findingAttackId = attackId ?? "T1190";
+      for (const f of res.findings) {
+        const lf: LiveFinding = {
+          severity: f.severity || "info",
+          title: redactPii((f.name || f.templateId).slice(0, 200)),
+          vulnClass: "nuclei-template",
+          attackId: findingAttackId,
+          evidence: redactPii(`${f.templateId} @ ${f.matchedAt}${f.cve ? ` [${f.cve}]` : ""}${f.excerpt ? ` — ${f.excerpt}` : ""}`.slice(0, 800)),
+          producer: _role,
+        };
+        ctx.liveFindings.push(lf);
+        writeFindingToRegistry(ctx, lf);
+      }
+      syncLiveFindingsToState(ctx);
+    }
     const tp = rawTp as "windows" | "linux";
     const hints = res.findings.slice(0, 10).map((f) => {
       const o = mapTemplateToBattery(f, tp);

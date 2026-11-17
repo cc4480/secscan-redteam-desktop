@@ -33,8 +33,7 @@ type GuardCtx = Parameters<typeof attestedHostAllowed>[0];
 function recordCtx(verifiedScope?: string[], outOfScope?: string[]): GuardCtx {
   return {
     verifiedScope,
-    input: { roe: { outOfScope } },
-  } as GuardCtx;
+    input: { roe: { outOfScope } } } as GuardCtx;
 }
 
 describe("attestedHostAllowed — the verified record is the only key", () => {
@@ -114,8 +113,7 @@ describe("WebProber — attested loopback actually fetches; unattested refuses",
     const prober = new WebProber({
       scopeHosts: ["127.0.0.1"],
       minDelayMs: 0,
-      attestedHost: (h) => attestedHostAllowed(recordCtx(["127.0.0.1"]), h),
-    });
+      attestedHost: (h) => attestedHostAllowed(recordCtx(["127.0.0.1"]), h) });
     const r = await prober.probe({ method: "GET", url: `http://127.0.0.1:${port}/` });
     assert.equal(r.status, 200);
     assert.match(r.bodySnippet ?? "", /lab-ok/);
@@ -188,8 +186,7 @@ describe("secscan_exec dispatch — the or12 scenario end to end", () => {
       fingerprint: { host: "127.0.0.1", stack: [], appType: "test" },
       registry: { confirmed: [], killed: [] },
       registryPath: join(mkdtempSync(join(tmpdir(), "attested-host-registry-")), "registry.json"),
-      events: { engagementId: "attested-host-test", updateState: () => {}, append: () => {} },
-    } as unknown as Ctx;
+      events: { engagementId: "attested-host-test", updateState: () => {}, append: () => {} } } as unknown as Ctx;
   }
   const CALL = { name: "secscan_exec" } as never;
   const ARGS = { url: "http://127.0.0.1:8000/", depth: "deep", category: "validation" };

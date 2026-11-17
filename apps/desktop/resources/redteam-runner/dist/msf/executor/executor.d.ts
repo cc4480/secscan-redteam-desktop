@@ -1,17 +1,18 @@
 /**
- * MsfExecutor — the runner's Metasploit bridge, behind the safety core.
+ * MsfExecutor — the runner's Metasploit arm, behind the safety core.
  * (Module doc comment preserved on the msf/executor.ts barrel.)
  *
  * Preflight order (mirrors host-exec/executor.ts):
- *   1. ROE scope check (exact hostname match, fail closed, before any packet)
+ *   1. ROE scope check (exact hostname match, fail closed, before any
+ *      local process is spawned)
  *   2. module/payload policy (dos + destructive modules refused; generic
  *      single-command payloads run the runner-built canary marker, which
  *      additionally passes the destructive denylist; Meterpreter payloads
  *      open a session — see 6)
- *   4. credential resolution (REDTEAM_MSFRPC_* env/Secure Vault only, fail
- *      fast with setup instructions)
- *   5. execution with timeout + abort signal; the console is destroyed on
- *      abort (the call signal is what stops a running module)
+ *   4. framework availability (the local msfconsole resolves and executes,
+ *      fail fast with setup instructions)
+ *   5. execution with timeout + abort signal; the console process is
+ *      killed on abort (the call signal is what stops a running module)
  *   6. session hygiene: a generic-payload validation run must not leave
  *      sessions behind — any session that wasn't there before is stopped
  *      immediately. A Meterpreter-payload run is the one exception (W8):
@@ -20,64 +21,21 @@
  *      stays open under a runner-issued handle
  *   7. redaction of every secret from every string that leaves
  *
- * The request function is injectable so tests run against a fake msfrpcd.
+ * The process spawner is injectable so tests run against a fake msfconsole.
  */
-import { type MsfRequestFn } from '../protocol.js';
+import { type MsfSpawnFn } from '../local-client.js';
 import { MsfSessionManager } from '../sessions.js';
 import { type SessionCloseArgs, type SessionCommandArgs } from './session-ops.js';
 import { type CredentialDumpArgs } from './credential-dump.js';
-export interface MsfDeps {
-    /** Injectable transport (default: HTTPS to the operator's msfrpcd). */
-    request?: MsfRequestFn;
-    env?: NodeJS.ProcessEnv;
-    /** Override msfrpcd endpoint (tests). */
-    endpoint?: {
-        host: string;
-        port: number;
-        useTls: boolean;
-    };
-    /**
-     * TEST MODE (REDTEAM_TEST_MODE): module/payload policy and the canary
-     * destructive check are bypassed. Set from the resolved runner config
-     * in phases/run.ts; the bypass is recorded by dispatch (dispatch/msf.ts)
-     * per call. Default false.
-     */
-    testMode?: boolean;
-}
-export interface MsfResult {
-    ok: boolean;
-    transport: 'msf';
-    host: string;
-    /** Redacted one-line summary for audit logs and events. */
-    summary: string;
-    /** Redacted, capped output. */
-    output: string;
-    ms: number;
-    /** Set when the safety core refused before contacting msfrpcd. */
-    refused?: string;
-    /** Set when a Meterpreter-payload run opened a session (W8): the runner-issued handle + daemon id. */
-    session?: {
-        handle: string;
-        daemonId: string;
-    };
-    /** Set by the credential-dump path: sealed evidence reference — counts/types/ref only, never raw material. */
-    evidence?: {
-        path: string;
-        sha256: string;
-        records: number;
-        types: string[];
-    };
-}
-export declare const MSF_TIMEOUT_MS = 120000;
+import type { MsfDeps, MsfResult } from './executor-types.js';
+import { type MsfSearchArgs, type MsfSuggestArgs } from './executor-query.js';
+export { MSF_TIMEOUT_MS } from './executor-types.js';
+export type { MsfDeps, MsfResult } from './executor-types.js';
 export declare class MsfExecutor {
     readonly deps: {
-        request?: MsfRequestFn;
+        spawn?: MsfSpawnFn;
         env: NodeJS.ProcessEnv;
-        endpoint?: {
-            host: string;
-            port: number;
-            useTls: boolean;
-        };
+        testMode?: boolean;
     };
     /** TEST MODE: policy checks bypassed (see MsfDeps.testMode). */
     readonly testMode: boolean;
@@ -93,31 +51,16 @@ export declare class MsfExecutor {
     /**
      * Search the module database (recon-safe: no module runs).
      * `query` uses msf search syntax; when omitted, `cve`/`service` build it.
+     * The body lives in executor-query.ts (file-budget split).
      */
-    search(args: {
-        host: string;
-        scopeHosts: string[];
-        query?: string;
-        cve?: string;
-        service?: string;
-        platform?: string;
-        signal?: AbortSignal;
-    }): Promise<MsfResult>;
+    search(args: MsfSearchArgs): Promise<MsfResult>;
     /**
      * Recon → module mapping: detected service/version → ranked candidate
      * modules. The candidates go to the COORDINATOR for approval — this tool
      * never fires an exploit. That approval is the recon→exploit sign-off
-     * the coordinator already owns.
+     * the coordinator already owns. The body lives in executor-query.ts.
      */
-    suggest(args: {
-        host: string;
-        scopeHosts: string[];
-        service?: string;
-        version?: string;
-        cve?: string;
-        platform?: string;
-        signal?: AbortSignal;
-    }): Promise<MsfResult>;
+    suggest(args: MsfSuggestArgs): Promise<MsfResult>;
     /**
      * Run ONE module. With a generic cmd payload, the only payload action is
      * the benign canary marker: `echo REDTEAM-MARKER-<id>` echoing back IS

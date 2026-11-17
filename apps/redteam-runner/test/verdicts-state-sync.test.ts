@@ -23,8 +23,7 @@ function live(over: Partial<LiveFinding> = {}): LiveFinding {
     title: 'Reflected XSS in search',
     attackId: 'T1059',
     evidence: 'marker reflected',
-    ...over,
-  }
+    ...over }
 }
 
 function runSync(liveFindings: LiveFinding[]): Finding[] {
@@ -34,9 +33,7 @@ function runSync(liveFindings: LiveFinding[]): Finding[] {
     events: {
       updateState: (partial: { findings?: Finding[] }) => {
         captured = partial
-      },
-    },
-  } as unknown as Ctx
+      } } } as unknown as Ctx
   syncLiveFindingsToState(ctx)
   assert.ok(captured?.findings, 'updateState received findings')
   return captured.findings
@@ -48,9 +45,7 @@ describe('syncLiveFindingsToState cell-verdict carry (Q-PROVEN Step 2)', () => {
       live({
         cellState: 'proven',
         provenClaim: { expectedMarker: 'REDTEAM-MARKER-x1', targetUrl: 'https://t.example/search' },
-        cellDetail: 'Challenger critique + verification signed, negative control passed.',
-      }),
-    ])
+        cellDetail: 'Challenger critique + verification signed, negative control passed.' }) ])
     assert.equal(f!.cellState, 'proven')
     assert.deepEqual(f!.provenClaim, { expectedMarker: 'REDTEAM-MARKER-x1', targetUrl: 'https://t.example/search' })
     assert.equal(f!.cellDetail, 'Challenger critique + verification signed, negative control passed.')
@@ -61,9 +56,7 @@ describe('syncLiveFindingsToState cell-verdict carry (Q-PROVEN Step 2)', () => {
       live({
         cellState: 'detected',
         provenClaim: { expectedMarker: 'M-2', targetUrl: 'https://t.example/a' },
-        cellDetail: 'Control also reflected the marker — claim falsified.',
-      }),
-    ])
+        cellDetail: 'Control also reflected the marker — claim falsified.' }) ])
     assert.equal(f!.cellState, 'detected')
     assert.deepEqual(f!.provenClaim, { expectedMarker: 'M-2', targetUrl: 'https://t.example/a' })
     assert.equal(f!.cellDetail, 'Control also reflected the marker — claim falsified.')

@@ -46,8 +46,7 @@ import {
   type RdpChannel,
   type RdpTransport,
   type AdTransport,
-  type AdEntry,
-} from "../src/host-exec/index.js";
+  type AdEntry } from "../src/host-exec/index.js";
 
 const FAKE_ENV: NodeJS.ProcessEnv = {
   REDTEAM_SSH_USER: "testuser",
@@ -58,8 +57,7 @@ const FAKE_ENV: NodeJS.ProcessEnv = {
   REDTEAM_SMB_NTHASH: "8846f7eaee8fb117ad06bdd830b7586c", // NT hash of "password" — TEST VECTOR ONLY
   REDTEAM_WINRM_USER: "testuser",
   REDTEAM_WINRM_PASSWORD: "s3cr3t-pw-FOR-TESTS",
-  REDTEAM_KRB_CCACHE_B64: Buffer.from("fake-ccache-bytes").toString("base64"),
-};
+  REDTEAM_KRB_CCACHE_B64: Buffer.from("fake-ccache-bytes").toString("base64") };
 
 const SCOPE = ["target.corp"];
 
@@ -140,8 +138,7 @@ describe("ntlmv2 primitives", () => {
     // Canned server confirm selecting HYBRID (2).
     const confirm = Buffer.from([
       0x03, 0x00, 0x00, 0x13, 0x06, 0xd0, 0x00, 0x00, 0x00, 0x00, 0x00,
-      0x02, 0x00, 0x08, 0x00, 0x02, 0x00, 0x00, 0x00,
-    ]);
+      0x02, 0x00, 0x08, 0x00, 0x02, 0x00, 0x00, 0x00 ]);
     const r = parseX224ConnectionConfirm(confirm);
     assert.equal(r.kind, "selected");
     if (r.kind === "selected") assert.equal(r.protocol, 2);
@@ -253,8 +250,7 @@ function fakeRdpServer(opts: {
       },
       close() {
         /* no-op */
-      },
-    };
+      } };
   })();
 
   const transport: RdpTransport = {
@@ -263,8 +259,7 @@ function fakeRdpServer(opts: {
     },
     async close() {
       /* no-op */
-    },
-  };
+    } };
   return { transport, seen };
 }
 
@@ -274,8 +269,7 @@ describe("rdp NLA credential validation", () => {
     const r = await rdpValidateCredentials(transport, {
       host: "target.corp",
       creds: { username: "testuser", password: "s3cr3t-pw-FOR-TESTS", domain: "TEST" },
-      timeoutMs: 2000,
-    });
+      timeoutMs: 2000 });
     assert.equal(r.reachable, true);
     assert.equal(r.nlaRequired, true);
     assert.equal(r.credentialValid, true);
@@ -287,8 +281,7 @@ describe("rdp NLA credential validation", () => {
     const r = await rdpValidateCredentials(transport, {
       host: "target.corp",
       creds: { username: "testuser", password: "wrong", domain: "TEST" },
-      timeoutMs: 2000,
-    });
+      timeoutMs: 2000 });
     assert.equal(r.nlaRequired, true);
     assert.equal(r.credentialValid, false);
   });
@@ -298,8 +291,7 @@ describe("rdp NLA credential validation", () => {
     const r = await rdpValidateCredentials(transport, {
       host: "target.corp",
       creds: { username: "testuser", password: "s3cr3t-pw-FOR-TESTS" },
-      timeoutMs: 2000,
-    });
+      timeoutMs: 2000 });
     assert.equal(r.reachable, true);
     assert.equal(r.nlaRequired, false);
     assert.equal(r.credentialValid, undefined, "no validation without NLA");
@@ -355,8 +347,7 @@ async function startFakeSmb2(expectedNtHashHex: string): Promise<{ server: Serve
     const send = (status: number, command: number, msgId: number, body: Buffer, sessionId = 0) => {
       const hdr = Buffer.concat([
         SMB2_MAGIC, u16le(64), u16le(0), u32le(status), u16le(command), u16le(1),
-        u32le(0x00000001), u32le(0), u64le(msgId), u32le(0x0000feff), u32le(0), u64le(sessionId), Buffer.alloc(16),
-      ]);
+        u32le(0x00000001), u32le(0), u64le(msgId), u32le(0x0000feff), u32le(0), u64le(sessionId), Buffer.alloc(16) ]);
       const payload = Buffer.concat([hdr, body]);
       const nb = Buffer.alloc(4);
       nb[0] = 0;
@@ -452,8 +443,7 @@ describe("smb pass-the-hash", () => {
       username: "testuser",
       ntHashHex: HASH,
       domain: "TEST",
-      timeoutMs: 5000,
-    });
+      timeoutMs: 5000 });
     await t.close();
     assert.equal(r.reachable, true);
     assert.equal(r.hashAccepted, true);
@@ -468,8 +458,7 @@ describe("smb pass-the-hash", () => {
       username: "testuser",
       ntHashHex: "00000000000000000000000000000000",
       domain: "TEST",
-      timeoutMs: 5000,
-    });
+      timeoutMs: 5000 });
     await t.close();
     assert.equal(r.hashAccepted, false);
     assert.deepEqual(log, ["rejected"]);
@@ -509,8 +498,7 @@ function fakeKrbRun(opts: { klistOut?: string; kvnoCode?: number; hasTools?: boo
           opts.klistOut ??
           "Ticket cache: FILE:/tmp/x\nDefault principal: testuser@TEST.CORP\n\nValid starting     Expires            Service principal\n01/01/26 00:00:00  01/02/26 00:00:00  krbtgt/TEST.CORP@TEST.CORP\n",
         stderr: "",
-        code: 0,
-      };
+        code: 0 };
     }
     if (cmd === "kvno") {
       const code = opts.kvnoCode ?? 0;
@@ -649,12 +637,10 @@ describe("ad enumeration", () => {
     const nodes = [
       { dn: "CN=alice,DC=x", name: "alice", kind: "user" as const, sid: "S-1-5-21-1-2-3-1104" },
       { dn: "CN=helpdesk,DC=x", name: "helpdesk", kind: "group" as const, sid: "S-1-5-21-1-2-3-1105" },
-      { dn: "CN=DA,DC=x", name: "Domain Admins", kind: "group" as const, sid: "S-1-5-21-1-2-3-512" },
-    ];
+      { dn: "CN=DA,DC=x", name: "Domain Admins", kind: "group" as const, sid: "S-1-5-21-1-2-3-512" } ];
     const edges = [
       { from: "CN=alice,DC=x", to: "CN=helpdesk,DC=x", via: "member" },
-      { from: "CN=helpdesk,DC=x", to: "CN=DA,DC=x", via: "member" },
-    ];
+      { from: "CN=helpdesk,DC=x", to: "CN=DA,DC=x", via: "member" } ];
     const paths = computeAttackPaths(nodes, edges, new Set(["CN=DA,DC=x"]));
     assert.ok(paths.length >= 2, "both alice and helpdesk have paths");
     const alicePath = paths.find((p) => p.path[0] === "alice");
@@ -673,9 +659,7 @@ describe("ad enumeration", () => {
         cn: ["UserAuth"],
         "msPKI-Certificate-Name-Flag": ["1"], // ENROLLEE_SUPPLIES_SUBJECT
         pKIExtendedKeyUsage: ["1.3.6.1.5.5.7.3.2"],
-        nTSecurityDescriptor: [enrollSd],
-      },
-    };
+        nTSecurityDescriptor: [enrollSd] } };
     const f1 = analyzeTemplate(esc1, dom);
     assert.ok(f1.some((f) => f.esc === "ESC1"), "ESC1 flagged");
     const esc4: AdEntry = {
@@ -685,8 +669,7 @@ describe("ad enumeration", () => {
         "msPKI-Certificate-Name-Flag": ["0"],
         pKIExtendedKeyUsage: ["1.3.6.1.5.5.7.3.1"],
         nTSecurityDescriptor: [buildSd([{ sid: "S-1-5-11", mask: 0x00040000 }])], // WriteDacl to Authenticated Users
-      },
-    };
+      } };
     assert.ok(analyzeTemplate(esc4, dom).some((f) => f.esc === "ESC4"), "ESC4 flagged");
   });
 
@@ -707,27 +690,23 @@ describe("ad enumeration", () => {
         if (filter === "(objectClass=domain)") return entries("domain");
         if (filter === "(objectClass=user)") {
           return [
-            { dn: "CN=alice,DC=test,DC=corp", attrs: { sAMAccountName: ["alice"], objectSid: [`${dom}-1104`], memberOf: ["CN=helpdesk,DC=test,DC=corp"] } },
-          ];
+            { dn: "CN=alice,DC=test,DC=corp", attrs: { sAMAccountName: ["alice"], objectSid: [`${dom}-1104`], memberOf: ["CN=helpdesk,DC=test,DC=corp"] } } ];
         }
         if (filter === "(objectClass=group)") {
           return [
             { dn: "CN=helpdesk,DC=test,DC=corp", attrs: { sAMAccountName: ["helpdesk"], objectSid: [`${dom}-1105`], member: [`CN=alice,DC=test,DC=corp`] } },
-            { dn: "CN=Domain Admins,DC=test,DC=corp", attrs: { sAMAccountName: ["Domain Admins"], objectSid: [`${dom}-512`], member: [`CN=helpdesk,DC=test,DC=corp`] } },
-          ];
+            { dn: "CN=Domain Admins,DC=test,DC=corp", attrs: { sAMAccountName: ["Domain Admins"], objectSid: [`${dom}-512`], member: [`CN=helpdesk,DC=test,DC=corp`] } } ];
         }
         return [];
       },
       async searchRaw(base, filter, attrs) {
         return this.search(base, filter, attrs);
       },
-      async close() {},
-    };
+      async close() {} };
     const r = await adEnumerate(fake, {
       host: "target.corp",
       creds: { username: "testuser", password: "pw", domain: "TEST" },
-      operations: ["users", "groups", "attack_paths"],
-    });
+      operations: ["users", "groups", "attack_paths"] });
     assert.equal(r.ok, true);
     const ap = r.sections.find((s) => s.operation === "attack_paths");
     assert.ok(ap, "attack_paths section present");
@@ -767,8 +746,7 @@ describe("wave-2 tools in the engagement loop", () => {
   const toolCall = (name: string, args: Record<string, unknown>): ToolCallRequest => ({
     id: `call-${name}`,
     name,
-    arguments: args,
-  });
+    arguments: args });
 
   function fakeWinrmFactory(): WinrmTransport {
     return {
@@ -779,8 +757,7 @@ describe("wave-2 tools in the engagement loop", () => {
           : "ok";
         return { stdout, stderr: "", code: 0, ms: 5 };
       },
-      async close() {},
-    };
+      async close() {} };
   }
 
   function scriptedLlm(): (role: AgentRole, messages: ChatMessage[], opts: { tools?: { name: string }[] }) => Promise<ChatResult> {
@@ -812,12 +789,9 @@ describe("wave-2 tools in the engagement loop", () => {
                 category: "validation",
                 targetProfile: "windows",
                 attackId: "T1021",
-                hypothesis: "WS-010 listener probe",
-              }),
-            ],
+                hypothesis: "WS-010 listener probe" }) ],
             provider: "fake",
-            model: "fake",
-          };
+            model: "fake" };
         }
         if (!firedShadow) {
           return {
@@ -828,12 +802,9 @@ describe("wave-2 tools in the engagement loop", () => {
                 category: "logic",
                 targetProfile: "windows",
                 attackId: "T1021",
-                hypothesis: "WS-065 shadow handoff prep",
-              }),
-            ],
+                hypothesis: "WS-065 shadow handoff prep" }) ],
             provider: "fake",
-            model: "fake",
-          };
+            model: "fake" };
         }
         return textOnly("TRIED: winrm_probe + rdp_shadow_prep / OBSERVED: outputs / VERDICT: done");
       }
@@ -846,12 +817,10 @@ describe("wave-2 tools in the engagement loop", () => {
       target: "10.9.0.13",
       mode: "red",
       objective: "wave-2 integration test",
-      roe: { scope: ["10.9.0.13"] },
-    };
+      roe: { scope: ["10.9.0.13"] } };
     const executor = new HostExecutor({
       winrm: fakeWinrmFactory,
-      env: FAKE_ENV,
-    });
+      env: FAKE_ENV });
     // winrm_probe needs a requestImpl seam — inject via a subclass hook:
     const origProbe = executor.winrmProbe.bind(executor);
     executor.winrmProbe = async (a) =>
@@ -860,20 +829,15 @@ describe("wave-2 tools in the engagement loop", () => {
         requestImpl: (async (u: string) => ({
           statusCode: 401,
           headers: { "www-authenticate": "Negotiate, NTLM", server: "Microsoft-HTTPAPI/2.0" },
-          url: u,
-        })) as never,
-      });
+          url: u })) as never });
     const res = await runEngagement(input, {
-      mcpToken: "test",
       deepseekApiKey: "test",
       qwenApiKey: "test",
       engagementsDir: dir,
       deps: {
         verify: async () => true,
         completeForRole: scriptedLlm() as never,
-        hostExecutor: executor,
-      },
-    });
+        hostExecutor: executor } });
     assert.equal(res.status, "complete");
     const { readFileSync } = await import("node:fs");
     const events = readFileSync(join2(dir, res.engagementId, "events.jsonl"), "utf8")
@@ -893,8 +857,7 @@ describe("wave-2 tools in the engagement loop", () => {
       target: "10.9.0.13",
       mode: "red",
       objective: "profile pin test",
-      roe: { scope: ["10.9.0.13"] },
-    };
+      roe: { scope: ["10.9.0.13"] } };
     const llm = async (role: AgentRole, messages: ChatMessage[]): Promise<ChatResult> => {
       const has = (s: string) => messages.some((m) => m.content.includes(s));
       if (role === "coordinator") {
@@ -917,20 +880,17 @@ describe("wave-2 tools in the engagement loop", () => {
             text: "firing ad_enum with linux profile (wrong)",
             toolCalls: [toolCall("ad_enum", { host: "10.9.0.13", operations: ["users"], category: "validation", targetProfile: "linux", hypothesis: "x" })],
             provider: "fake",
-            model: "fake",
-          };
+            model: "fake" };
         }
         return textOnly("done");
       }
       return textOnly("idle");
     };
     const res = await runEngagement(input, {
-      mcpToken: "test",
       deepseekApiKey: "test",
       qwenApiKey: "test",
       engagementsDir: dir,
-      deps: { verify: async () => true, completeForRole: llm as never, hostExecutor: new HostExecutor({ env: FAKE_ENV }) },
-    });
+      deps: { verify: async () => true, completeForRole: llm as never, hostExecutor: new HostExecutor({ env: FAKE_ENV }) } });
     assert.equal(res.status, "complete");
     const { readFileSync } = await import("node:fs");
     const events = readFileSync(join2(dir, res.engagementId, "events.jsonl"), "utf8")

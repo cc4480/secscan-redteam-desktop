@@ -57,8 +57,7 @@ function buildOutcome(over: Partial<ArsenalBuildOutcome> = {}): ArsenalBuildOutc
     dupeCount: 0,
     priority: [{ slug: 'seclists', entryCount: 2 }],
     failureReasons: [],
-    ...over,
-  }
+    ...over }
 }
 
 describe('arsenal CLI (ARS-8)', () => {
@@ -105,8 +104,7 @@ describe('arsenal CLI (ARS-8)', () => {
       const deps = {
         git: fakeGit(DEFAULT_ARSENAL_SOURCE_REPO),
         buildIndex: async () =>
-          buildOutcome({ ok: false, generation: 0, entryCount: 0, failureReasons: ['priority collection seclists is empty'] }),
-      }
+          buildOutcome({ ok: false, generation: 0, entryCount: 0, failureReasons: ['priority collection seclists is empty'] }) }
       const { code, out } = await captured(() => runArsenalCli(['refresh'], env, deps))
       assert.equal(code, 1)
       assert.match(out, /old generation still serving/)

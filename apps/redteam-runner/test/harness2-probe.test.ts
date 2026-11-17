@@ -24,8 +24,7 @@ import {
   listLayers,
   readLayer,
   removeLayer,
-  setActiveLayers,
-} from "../src/harness2/layers.js";
+  setActiveLayers } from "../src/harness2/layers.js";
 import { DEFAULT_TOKEN_BUDGET, VERDICTS_FILE, type VerdictLogRecord } from "../src/harness2/probe-verdict.js";
 import { loadProbeTargets, probeProposal, type ProbeRunFn, type ProbeRunInput } from "../src/harness2/probe.js";
 import { createRunnerProbeSeam, probeCommand, proposeCommand } from "../src/harness2/probe-cli.js";
@@ -39,8 +38,7 @@ function tempPaths(prefix: string): Harness2Paths {
     database: join(root, "harness2.db"),
     layers: join(root, "layers"),
     experience: join(root, "experience"),
-    runs: join(root, "runs"),
-  };
+    runs: join(root, "runs") };
 }
 
 function sampleLayer(overrides: Partial<PatchLayer> = {}): PatchLayer {
@@ -50,8 +48,7 @@ function sampleLayer(overrides: Partial<PatchLayer> = {}): PatchLayer {
     yaml: "- id: recon-system-prompt\n  config:\n    section: lean\n",
     adoptedAt: "2026-10-18T00:00:00.000Z",
     evidenceRunId: "probe-run-1",
-    ...overrides,
-  };
+    ...overrides };
 }
 
 function sampleProposal(overrides: Partial<Proposal> = {}): Proposal {
@@ -61,8 +58,7 @@ function sampleProposal(overrides: Partial<Proposal> = {}): Proposal {
     component: "system-prompt",
     yaml: "- id: recon-system-prompt\n  config:\n    section: lean\n",
     rationale: "fewer planner steps on recon without losing findings",
-    ...overrides,
-  };
+    ...overrides };
 }
 
 function sampleMetrics(overrides: Partial<RunMetrics> = {}): RunMetrics {
@@ -82,8 +78,7 @@ function sampleMetrics(overrides: Partial<RunMetrics> = {}): RunMetrics {
     harness: { runnerVersion: "test", layerIds: [], componentHashes: {} },
     startedAt: "2026-10-18T00:00:00.000Z",
     finishedAt: "2026-10-18T00:00:01.000Z",
-    ...overrides,
-  };
+    ...overrides };
 }
 
 /** A section-5 store with one stored training run, the leakage reference. */
@@ -106,8 +101,7 @@ function openStoreWithTraining(paths: Harness2Paths, overrides: Partial<RunBundl
       tokensTotal: 900,
       crashed: false,
       failureMode: "missed-vuln",
-      ...overrides,
-    },
+      ...overrides },
     [],
   );
   return store;
@@ -123,8 +117,7 @@ function writeTargetsFile(paths: Harness2Paths, count = MIN_HELD_OUT_TARGETS): s
       mode: "red",
       objective: "probe the candidate harness on a lab target",
       roe: { scope: [host] },
-      targetClass: "wordpress",
-    };
+      targetClass: "wordpress" };
   });
   writeFileSync(file, JSON.stringify(targets));
   return file;
@@ -143,8 +136,7 @@ function fakeSeam(result: (input: ProbeRunInput, layerIds: readonly string[]) =>
       calls.push({ input, layerIds: [...layerIds] });
       onCall?.(input);
       return result(input, layerIds);
-    },
-  };
+    } };
 }
 
 /** Base partial / candidate success: a clean ADOPT at every gate condition. */
@@ -343,8 +335,7 @@ describe("probe safety gates", () => {
         store,
         proposal: sampleProposal(),
         targetsFile: writeTargetsFile(paths, MIN_HELD_OUT_TARGETS - 1),
-        runEngagement: seam.runEngagement,
-      });
+        runEngagement: seam.runEngagement });
       assert.equal(verdict.verdict, "INSUFFICIENT_DATA");
       assert.equal(verdict.adopted, false);
       assert.match(verdict.reason, /distinct held-out target/);
@@ -502,8 +493,7 @@ describe("section-8 probe verdict and approval gate", () => {
         proposal: sampleProposal(),
         targetsFile: writeTargetsFile(paths),
         runEngagement: seam.runEngagement,
-        tokenBudget: 100,
-      });
+        tokenBudget: 100 });
       assert.equal(verdict.verdict, "INSUFFICIENT_DATA");
       assert.match(verdict.reason, /token budget exhausted/);
       assert.equal(verdict.baseRuns, 1, "one run already started before the budget was hit");

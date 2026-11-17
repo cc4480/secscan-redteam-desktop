@@ -1,5 +1,5 @@
 /**
- * SecLayer target profile — the MCP/API layer (https://secscan.us/api/mcp).
+ * SecLayer target profile — the MCP/API layer (https://target.invalid/api/mcp).
  *
  * EXHAUSTIVE battery (v0.7.0): surface × technique. Surfaces: MCP
  * initialize/handshake, capability negotiation, tools/list, tools/call for

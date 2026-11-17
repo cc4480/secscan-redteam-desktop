@@ -43,8 +43,7 @@ const meta: ReportMeta = {
   startedAt: "2026-10-28T09:00:00.000Z",
   generatedAt: "2026-10-28T10:00:00.000Z",
   findings: { critical: 1, high: 1, medium: 1, low: 1, info: 0 },
-  battery: { total: 10, confirmed: 3, executedClean: 4, killed: 2, blocked: 1, na: 0, pending: 0 },
-};
+  battery: { total: 10, confirmed: 3, executedClean: 4, killed: 2, blocked: 1, na: 0, pending: 0 } };
 
 function bundle(over: Partial<PocBundle>): PocBundle {
   return {
@@ -67,17 +66,14 @@ function bundle(over: Partial<PocBundle>): PocBundle {
         result: "200 OK — body contains REDTEAM-MARKER-abc123",
         validation: "marker-echo",
         marker: "REDTEAM-MARKER-abc123",
-        replay: null,
-      },
-    ],
+        replay: null } ],
     markerSent: "REDTEAM-MARKER-abc123",
     markerObserved: "REDTEAM-MARKER-abc123",
     validationTier: "execution",
     proves: "The marker was executed and echoed by the target.",
     doesNotProve: "It does not prove data beyond the canary was reachable.",
     reverifyCommand: "node reverify.mjs --finding F-1",
-    ...over,
-  };
+    ...over };
 }
 
 const findings: Finding[] = [
@@ -85,13 +81,11 @@ const findings: Finding[] = [
   { id: "F-2", severity: "high", title: "Verbose errors disclose stack trace", attackIds: [], evidence: "The error page prints a full stack trace.", fix: "Return generic errors.", retest: "Trigger the error; expect a generic page.", status: "confirmed", accountableOperator: "Carlos" },
   { id: "F-3", severity: "medium", title: "Missing rate limiting on login", attackIds: ["T1110"], evidence: "20 rapid attempts accepted.", fix: "Add rate limiting.", retest: "Repeat the burst; expect throttling.", status: "confirmed", accountableOperator: "Carlos" },
   { id: "F-4", severity: "low", title: "Cookie without Secure flag", attackIds: [], evidence: "Session cookie lacks Secure.", fix: "Set Secure.", retest: "Inspect Set-Cookie.", status: "deferred", accountableOperator: "Carlos" },
-  { id: "F-5", severity: "info", title: "SQL injection in search", attackIds: ["T1190"], evidence: "Tested and excluded.", fix: "", retest: "", status: "killed", accountableOperator: "Carlos" },
-];
+  { id: "F-5", severity: "info", title: "SQL injection in search", attackIds: ["T1190"], evidence: "Tested and excluded.", fix: "", retest: "", status: "killed", accountableOperator: "Carlos" } ];
 
 const bundles = new Map<string, PocBundle>([
   ["F-1", bundle({})],
-  ["F-2", bundle({ findingId: "F-2", validationTier: "observation", markerSent: undefined, markerObserved: undefined, proves: "The stack trace was observed in the response.", reverifyCommand: "node reverify.mjs --finding F-2" })],
-]);
+  ["F-2", bundle({ findingId: "F-2", validationTier: "observation", markerSent: undefined, markerObserved: undefined, proves: "The stack trace was observed in the response.", reverifyCommand: "node reverify.mjs --finding F-2" })] ]);
 
 const input: EngagementReportInput = {
   meta,
@@ -104,42 +98,35 @@ const input: EngagementReportInput = {
   noBundleReasons: new Map([["F-3", "finding F-3: no correlated tool execution in the audit log — no bundle"]]),
   negativeProof: [
     { hypothesis: "SQL injection in search", killingObservation: "Parameterised query confirmed.", decisiveEvents: [] },
-    { hypothesis: "Open redirect on logout", killingObservation: "Redirect target is allow-listed.", attackId: "T1204", decisiveEvents: [{ seq: 3, ts: meta.startedAt, tool: "http_probe", result: "302 to /home" }] },
-  ],
+    { hypothesis: "Open redirect on logout", killingObservation: "Redirect target is allow-listed.", attackId: "T1204", decisiveEvents: [{ seq: 3, ts: meta.startedAt, tool: "http_probe", result: "302 to /home" }] } ],
   findingMeta: new Map([["F-1", { category: "validation", owasp: "WSTG-ATHZ-04" }]]),
   coverage: {
     fullBattery: true,
     cells: [
       { target: "webapp", category: "validation", state: "done" },
       { target: "webapp", category: "logic", state: "blocked" },
-      { target: "webapp", category: "functionality", state: "missing" },
-    ],
+      { target: "webapp", category: "functionality", state: "missing" } ],
     totals: { total: 10, confirmed: 3, executedClean: 4, killed: 2, blocked: 1, na: 0, pending: 0 },
     probesUsed: 42,
     planOnly: ["webapp:WS-064 [needs: kerberos ticket material]"],
-    notCovered: ["webapp:functionality"],
-  },
+    notCovered: ["webapp:functionality"] },
   activity: {
     eventCount: 128,
     rows: [{ action: "http_probe", count: 40, attackIds: ["T1190"], firstSeq: 2, lastSeq: 90 }],
     totalActions: 1,
     decisions: [{ action: "sign_off", seq: 120 }],
-    danglingCauses: [],
-  },
-};
+    danglingCauses: [] } };
 
 const doc = buildReportDocument(input);
 const html = renderEngagementReportHtml(input);
 const md = renderReportMarkdown(doc, {
   batteryLine: "Battery coverage: fixture line.",
   proofMd: "",
-  integrationsMd: "",
-});
+  integrationsMd: "" });
 const ctxStub = {
   events: { engagementId: meta.engagementId },
   input: { target: meta.target, mode: meta.mode, objective: meta.objective },
-  config: { dryRunAgents: false },
-} as unknown as Ctx;
+  config: { dryRunAgents: false } } as unknown as Ctx;
 const model = buildReportModel(
   ctxStub,
   {
@@ -148,9 +135,7 @@ const model = buildReportModel(
     cells: [
       { t: "webapp", c: "validation", s: "done" },
       { t: "webapp", c: "logic", s: "blocked" },
-      { t: "webapp", c: "functionality", s: "missing" },
-    ],
-  },
+      { t: "webapp", c: "functionality", s: "missing" } ] },
   doc,
 );
 const json = JSON.parse(renderReportJson(model)) as typeof model;
@@ -159,8 +144,7 @@ const csv = buildFindingsCsv({
   findings: doc.findingsInReportOrder,
   findingMeta: input.findingMeta,
   bundles,
-  target: meta.target,
-});
+  target: meta.target });
 const docxText = strFromU8(unzipSync(buildReportDocx(input))["word/document.xml"]!);
 
 describe("one document — canonical counts", () => {
@@ -206,8 +190,7 @@ describe("one document — section presence reconciles", () => {
     findings: "Proven — 1",
     "fix-prompt": "Complete Fix Prompt",
     activity: "Tool Activity",
-    footer: "Artifacts:",
-  };
+    footer: "Artifacts:" };
   const mdMarks: Record<string, string> = {
     cover: "# Penetration Test Report",
     "executive-summary": "## Executive Summary",
@@ -216,8 +199,7 @@ describe("one document — section presence reconciles", () => {
     findings: "## Findings",
     "fix-prompt": "## Complete Fix Prompt",
     activity: "## Tool activity (runner-computed",
-    footer: "Artifacts: report.md",
-  };
+    footer: "Artifacts: report.md" };
 
   it("the JSON manifest is the document's section list, in canonical order", () => {
     assert.deepEqual(json.sections, [...doc.sections]);
@@ -230,8 +212,7 @@ describe("one document — section presence reconciles", () => {
       "findings",
       "fix-prompt",
       "activity",
-      "footer",
-    ]);
+      "footer" ]);
   });
 
   it("every manifest section renders in the HTML and the MD", () => {

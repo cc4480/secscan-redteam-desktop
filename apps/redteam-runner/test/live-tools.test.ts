@@ -30,8 +30,7 @@ import {
   getLive,
   listLive,
   roleForPhase,
-  dispatchLiveTool,
-} from "../src/live.js";
+  dispatchLiveTool } from "../src/live.js";
 import { EXEC_TOOLS, EXEC_TOOLS_BY_NAME, EXEC_TOOL_NAMES } from "../src/ui/mcp-exec.js";
 import { TOOLS } from "../src/ui/mcp-tools.js";
 import type { Ctx } from "../src/context.js";
@@ -46,8 +45,7 @@ function fakeCtx(phase: string): Ctx {
     safety: { environment: "staging" },
     hosts: ["example.test"],
     startedAt: Date.now(),
-    actions: 0,
-  } as unknown as Ctx;
+    actions: 0 } as unknown as Ctx;
 }
 
 afterEach(() => {

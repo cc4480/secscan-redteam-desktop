@@ -43,8 +43,7 @@ import {
   isAllowedSessionPostModule,
   MSF_SESSION_POST_MODULES,
   countCredentialRecords,
-  type MsfConsoleProcess,
-} from "../src/msf/index.js";
+  type MsfConsoleProcess } from "../src/msf/index.js";
 import { runEngagement } from "../src/phases.js";
 import { handleMsfTools } from "../src/dispatch/msf.js";
 import type { Ctx } from "../src/context.js";
@@ -76,8 +75,7 @@ const SEARCH_TABLE = [
   "   1  exploit/windows/smb/ms08_067_netapi       2008-10-28       great      Yes    MS08-067 Microsoft Server Service Relative Path Stack Corruption",
   "   2  auxiliary/dos/windows/smb/ms06_025_rras   2006-04-25       normal     No     Microsoft RRAS Service RASMAN Registry Overflow DoS",
   "   3  auxiliary/scanner/smb/smb_enumshares      2011-01-01       normal     No     SMB Share Enumeration",
-  "",
-].join("\n");
+  "" ].join("\n");
 
 class FakeConsoleProc implements MsfConsoleProcess {
   readonly writes: string[] = [];
@@ -219,8 +217,7 @@ function startFakeMsf(opts: { versionOk?: boolean } = {}): FakeMsf {
     },
     close() {
       _resetMsfRuntimeForTests();
-    },
-  };
+    } };
   return fake;
 }
 
@@ -312,8 +309,7 @@ describe("msf policy", () => {
       fullname: "windows/smb/ms17_010_eternalblue",
       rank: "excellent",
       description: "MS17-010 EternalBlue SMB Remote Windows Kernel Pool Corruption",
-      disclosureDate: "2017-03-14",
-    });
+      disclosureDate: "2017-03-14" });
     assert.equal(mods[2]!.type, "auxiliary");
     assert.equal(mods[2]!.fullname, "dos/windows/smb/ms06_025_rras");
     assert.deepEqual(parseMsfSearchOutput("no modules here\n"), []);
@@ -387,8 +383,7 @@ describe("MsfExecutor", () => {
   it("dos module run is refused by policy before any process is spawned", async () => {
     const res = await exec().run({
       host: "10.9.0.12", scopeHosts: SCOPE, moduleType: "auxiliary",
-      module: "dos/windows/smb/ms06_025_rras", marker: "abc123",
-    });
+      module: "dos/windows/smb/ms06_025_rras", marker: "abc123" });
     assert.equal(res.ok, false);
     assert.ok(res.refused?.includes("denial-of-service"));
     assert.equal(consoles().length, 0);
@@ -397,8 +392,7 @@ describe("MsfExecutor", () => {
   it("non-generic, non-Meterpreter payload run is refused by policy", async () => {
     const res = await exec().run({
       host: "10.9.0.12", scopeHosts: SCOPE, moduleType: "exploit",
-      module: "windows/smb/ms17_010_eternalblue", payload: "windows/shell_reverse_tcp", marker: "abc123",
-    });
+      module: "windows/smb/ms17_010_eternalblue", payload: "windows/shell_reverse_tcp", marker: "abc123" });
     assert.equal(res.ok, false);
     assert.ok(res.refused?.includes("payload not allowed"));
   });
@@ -406,8 +400,7 @@ describe("MsfExecutor", () => {
   it("run captures the canary marker echo as validation", async () => {
     const res = await exec().run({
       host: "10.9.0.12", scopeHosts: SCOPE, moduleType: "exploit",
-      module: "windows/smb/ms17_010_eternalblue", marker: "abc123",
-    });
+      module: "windows/smb/ms17_010_eternalblue", marker: "abc123" });
     assert.equal(res.ok, true, res.summary);
     assert.ok(res.summary.includes("MARKER ECHOED"), res.summary);
     assert.ok(res.output.includes("REDTEAM-MARKER-"), "marker in captured output");
@@ -421,8 +414,7 @@ describe("MsfExecutor", () => {
     const res = await exec().run({
       host: "10.9.0.12", scopeHosts: SCOPE, moduleType: "exploit",
       module: "windows/smb/ms17_010_eternalblue", marker: "abc123",
-      options: { NOTE: "x; sessions -k 7" },
-    });
+      options: { NOTE: "x; sessions -k 7" } });
     assert.equal(res.ok, true, res.summary);
     assert.ok(
       !allWrites().some((w) => w.trim() === "sessions -k 7"),
@@ -441,8 +433,7 @@ describe("MsfExecutor", () => {
     const p = e.run({
       host: "10.9.0.12", scopeHosts: SCOPE, moduleType: "exploit",
       module: "windows/smb/ms17_010_eternalblue", marker: "abc123",
-      signal: ctrl.signal, timeoutMs: 30_000,
-    });
+      signal: ctrl.signal, timeoutMs: 30_000 });
     await new Promise((r) => setTimeout(r, 300));
     ctrl.abort();
     const res = await p;
@@ -473,8 +464,7 @@ describe("MsfExecutor sessions + credential dump (W8)", () => {
   async function openSession(e: MsfExecutor) {
     const res = await e.run({
       host: "10.9.0.12", scopeHosts: SCOPE, moduleType: "exploit",
-      module: "windows/smb/ms17_010_eternalblue", payload: "windows/x64/meterpreter/reverse_tcp", marker: "abc123",
-    });
+      module: "windows/smb/ms17_010_eternalblue", payload: "windows/x64/meterpreter/reverse_tcp", marker: "abc123" });
     assert.equal(res.ok, true, res.summary);
     assert.ok(res.session?.handle, "run returns the session handle");
     return res;
@@ -498,8 +488,7 @@ describe("MsfExecutor sessions + credential dump (W8)", () => {
     const e = exec();
     const res = await e.sessionCommand({
       host: "10.9.0.12", scopeHosts: SCOPE,
-      handle: "00000000-0000-0000-0000-000000000000", command: "sysinfo",
-    });
+      handle: "00000000-0000-0000-0000-000000000000", command: "sysinfo" });
     assert.equal(res.ok, false);
     assert.ok(res.refused?.includes("unknown or closed"), res.summary);
     assert.equal(fake.procs.length, 0, "no local process spawned at all");
@@ -509,8 +498,7 @@ describe("MsfExecutor sessions + credential dump (W8)", () => {
     const e = exec();
     const { session } = await openSession(e);
     const res = await e.sessionCommand({
-      host: "10.9.0.12", scopeHosts: SCOPE, handle: session!.handle, command: "sysinfo",
-    });
+      host: "10.9.0.12", scopeHosts: SCOPE, handle: session!.handle, command: "sysinfo" });
     assert.equal(res.ok, true, res.summary);
     assert.ok(res.output.includes("FAKE-PC"), res.output);
     assert.ok(fake.sessionWrites.some((w) => w.includes("sysinfo")));
@@ -520,8 +508,7 @@ describe("MsfExecutor sessions + credential dump (W8)", () => {
     const e = exec();
     const { session } = await openSession(e);
     const res = await e.sessionCommand({
-      host: "10.9.0.13", scopeHosts: ["10.9.0.12", "10.9.0.13"], handle: session!.handle, command: "sysinfo",
-    });
+      host: "10.9.0.13", scopeHosts: ["10.9.0.12", "10.9.0.13"], handle: session!.handle, command: "sysinfo" });
     assert.equal(res.ok, false);
     assert.ok(res.refused?.includes("bound to 10.9.0.12"), res.summary);
   });
@@ -531,8 +518,7 @@ describe("MsfExecutor sessions + credential dump (W8)", () => {
     const { session } = await openSession(e);
     const before = fake.procs.length;
     const res = await e.sessionCommand({
-      host: "10.99.0.99", scopeHosts: SCOPE, handle: session!.handle, command: "sysinfo",
-    });
+      host: "10.99.0.99", scopeHosts: SCOPE, handle: session!.handle, command: "sysinfo" });
     assert.equal(res.ok, false);
     assert.ok(res.refused?.includes("out of scope"), res.summary);
     assert.equal(fake.procs.length, before, "no new local process");
@@ -542,8 +528,7 @@ describe("MsfExecutor sessions + credential dump (W8)", () => {
     const e = exec();
     const { session } = await openSession(e);
     const res = await e.sessionCommand({
-      host: "10.9.0.12", scopeHosts: SCOPE, handle: session!.handle, command: "rm -rf /",
-    });
+      host: "10.9.0.12", scopeHosts: SCOPE, handle: session!.handle, command: "rm -rf /" });
     assert.equal(res.ok, false);
     assert.ok(res.refused?.includes("denylist"), res.summary);
   });
@@ -555,8 +540,7 @@ describe("MsfExecutor sessions + credential dump (W8)", () => {
     try {
       const res = await e.credentialDump({
         host: "10.9.0.12", scopeHosts: SCOPE, handle: session!.handle,
-        kind: "hashdump", evidenceDir: join(dir, "evidence"),
-      });
+        kind: "hashdump", evidenceDir: join(dir, "evidence") });
       assert.equal(res.ok, true, res.summary);
       assert.equal(res.output, "", "no raw material in the tool output");
       assert.ok(!res.summary.includes("31d6cfe0"), "no hash in the summary");
@@ -581,8 +565,7 @@ describe("MsfExecutor sessions + credential dump (W8)", () => {
     try {
       const res = await e.credentialDump({
         host: "10.9.0.12", scopeHosts: SCOPE, handle: session!.handle,
-        kind: "kiwi", evidenceDir: join(dir, "evidence"),
-      });
+        kind: "kiwi", evidenceDir: join(dir, "evidence") });
       assert.equal(res.ok, true, res.summary);
       assert.ok((res.evidence?.records ?? 0) >= 1);
       assert.ok(!res.summary.includes("fake-pass-123"), "no password in the summary");
@@ -599,8 +582,7 @@ describe("MsfExecutor sessions + credential dump (W8)", () => {
     const postRunsBefore = allWrites().filter((w) => w.startsWith("use post/")).length;
     const res = await e.credentialDump({
       host: "10.9.0.12", scopeHosts: SCOPE, handle: session!.handle,
-      kind: "everything", evidenceDir: "/tmp/never-written",
-    });
+      kind: "everything", evidenceDir: "/tmp/never-written" });
     assert.equal(res.ok, false);
     assert.ok(res.refused?.includes("unknown credential dump kind"), res.summary);
     assert.equal(allWrites().filter((w) => w.startsWith("use post/")).length, postRunsBefore);
@@ -614,8 +596,7 @@ describe("MsfExecutor sessions + credential dump (W8)", () => {
     assert.ok(consoles()[0]!.killed, "the session's console process is stopped");
     assert.equal(e.sessions.list().length, 0);
     const after = await e.sessionCommand({
-      host: "10.9.0.12", scopeHosts: SCOPE, handle: session!.handle, command: "sysinfo",
-    });
+      host: "10.9.0.12", scopeHosts: SCOPE, handle: session!.handle, command: "sysinfo" });
     assert.equal(after.ok, false);
     assert.ok(after.refused?.includes("unknown or closed"));
   });
@@ -636,8 +617,7 @@ describe("msf_exec wiring", () => {
   const toolCall = (name: string, args: Record<string, unknown>): ToolCallRequest => ({
     id: `call-${name}`,
     name,
-    arguments: args,
-  });
+    arguments: args });
 
   function scriptedLlm(action: "search" | "run", outOfScope: boolean) {
     return async (role: AgentRole, messages: ChatMessage[], _opts: { tools?: { name: string }[] }): Promise<ChatResult> => {
@@ -679,11 +659,9 @@ describe("msf_exec wiring", () => {
       target: "10.9.0.12",
       mode: "red",
       objective: "msf wiring test",
-      roe: { scope: ["10.9.0.12"] },
-    };
+      roe: { scope: ["10.9.0.12"] } };
     const msfExecutor = new MsfExecutor({ spawn: fake.spawn, env: {} });
     const res = await runEngagement(input, {
-      mcpToken: "test",
       deepseekApiKey: "test",
       qwenApiKey: "test",
       engagementsDir: dir,
@@ -691,9 +669,7 @@ describe("msf_exec wiring", () => {
       deps: {
         verify: async () => true,
         completeForRole: scriptedLlm(action, outOfScope) as never,
-        msfExecutor,
-      },
-    });
+        msfExecutor } });
     const events = readFileSync(join(dir, res.engagementId, "events.jsonl"), "utf8")
       .split("\n")
       .filter(Boolean)
@@ -755,16 +731,13 @@ describe("msf_exec wiring", () => {
         target: "10.9.0.12",
         mode: "red",
         objective: "tool list check",
-        roe: { scope: ["10.9.0.12"] },
-      };
+        roe: { scope: ["10.9.0.12"] } };
       await runEngagement(input, {
-        mcpToken: "test",
         deepseekApiKey: "test",
         qwenApiKey: "test",
         engagementsDir: dir,
         registryPath: join(dir, "registry.json"),
-        deps: { verify: async () => true, completeForRole: llm as never },
-      });
+        deps: { verify: async () => true, completeForRole: llm as never } });
       assert.ok(sawTools.includes("msf_exec"), "agent tool list includes msf_exec");
     } finally {
       fake.close();
@@ -801,8 +774,7 @@ describe("msf_exec wiring", () => {
               text: "firing run",
               toolCalls: [toolCall("msf_exec", { ...base, action: "run", moduleType: "exploit", module: "windows/smb/ms17_010_eternalblue", payload: "windows/x64/meterpreter/reverse_tcp", attackId: "T1190", cve: "CVE-2017-0144", hypothesis: "session flow" })],
               provider: "fake",
-              model: "fake",
-            };
+              model: "fake" };
           }
           if (toolMsgs.length === 1) {
             const m = toolMsgs[0]!.content.match(/handle ([0-9a-f-]{36})/);
@@ -811,24 +783,21 @@ describe("msf_exec wiring", () => {
               text: "session command",
               toolCalls: [toolCall("msf_exec", { ...base, action: "session_command", sessionHandle: handle, command: "sysinfo", attackId: "T1059", hypothesis: "interact" })],
               provider: "fake",
-              model: "fake",
-            };
+              model: "fake" };
           }
           if (toolMsgs.length === 2) {
             return {
               text: "dump",
               toolCalls: [toolCall("msf_exec", { ...base, action: "credential_dump", sessionHandle: handle, dumpKind: "hashdump", attackId: "T1003", hypothesis: "dump" })],
               provider: "fake",
-              model: "fake",
-            };
+              model: "fake" };
           }
           if (toolMsgs.length === 3) {
             return {
               text: "close",
               toolCalls: [toolCall("msf_exec", { ...base, action: "session_close", sessionHandle: handle, attackId: "T1059", hypothesis: "close" })],
               provider: "fake",
-              model: "fake",
-            };
+              model: "fake" };
           }
           return textOnly("TRIED: msf session flow / OBSERVED: done / VERDICT: killed - done");
         }
@@ -838,20 +807,16 @@ describe("msf_exec wiring", () => {
         target: "10.9.0.12",
         mode: "red",
         objective: "msf session wiring test",
-        roe: { scope: ["10.9.0.12"] },
-      };
+        roe: { scope: ["10.9.0.12"] } };
       const msfExecutor = new MsfExecutor({ spawn: fake.spawn, env: {} });
       const res = await runEngagement(input, {
-        mcpToken: "test",
         deepseekApiKey: "test",
         qwenApiKey: "test",
         engagementsDir: dir,
         deps: {
           verify: async () => true,
           completeForRole: llm as never,
-          msfExecutor,
-        },
-      });
+          msfExecutor } });
       assert.equal(res.status, "complete");
       assert.notEqual(handle, "missing-handle", "the run result carried the session handle to the agent");
       const all = readFileSync(join(dir, res.engagementId, "events.jsonl"), "utf8")
@@ -891,8 +856,7 @@ describe("msf_exec dispatcher guard (eng-2026-11-02-wcsu rider)", () => {
     const throwingExecutor = {
       search: async (): Promise<never> => {
         throw new TypeError("Cannot read properties of undefined (reading 'length')");
-      },
-    };
+      } };
     const ctx = {
       input: { mode: "red", roe: {} },
       hosts: ["10.9.0.12"],
@@ -901,16 +865,14 @@ describe("msf_exec dispatcher guard (eng-2026-11-02-wcsu rider)", () => {
       targetCoverage: new Map(),
       config: undefined,
       events: { updateState: () => {}, append: () => {} },
-      msfExecutor: throwingExecutor,
-    } as unknown as Ctx;
+      msfExecutor: throwingExecutor } as unknown as Ctx;
     const call: ToolCallRequest = { id: "call-msf-search", name: "msf_exec", arguments: {} };
     const args: Record<string, unknown> = {
       action: "search",
       host: "10.9.0.12",
       targetProfile: "windows",
       category: "functionality",
-      service: "smb",
-    };
+      service: "smb" };
     const res = await handleMsfTools(ctx, "exploiter", "recon", call, args);
     assert.ok(res, "the handler answers the call");
     assert.equal(res.ok, false);

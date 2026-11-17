@@ -1,5 +1,6 @@
 import { strListArg } from "./prelude.js";
 import { seclayerPrelude, isDenial, recordSeclayerFindings, strArg, } from "./seclayer.js";
+import { isLoopbackTarget, withLoopbackOob } from "../net/oob-listener.js";
 import { assessCsrf } from "#seclayer/server/csrfProbe.js";
 import { probeStoredXss } from "#seclayer/server/storedXss.js";
 import { probeDomXss } from "#seclayer/server/domXss.js";
@@ -32,7 +33,7 @@ export async function handleSeclayerDastTool(ctx, _role, _phase, call, args) {
     const postUrls = strListArg(args, "postUrls") ?? [];
     const cookieLines = strListArg(args, "cookieLines") ?? [];
     const deny = (msg) => ({ result: `DENIED: ${msg}`, attackId: pre.attackId, target: url });
-    const done = (raw, cls) => recordSeclayerFindings(ctx, `seclayer_dast/${probe}`, url, raw, pre, cls);
+    const done = (raw, cls, notRun) => recordSeclayerFindings(ctx, `seclayer_dast/${probe}`, url, raw, pre, cls, _role, notRun);
     try {
         switch (probe) {
             case "csrf": {
@@ -82,13 +83,22 @@ export async function handleSeclayerDastTool(ctx, _role, _phase, call, args) {
                 if (discovered.length === 0)
                     return deny("seclayer_dast llm needs discovered LLM endpoints from recon ({url, method?, params?}).");
                 const origin = new URL(url).origin;
-                const all = [];
-                for (const fn of [probeLlmPromptInjection, probeLlmMemoryPoisoning, probeLlmInsecureToolUse]) {
-                    const f = await fn(discovered, origin, headers);
-                    if (f)
-                        all.push(f);
-                }
-                return done(all, "llm-endpoint");
+                return withLoopbackOob(url, async (oob) => {
+                    const all = [];
+                    for (const fn of [probeLlmPromptInjection, probeLlmMemoryPoisoning]) {
+                        const f = await fn(discovered, origin, headers);
+                        if (f)
+                            all.push(f);
+                    }
+                    const toolUse = await probeLlmInsecureToolUse(discovered, origin, headers, oob);
+                    if (toolUse)
+                        all.push(toolUse);
+                    const notRun = [];
+                    if (!isLoopbackTarget(new URL(url).hostname)) {
+                        notRun.push("LLM insecure-tool-use (out-of-band fetch via model tool) was not run because the target is not loopback/local and the in-process loopback collaborator cannot receive callbacks from remote targets (loopback-only).");
+                    }
+                    return done(all, "llm-endpoint", notRun.length ? notRun : undefined);
+                });
             }
             case "edge_function": {
                 const texts = strListArg(args, "texts") ?? [];

@@ -34,8 +34,7 @@ function baseCtx(over: Record<string, unknown> = {}): Ctx {
     probesUsed: 0,
     hostKill: { controllers: new Set() },
     safety: { rpsPerHost: 5 },
-    ...over,
-  } as unknown as Ctx;
+    ...over } as unknown as Ctx;
 }
 
 const call = (name: string): ToolCallRequest => ({ name }) as unknown as ToolCallRequest;
@@ -90,8 +89,7 @@ describe("xtool run path: dead explicit override is refused, not spawned", () =>
             action: "run",
             host: "https://seclayer.app/FUZZ",
             targetProfile: "linux",
-            profile: "dirs",
-          }),
+            profile: "dirs" }),
       );
       assert.ok(r, "handled");
       // The probe path's refusal shape: UNAVAILABLE plus the tool's setup
@@ -119,8 +117,7 @@ describe("xtool run path: dead explicit override is refused, not spawned", () =>
             action: "run",
             host: "https://seclayer.app/FUZZ",
             targetProfile: "linux",
-            profile: "dirs",
-          }),
+            profile: "dirs" }),
       );
       assert.ok(r, "handled");
       assert.ok(!/^UNAVAILABLE:/.test(r.result), "bundled copy is present, so no refusal");
@@ -138,8 +135,7 @@ describe("xtool run path: dead explicit override is refused, not spawned", () =>
         handleXTool(baseCtx(), "recon", "recon", call("ffuf_exec"), {
           action: "probe",
           host: "",
-          targetProfile: "linux",
-        }),
+          targetProfile: "linux" }),
     );
     assert.ok(r, "handled");
     assert.match(r.result, /^UNAVAILABLE:/);
@@ -158,9 +154,7 @@ describe("nmap scan path: dead explicit override is refused, not spawned", () =>
             scanned = true;
             return { ok: true, message: "ok", run: { hosts: [] } };
           },
-          profiles: async () => ({ message: "Profiles" }),
-        },
-      });
+          profiles: async () => ({ message: "Profiles" }) } });
       const r = await withEnv(
         { REDTEAM_TOOLS_DIR: root, REDTEAM_NMAP_BIN: join(root, "deleted-tools", `nmap${EXE}`) },
         () =>
@@ -168,8 +162,7 @@ describe("nmap scan path: dead explicit override is refused, not spawned", () =>
             action: "scan",
             host: "seclayer.app",
             targetProfile: "linux",
-            profile: "quick",
-          }),
+            profile: "quick" }),
       );
       assert.ok(r, "handled");
       assert.match(r.result, /^UNAVAILABLE:/, "refused as UNAVAILABLE before scanning");
@@ -190,16 +183,13 @@ describe("nmap scan path: dead explicit override is refused, not spawned", () =>
             scanned = a.target;
             return { ok: true, message: "ok", run: { hosts: [] } };
           },
-          profiles: async () => ({ message: "Profiles" }),
-        },
-      });
+          profiles: async () => ({ message: "Profiles" }) } });
       const r = await withEnv({ REDTEAM_TOOLS_DIR: root, REDTEAM_NMAP_BIN: undefined }, () =>
         handleNmapTools(ctx, "recon", "recon", call("nmap_exec"), {
           action: "scan",
           host: "seclayer.app",
           targetProfile: "linux",
-          profile: "quick",
-        }),
+          profile: "quick" }),
       );
       assert.ok(r, "handled");
       assert.ok(!/^UNAVAILABLE:/.test(r.result), "bundled copy is present, so no refusal");

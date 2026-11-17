@@ -5,7 +5,7 @@
  * Pure data split of linux.ts: every item is byte-identical to the original,
  * same order, same fields. Assembled by linux.ts.
  */
-import { NEEDS_MSFRPCD, NEEDS_NUCLEI } from "./types.js";
+import { NEEDS_MSFCONSOLE, NEEDS_NUCLEI } from "./types.js";
 export const LINUX_PART_5 = [
     // ============================================ LOGGING & DETECTION
     {
@@ -130,20 +130,20 @@ export const LINUX_PART_5 = [
     {
         id: "LX-107", category: "logic", name: "CVE → Metasploit module mapping",
         brief: "Detected service/version mapped to candidate CVE exploit modules for coordinator approval.",
-        owasp: "CIS-v8-4.4", attackId: "T1190", needs: NEEDS_MSFRPCD,
+        owasp: "CIS-v8-4.4", attackId: "T1190", needs: NEEDS_MSFCONSOLE,
         what: "For every versioned service detected during recon (SSH, HTTP, FTP, NFS, SMB…), run msf_exec suggest with the service and version string and present the ranked candidate exploit modules to the coordinator for approval. Mapping only — nothing fires. Methodology item: each CVE approved downstream becomes its own runtime instance.",
     },
     {
         id: "LX-108", category: "functionality", name: "CVE exploit validation via Metasploit",
         brief: "Coordinator-approved CVE modules fired with benign canary marker payloads.",
-        owasp: "CIS-v8-4.4", attackId: "T1190", needs: NEEDS_MSFRPCD,
+        owasp: "CIS-v8-4.4", attackId: "T1190", needs: NEEDS_MSFCONSOLE,
         what: "For each coordinator-approved candidate from LX-107, run msf_exec run in the exploit phase: ONE module. A generic cmd payload executes ONLY the runner-built canary marker (echo REDTEAM-MARKER-*); a Meterpreter session payload may land the run instead — the session registers to the run and the marker is proven through it before any session command. The marker echoing back IS the validation — command execution achieved. dos/destructive modules are refused by policy; sessions a run did not register are stopped by hygiene. Tag attackId T1190 and put the CVE in the cve field — each validated CVE is recorded as its own report instance.",
         blackNote: "One module per CVE; lowest-rank-sufficient module first; stop on first defender signal.",
     },
     {
         id: "LX-109", category: "validation", name: "Metasploit auxiliary validation rigor",
         brief: "Auxiliary scanner findings cross-validated; module ranks sanity-checked.",
-        owasp: "CIS-v8-4.4", attackId: "T1595.002", needs: NEEDS_MSFRPCD,
+        owasp: "CIS-v8-4.4", attackId: "T1595.002", needs: NEEDS_MSFCONSOLE,
         what: "Cross-validate auxiliary-module findings (ssh_enumusers, http scanners, etc.) against direct host-exec evidence (ssh_exec version checks, banner reads) — two independent observations before a finding. Sanity-check module ranks against observed behavior; a high-rank module that fails silently is reported as a coverage note, not a finding.",
     },
     // ------------------------------------------------- TEMPLATE-BASED CHECKS

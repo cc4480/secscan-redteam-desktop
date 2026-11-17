@@ -21,8 +21,7 @@ import {
   saveRegistryFile,
   seedRegistry,
   transactRegistryFile,
-  type VulnerabilityRegistry,
-} from "../src/registry.js";
+  type VulnerabilityRegistry } from "../src/registry.js";
 import { writeFindingToRegistry, writeKilledToRegistry } from "../src/dispatch/verdicts.js";
 import type { Ctx, KilledLive, LiveFinding } from "../src/context.js";
 
@@ -45,8 +44,7 @@ function makeCtx(id: string, registryPath: string): Ctx {
     events: makeLog(id),
     registry: emptyRegistry(),
     registryPath,
-    fingerprint: { host: "h", stack: [], appType: "t" },
-  } as unknown as Ctx;
+    fingerprint: { host: "h", stack: [], appType: "t" } } as unknown as Ctx;
 }
 
 function finding(vulnClass: string, n: number): LiveFinding {
@@ -56,8 +54,7 @@ function finding(vulnClass: string, n: number): LiveFinding {
     vulnClass,
     attackId: "T1190",
     evidence: "e",
-    payload: `p${n}`,
-  };
+    payload: `p${n}` };
 }
 
 describe("EventLog per-instance sequencing", () => {
@@ -167,8 +164,7 @@ describe("registry atomic transactions", () => {
         technique: "t",
         payloadPattern: "p",
         evidenceRef: "r",
-        severity: "low",
-      });
+        severity: "low" });
     });
     transactRegistryFile(path, (reg: VulnerabilityRegistry) => {
       seen.push(reg.confirmed.length);

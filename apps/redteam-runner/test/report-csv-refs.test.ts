@@ -34,8 +34,7 @@ function vuln(overrides: Partial<ScanVulnerability> = {}): ScanVulnerability {
     solution: "Add the Secure attribute.",
     cvssScore: 6.5,
     cweId: "CWE-614",
-    ...overrides,
-  };
+    ...overrides };
 }
 
 function live(overrides: Partial<LiveFinding> = {}): LiveFinding {
@@ -46,8 +45,7 @@ function live(overrides: Partial<LiveFinding> = {}): LiveFinding {
     evidence: "Set-Cookie: sid=…; HttpOnly",
     cvss: 6.5,
     cwe: "CWE-614",
-    ...overrides,
-  };
+    ...overrides };
 }
 
 function finding(overrides: Partial<Finding> = {}): Finding {
@@ -60,8 +58,7 @@ function finding(overrides: Partial<Finding> = {}): Finding {
     fix: "Add the Secure attribute to all cookies.",
     retest: "Re-request and inspect Set-Cookie.",
     status: "confirmed",
-    ...overrides,
-  };
+    ...overrides };
 }
 
 function bundle(overrides: Partial<PocBundle> = {}): PocBundle {
@@ -81,8 +78,7 @@ function bundle(overrides: Partial<PocBundle> = {}): PocBundle {
     proves: "The cookie was set without Secure.",
     doesNotProve: "Session theft itself.",
     reverifyCommand: "redteam-runner reverify b-1",
-    ...overrides,
-  } as PocBundle;
+    ...overrides } as PocBundle;
 }
 
 describe("RP-3 — the SecScan seam stops dropping reference data", () => {
@@ -155,14 +151,12 @@ describe("RP-1 — findings.csv reconciles with the report model", () => {
   const findings: Finding[] = [
     finding({ fix: "Add the Secure attribute.\nThen re-test  the header." }),
     finding({ id: "F-2", severity: "high", title: "Reflected XSS in search", attackIds: ["T1059"], fix: "Escape output." }),
-    finding({ id: "F-3", severity: "low", title: "Verbose errors", status: "killed", fix: "Generic error pages." }),
-  ];
+    finding({ id: "F-3", severity: "low", title: "Verbose errors", status: "killed", fix: "Generic error pages." }) ];
   const bundles = new Map<string, PocBundle>([["F-1", bundle()]]);
   const meta = buildFindingMeta(bundles, [
     finding({ cvss: 6.5, cwe: "CWE-614" }),
     finding({ id: "F-2", cvss: 7.4 }),
-    finding({ id: "F-3" }),
-  ]);
+    finding({ id: "F-3" }) ]);
   const csv = buildFindingsCsv({ findings, findingMeta: meta, bundles, target: "https://target.example" });
   const lines = csv.split("\r\n").filter((l) => l.length > 0);
 
@@ -195,8 +189,7 @@ describe("RP-1 — findings.csv reconciles with the report model", () => {
       findings: [finding({ title: 'Header, "quoted" title' })],
       findingMeta: new Map(),
       bundles: new Map(),
-      target: "https://target.example",
-    });
+      target: "https://target.example" });
     assert.ok(tricky.split("\r\n")[1].startsWith('F-1,"Header, ""quoted"" title",medium'));
   });
 
@@ -205,8 +198,7 @@ describe("RP-1 — findings.csv reconciles with the report model", () => {
     const appended: { action?: string }[] = [];
     const ctx = {
       events: { dir, engagementId: "eng-1", append: (e: { action?: string }) => appended.push(e) },
-      input: { target: "https://target.example" },
-    } as unknown as Ctx;
+      input: { target: "https://target.example" } } as unknown as Ctx;
     emitFindingsCsv(ctx, findings, bundles);
     const path = join(dir, "findings.csv");
     assert.ok(existsSync(path));
@@ -215,8 +207,7 @@ describe("RP-1 — findings.csv reconciles with the report model", () => {
       findings,
       findingMeta: buildFindingMeta(bundles, findings),
       bundles,
-      target: "https://target.example",
-    });
+      target: "https://target.example" });
     assert.equal(written, expected);
     assert.equal(appended.length, 1);
     assert.equal(appended[0].action, "report_csv_written");

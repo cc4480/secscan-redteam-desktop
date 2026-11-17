@@ -47,6 +47,7 @@ import { type AgentRole, type CharterEngagement, type CharterRole, type ChatMess
 import { type Ctx } from './context.js';
 import { type EngagementPhase } from './types.js';
 export { condensedReissueMessages } from './policy-containment.js';
+export { artifactCheckForPhase, isArtifactPhase, reportArtifactCheck } from './charter-artifacts.js';
 /**
  * The charter engagement record for one run, filled from what the runner
  * actually holds. Every field is required by the charter loader, so each
@@ -84,37 +85,6 @@ export interface CharteredCallOptions {
      */
     artifactCheck?: (text: string) => boolean;
 }
-/**
- * M6: the phases whose chartered calls must produce an artifact — the
- * report phase (the report document, the Scribe's authored HTML, the
- * scribe/peer-review verdict JSON). Every createCharteredComplete
- * caller that serves the report phase passes 'report' (report/phase.ts
- * via agentLoop, report/scribe.ts, report/scribe-html.ts,
- * phases/peer-review.ts), so the flag originates here, from the phase
- * the factory was built for, not from a per-call guess.
- *
- * @param phase - the phase a chartered completion serves
- * @returns true when that phase's calls are artifact-producing tasks
- */
-export declare function isArtifactPhase(phase: EngagementPhase): boolean;
-/**
- * M6: the default artifact check for an artifact phase's response: the
- * text carries a complete HTML document (Scribe-authored report.html),
- * a parseable JSON object (a whole-text verdict, or a fenced ```json
- * block — the report's findings block), or a markdown report heading.
- * Cooperative prose with none of these is not the artifact.
- *
- * @param text - the response text to check
- * @returns true when the text carries an artifact in a required format
- */
-export declare function reportArtifactCheck(text: string): boolean;
-/**
- * M6: the phase-derived artifact check paired with {@link isArtifactPhase}.
- *
- * @param phase - the phase a chartered completion serves
- * @returns the artifact check for artifact phases, or undefined
- */
-export declare function artifactCheckForPhase(phase: EngagementPhase): ((text: string) => boolean) | undefined;
 /** Injectable provider seam for tests; production uses the router registry. */
 export interface CharteredCallSeams {
     /** Raw provider call for one resolved route. */

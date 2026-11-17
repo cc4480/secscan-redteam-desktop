@@ -9,15 +9,13 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   buildReportDetail, diffFindings, firstSentence,
-  type BaselineInput, type DetailFindingInput, type DetailInput,
-} from '../src/report/detail.js'
+  type BaselineInput, type DetailFindingInput, type DetailInput } from '../src/report/detail.js'
 
 function f(over: Partial<DetailFindingInput> & { id: string }): DetailFindingInput {
   return {
     title: `Finding ${over.id}`, severity: 'medium', tier: 'confirmed',
     attackIds: [], sourceLabel: '', signals: [], fix: 'Fix it. Then verify.',
-    ...over,
-  }
+    ...over }
 }
 
 function input(over: Partial<DetailInput> = {}): DetailInput {
@@ -30,19 +28,16 @@ function input(over: Partial<DetailInput> = {}): DetailInput {
     findings: [],
     coverage: {
       totals: { total: 22, confirmed: 1, executedClean: 16, killed: 1, blocked: 4, na: 0, pending: 0 },
-      probesUsed: 36, fullBattery: true, notCovered: [], planOnly: [], arms: [],
-    },
+      probesUsed: 36, fullBattery: true, notCovered: [], planOnly: [], arms: [] },
     surface: {},
-    ...over,
-  }
+    ...over }
 }
 
 function baseline(over: Partial<BaselineInput> = {}): BaselineInput {
   return {
     engagementId: 'eng-base', startedAt: '2026-10-20T09:00:00.000Z',
     dryRun: false, score: 80, grade: 'B', findings: [],
-    ...over,
-  }
+    ...over }
 }
 
 describe('detail diff (§12.1)', () => {
@@ -157,10 +152,8 @@ describe('detail risk areas (§12.5)', () => {
       f({ id: 'F-2', severity: 'low', sourceLabel: 'Injection Defense', signals: ['WSTG-CONF-12', 'CWE-79'] }),
       f({ id: 'F-3', severity: 'info', sourceLabel: 'Information Disclosure' }),
       f({ id: 'F-4', severity: 'high', sourceLabel: 'Mystery Category' }),
-      f({ id: 'F-5', severity: 'high', tier: 'deferred', sourceLabel: 'bola' }),
-    ],
-    tierCounts: { proven: 0, confirmed: 4, deferred: 1 },
-  })
+      f({ id: 'F-5', severity: 'high', tier: 'deferred', sourceLabel: 'bola' }) ],
+    tierCounts: { proven: 0, confirmed: 4, deferred: 1 } })
 
   it('every actionable finding is in exactly one area; sums reconcile', () => {
     const d = buildReportDetail(mixed)
@@ -194,8 +187,7 @@ describe('detail risk areas (§12.5)', () => {
 describe('detail impact (§12.6)', () => {
   it('rule 1: confirmed critical in API area carries the incident sentence', () => {
     const d = buildReportDetail(input({
-      findings: [f({ id: 'F-1', severity: 'critical', sourceLabel: 'bola' })],
-    }))
+      findings: [f({ id: 'F-1', severity: 'critical', sourceLabel: 'bola' })] }))
     assert.equal(d.impact.level, 'critical')
     assert.match(d.impact.text, /^Material business risk: F-1 \(/)
     assert.match(d.impact.text, /Treat as an incident until the fix is verified by retest\./)
@@ -203,8 +195,7 @@ describe('detail impact (§12.6)', () => {
 
   it('rule 1: a critical outside the two named areas gets no incident sentence', () => {
     const d = buildReportDetail(input({
-      findings: [f({ id: 'F-1', severity: 'critical', sourceLabel: 'csrf' })],
-    }))
+      findings: [f({ id: 'F-1', severity: 'critical', sourceLabel: 'csrf' })] }))
     assert.equal(d.impact.level, 'critical')
     assert.ok(!/Treat as an incident/.test(d.impact.text))
   })
@@ -213,9 +204,7 @@ describe('detail impact (§12.6)', () => {
     const d = buildReportDetail(input({
       findings: [
         f({ id: 'F-1', severity: 'high', title: 'Weak session', sourceLabel: 'weak-session' }),
-        f({ id: 'F-2', severity: 'high', title: 'No rate limit', sourceLabel: 'auth-rate-limit' }),
-      ],
-    }))
+        f({ id: 'F-2', severity: 'high', title: 'No rate limit', sourceLabel: 'auth-rate-limit' }) ] }))
     assert.equal(d.impact.level, 'high')
     assert.match(
       d.impact.text,
@@ -248,9 +237,7 @@ describe('detail impact (§12.6)', () => {
     const d = buildReportDetail(input({
       findings: [
         f({ id: 'F-1', severity: 'low', tier: 'proven', sourceLabel: 'csrf' }),
-        f({ id: 'F-2', severity: 'medium', sourceLabel: 'bola' }),
-      ],
-    }))
+        f({ id: 'F-2', severity: 'medium', sourceLabel: 'bola' }) ] }))
     assert.equal(d.impact.level, 'medium')
     assert.match(d.impact.text, /Per-user data can be reached across account boundaries/)
     assert.ok(!/Content or session material/.test(d.impact.text), "not the proven low's area clause")
@@ -262,9 +249,7 @@ describe('detail per-finding impact (Q-RP-4)', () => {
     const d = buildReportDetail(input({
       findings: [
         f({ id: 'F-1', severity: 'critical', tier: 'proven', sourceLabel: 'bola' }),
-        f({ id: 'F-2', severity: 'low', sourceLabel: 'Injection Defense', signals: ['WSTG-CONF-12'] }),
-      ],
-    }))
+        f({ id: 'F-2', severity: 'low', sourceLabel: 'Injection Defense', signals: ['WSTG-CONF-12'] }) ] }))
     assert.deepEqual(Object.keys(d.findingImpacts).sort(), ['F-1', 'F-2'])
     assert.equal(
       d.findingImpacts['F-1'],
@@ -281,17 +266,14 @@ describe('detail per-finding impact (Q-RP-4)', () => {
     const d = buildReportDetail(input({
       findings: [
         f({ id: 'F-1', severity: 'high', tier: 'deferred', sourceLabel: 'bola' }),
-        f({ id: 'F-2', severity: 'info' }),
-      ],
-    }))
+        f({ id: 'F-2', severity: 'info' }) ] }))
     assert.equal(d.findingImpacts['F-1'], undefined)
     assert.deepEqual(Object.keys(d.findingImpacts), ['F-2'])
   })
 
   it('an unclassified area still resolves through the family/General path', () => {
     const d = buildReportDetail(input({
-      findings: [f({ id: 'F-1', severity: 'high', sourceLabel: 'Mystery Category' })],
-    }))
+      findings: [f({ id: 'F-1', severity: 'high', sourceLabel: 'Mystery Category' })] }))
     assert.match(d.findingImpacts['F-1']!, /The confirmed weakness is documented with its evidence under Findings\./)
   })
 })
@@ -303,9 +285,7 @@ describe('detail priority (§12.7)', () => {
         f({ id: 'F-10', severity: 'high' }),
         f({ id: 'F-2', severity: 'high' }),
         f({ id: 'F-1', severity: 'low', tier: 'proven' }),
-        f({ id: 'F-3', severity: 'critical' }),
-      ],
-    }))
+        f({ id: 'F-3', severity: 'critical' }) ] }))
     assert.deepEqual(
       d.priority.actions.map(a => a.id),
       ['F-1', 'F-3', 'F-2', 'F-10'],
@@ -318,9 +298,7 @@ describe('detail priority (§12.7)', () => {
       findings: [
         f({ id: 'F-1', severity: 'low', tier: 'deferred' }),
         f({ id: 'F-2', severity: 'critical', tier: 'deferred' }),
-        f({ id: 'F-3', severity: 'info' }),
-      ],
-    }))
+        f({ id: 'F-3', severity: 'info' }) ] }))
     assert.deepEqual(d.priority.verifyNext.map(a => a.id), ['F-2', 'F-1'])
     assert.equal(d.priority.zeroNote, undefined)
   })
@@ -339,8 +317,7 @@ describe('detail priority (§12.7)', () => {
 
   it('zero actionable with deferred outstanding shows Verify next, not the zero note', () => {
     const d = buildReportDetail(input({
-      findings: [f({ id: 'F-1', tier: 'deferred' })],
-    }))
+      findings: [f({ id: 'F-1', tier: 'deferred' })] }))
     assert.equal(d.priority.zeroNote, undefined)
     assert.equal(d.priority.verifyNext.length, 1)
   })
@@ -351,22 +328,18 @@ describe('detail pillars (§12.8)', () => {
     'bola', 'api', 'webhook', 'redteam',
     'aggressive_ssti', 'aggressive_nosql', 'aggressive_xxe', 'aggressive_crlf', 'aggressive_host_header',
     'csrf', 'dom_xss', 'deserialization', 'prototype_pollution', 'price_manipulation',
-    'auth_rate_limit', 'i18n', 'edge_function', 'secscan-engine',
-  ]
+    'auth_rate_limit', 'i18n', 'edge_function', 'secscan-engine' ]
   const parityLike = input({
     findings: [
       f({ id: 'F-1', severity: 'critical', sourceLabel: 'bola-idor' }),
       f({ id: 'F-2', severity: 'low', sourceLabel: 'Injection Defense', signals: ['WSTG-CONF-12'] }),
-      f({ id: 'F-3', severity: 'info', sourceLabel: 'Information Disclosure' }),
-    ],
+      f({ id: 'F-3', severity: 'info', sourceLabel: 'Information Disclosure' }) ],
     coverage: {
       totals: { total: 22, confirmed: 1, executedClean: 16, killed: 1, blocked: 4, na: 0, pending: 0 },
       probesUsed: 36, fullBattery: true,
       notCovered: ['credential_chain', 'stored_xss', 'weak_session', 'llm'], planOnly: [],
-      arms: ARMS_RAN.map(name => ({ name, state: 'ran' as const })),
-    },
-    surface: { tlsGrade: 'A', servedVia: 'Cloudflare', technologies: ['Cloudflare'] },
-  })
+      arms: ARMS_RAN.map(name => ({ name, state: 'ran' as const })) },
+    surface: { tlsGrade: 'A', servedVia: 'Cloudflare', technologies: ['Cloudflare'] } })
 
   it('attribution sums equal the actionable total; engine findings split EASM/DAST', () => {
     const d = buildReportDetail(parityLike)
@@ -406,10 +379,7 @@ describe('detail pillars (§12.8)', () => {
         arms: [
           { name: 'bola', state: 'blocked', reason: 'ownership verification required' },
           { name: 'api', state: 'not-covered', reason: 'ownership verification required' },
-          { name: 'webhook', state: 'blocked', reason: 'no webhook surface' },
-        ],
-      },
-    }))
+          { name: 'webhook', state: 'blocked', reason: 'no webhook surface' } ] } }))
     const api = d.pillars.find(p => p.pillar === 'API SEC')!
     assert.equal(api.status, 'NOT COVERED')
     assert.match(api.reason ?? '', /ownership verification required/)
@@ -440,22 +410,18 @@ describe('detail breakdown + surface (§§3/8)', () => {
       findings: [
         f({ id: 'F-1', severity: 'critical', title: 'Cross-tenant object access (BOLA)', sourceLabel: 'bola-idor', attackIds: ['T1190'] }),
         f({ id: 'F-2', severity: 'low', title: 'Missing CSP', sourceLabel: 'Injection Defense', signals: ['WSTG-CONF-12'] }),
-        f({ id: 'F-3', severity: 'info', title: 'robots.txt paths', sourceLabel: 'Information Disclosure' }),
-      ],
+        f({ id: 'F-3', severity: 'info', title: 'robots.txt paths', sourceLabel: 'Information Disclosure' }) ],
       coverage: {
         totals: { total: 22, confirmed: 1, executedClean: 16, killed: 1, blocked: 4, na: 0, pending: 0 },
         probesUsed: 36, fullBattery: true,
         notCovered: ['credential_chain', 'stored_xss', 'weak_session', 'llm'], planOnly: [],
-        arms: [],
-      },
-    }))
+        arms: [] } }))
     assert.deepEqual(d.breakdown, [
       'Automated red assessment of https://secscan.us: 3 active findings across 3 areas; overall posture CRITICAL.',
       'The grade is anchored by F-1 (critical · Cross-tenant object access (BOLA)) — one confirmed critical caps the score at 20.',
       '1 critical · 0 high · 0 medium · 1 low · 1 info — 0 proven · 3 confirmed · 0 deferred.',
       '17 of 22 battery items executed; 4 blocked and 0 not-applicable, each with its recorded reason under Coverage.',
-      '4 arms did not run: credential_chain, stored_xss, weak_session, llm — reasons under Coverage.',
-    ])
+      '4 arms did not run: credential_chain, stored_xss, weak_session, llm — reasons under Coverage.' ])
     assert.equal(d.diff, null)
     assert.equal(d.baselineLabel, undefined)
   })
@@ -468,9 +434,7 @@ describe('detail breakdown + surface (§§3/8)', () => {
       coverage: {
         totals: { total: 22, confirmed: 1, executedClean: 16, killed: 1, blocked: 4, na: 0, pending: 0 },
         probesUsed: 36, fullBattery: true, notCovered: [], planOnly: [],
-        arms: [{ name: 'bola', state: 'ran' }],
-      },
-    }))
+        arms: [{ name: 'bola', state: 'ran' }] } }))
     const labels = full.surfaceNetwork!.map(r => r.label)
     assert.deepEqual(labels, ['Resolved IP', 'TLS grade', 'Technologies'])
     const armsRow = full.surfaceDynamic.find(r => r.label === 'Arms')!

@@ -21,9 +21,9 @@ export const SECSCAN_PART_1 = [
     },
     {
         id: "SS-003", category: "validation", name: "Intake URL userinfo trick",
-        brief: "https://secscan.us@evil-canary — does the validator see the real host?",
+        brief: "https://target.invalid@evil-canary — does the validator see the real host?",
         owasp: "WSTG-INPV-01", attackId: "T1190",
-        what: "Submit https://secscan.us@<canary-host> and https://user:pass@<canary-host> as the intake URL. If the validator or the SSRF guard parses the host as secscan.us while the fetch goes to the canary host, that divergence is the finding. Canary hosts only.",
+        what: "Submit https://target.invalid@<canary-host> and https://user:pass@<canary-host> as the intake URL. If the validator or the SSRF guard parses the host as target.invalid while the fetch goes to the canary host, that divergence is the finding. Canary hosts only.",
     },
     {
         id: "SS-004", category: "validation", name: "Double-encoded intake URL",
@@ -35,7 +35,7 @@ export const SECSCAN_PART_1 = [
         id: "SS-005", category: "validation", name: "Unicode / IDN homograph domain",
         brief: "Lookalike unicode domains — does the validator normalize to punycode before checking?",
         owasp: "WSTG-INPV-01", attackId: "T1027",
-        what: "Submit IDN homographs of secscan.us (cyrillic/greek lookalikes) as the intake target. Observe whether validation punycode-normalizes before the ownership/allow checks. Benign canary domains only.",
+        what: "Submit IDN homographs of target.invalid (cyrillic/greek lookalikes) as the intake target. Observe whether validation punycode-normalizes before the ownership/allow checks. Benign canary domains only.",
     },
     {
         id: "SS-006", category: "validation", name: "Overlong intake URL",
@@ -71,7 +71,7 @@ export const SECSCAN_PART_1 = [
         id: "SS-011", category: "validation", name: "Regex bypass on domain validator",
         brief: "Unanchored patterns, newline tricks — can the domain regex be walked around?",
         owasp: "WSTG-INPV", attackId: "T1190",
-        what: "Probe the intake domain/URL regex with classic bypasses: secscan.us.evil-canary, evilsecscan.us, newline-embedded domains, and subdomain-boundary tricks. Single probes — never ReDoS-shaped input.",
+        what: "Probe the intake domain/URL regex with classic bypasses: target.invalid.evil-canary, eviltarget.invalid, newline-embedded domains, and subdomain-boundary tricks. Single probes — never ReDoS-shaped input.",
     },
     {
         id: "SS-012", category: "validation", name: "DNS-rebinding-shaped hostname",

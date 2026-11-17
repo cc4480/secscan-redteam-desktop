@@ -37,8 +37,7 @@ import {
   createCampaign,
   loadCampaign,
   recordWaveOutcome,
-  type EngagementResultLike,
-} from '../src/campaign/store.js'
+  type EngagementResultLike } from '../src/campaign/store.js'
 import { validateCampaignRecord } from '../src/campaign/schema.js'
 
 let root: string
@@ -61,8 +60,7 @@ function makeCampaign(id = 'camp-flow', maxWaves = 2): void {
     objective: 'Two-wave flow fixture',
     scope: { hosts: ['127.0.0.1'], verificationRef: 'dns-txt:fixture' },
     caps: { maxWaves },
-    createdBy: 'Carlos',
-  })
+    createdBy: 'Carlos' })
 }
 
 describe('the "/ad" guard', () => {
@@ -75,8 +73,7 @@ describe('the "/ad" guard', () => {
         objective: 'forbidden',
         scope: { hosts: ['127.0.0.1'], verificationRef: 'x' },
         caps: { maxWaves: 1 },
-        createdBy: 'Carlos',
-      }),
+        createdBy: 'Carlos' }),
     )
     makeCampaign('camp-ok')
     const rec = loadCampaign(campaignsDir, 'camp-ok')
@@ -92,8 +89,7 @@ describe('the "/ad" guard', () => {
       /kind\s*[:=]\s*["']ad["']/i,
       /name\s*:\s*["']ad["']/,
       /registerKind\s*\(\s*["']ad["']/,
-      /id\s*:\s*["']ad["']/,
-    ]
+      /id\s*:\s*["']ad["']/ ]
     for (const file of files) {
       const text = readFileSync(join(dir, file), 'utf8')
       for (const pattern of registrationPatterns) {
@@ -110,13 +106,10 @@ describe('two-wave campaign contract flow', () => {
     findings: [
       { status: 'confirmed', severity: 'high' },
       { status: 'confirmed', severity: 'medium' },
-      { status: 'killed', severity: 'low' },
-    ],
-  }
+      { status: 'killed', severity: 'low' } ] }
   const wave2: EngagementResultLike = {
     status: 'complete',
-    findings: [{ status: 'confirmed', severity: 'critical' }],
-  }
+    findings: [{ status: 'confirmed', severity: 'critical' }] }
 
   it('gates both waves on recorded decisions and completes at the cap with per-wave rollups', () => {
     makeCampaign()
@@ -144,15 +137,13 @@ describe('two-wave campaign contract flow', () => {
       confirmed: 2,
       killed: 1,
       deferred: 0,
-      bySeverity: { critical: 0, high: 1, medium: 1, low: 1, info: 0 },
-    })
+      bySeverity: { critical: 0, high: 1, medium: 1, low: 1, info: 0 } })
     assert.deepEqual(rec.waves[1].outcome?.rollup, {
       totalFindings: 1,
       confirmed: 1,
       killed: 0,
       deferred: 0,
-      bySeverity: { critical: 1, high: 0, medium: 0, low: 0, info: 0 },
-    })
+      bySeverity: { critical: 1, high: 0, medium: 0, low: 0, info: 0 } })
     // The audit spine shows the whole story: create, launch, harvest,
     // launch, harvest-to-complete — plus the two recorded decisions.
     assert.deepEqual(
@@ -197,16 +188,14 @@ describe('live two-wave run through runEngagement (dry-run)', { skip: !LIVE && '
               objective: `Campaign live fixture, wave ${waveIndex}`,
               operatorName: 'Campaign Test',
               environment: 'staging',
-              roe: { scope: [target] },
-            },
+              roe: { scope: [target] } },
             {
               dryRunAgents: true,
               localSandbox: true,
               maxActions: 5,
               engagementId,
               engagementsDir: join(root, 'live-engagements'),
-              registryPath: join(root, 'registry.json'),
-            },
+              registryPath: join(root, 'registry.json') },
           )
           return recordWaveOutcome(campaignsDir, 'camp-live', waveIndex, result)
         }

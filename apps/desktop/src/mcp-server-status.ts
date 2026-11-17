@@ -14,8 +14,7 @@
  *
  * No credential value leaves this module: a row's token is used only as the
  * probe's own bearer, and every reported detail is a fixed phrase or an HTTP
- * status. The SecScan and Seclayer rows are native now and have no server to
- * probe; the two rows that remain are the engagement runner and the bridge.
+ * status. The rows probed here are the engagement runner and the bridge.
  */
 
 import { readFile } from 'node:fs/promises'

@@ -37,8 +37,7 @@ function fakeSocket(options: { open?: boolean; reply?: (message: { id: number; m
         queueMicrotask(() => socket.onmessage?.({ data: JSON.stringify(reply) }));
       }
     },
-    close() { socket.onclose?.({}); },
-  };
+    close() { socket.onclose?.({}); } };
   // A real WebSocket opens after the listener is attached; mirror that ordering so a
   // handler assigned later still observes the open event.
   Object.defineProperty(socket, "onopen", {
@@ -46,8 +45,7 @@ function fakeSocket(options: { open?: boolean; reply?: (message: { id: number; m
     set: (handler: (() => void) | null) => {
       openHandler = handler;
       if (handler && options.open !== false) queueMicrotask(() => handler());
-    },
-  });
+    } });
   return socket;
 }
 
@@ -60,8 +58,7 @@ describe("CDP target resolution", () => {
   it("picks the first page target from /json/list", async () => {
     const url = await resolveCdpWebSocketUrl("http://127.0.0.1:9222/", listFetch([
       { type: "browser", webSocketDebuggerUrl: "ws://browser" },
-      { type: "page", webSocketDebuggerUrl: "ws://page" },
-    ]));
+      { type: "page", webSocketDebuggerUrl: "ws://page" } ]));
     assert.equal(url, "ws://page");
   });
 
@@ -77,8 +74,7 @@ describe("CDP transport", () => {
     const connection = await connectCdp("http://127.0.0.1:9222", {
       fetchImpl: listFetch([{ type: "page", webSocketDebuggerUrl: "ws://page" }]),
       socketFactory: () => socket,
-      timeoutMs: 500,
-    });
+      timeoutMs: 500 });
     assert.deepEqual(socket.sent.map((message) => message.method), ["Runtime.enable", "Page.enable"]);
     await connection.send("Page.navigate", { url: "http://example.test" });
     assert.equal(socket.sent[2]!.method, "Page.navigate");
@@ -89,28 +85,24 @@ describe("CDP transport", () => {
     const socket = fakeSocket({
       reply: (message) => (message.method === "Page.enable"
         ? { id: message.id, error: { message: "not allowed" } }
-        : { id: message.id, result: {} }),
-    });
+        : { id: message.id, result: {} }) });
     await assert.rejects(() => connectCdp("http://127.0.0.1:9222", {
       fetchImpl: listFetch([{ type: "page", webSocketDebuggerUrl: "ws://page" }]),
       socketFactory: () => socket,
-      timeoutMs: 500,
-    }), /not allowed/);
+      timeoutMs: 500 }), /not allowed/);
   });
 
   it("fails closed when the socket never opens, and when a command times out", async () => {
     await assert.rejects(() => connectCdp("http://127.0.0.1:9222", {
       fetchImpl: listFetch([{ type: "page", webSocketDebuggerUrl: "ws://page" }]),
       socketFactory: () => fakeSocket({ open: false }),
-      timeoutMs: 20,
-    }), /did not open/);
+      timeoutMs: 20 }), /did not open/);
 
     const silent = fakeSocket({ reply: (message) => (message.method === "Runtime.enable" || message.method === "Page.enable" ? { id: message.id, result: {} } : undefined) });
     const connection = await connectCdp("http://127.0.0.1:9222", {
       fetchImpl: listFetch([{ type: "page", webSocketDebuggerUrl: "ws://page" }]),
       socketFactory: () => silent,
-      timeoutMs: 20,
-    });
+      timeoutMs: 20 });
     await assert.rejects(() => connection.send("Page.navigate", {}), /timed out/);
     connection.close();
   });

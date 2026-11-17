@@ -54,9 +54,7 @@ function stampedCtx(completeForRole: CompleteFn, events: { append: (e: unknown) 
       objective: 'assess the fixture attack surface',
       client: 'Fixture Owner LLC',
       operatorName: 'Fixture Operator',
-      roe: { scope: ['app.example.com', 'example.com'] },
-    },
-  } as unknown as Ctx
+      roe: { scope: ['app.example.com', 'example.com'] } } } as unknown as Ctx
 }
 
 describe('coder seat (TANK) — requestCoderArtifact', () => {
@@ -72,8 +70,7 @@ describe('coder seat (TANK) — requestCoderArtifact', () => {
       brief: 'test the search parameter for SQL injection',
       codeNeed: NEED,
       attackId: 'T1190',
-      category: 'validation',
-    })
+      category: 'validation' })
     assert.equal(artifact.text, ARTIFACT)
     assert.equal(captured.length, 1, 'exactly one coder completion')
     const system = captured[0]![0]!.content
@@ -118,12 +115,10 @@ describe('coder seat (TANK) — the exploit path (runTask)', () => {
         target: 'https://shop.example.test',
         client: 'Fixture Owner LLC',
         operatorName: 'Fixture Operator',
-        roe: { blackoutWindows: [], scope: ['shop.example.test'] },
-      },
+        roe: { blackoutWindows: [], scope: ['shop.example.test'] } },
       deps: {
         completeForRole,
-        bridgeClient: { available: async () => false, listTools: async () => [], call: async () => '' },
-      },
+        bridgeClient: { available: async () => false, listTools: async () => [], call: async () => '' } },
       hosts: ['shop.example.test'],
       domain: 'shop.example.test',
       plan: null,
@@ -139,8 +134,7 @@ describe('coder seat (TANK) — the exploit path (runTask)', () => {
       itemLedger: new Map(),
       opsecCooldown: new Set<string>(),
       safety: { limiter: { acquire: async () => {} } },
-      tier: { current: 2, chainSteps: new Map<string, number>() },
-    } as unknown as Ctx
+      tier: { current: 2, chainSteps: new Map<string, number>() } } as unknown as Ctx
   }
 
   function scriptedModel(state: { coderCalls: number; exploiterUserTurns: string[] }): CompleteFn {
@@ -161,8 +155,7 @@ describe('coder seat (TANK) — the exploit path (runTask)', () => {
     attackId: 'T1190',
     category: 'validation',
     maxTurns: 4,
-    ...over,
-  })
+    ...over })
 
   it('(b) invokes the coder seat when a task declares a code need and consumes the artifact', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'rt-coder-'))

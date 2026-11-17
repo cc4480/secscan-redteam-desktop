@@ -31,8 +31,7 @@ import {
   readFleetProviderRecord,
   resolveFleetProviderPath,
   roleModelPolicy,
-  writeFleetProviderRecord,
-} from '@secscan/redteam-llm-router'
+  writeFleetProviderRecord } from '@secscan/redteam-llm-router'
 import { createStoreFleetConfigResolver } from '../src/fleet-store-resolver.js'
 
 const dirs: string[] = []

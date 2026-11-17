@@ -21,8 +21,7 @@ import {
   ResilienceError,
   classifyError,
   providerErrorFromResponse,
-  type ChatResult,
-} from '@secscan/redteam-llm-router'
+  type ChatResult } from '@secscan/redteam-llm-router'
 import { condenseDirectiveContext, coordinatorDirectiveOrClose } from '../src/phases/directive.js'
 import { exploitPhase } from '../src/phases/exploit.js'
 import { EventLog, readEvents } from '../src/events.js'
@@ -68,21 +67,18 @@ function makeCtx(eventsDir: string, err: unknown): Ctx {
       maxDurationMs: 60_000,
       maxExploitProbes: 10,
       dryRunAgents: false,
-      localSandbox: false,
-    },
+      localSandbox: false },
     input: {
       target: 'https://shop.example.test',
       mode: 'red',
       objective: 'assess the shop',
       roe: { blackoutWindows: [] },
-      fullBattery: false,
-    },
+      fullBattery: false },
     deps: { completeForRole },
     events: new EventLog(eventsDir, 'eng-directive-failure', {
       target: 'shop.example.test',
       mode: 'red',
-      objective: 'test',
-    }),
+      objective: 'test' }),
     coverage: new Set(),
     targetCoverage: new Map(),
     itemLedger: new Map(),
@@ -95,8 +91,7 @@ function makeCtx(eventsDir: string, err: unknown): Ctx {
     killedLive: [],
     targetMap: [],
     safety: { killSwitchAborts: 0 },
-    hostKill: { aborted: false, controllers: new Set<AbortController>() },
-  } as unknown as Ctx
+    hostKill: { aborted: false, controllers: new Set<AbortController>() } } as unknown as Ctx
 }
 
 function eventsOf(action: string): EngagementEvent[] {
@@ -169,14 +164,12 @@ function makeScriptedCtx(
       mode: 'red',
       objective: 'assess the shop',
       roe: { blackoutWindows: [], scope: ['shop.example.test'] },
-      fullBattery: false,
-    },
+      fullBattery: false },
     deps: { completeForRole },
     events: new EventLog(eventsDir, 'eng-directive-reissue', {
       target: 'shop.example.test',
       mode: 'red',
-      objective: 'assess the shop',
-    }),
+      objective: 'assess the shop' }),
     coverage: new Set(),
     targetCoverage: new Map(),
     itemLedger: new Map(),
@@ -190,8 +183,7 @@ function makeScriptedCtx(
     fingerprint: { stack: [], appType: 'unknown' },
     tier: { current: 0, chainSteps: new Map<string, number>() },
     safety: { killSwitchAborts: 0 },
-    hostKill: { aborted: false, controllers: new Set<AbortController>() },
-  } as unknown as Ctx
+    hostKill: { aborted: false, controllers: new Set<AbortController>() } } as unknown as Ctx
   return { ctx, state }
 }
 
@@ -208,8 +200,7 @@ describe('coordinatorDirectiveOrClose — condensed re-issue (W2)', () => {
         text: JSON.stringify({ tasks: [], finish: true, note: 'recovered by reissue' }),
         toolCalls: [],
         provider: 'fake',
-        model: 'fake',
-      }
+        model: 'fake' }
     })
     const out = await coordinatorDirectiveOrClose(ctx, 'replan', RAW_CONTEXT)
     assert.ok(out, 'the re-issue recovers the directive instead of closing')

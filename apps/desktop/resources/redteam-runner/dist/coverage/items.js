@@ -21,6 +21,7 @@
  */
 import { ALL_TARGETS, TARGET_PREFIXES, TARGET_PROFILES } from '../targets/index.js';
 import { nucleiBinaryPresent } from '../nuclei/prereq.js';
+import { msfBinaryPresent } from '../msf/prereq.js';
 /** Dispositions that are final: no overwrite except via the reverify reopen path. */
 const FINAL_DISPOSITIONS = ['confirmed', 'killed', 'na'];
 const PREFIX_TO_TARGET = {
@@ -87,8 +88,8 @@ export function resolveItemKey(raw, _targetProfile) {
  */
 export function prerequisiteMet(needs) {
     const n = needs.toLowerCase();
-    if (n.includes('msfrpcd')) {
-        return !!(process.env.REDTEAM_MSFRPC_USER && process.env.REDTEAM_MSFRPC_PASS);
+    if (n.includes('msfconsole')) {
+        return msfBinaryPresent();
     }
     if (n.includes('kerberos ticket')) {
         return !!(process.env.REDTEAM_KRB_CCACHE_B64 ||

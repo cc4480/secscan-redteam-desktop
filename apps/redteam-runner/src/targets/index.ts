@@ -110,7 +110,7 @@ export function inferTargetProfile(url: string): TargetId {
     const u = new URL(url);
     if (u.pathname.toLowerCase().startsWith("/api/mcp")) return "seclayer";
     const host = u.hostname.toLowerCase();
-    if (host === "secscan.us" || host.endsWith(".secscan.us")) return "secscan";
+    if (host === "example.invalid") return "secscan";
     if (host === "seclayer.app" || host.endsWith(".seclayer.app")) return "seclayer";
   } catch {
     /* unparseable - fall through to the generic webapp battery */

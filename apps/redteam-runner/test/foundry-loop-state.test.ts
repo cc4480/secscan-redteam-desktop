@@ -39,13 +39,9 @@ describe('foundry loop-state loader (DB-2)', () => {
             novelty: null,
             liveSimilarity: null,
             coverageGain: null,
-            costEfficiency: null,
-          },
+            costEfficiency: null },
           scoredWeight: 1,
-          at: '2026-11-01T00:00:00.000Z',
-        },
-      },
-    })
+          at: '2026-11-01T00:00:00.000Z' } } })
     const loaded = loadLoopState(store)
     assert.equal(loaded.cyclesRun, 7)
     assert.equal(loaded.lastCycle, null)

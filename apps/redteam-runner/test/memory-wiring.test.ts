@@ -27,8 +27,7 @@ function input(): EngagementInput {
     target: "secscan.us",
     mode: "red",
     objective: "test objective",
-    roe: { scope: ["secscan.us"] },
-  };
+    roe: { scope: ["secscan.us"] } };
 }
 
 describe("resolveConfig memoryRoot (§3.1)", () => {
@@ -70,8 +69,7 @@ describe("memoryBlock (prompt surface)", () => {
     objective: "test objective",
     target: "secscan.us",
     scopeHosts: ["secscan.us"],
-    roe: { scope: ["secscan.us"] },
-  };
+    roe: { scope: ["secscan.us"] } };
 
   it("renders nothing when no brief was recalled", () => {
     assert.equal(memoryBlock(base), "");
@@ -99,8 +97,7 @@ describe("runEngagement memory wiring (dry-run agents)", () => {
     engagementsDir: dir,
     registryPath: join(dir, "registry.json"),
     dryRunAgents: true,
-    deps: { verify },
-  });
+    deps: { verify } });
 
   it("first engagement on an empty store completes with a NO_ELIGIBLE_UNITS pack and a commit receipt", async () => {
     const res = await runEngagement(input(), opts(yesVerify));

@@ -47,8 +47,7 @@ export const FIXTURE_COLLECTIONS: FixtureCollection[] = [
     description: 'Security tester companion list collection',
     topic: 'Wordlists',
     fetchedAt: FIXTURE_BUILT_AT,
-    entryCount: 4,
-  },
+    entryCount: 4 },
   {
     slug: 'payloadsallthethings',
     name: 'PayloadsAllTheThings',
@@ -56,8 +55,7 @@ export const FIXTURE_COLLECTIONS: FixtureCollection[] = [
     description: 'Payloads and bypasses for web vulnerabilities',
     topic: 'Web Hacking',
     fetchedAt: FIXTURE_BUILT_AT,
-    entryCount: 3,
-  },
+    entryCount: 3 },
   {
     slug: 'gtfobins',
     name: 'GTFOBins',
@@ -65,8 +63,7 @@ export const FIXTURE_COLLECTIONS: FixtureCollection[] = [
     description: 'Unix binaries that bypass local security restrictions',
     topic: 'Privilege Escalation',
     fetchedAt: FIXTURE_BUILT_AT,
-    entryCount: 2,
-  },
+    entryCount: 2 },
   {
     slug: 'big-collection',
     name: 'Big Collection',
@@ -74,8 +71,7 @@ export const FIXTURE_COLLECTIONS: FixtureCollection[] = [
     description: 'A large synthetic collection used for limit testing',
     topic: 'Utilities',
     fetchedAt: FIXTURE_BUILT_AT,
-    entryCount: 60,
-  },
+    entryCount: 60 },
   {
     slug: 'awesome-osint',
     name: 'Awesome OSINT',
@@ -83,9 +79,7 @@ export const FIXTURE_COLLECTIONS: FixtureCollection[] = [
     description: 'OSINT resource list, Level 1 only in this fixture',
     topic: 'OSINT',
     fetchedAt: null,
-    entryCount: 0,
-  },
-]
+    entryCount: 0 } ]
 
 const LONG_DESCRIPTION =
   'Usernames gathered from public breaches and default account lists for every platform ' +
@@ -101,8 +95,7 @@ export const FIXTURE_ENTRIES: FixtureEntry[] = [
     collectionSlug: 'seclists',
     tags: ['topic:wordlists', 'collection:seclists', 'wordlist'],
     targets: ['WA'],
-    battery: ['functionality', 'F-10'],
-  },
+    battery: ['functionality', 'F-10'] },
   {
     name: 'Password Collection',
     url: 'https://example.test/seclists/passwords',
@@ -110,8 +103,7 @@ export const FIXTURE_ENTRIES: FixtureEntry[] = [
     collectionSlug: 'seclists',
     tags: ['topic:wordlists', 'collection:seclists', 'wordlist'],
     targets: ['SS', 'WA'],
-    battery: ['functionality'],
-  },
+    battery: ['functionality'] },
   {
     name: 'Fuzzing Strings',
     url: 'https://example.test/seclists/fuzzing',
@@ -119,8 +111,7 @@ export const FIXTURE_ENTRIES: FixtureEntry[] = [
     collectionSlug: 'seclists',
     tags: ['topic:wordlists', 'collection:seclists'],
     targets: ['WA'],
-    battery: ['validation'],
-  },
+    battery: ['validation'] },
   {
     name: 'Comprehensive Username List',
     url: 'https://example.test/seclists/usernames',
@@ -128,8 +119,7 @@ export const FIXTURE_ENTRIES: FixtureEntry[] = [
     collectionSlug: 'seclists',
     tags: ['topic:wordlists', 'collection:seclists', 'wordlist'],
     targets: ['SS', 'WA'],
-    battery: [],
-  },
+    battery: [] },
   {
     name: 'SSRF Payloads',
     url: 'https://example.test/patt/ssrf',
@@ -137,8 +127,7 @@ export const FIXTURE_ENTRIES: FixtureEntry[] = [
     collectionSlug: 'payloadsallthethings',
     tags: ['topic:web-hacking', 'collection:payloadsallthethings', 'payloads'],
     targets: ['WA'],
-    battery: ['functionality', 'F-9'],
-  },
+    battery: ['functionality', 'F-9'] },
   {
     name: 'IDOR Examples',
     url: 'https://example.test/patt/idor',
@@ -146,8 +135,7 @@ export const FIXTURE_ENTRIES: FixtureEntry[] = [
     collectionSlug: 'payloadsallthethings',
     tags: ['topic:web-hacking', 'collection:payloadsallthethings', 'payloads'],
     targets: ['WA'],
-    battery: ['functionality', 'F-1'],
-  },
+    battery: ['functionality', 'F-1'] },
   {
     name: 'Kubernetes Secrets',
     url: 'https://example.test/patt/kubernetes-secrets',
@@ -155,8 +143,7 @@ export const FIXTURE_ENTRIES: FixtureEntry[] = [
     collectionSlug: 'payloadsallthethings',
     tags: ['topic:web-hacking', 'collection:payloadsallthethings'],
     targets: ['WA'],
-    battery: [],
-  },
+    battery: [] },
   {
     name: 'sudo',
     url: 'https://example.test/gtfobins/sudo',
@@ -164,8 +151,7 @@ export const FIXTURE_ENTRIES: FixtureEntry[] = [
     collectionSlug: 'gtfobins',
     tags: ['topic:privilege-escalation', 'collection:gtfobins'],
     targets: ['LX'],
-    battery: [],
-  },
+    battery: [] },
   {
     name: 'Cluster Enumeration Notes',
     url: 'https://example.test/gtfobins/cluster-notes',
@@ -173,9 +159,7 @@ export const FIXTURE_ENTRIES: FixtureEntry[] = [
     collectionSlug: 'gtfobins',
     tags: ['topic:privilege-escalation', 'collection:gtfobins'],
     targets: ['LX'],
-    battery: [],
-  },
-]
+    battery: [] } ]
 
 for (let i = 1; i <= 60; i++) {
   const nn = String(i).padStart(2, '0')
@@ -186,8 +170,7 @@ for (let i = 1; i <= 60; i++) {
     collectionSlug: 'big-collection',
     tags: ['topic:utilities', 'collection:big-collection'],
     targets: [],
-    battery: [],
-  })
+    battery: [] })
 }
 
 /** Spec §5 DDL, verbatim. */
@@ -253,8 +236,7 @@ export function buildFixtureIndex(dataHome: string): { engagementsDir: string; d
       ['entry_count', String(FIXTURE_ENTRIES.length)],
       ['collection_count', String(FIXTURE_COLLECTIONS.length)],
       ['unparsed_count', '0'],
-      ['dupe_count', '0'],
-    ]
+      ['dupe_count', '0'] ]
     for (const [k, v] of metaRows) meta.run(k, v)
 
     const coll = db.prepare(

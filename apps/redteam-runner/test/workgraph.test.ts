@@ -23,8 +23,7 @@ import {
   recordAction,
   startSubtask,
   MAX_SUBTASKS_PER_TASK,
-  MAX_TASKS_PER_FLOW,
-} from '../src/workgraph/graph.js'
+  MAX_TASKS_PER_FLOW } from '../src/workgraph/graph.js'
 import { loadFlow, saveFlow } from '../src/workgraph/store.js'
 import { refineAfterSubtask } from '../src/workgraph/refiner.js'
 import { executeFlow } from '../src/workgraph/executor.js'
@@ -32,8 +31,7 @@ import {
   completeGraphSubtask,
   ensureWorkGraph,
   graphSubtaskFor,
-  startGraphSubtask,
-} from '../src/workgraph/wiring.js'
+  startGraphSubtask } from '../src/workgraph/wiring.js'
 import { EventLog } from '../src/events.js'
 import type { Ctx } from '../src/context.js'
 import type { PlanStep } from '../src/types.js'
@@ -41,8 +39,7 @@ import type { PlanStep } from '../src/types.js'
 const STEPS: PlanStep[] = [
   { phase: 'recon', attackId: 'T1595', description: 'Map the surface' },
   { phase: 'recon', attackId: 'T1589', description: 'Gather victim identity' },
-  { phase: 'exploit', attackId: 'T1190', description: 'Exploit public app' },
-]
+  { phase: 'exploit', attackId: 'T1190', description: 'Exploit public app' } ]
 
 function sampleFlow() {
   return buildFlowFromPlan({ engagementId: 'eng-wg', objective: 'obj', target: 'shop.example.test', steps: STEPS })
@@ -108,21 +105,18 @@ describe('graph — flow node budget (Item 3)', () => {
 
   it('buildFlowFromPlan accepts exactly the budget and throws one step over it', () => {
     const atBudget = buildFlowFromPlan({
-      engagementId: 'eng-cap', objective: 'obj', target: 't', steps: manySteps(MAX_TASKS_PER_FLOW),
-    })
+      engagementId: 'eng-cap', objective: 'obj', target: 't', steps: manySteps(MAX_TASKS_PER_FLOW) })
     assert.equal(atBudget.tasks.length, MAX_TASKS_PER_FLOW)
     assert.throws(
       () => buildFlowFromPlan({
-        engagementId: 'eng-cap', objective: 'obj', target: 't', steps: manySteps(MAX_TASKS_PER_FLOW + 1),
-      }),
+        engagementId: 'eng-cap', objective: 'obj', target: 't', steps: manySteps(MAX_TASKS_PER_FLOW + 1) }),
       new RegExp(`${MAX_TASKS_PER_FLOW}`),
     )
   })
 
   it('addSubtask is admitted at budget-1 and refused at budget, naming the cap', () => {
     const flow = buildFlowFromPlan({
-      engagementId: 'eng-cap', objective: 'obj', target: 't', steps: manySteps(MAX_TASKS_PER_FLOW - 1),
-    })
+      engagementId: 'eng-cap', objective: 'obj', target: 't', steps: manySteps(MAX_TASKS_PER_FLOW - 1) })
     assert.equal(flowNodeCount(flow), MAX_TASKS_PER_FLOW - 1)
     const taskId = flow.tasks[0]!.id
     const admitted = addSubtask(flow, taskId, { title: 'last node', kind: 'probe' })
@@ -147,8 +141,7 @@ describe('graph — flow node budget (Item 3)', () => {
 
   it('a budget-refused refiner pass reports no change', async () => {
     const flow = buildFlowFromPlan({
-      engagementId: 'eng-cap', objective: 'obj', target: 't', steps: manySteps(MAX_TASKS_PER_FLOW),
-    })
+      engagementId: 'eng-cap', objective: 'obj', target: 't', steps: manySteps(MAX_TASKS_PER_FLOW) })
     const outcome = await refineAfterSubtask(
       flow,
       { completedSubtaskId: 'x', resultSummary: '' },
@@ -169,8 +162,7 @@ describe('graph — flow node budget (Item 3)', () => {
         engagementId: 'eng-cap',
         objective: 'obj',
         target: 't',
-        steps: manySteps(MAX_TASKS_PER_FLOW - 2),
-      })
+        steps: manySteps(MAX_TASKS_PER_FLOW - 2) })
       const host = flow.tasks[0]!
       assert.ok(addSubtask(flow, host.id, { title: 'pending A', kind: 'probe' }).ok)
       assert.ok(addSubtask(flow, host.id, { title: 'pending B', kind: 'probe' }).ok)
@@ -182,8 +174,7 @@ describe('graph — flow node budget (Item 3)', () => {
       const ran: string[] = []
       const summary = await executeFlow(loaded, {
         runSubtask: async (id) => { ran.push(id); return 'ok' },
-        save: f => saveFlow(dir, f),
-      })
+        save: f => saveFlow(dir, f) })
       assert.equal(ran.length, 2, 'both pre-existing pending subtasks complete')
       assert.equal(summary.complete, true)
       assert.equal(flowNodeCount(loaded), MAX_TASKS_PER_FLOW, 'the resumed run created no new nodes')
@@ -235,9 +226,7 @@ describe('refiner — validated re-planning', () => {
         skipSubtaskIds: [pendingSub.subtask.id, doneSub.subtask.id],
         reprioritize: [
           { taskId: flow.tasks[2]!.id, priority: 42 },
-          { taskId: 'task-nope', priority: 1 },
-        ],
-      }),
+          { taskId: 'task-nope', priority: 1 } ] }),
     )
     assert.equal(outcome.changed, true)
     assert.equal(flow.revision, 1)
@@ -281,8 +270,7 @@ describe('executor — kill and resume', () => {
       runSubtask: async (id) => { firstRun.push(id); return 'ok' },
       save: f => saveFlow(dir, f),
       shouldStop: () => stopped,
-      onEvent: (action) => { if (action === 'subtask_done') stopped = true },
-    })
+      onEvent: (action) => { if (action === 'subtask_done') stopped = true } })
     assert.equal(first.stoppedEarly, true)
     assert.equal(firstRun.length, 1)
 
@@ -294,8 +282,7 @@ describe('executor — kill and resume', () => {
     const second = await executeFlow(loaded, {
       runSubtask: async (id) => { resumedRun.push(id); return 'ok' },
       save: f => saveFlow(dir, f),
-      refine: async () => { refineCalls++; return null },
-    })
+      refine: async () => { refineCalls++; return null } })
     assert.equal(second.complete, true)
     assert.equal(resumedRun.length, 2, 'only the two unsettled subtasks run')
     assert.ok(!resumedRun.includes(firstRun[0]!), 'the settled subtask is never re-run')
@@ -327,9 +314,7 @@ describe('wiring — plan builds the graph, relaunch resumes it', () => {
             return { text: JSON.stringify({ addSubtasks: [{ taskId: refineTargetTaskId(), title: 'refiner follow-up', kind: 'probe' }] }) }
           }
           return { text: '' }
-        },
-      },
-    } as unknown as Ctx
+        } } } as unknown as Ctx
   }
 
   it('persists the graph at plan time and resumes it on a fresh context', async () => {
@@ -381,8 +366,7 @@ describe('wiring — the refiner prompt is fleet-assembled for the coordinator s
         mode: 'red',
         client: 'Example Owner LLC',
         operatorName: 'Named Operator',
-        roe: { scope: ['shop.example.test'] },
-      },
+        roe: { scope: ['shop.example.test'] } },
       domain: 'shop.example.test',
       hosts: ['shop.example.test'],
       verifiedScope: ['shop.example.test'],
@@ -395,9 +379,7 @@ describe('wiring — the refiner prompt is fleet-assembled for the coordinator s
         completeForRole: async (_role: unknown, messages: Array<{ role: string; content: string }>) => {
           seen.push(messages)
           return { text: '{}' }
-        },
-      },
-    } as unknown as Ctx
+        } } } as unknown as Ctx
     const flow = ensureWorkGraph(ctx)
     assert.ok(flow)
     const sub = graphSubtaskFor(ctx, { kind: 'probe', brief: 'exploit the app', attackId: 'T1190' })
@@ -430,9 +412,7 @@ describe('graph — deadline/cost fields (Item 8)', () => {
         target: 't',
         steps: [
           { phase: 'recon', description: 'with fields', deadline: FUTURE, cost: 7 },
-          { phase: 'recon', description: 'without fields' },
-        ],
-      })
+          { phase: 'recon', description: 'without fields' } ] })
       assert.equal(flow.tasks[0]!.deadline, FUTURE)
       assert.equal(flow.tasks[0]!.cost, 7)
       saveFlow(dir, flow)
@@ -451,12 +431,10 @@ describe('graph — deadline/cost fields (Item 8)', () => {
   it('deadline/cost never enter the task id: same step, same id, with or without them', () => {
     const bare = buildFlowFromPlan({
       engagementId: 'eng-id', objective: 'obj', target: 't',
-      steps: [{ phase: 'recon', attackId: 'T1595', description: 'same step' }],
-    })
+      steps: [{ phase: 'recon', attackId: 'T1595', description: 'same step' }] })
     const dressed = buildFlowFromPlan({
       engagementId: 'eng-id', objective: 'obj', target: 't',
-      steps: [{ phase: 'recon', attackId: 'T1595', description: 'same step', deadline: FUTURE, cost: 3 }],
-    })
+      steps: [{ phase: 'recon', attackId: 'T1595', description: 'same step', deadline: FUTURE, cost: 3 }] })
     assert.equal(dressed.tasks[0]!.id, bare.tasks[0]!.id)
   })
 
@@ -469,15 +447,12 @@ describe('graph — deadline/cost fields (Item 8)', () => {
         { phase: 'recon', description: 'no deadline, priority 0' },
         { phase: 'recon', description: 'later deadline, priority 1', deadline: LATER },
         { phase: 'recon', description: 'future deadline, priority 2', deadline: FUTURE },
-        { phase: 'recon', description: 'future deadline, priority 3', deadline: FUTURE },
-      ],
-    })
+        { phase: 'recon', description: 'future deadline, priority 3', deadline: FUTURE } ] })
     const expected = [
       'future deadline, priority 2',
       'future deadline, priority 3',
       'later deadline, priority 1',
-      'no deadline, priority 0',
-    ]
+      'no deadline, priority 0' ]
     assert.deepEqual(nextReady(flow).map(t => t.title), expected)
     const plain = sampleFlow()
     assert.deepEqual(
@@ -487,8 +462,7 @@ describe('graph — deadline/cost fields (Item 8)', () => {
     for (const t of flow.tasks) assert.ok(addSubtask(flow, t.id, { title: `run ${t.title}`, kind: 'probe' }).ok)
     const ranTitles: string[] = []
     await executeFlow(flow, {
-      runSubtask: async (_id, title) => { ranTitles.push(title); return 'ok' },
-    })
+      runSubtask: async (_id, title) => { ranTitles.push(title); return 'ok' } })
     assert.deepEqual(ranTitles, expected.map(t => `run ${t}`))
   })
 
@@ -501,9 +475,7 @@ describe('graph — deadline/cost fields (Item 8)', () => {
         { phase: 'recon', description: 'overdue pending', deadline: PAST, cost: 5 },
         { phase: 'recon', description: 'future deadline', deadline: FUTURE, cost: 7 },
         { phase: 'recon', description: 'no fields' },
-        { phase: 'recon', description: 'overdue but done', deadline: PAST },
-      ],
-    })
+        { phase: 'recon', description: 'overdue but done', deadline: PAST } ] })
     flow.tasks[3]!.status = 'done'
     const p = flowProgress(flow)
     assert.equal(p.overdue, 1)
@@ -520,9 +492,7 @@ describe('graph — deadline/cost fields (Item 8)', () => {
         target: 't',
         steps: [
           { phase: 'recon', description: 'a', deadline: FUTURE, cost: 2 },
-          { phase: 'recon', description: 'b' },
-        ],
-      })
+          { phase: 'recon', description: 'b' } ] })
       saveFlow(dir, flow)
       const loaded = loadFlow(dir)
       assert.ok(loaded)

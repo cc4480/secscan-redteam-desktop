@@ -23,8 +23,7 @@ import {
   classifyScopeEntry,
   commandUsesNetworkTool,
   extractTargets,
-  scopeGuardFor,
-} from "../src/safety/scope-guard.js";
+  scopeGuardFor } from "../src/safety/scope-guard.js";
 import { authorizePhase } from "../src/phases/authorize.js";
 import { dispatchTool } from "../src/dispatch/router.js";
 import type { Ctx } from "../src/context.js";
@@ -36,8 +35,7 @@ import type { ToolCallRequest } from "@secscan/redteam-llm-router";
 const ALLOW_MAPPING = {
   domains: ["acme.com", "api.acme.io"],
   ips: ["203.0.113.10"],
-  cidrs: ["198.51.100.0/24"],
-};
+  cidrs: ["198.51.100.0/24"] };
 const DENY_MAPPING = { domains: ["status.acme.com", "staging.acme.com"] };
 
 describe("ported from test_scope_validator.py", () => {
@@ -51,8 +49,7 @@ describe("ported from test_scope_validator.py", () => {
       "999.1.1.1": "other",
       "https://x.io/path": "domain",
       "2001:db8::1": "ip",
-      "fe80::/10": "cidr",
-    };
+      "fe80::/10": "cidr" };
     for (const [asset, want] of Object.entries(cases)) {
       assert.equal(classifyScopeEntry(asset), want, `classify ${asset}`);
     }
@@ -70,8 +67,7 @@ describe("ported from test_scope_validator.py", () => {
     // guard must still refuse it (deny precedence, exercised end to end).
     const guard = ScopeGuard.fromRoe({
       scope: ["*.acme.com", "api.acme.io", "203.0.113.10", "198.51.100.0/24"],
-      outOfScope: ["status.acme.com", "*.staging.acme.com"],
-    });
+      outOfScope: ["status.acme.com", "*.staging.acme.com"] });
     const v = guard.checkHost("status.acme.com");
     assert.equal(v.allowed, false);
     assert.equal(v.kind, "deny");
@@ -140,8 +136,7 @@ describe("HostSet.contains — scope.py membership semantics", () => {
     const s = HostSet.fromMapping({
       in_scope: ["Example.COM"],
       hosts: ["10.0.0.0/8", "192.0.2.5", "node.internal"],
-      networks: ["2001:db8::/32"],
-    });
+      networks: ["2001:db8::/32"] });
     assert.equal(s.contains("example.com").member, true);
     assert.equal(s.contains("node.internal").member, true, "non-IP hosts-key entries normalise to domains");
     assert.equal(s.contains("10.9.9.9").reason, "in 10.0.0.0/8");
@@ -282,16 +277,14 @@ describe("dispatch scope gate — the choke point", () => {
       hosts: roe.scope,
       events: {
         dir: "/tmp/scope-guard-test-no-such-dir",
-        append: (e: FakeEvents) => appended.push(e),
-      },
+        append: (e: FakeEvents) => appended.push(e) },
       hostKill: { aborted: false, controllers: new Set<AbortController>() },
       tier: { current: 2, declared: 2, chainSteps: new Map<string, number>() },
       safety: {
         limiter: { acquire: async () => {} },
         autoHalt: { isHalted: () => false, haltReason: () => undefined, recordOutcome: () => undefined },
         killSwitchAborts: 0,
-        rpsPerHost: 5,
-      },
+        rpsPerHost: 5 },
       itemLedger: new Map(),
       opsecCooldown: new Set<string>(),
       coverage: new Set<string>(),
@@ -302,16 +295,13 @@ describe("dispatch scope gate — the choke point", () => {
         probe: async (req: { url: string }) => {
           probes.push(req);
           return { status: 200, ms: 1, bodySnippet: "ok" };
-        },
-      },
+        } },
       hostExecutor: {
         killSwitch: undefined,
         sshExec: async (a: { command: string }) => {
           sshCommands.push(a.command);
           return { summary: "ssh ok", output: "Linux", ok: true };
-        },
-      },
-    } as unknown as Ctx;
+        } } } as unknown as Ctx;
     return { ctx, appended, probes, sshCommands };
   }
 
@@ -474,8 +464,7 @@ describe("verified record — attested bare hostnames (the desktop local-host pa
   it("the ROE deny list still beats the record allow set", () => {
     const g = ScopeGuard.fromVerifiedRecord({
       verifiedScope: ["Cho-zen1", "acme.com"],
-      outOfScope: ["status.acme.com"],
-    });
+      outOfScope: ["status.acme.com"] });
     const v = g.checkHost("status.acme.com");
     assert.equal(v.allowed, false);
     assert.equal(v.kind, "deny");
@@ -489,8 +478,7 @@ describe("verified record — attested bare hostnames (the desktop local-host pa
     // silently failed for exactly the hosts the record path serves.
     const g = ScopeGuard.fromVerifiedRecord({
       verifiedScope: ["Cho-zen1"],
-      outOfScope: ["Cho-zen1"],
-    });
+      outOfScope: ["Cho-zen1"] });
     const v = g.checkHost("cho-zen1");
     assert.equal(v.allowed, false);
     assert.equal(v.kind, "deny");
@@ -582,8 +570,7 @@ describe("verified record — attested underscore hostnames (L9)", () => {
   it("an underscore host in the deny list is denied (deny beats allow)", () => {
     const g = ScopeGuard.fromVerifiedRecord({
       verifiedScope: ["my_host"],
-      outOfScope: ["my_host"],
-    });
+      outOfScope: ["my_host"] });
     const v = g.checkHost("my_host");
     assert.equal(v.allowed, false);
     assert.equal(v.kind, "deny");
@@ -608,8 +595,7 @@ describe("verified record — attested underscore hostnames (L9)", () => {
 describe("scopeGuardFor — the verified record is the allow source", () => {
   it("builds from the launch ROE until authorize stamps the record, then rebuilds from the record", () => {
     const ctx: Parameters<typeof scopeGuardFor>[0] = {
-      input: { roe: { scope: ["launch.example.com"] } },
-    };
+      input: { roe: { scope: ["launch.example.com"] } } };
     const launchGuard = scopeGuardFor(ctx);
     assert.equal(launchGuard.checkHost("launch.example.com").allowed, true);
     assert.equal(launchGuard.checkHost("record.example.com").allowed, false);
@@ -624,8 +610,7 @@ describe("scopeGuardFor — the verified record is the allow source", () => {
   it("fromVerifiedRecord matches fromRoe membership for the same entries, deny included", () => {
     const record = ScopeGuard.fromVerifiedRecord({
       verifiedScope: ["acme.com", "10.0.0.0/24"],
-      outOfScope: ["status.acme.com"],
-    });
+      outOfScope: ["status.acme.com"] });
     assert.equal(record.checkHost("api.acme.com").allowed, true);
     assert.equal(record.checkHost("10.0.0.9").allowed, true);
     assert.equal(record.checkHost("status.acme.com").kind, "deny");
@@ -643,15 +628,12 @@ describe("authorize phase — stamps the verified record the guard derives from"
         mode: "red",
         objective: "record-scope proof",
         operatorName: "Test Operator",
-        roe: { scope: ["example.com", "api.example.com"], outOfScope: [] as string[] },
-      },
-      config: { testMode: false, verifyViaService: false, mcpEndpoint: "", mcpToken: "", localSandbox: false },
+        roe: { scope: ["example.com", "api.example.com"], outOfScope: [] as string[] } },
+      config: { testMode: false, localSandbox: false },
       deps: {},
       events: {
         append: (e: { action: string; result: string }) => appended.push(e),
-        updateState: () => undefined,
-      },
-    } as unknown as Ctx;
+        updateState: () => undefined } } as unknown as Ctx;
 
     const verdict = await authorizePhase(ctx);
     assert.equal(verdict.allowed, true);
@@ -682,16 +664,12 @@ describe("authorize phase — stamps the verified record the guard derives from"
         operatorName: "Test Operator",
         roe: {
           scope: ["example.com", "api.example.com", "Acme iOS app", "never-checked.example.org"],
-          outOfScope: [] as string[],
-        },
-      },
-      config: { testMode: false, verifyViaService: false, mcpEndpoint: "", mcpToken: "", localSandbox: false },
+          outOfScope: [] as string[] } },
+      config: { testMode: false, localSandbox: false },
       deps: {},
       events: {
         append: () => undefined,
-        updateState: () => undefined,
-      },
-    } as unknown as Ctx;
+        updateState: () => undefined } } as unknown as Ctx;
 
     const verdict = await authorizePhase(ctx);
     assert.equal(verdict.allowed, true);
@@ -712,15 +690,12 @@ describe("authorize phase — stamps the verified record the guard derives from"
         mode: "red",
         objective: "raw form preservation",
         operatorName: "Test Operator",
-        roe: { scope: ["Cho-zen1"], outOfScope: [] as string[] },
-      },
-      config: { testMode: false, verifyViaService: false, mcpEndpoint: "", mcpToken: "", localSandbox: false },
+        roe: { scope: ["Cho-zen1"], outOfScope: [] as string[] } },
+      config: { testMode: false, localSandbox: false },
       deps: {},
       events: {
         append: () => undefined,
-        updateState: () => undefined,
-      },
-    } as unknown as Ctx;
+        updateState: () => undefined } } as unknown as Ctx;
 
     const verdict = await authorizePhase(ctx);
     assert.equal(verdict.allowed, true);

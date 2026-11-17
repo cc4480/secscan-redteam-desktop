@@ -29,11 +29,9 @@ function harness(dir: string, tier: 0 | 1 | 2, approvals: Partial<ApprovalEntry>
   const ctx = {
     events: {
       dir,
-      append: (e: { action: string; result: string }) => { events.push(e) },
-    },
+      append: (e: { action: string; result: string }) => { events.push(e) } },
     tier: { current: tier },
-    approvals: { list: () => approvals as ApprovalEntry[] },
-  } as unknown as Ctx
+    approvals: { list: () => approvals as ApprovalEntry[] } } as unknown as Ctx
   return { ctx, events }
 }
 
@@ -41,8 +39,7 @@ function writeTier(dir: string, tier: number, by?: string): void {
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'tier.json'), JSON.stringify({
     tier, declared: tier, environment: 'staging',
-    updatedAt: new Date().toISOString(), ...(by === undefined ? {} : { by }),
-  }))
+    updatedAt: new Date().toISOString(), ...(by === undefined ? {} : { by }) }))
 }
 
 describe('refreshTierFromDisk — autonomy is a governance act', () => {

@@ -20,8 +20,7 @@ import {
   buildPocBundle,
   bundleFileName,
   verifyBundleIntegrity,
-  type PocBundle,
-} from '../src/proof/bundle.js'
+  type PocBundle } from '../src/proof/bundle.js'
 import { reverifyBundle, type StepRunner } from '../src/proof/reverify.js'
 import { buildProofSection } from '../src/report/proof.js'
 import type { Ctx } from '../src/context.js'
@@ -37,8 +36,7 @@ function ev(partial: Partial<EngagementEvent> & { action: string; result: string
     phase: 'exploit',
     actor: 'exploiter',
     target: 'target.example',
-    ...partial,
-  } as EngagementEvent
+    ...partial } as EngagementEvent
 }
 
 function confirmedFinding(over: Partial<Finding> = {}): Finding {
@@ -51,8 +49,7 @@ function confirmedFinding(over: Partial<Finding> = {}): Finding {
     fix: 'patch',
     retest: 're-run',
     status: 'confirmed',
-    ...over,
-  }
+    ...over }
 }
 
 const MSF_EVENT = ev({
@@ -61,8 +58,7 @@ const MSF_EVENT = ev({
   attackId: 'T1190',
   result:
     'msf exploit/windows/smb/ms17_010_eternalblue vs target.example: MARKER ECHOED — command execution validated. ' +
-    '[CVE-2017-0144] Output: REDTEAM-MARKER-abc123',
-})
+    '[CVE-2017-0144] Output: REDTEAM-MARKER-abc123' })
 
 function builtBundle(over: Partial<Finding> = {}): PocBundle {
   const { bundle, reason } = buildPocBundle({ finding: confirmedFinding(over), events: [MSF_EVENT], engagement: META, secrets: [] })
@@ -81,8 +77,7 @@ describe('bundleFileName — finding ids cannot escape poc/', () => {
     '.',
     '',
     '.../x',
-    'F-1/../../registry',
-  ]
+    'F-1/../../registry' ]
 
   it('maps every id to a separator-free name contained in the target dir', () => {
     const pocDir = resolve('/engagements/eng-1/poc')
@@ -112,8 +107,7 @@ describe('buildProofSection — hostile finding ids stay inside poc/', () => {
     const ctx = {
       events: { dir, engagementId: 'eng-1', append: (e: unknown) => appended.push(e) },
       input: { target: 'target.example', operatorName: 'op' },
-      killedLive: [],
-    } as unknown as Ctx
+      killedLive: [] } as unknown as Ctx
     const evil = confirmedFinding({ id: '../../registry' })
     const normal = confirmedFinding({ id: 'F-1' })
     const section = buildProofSection(ctx, [evil, normal], new Map())

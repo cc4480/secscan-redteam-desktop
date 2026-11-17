@@ -21,8 +21,7 @@ import {
   assertLaunchAllowed,
   evaluateLaunch,
   nextWaveIndex,
-  recordOperatorDecision,
-} from '../src/campaign/gate.js'
+  recordOperatorDecision } from '../src/campaign/gate.js'
 import {
   beginWave,
   campaignFile,
@@ -30,8 +29,7 @@ import {
   loadCampaign,
   recordTransition,
   recordWaveOutcome,
-  type CreateCampaignInput,
-} from '../src/campaign/store.js'
+  type CreateCampaignInput } from '../src/campaign/store.js'
 
 let root: string
 let campaignsDir: string
@@ -54,8 +52,7 @@ function make(over: Partial<CreateCampaignInput> = {}): void {
     scope: { hosts: ['127.0.0.1'], verificationRef: 'dns-txt:fixture' },
     caps: { maxWaves: 3 },
     createdBy: 'Carlos',
-    ...over,
-  })
+    ...over })
 }
 
 function finishWave(waveIndex: number): void {
@@ -147,8 +144,7 @@ describe('recorded auto-advance (C-1 opt-in)', () => {
     const d = recordOperatorDecision(campaignsDir, 'camp-gate', {
       operator: 'Carlos',
       kind: 'enable-auto-advance',
-      maxWave: 2,
-    })
+      maxWave: 2 })
     let rec = loadCampaign(campaignsDir, 'camp-gate')
     assert.equal(rec.autoAdvance.enabled, true)
     assert.equal(rec.autoAdvance.maxWave, 2)
@@ -260,8 +256,7 @@ describe('decision recording discipline', () => {
       rec.decisions.map(d => [d.seq, d.operator, d.kind]),
       [
         [0, 'Carlos', 'start'],
-        [1, 'Judith', 'pause'],
-      ],
+        [1, 'Judith', 'pause'] ],
     )
     assert.equal(rec.decisions[0].note, 'go')
   })

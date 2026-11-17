@@ -17,8 +17,7 @@ import { tmpdir } from "node:os";
 import {
   escalateEngagement,
   describeEscalation,
-  isSafeEngagementId,
-} from "../src/accountability/escalate.js";
+  isSafeEngagementId } from "../src/accountability/escalate.js";
 import { readTierFile, writeTierFile } from "../src/accountability/tierfile.js";
 import { checkTierAllows, type AutonomyTier, type TierState } from "../src/accountability/tiers.js";
 import { refreshTierFromDisk } from "../src/dispatch/router.js";
@@ -81,8 +80,7 @@ describe("escalateEngagement (CLI core)", () => {
       engagementId: "eng-up-1",
       toTier: "1",
       operator: "op",
-      reason: "intrusive checks needed",
-    });
+      reason: "intrusive checks needed" });
     assert.equal(r.fromTier, 0);
     assert.equal(r.toTier, 1);
     assert.equal(r.operator, "op");
@@ -160,8 +158,7 @@ describe("escalateEngagement (CLI core)", () => {
       toTier: "2",
       operator: "op",
       reason: "chain needed",
-      tier2ProdConfirmed: true,
-    });
+      tier2ProdConfirmed: true });
     assert.equal(r.toTier, 2);
     cannedEngagement("eng-stg-1", 1, "staging");
     const r2 = escalateEngagement({
@@ -169,8 +166,7 @@ describe("escalateEngagement (CLI core)", () => {
       engagementId: "eng-stg-1",
       toTier: "2",
       operator: "op",
-      reason: "chain needed",
-    });
+      reason: "chain needed" });
     assert.equal(r2.toTier, 2, "staging needs no extra confirmation");
   });
 
@@ -181,8 +177,7 @@ describe("escalateEngagement (CLI core)", () => {
       engagementId: "eng-desc-1",
       toTier: "1",
       operator: "op",
-      reason: "x",
-    });
+      reason: "x" });
     assert.match(describeEscalation(r), /next tool call/);
     assert.match(describeEscalation(r), /Tier 0.*→ Tier 1/);
   });
@@ -201,8 +196,7 @@ describe("dispatcher pickup (refreshTierFromDisk)", () => {
       engagementId: "eng-pickup-1",
       toTier: "1",
       operator: "op",
-      reason: "host access approved",
-    });
+      reason: "host access approved" });
     // The dispatcher always carries the engagement approval log; an upward tier
     // change is refused without a matching entry, so the stub must supply it.
     refreshTierFromDisk(
@@ -259,8 +253,7 @@ describe("UI endpoint (handleEscalate)", () => {
       end(c?: string) {
         if (c) chunks.push(c);
         res.body = chunks.join("");
-      },
-    };
+      } };
     return res;
   }
 

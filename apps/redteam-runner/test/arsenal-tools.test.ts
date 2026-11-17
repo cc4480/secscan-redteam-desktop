@@ -17,16 +17,14 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
   buildAndSwapArsenalIndex,
-  type ArsenalBuildData,
-} from '../src/arsenal/index-store.js'
+  type ArsenalBuildData } from '../src/arsenal/index-store.js'
 import {
   ARSENAL_EMPTY_FIX,
   ARSENAL_TOOLS,
   ARSENAL_TOOLS_BY_NAME,
   buildArsenalFtsMatch,
   buildArsenalFtsMatchAny,
-  arsenalFtsTerms,
-} from '../src/arsenal/tools.js'
+  arsenalFtsTerms } from '../src/arsenal/tools.js'
 
 const BUILT_AT = '2026-10-31T12:00:00.000Z'
 const SOURCE_COMMIT = 'fixturecommit123'
@@ -77,8 +75,7 @@ function fixtureData(): ArsenalBuildData {
         topic: 'Wordlists',
         fetchedAt: BUILT_AT,
         entryCount: 3,
-        fetchError: null,
-      },
+        fetchError: null },
       {
         slug: 'payloadsallthethings',
         name: 'PayloadsAllTheThings',
@@ -87,8 +84,7 @@ function fixtureData(): ArsenalBuildData {
         topic: 'Web Hacking',
         fetchedAt: BUILT_AT,
         entryCount: 2,
-        fetchError: null,
-      },
+        fetchError: null },
       {
         slug: 'gtfobins',
         name: 'GTFOBins',
@@ -97,8 +93,7 @@ function fixtureData(): ArsenalBuildData {
         topic: 'Privilege Escalation',
         fetchedAt: BUILT_AT,
         entryCount: 1,
-        fetchError: null,
-      },
+        fetchError: null },
       {
         slug: 'awesome-osint',
         name: 'Awesome OSINT',
@@ -107,9 +102,7 @@ function fixtureData(): ArsenalBuildData {
         topic: 'OSINT',
         fetchedAt: null,
         entryCount: 0,
-        fetchError: null,
-      },
-    ],
+        fetchError: null } ],
     entries: [
       {
         name: 'JWT Wordlist',
@@ -119,8 +112,7 @@ function fixtureData(): ArsenalBuildData {
         collectionSlug: 'seclists',
         tags: ['topic:wordlists', 'collection:seclists', 'wordlist'],
         targets: ['WA'],
-        battery: ['F-10', 'functionality'],
-      },
+        battery: ['F-10', 'functionality'] },
       {
         name: 'Password Collection',
         url: 'https://example.invalid/seclists/password-collection',
@@ -128,8 +120,7 @@ function fixtureData(): ArsenalBuildData {
         collectionSlug: 'seclists',
         tags: ['topic:wordlists', 'collection:seclists', 'wordlist'],
         targets: ['WA', 'SS'],
-        battery: ['functionality'],
-      },
+        battery: ['functionality'] },
       {
         name: 'Comprehensive Username List',
         url: 'https://example.invalid/seclists/usernames',
@@ -137,8 +128,7 @@ function fixtureData(): ArsenalBuildData {
         collectionSlug: 'seclists',
         tags: ['topic:wordlists', 'collection:seclists', 'wordlist'],
         targets: ['WA'],
-        battery: [],
-      },
+        battery: [] },
       {
         name: 'SSRF Payloads',
         url: 'https://example.invalid/payloadsallthethings/ssrf',
@@ -147,8 +137,7 @@ function fixtureData(): ArsenalBuildData {
         collectionSlug: 'payloadsallthethings',
         tags: ['topic:web-hacking', 'collection:payloadsallthethings', 'payloads'],
         targets: ['WA'],
-        battery: ['F-9'],
-      },
+        battery: ['F-9'] },
       {
         name: 'IDOR Examples',
         url: 'https://example.invalid/payloadsallthethings/idor',
@@ -157,8 +146,7 @@ function fixtureData(): ArsenalBuildData {
         collectionSlug: 'payloadsallthethings',
         tags: ['topic:web-hacking', 'collection:payloadsallthethings'],
         targets: ['WA'],
-        battery: ['F-1'],
-      },
+        battery: ['F-1'] },
       {
         name: 'sudo',
         url: 'https://example.invalid/gtfobins/sudo',
@@ -166,10 +154,7 @@ function fixtureData(): ArsenalBuildData {
         collectionSlug: 'gtfobins',
         tags: ['topic:privilege-escalation', 'collection:gtfobins'],
         targets: ['LX'],
-        battery: [],
-      },
-    ],
-  }
+        battery: [] } ] }
 }
 
 function tool(name: string) {
@@ -314,8 +299,7 @@ describe('browse', () => {
       { topic: 'OSINT', collections: 1, entries: 0 },
       { topic: 'Privilege Escalation', collections: 1, entries: 1 },
       { topic: 'Web Hacking', collections: 1, entries: 2 },
-      { topic: 'Wordlists', collections: 1, entries: 3 },
-    ])
+      { topic: 'Wordlists', collections: 1, entries: 3 } ])
     assert.equal(env.index.generation, 1)
   })
 
@@ -332,9 +316,7 @@ describe('browse', () => {
         url: 'https://example.invalid/seclists',
         description: 'Wordlists for testing.',
         entry_count: 3,
-        level2: true,
-      },
-    ])
+        level2: true } ])
     const osint = JSON.parse(
       await tool('arsenal_browse').run({ category: 'OSINT' }),
     ) as { collections: Array<{ slug: string; level2: boolean }> }
@@ -355,8 +337,7 @@ describe('T10 — recommend determinism + why facets', () => {
   it('returns the facet-matching entry first, with its why', async () => {
     const env = JSON.parse(
       await tool('arsenal_recommend').run({
-        task: 'Forge a JWT to hijack the web app session',
-      }),
+        task: 'Forge a JWT to hijack the web app session' }),
     ) as SearchEnvelope
     // Candidates are the OR term matches: "jwt" hits the JWT row, and "web"
     // hits both Web Hacking rows through their stored `topic:web-hacking`
@@ -422,8 +403,7 @@ describe('T11 — empty index', () => {
     process.env['REDTEAM_ARSENAL_DB_PATH'] = emptyPath
     try {
       const expected = JSON.stringify({
-        error: { code: 'ARSENAL_INDEX_EMPTY', fix: ARSENAL_EMPTY_FIX },
-      })
+        error: { code: 'ARSENAL_INDEX_EMPTY', fix: ARSENAL_EMPTY_FIX } })
       assert.equal(await tool('arsenal_search').run({ query: 'jwt' }), expected)
       assert.equal(await tool('arsenal_browse').run({}), expected)
       assert.equal(

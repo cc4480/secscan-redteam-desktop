@@ -33,8 +33,7 @@ import {
   probeTargetTls,
   probeTls,
   tlsCertProblems,
-  type TlsObservation,
-} from '#secscan/tlsProbe.js'
+  type TlsObservation } from '#secscan/tlsProbe.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const FIXTURES = join(HERE, '..', '..', 'test', 'fixtures', 'tls')
@@ -86,8 +85,7 @@ describe('Q-SSLLABS native TLS probe (spec T1–T3)', () => {
       key: fx('good.key'),
       cert: fx('good.crt'),
       minVersion: 'TLSv1',
-      ciphers: 'ALL:@SECLEVEL=0',
-    })
+      ciphers: 'ALL:@SECLEVEL=0' })
     expired = await startServer({ key: fx('expired.key'), cert: fx('expired.crt') })
     notYet = await startServer({ key: fx('notyet.key'), cert: fx('notyet.crt') })
     wrongHost = await startServer({ key: fx('wronghost.key'), cert: fx('wronghost.crt') })
@@ -228,8 +226,7 @@ describe('grade mapping and problem classification (pure)', () => {
     hostnameMatches: true,
     validFromMs: Date.parse('2020-01-01T00:00:00.000Z'),
     validToMs: Date.parse('2030-01-01T00:00:00.000Z'),
-    legacyProtocolsAccepted: [],
-  }
+    legacyProtocolsAccepted: [] }
 
   it('unmeasured observations grade null', () => {
     assert.equal(deriveTlsGrade({ checked: false, reachable: false, legacyProtocolsAccepted: [] }), null)
@@ -248,8 +245,7 @@ describe('grade mapping and problem classification (pure)', () => {
       ...base,
       authorized: false,
       authorizationError: 'CERT_HAS_EXPIRED',
-      validToMs: Date.parse('2021-01-01T00:00:00.000Z'),
-    }
+      validToMs: Date.parse('2021-01-01T00:00:00.000Z') }
     assert.deepEqual(tlsCertProblems(expiredObs), ['expired'])
     assert.deepEqual(tlsCertProblems({ ...base, authorized: false, hostnameMatches: false }), ['hostname-mismatch'])
     assert.deepEqual(tlsCertProblems({ ...base, authorized: false }), ['untrusted'])

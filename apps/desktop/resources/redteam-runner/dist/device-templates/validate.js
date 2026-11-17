@@ -8,6 +8,7 @@
  * a scan that quietly skipped half its capability.
  */
 import { DEVICE_ORDER, TOOL_CATALOGUE, } from './catalog.js';
+import { DEVICE_RULES } from './roe.js';
 const REQUIRED_PHASES = ['recon', 'exploit', 'report'];
 /**
  * Validate a template set against the catalogue.
@@ -57,6 +58,19 @@ export function validateDeviceTemplates(templates, catalogue = TOOL_CATALOGUE) {
     for (const tool of known) {
         if (!usedBy.has(tool)) {
             violations.push({ rule: 'orphan-tool', detail: `"${tool}" is in the catalogue but no device template uses it` });
+        }
+    }
+    // Every device class carries its own rules of engagement, and those rules must
+    // leave the work possible: a template whose rules forbade exploitation would ship
+    // a scanner too timid to prove anything on that device.
+    for (const id of DEVICE_ORDER) {
+        const rules = DEVICE_RULES[id];
+        if (!rules) {
+            violations.push({ rule: 'missing-device-rules', detail: `device "${id}" has no rules of engagement` });
+            continue;
+        }
+        if (rules.aggression.length === 0 || rules.proof.length === 0 || rules.limits.length === 0) {
+            violations.push({ rule: 'incomplete-device-rules', detail: `device "${id}" must state aggression, proof and limits` });
         }
     }
     return violations;

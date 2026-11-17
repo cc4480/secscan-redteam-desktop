@@ -37,8 +37,7 @@ import {
   loadTicketMapping,
   updateTicketsForReverify,
   type JiraConfig,
-  type SnowConfig,
-} from "../src/integrations/index.js";
+  type SnowConfig } from "../src/integrations/index.js";
 import type { Finding } from "../src/types.js";
 import type { PocBundle } from "../src/proof/bundle.js";
 import type { ReverifyReport } from "../src/proof/reverify.js";
@@ -63,8 +62,7 @@ function startFake(
         method: req.method ?? "",
         url: req.url ?? "",
         headers: Object.fromEntries(Object.entries(req.headers).map(([k, v]) => [k.toLowerCase(), String(v)])),
-        body: data,
-      };
+        body: data };
       captured.push(c);
       const out = handler(c);
       res.writeHead(out.status, { "Content-Type": "application/json" });
@@ -87,8 +85,7 @@ const finding: Finding = {
   evidence: "smb_exec list_shares showed signing disabled",
   fix: "Enforce SMB signing via GPO.",
   retest: "Re-run smb_exec; signing must be required.",
-  status: "confirmed",
-};
+  status: "confirmed" };
 
 const bundle = {
   version: 1,
@@ -106,8 +103,7 @@ const bundle = {
   validationTier: "observation",
   proves: "Read-only output proves signing is disabled.",
   doesNotProve: "Full impact not proven.",
-  reverifyCommand: "redteam-runner reverify --bundle poc/F-1.json",
-} as PocBundle;
+  reverifyCommand: "redteam-runner reverify --bundle poc/F-1.json" } as PocBundle;
 
 function reverifyReport(verdict: ReverifyReport["verdict"]): ReverifyReport {
   return {
@@ -118,8 +114,7 @@ function reverifyReport(verdict: ReverifyReport["verdict"]): ReverifyReport {
     verdict,
     steps: [],
     summary: "reverify summary",
-    registryNote: "registry note",
-  };
+    registryNote: "registry note" };
 }
 
 describe("config resolvers fail closed", () => {
@@ -133,8 +128,7 @@ describe("config resolvers fail closed", () => {
       REDTEAM_JIRA_BASE_URL: "not-a-url",
       REDTEAM_JIRA_USER: "u",
       REDTEAM_JIRA_API_TOKEN: "t",
-      REDTEAM_JIRA_PROJECT: "SEC",
-    });
+      REDTEAM_JIRA_PROJECT: "SEC" });
     assert.equal(r.configured, false);
   });
   it("jira: bad priority map JSON → configured:false", () => {
@@ -143,8 +137,7 @@ describe("config resolvers fail closed", () => {
       REDTEAM_JIRA_USER: "u",
       REDTEAM_JIRA_API_TOKEN: "t",
       REDTEAM_JIRA_PROJECT: "SEC",
-      REDTEAM_JIRA_PRIORITY_MAP: "{bad",
-    });
+      REDTEAM_JIRA_PRIORITY_MAP: "{bad" });
     assert.equal(r.configured, false);
   });
   it("jira: happy path → defaults (Task type, stock priorities)", () => {
@@ -152,8 +145,7 @@ describe("config resolvers fail closed", () => {
       REDTEAM_JIRA_BASE_URL: "https://jira.example.com/",
       REDTEAM_JIRA_USER: "bot@example.com",
       REDTEAM_JIRA_API_TOKEN: "tok",
-      REDTEAM_JIRA_PROJECT: "SEC",
-    });
+      REDTEAM_JIRA_PROJECT: "SEC" });
     assert.equal(r.configured, true);
     if (r.configured) {
       assert.equal(r.baseUrl, "https://jira.example.com");
@@ -170,8 +162,7 @@ describe("config resolvers fail closed", () => {
     const r = resolveSnowConfig({
       REDTEAM_SNOW_INSTANCE: "https://acme.service-now.com",
       REDTEAM_SNOW_USER: "u",
-      REDTEAM_SNOW_PASSWORD: "p",
-    });
+      REDTEAM_SNOW_PASSWORD: "p" });
     assert.equal(r.configured, true);
     if (r.configured) assert.equal(r.table, "incident");
   });
@@ -207,8 +198,7 @@ describe("jira sink", () => {
       apiToken: "tok123",
       project: "SEC",
       issueType: "Task",
-      priorityMap: { critical: "1", high: "2", medium: "3", low: "4", info: "5" },
-    };
+      priorityMap: { critical: "1", high: "2", medium: "3", low: "4", info: "5" } };
   }
 
   it("create: correct endpoint, Basic auth, ADF description, priority, labels", async () => {
@@ -279,8 +269,7 @@ describe("servicenow sink", () => {
       instance: `http://127.0.0.1:${fake.port}`,
       user: "u",
       password: "pw",
-      table: "incident",
-    };
+      table: "incident" };
   }
 
   it("create: table API, urgency from severity, proof in description", async () => {
@@ -349,8 +338,7 @@ describe("siem export", () => {
       findings: [finding],
       bundles,
       safetySummary: "zero-disruption: clean",
-      severityCounts: { critical: 1 },
-    });
+      severityCounts: { critical: 1 } });
     const types = events.map((e) => e.event_type);
     assert.deepEqual(types, ["finding", "proof_bundle", "safety_summary", "engagement_completed"]);
     for (const e of events) {
@@ -372,8 +360,7 @@ describe("siem export", () => {
     try {
       const events = buildSiemEvents({
         engagementId: "e1", target: "t", operator: "op", findings: [finding],
-        bundles: new Map(), safetySummary: "s", severityCounts: {},
-      });
+        bundles: new Map(), safetySummary: "s", severityCounts: {} });
       const path = writeSiemEvents(dir, events);
       const lines = readFileSync(path, "utf8").trim().split("\n");
       assert.equal(lines.length, events.length);
@@ -397,8 +384,7 @@ describe("ticket sync orchestration", () => {
         REDTEAM_JIRA_BASE_URL: `http://127.0.0.1:${fake.port}`,
         REDTEAM_JIRA_USER: "u", REDTEAM_JIRA_API_TOKEN: "t", REDTEAM_JIRA_PROJECT: "SEC",
         REDTEAM_SNOW_INSTANCE: `http://127.0.0.1:${fake.port}`,
-        REDTEAM_SNOW_USER: "u", REDTEAM_SNOW_PASSWORD: "p",
-      };
+        REDTEAM_SNOW_USER: "u", REDTEAM_SNOW_PASSWORD: "p" };
       const { mapping, attempts } = await syncFindingsToTickets(
         { engagementId: "e1", target: "t", findings: [finding], bundles: new Map([[finding.id, bundle]]), env, http: fake.http },
         dir,
@@ -423,8 +409,7 @@ describe("ticket sync orchestration", () => {
       const killed = { ...finding, id: "F-2", status: "killed" } as Finding;
       const env = {
         REDTEAM_JIRA_BASE_URL: `http://127.0.0.1:${fake.port}`,
-        REDTEAM_JIRA_USER: "u", REDTEAM_JIRA_API_TOKEN: "t", REDTEAM_JIRA_PROJECT: "SEC",
-      };
+        REDTEAM_JIRA_USER: "u", REDTEAM_JIRA_API_TOKEN: "t", REDTEAM_JIRA_PROJECT: "SEC" };
       const { mapping } = await syncFindingsToTickets(
         { engagementId: "e1", target: "t", findings: [killed], bundles: new Map(), env, http: fake.http },
         dir,
@@ -458,8 +443,7 @@ describe("ticket sync orchestration", () => {
     try {
       const env = {
         REDTEAM_JIRA_BASE_URL: `http://127.0.0.1:${fake.port}`,
-        REDTEAM_JIRA_USER: "u", REDTEAM_JIRA_API_TOKEN: "t", REDTEAM_JIRA_PROJECT: "SEC",
-      };
+        REDTEAM_JIRA_USER: "u", REDTEAM_JIRA_API_TOKEN: "t", REDTEAM_JIRA_PROJECT: "SEC" };
       const { attempts } = await syncFindingsToTickets(
         { engagementId: "e1", target: "t", findings: [finding], bundles: new Map(), env, http: fake.http },
         dir,
@@ -493,8 +477,7 @@ describe("retest loop", () => {
     try {
       const env = {
         REDTEAM_JIRA_BASE_URL: `http://127.0.0.1:${fake.port}`,
-        REDTEAM_JIRA_USER: "u", REDTEAM_JIRA_API_TOKEN: "t", REDTEAM_JIRA_PROJECT: "SEC",
-      };
+        REDTEAM_JIRA_USER: "u", REDTEAM_JIRA_API_TOKEN: "t", REDTEAM_JIRA_PROJECT: "SEC" };
       const mapping = { engagementId: "e1", writtenAt: "x", tickets: { "F-1": { jiraKey: "SEC-7" } } };
 
       const r1 = await updateTicketsForReverify(mapping, bundle, reverifyReport("reproduced"), { env, http: fake.http });
@@ -521,8 +504,7 @@ describe("retest loop", () => {
     try {
       const env = {
         REDTEAM_JIRA_BASE_URL: `http://127.0.0.1:${fake.port}`,
-        REDTEAM_JIRA_USER: "u", REDTEAM_JIRA_API_TOKEN: "t", REDTEAM_JIRA_PROJECT: "SEC",
-      };
+        REDTEAM_JIRA_USER: "u", REDTEAM_JIRA_API_TOKEN: "t", REDTEAM_JIRA_PROJECT: "SEC" };
       const mapping = { engagementId: "e1", writtenAt: "x", tickets: { "F-1": { jiraKey: "SEC-7" } } };
       await updateTicketsForReverify(mapping, bundle, reverifyReport("target-changed"), { env, http: fake.http });
       const comment = fake.captured.find((x) => x.url.endsWith("/comment"))!;

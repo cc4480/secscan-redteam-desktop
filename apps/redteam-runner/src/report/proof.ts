@@ -42,9 +42,9 @@ export function buildProofSection(ctx: Ctx, findings: Finding[], pocBundleMap: M
     const secretEnvNames = [
       'REDTEAM_SSH_PASSWORD', 'REDTEAM_SSH_KEY',
       'REDTEAM_SMB_PASSWORD', 'REDTEAM_SMB_NTHASH',
-      'REDTEAM_WINRM_PASSWORD', 'REDTEAM_MSFRPC_PASS',
+      'REDTEAM_WINRM_PASSWORD',
       'REDTEAM_KRB_CCACHE_B64', 'REDTEAM_KRB_KIRBI_B64',
-      'SECSCAN_MCP_TOKEN', 'DEEPSEEK_API_KEY', 'QWEN_API_KEY',
+      'DEEPSEEK_API_KEY', 'QWEN_API_KEY',
     ]
     const proofSecrets = secretEnvNames
       .map(n => process.env[n])

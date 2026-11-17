@@ -2,16 +2,16 @@
  * Recon → module mapping: detected service/version → candidate Metasploit
  * modules.
  *
- * The mapping is deliberately thin: msfrpcd's own `module.search` does the
+ * The mapping is deliberately thin: msfconsole's own `search` does the
  * real matching (it knows all ~2,000 exploits). This module builds honest
  * search queries from recon evidence and ranks/filters the results —
  * dropping policy-denied modules BEFORE the agent ever sees them, so a
  * denied module can never be proposed, let alone run.
  *
  * Pure functions (query building, ranking) are unit-tested; the search
- * itself goes through MsfClient.
+ * itself goes through LocalMsfClient.
  */
-import type { MsfClient, MsfModule } from "./client.js";
+import type { LocalMsfClient, MsfModule } from "./local-client.js";
 export declare const CVE_RE: RegExp;
 /** Extract CVE identifiers from arbitrary recon text (banner, version string). */
 export declare function extractCves(text: string): string[];
@@ -42,4 +42,4 @@ export interface RankedModule extends MsfModule {
  */
 export declare function filterAndRank(modules: MsfModule[]): RankedModule[];
 /** Run the query chain and return ranked candidates (cap 25 — triage, not dump). */
-export declare function suggestModules(client: MsfClient, input: SuggestInput): Promise<RankedModule[]>;
+export declare function suggestModules(client: LocalMsfClient, input: SuggestInput): Promise<RankedModule[]>;

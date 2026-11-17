@@ -14,14 +14,12 @@ import assert from "node:assert/strict";
 
 import {
   assembleMemoryPack,
-  type MemoryRecallStore,
-} from "../src/memory/recall.js";
+  type MemoryRecallStore } from "../src/memory/recall.js";
 import { deriveMemoryScope } from "../src/memory/scope.js";
 import {
   deriveTrust,
   evaluateCorroboration,
-  sourceKeyFor,
-} from "../src/memory/trust.js";
+  sourceKeyFor } from "../src/memory/trust.js";
 import { unitViewSourceHash } from "../src/memory/views.js";
 import type { MemoryScope, MemoryUnit, RecallReceipt } from "../src/memory/types.js";
 
@@ -57,8 +55,7 @@ function hostScope(host: string): MemoryScope {
     scopeKey: `key-${host}`,
     hosts: [host],
     stack: [],
-    originEngagementIds: ["eng-0"],
-  };
+    originEngagementIds: ["eng-0"] };
 }
 
 describe("memory integration — SCOPE-BINDING NEGATIVE TEST (mandatory, brief §11)", () => {
@@ -78,14 +75,12 @@ describe("memory integration — SCOPE-BINDING NEGATIVE TEST (mandatory, brief �
       derivedFromUnitIds: [],
       extractor: { name: "registry-projector", version: "1", inputHash: "00" },
       createdAt: NOW_ISO,
-      createdBy: "runner",
-    },
+      createdBy: "runner" },
     proof: {
       state: "proven",
       receipts: [{ kind: "proof-bundle", ref: "eng-a/proof/bundle.json" }],
       cellState: "proven",
-      negativeControlReceiptRef: "eng-a/proof/nc.json",
-    },
+      negativeControlReceiptRef: "eng-a/proof/nc.json" },
     trust: { tier: "proven", baseScore: 1, derivedAt: NOW_ISO, derivation: ["CELL_PROVEN", "NEGATIVE_CONTROL_OK", "RECEIPT_LINKED"] },
     corroboration: { independentCount: 1, sourceKeys: ["registry:eng-a"] },
     contentClass: "normal",
@@ -99,11 +94,9 @@ describe("memory integration — SCOPE-BINDING NEGATIVE TEST (mandatory, brief �
       sourceHash: "hash-a",
       generatedAt: NOW_ISO,
       generator: "deterministic-v1",
-      stale: false,
-    },
+      stale: false },
     retrieval: { retrievalCount: 0 },
-    hash: "hash-a",
-  };
+    hash: "hash-a" };
   // Healthy views, bound the way the real store binds them.
   unitA.views.sourceHash = unitViewSourceHash(unitA);
 
@@ -113,14 +106,12 @@ describe("memory integration — SCOPE-BINDING NEGATIVE TEST (mandatory, brief �
       engagementId: "eng-b",
       hosts: ["b.example.test"],
       verifiedAt: NOW_ISO,
-      verificationProof: "operator attestation",
-    });
+      verificationProof: "operator attestation" });
     const packB = assembleMemoryPack(store, scopeB, {
       phase: "start",
       query: "sql injection login form",
       engagementId: "eng-b",
-      now: NOW,
-    });
+      now: NOW });
     assert.ok(!packB.text.includes(MARKER), "marker claim leaked into Target B's start pack");
     assert.ok(!packB.text.includes(unitA.unitId), "unitId leaked into Target B's start pack");
     assert.deepEqual(packB.survivors, []);
@@ -131,8 +122,7 @@ describe("memory integration — SCOPE-BINDING NEGATIVE TEST (mandatory, brief �
       query: "sql injection login form",
       engagementId: "eng-b",
       now: NOW,
-      eligibility: { stack: ["php"], appType: "web" },
-    });
+      eligibility: { stack: ["php"], appType: "web" } });
     assert.ok(!packB2.text.includes(MARKER), "marker claim leaked into Target B's refresh pack");
     assert.deepEqual(packB2.survivors, []);
 
@@ -141,14 +131,12 @@ describe("memory integration — SCOPE-BINDING NEGATIVE TEST (mandatory, brief �
       engagementId: "eng-a2",
       hosts: ["a.example.test"],
       verifiedAt: NOW_ISO,
-      verificationProof: "operator attestation",
-    });
+      verificationProof: "operator attestation" });
     const packA = assembleMemoryPack(store, scopeA, {
       phase: "start",
       query: "sql injection login form",
       engagementId: "eng-a2",
-      now: NOW,
-    });
+      now: NOW });
     assert.ok(packA.text.includes(MARKER), "positive control failed: unit missing from Target A's pack");
     assert.equal(packA.survivors[0]!.unitId, unitA.unitId);
     assert.equal(packA.survivors[0]!.tier, "proven");
@@ -162,8 +150,7 @@ describe("memory integration — POISONING TEST (mandatory, brief §11)", () => 
   function targetClaimUnit(corroboration: MemoryUnit["corroboration"]): MemoryUnit {
     const proof: MemoryUnit["proof"] = { state: "unproven", receipts: [] };
     const sourceRefs: MemoryUnit["provenance"]["sourceRefs"] = [
-      { kind: "target-response", uri: "eng-t1/recon/login.html", sha256: "page-hash-1" },
-    ];
+      { kind: "target-response", uri: "eng-t1/recon/login.html", sha256: "page-hash-1" } ];
     const trust = deriveTrust(
       { proof, corroboration, contentClass: "target-derived-untrusted", sourceRefs },
       NOW_ISO,
@@ -183,8 +170,7 @@ describe("memory integration — POISONING TEST (mandatory, brief §11)", () => 
         derivedFromUnitIds: [],
         extractor: { name: "target-derived-intake", version: "1", inputHash: "00" },
         createdAt: NOW_ISO,
-        createdBy: "runner",
-      },
+        createdBy: "runner" },
       proof,
       trust,
       corroboration,
@@ -198,11 +184,9 @@ describe("memory integration — POISONING TEST (mandatory, brief §11)", () => 
         sourceHash: "hash-t",
         generatedAt: NOW_ISO,
         generator: "deterministic-v1",
-        stale: false,
-      },
+        stale: false },
       retrieval: { retrievalCount: 0 },
-      hash: "hash-t",
-    };
+      hash: "hash-t" };
     unit.views.sourceHash = unitViewSourceHash(unit);
     return unit;
   }
@@ -212,12 +196,10 @@ describe("memory integration — POISONING TEST (mandatory, brief §11)", () => 
       engagementId: "eng-t2",
       hosts: ["target.example.test"],
       verifiedAt: NOW_ISO,
-      verificationProof: "operator attestation",
-    });
+      verificationProof: "operator attestation" });
     const single = targetClaimUnit({
       independentCount: 1,
-      sourceKeys: [sourceKeyFor("target-content", "eng-t1")],
-    });
+      sourceKeys: [sourceKeyFor("target-content", "eng-t1")] });
     assert.equal(single.trust.tier, "untrusted-target");
     assert.ok(single.trust.baseScore <= 0.2);
 
@@ -226,8 +208,7 @@ describe("memory integration — POISONING TEST (mandatory, brief §11)", () => 
       phase: "start",
       query: QUERY,
       engagementId: "eng-t2",
-      now: NOW,
-    });
+      now: NOW });
     assert.equal(pack1.survivors.length, 1);
     assert.equal(pack1.survivors[0]!.tier, "untrusted-target");
     assert.equal(pack1.survivors[0]!.untrusted, true);
@@ -257,16 +238,14 @@ describe("memory integration — POISONING TEST (mandatory, brief §11)", () => 
     const lifted = targetClaimUnit({
       independentCount: 2,
       sourceKeys: [sourceKeyFor("target-content", "eng-t1"), sourceKeyFor("registry", "eng-t3")],
-      lastCorroboratedAt: NOW_ISO,
-    });
+      lastCorroboratedAt: NOW_ISO });
     assert.equal(lifted.trust.tier, "corroborated");
     store.setUnits([lifted]);
     const pack2 = assembleMemoryPack(store, scope, {
       phase: "start",
       query: QUERY,
       engagementId: "eng-t2",
-      now: NOW,
-    });
+      now: NOW });
     assert.equal(pack2.survivors[0]!.tier, "corroborated");
     assert.equal(pack2.survivors[0]!.untrusted, false);
     assert.ok(

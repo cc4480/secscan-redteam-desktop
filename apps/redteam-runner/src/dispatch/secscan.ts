@@ -97,7 +97,7 @@ export async function handleSecscanTools(
   noteCategoryCoverage(ctx, category, targetProfile)
   let scan: ScanResult
   try {
-    scan = await runScan(url, depth === 'deep' ? 'deep' : 'basic', undefined, { attestedHost: (host) => attestedHostAllowed(ctx, host) })
+    scan = await runScan(url, depth === 'deep' ? 'deep' : 'basic', undefined, { attestedHost: (host: string) => attestedHostAllowed(ctx, host) })
   } catch (err) {
     return { result: `secscan_exec failed: ${(err as Error).message}`, attackId, target: url, ok: false }
   }

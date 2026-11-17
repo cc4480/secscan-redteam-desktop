@@ -32,8 +32,7 @@ function fakeRes(): { res: ServerResponse; captured: Captured } {
     end(chunk?: string) {
       captured.body = chunk ?? ''
       return res
-    },
-  }
+    } }
   return { res: res as unknown as ServerResponse, captured }
 }
 
@@ -70,13 +69,11 @@ describe('POST /api/chat', () => {
         req.on('end', () => {
           chatCalls.push({
             body: JSON.parse(raw) as Record<string, unknown>,
-            authorization: req.headers['authorization'],
-          })
+            authorization: req.headers['authorization'] })
           res.writeHead(200, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({
             choices: [{ message: { content: 'answer from the local stub' } }],
-            usage: { prompt_tokens: 5, completion_tokens: 4, total_tokens: 9 },
-          }))
+            usage: { prompt_tokens: 5, completion_tokens: 4, total_tokens: 9 } }))
         })
         return
       }
@@ -99,15 +96,12 @@ describe('POST /api/chat', () => {
         file: MODEL_FILE,
         path: modelPath,
         sizeBytes: 18,
-        downloadedAt: 1,
-      }],
-    }))
+        downloadedAt: 1 }] }))
     writeFileSync(join(modelsDir, 'settings.json'), JSON.stringify({
       activeModelId: MODEL_ID,
       contextLength: 32768,
       threads: 4,
-      startOnLaunch: false,
-    }))
+      startOnLaunch: false }))
     writeState(runningState())
   })
 

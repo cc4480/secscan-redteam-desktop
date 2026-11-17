@@ -47,8 +47,7 @@ import {
   caseIdFor,
   registerCase,
   storeDirForEngagement,
-  type FoundryCase,
-} from "../src/foundry/store.js";
+  type FoundryCase } from "../src/foundry/store.js";
 
 /** Minimal mock response capturing status + body (mirrors test/ui.test.ts). */
 function mockRes() {
@@ -68,8 +67,7 @@ function mockRes() {
     end(c?: string) {
       if (c) chunks.push(c);
       res.body = chunks.join("");
-    },
-  };
+    } };
   return res;
 }
 
@@ -116,8 +114,7 @@ async function launchDryRun(store: UiStore): Promise<string> {
     objective: "console pages real-roots proof",
     scope: ["example.com"],
     operatorName: "Console Proof",
-    dryRun: true,
-  });
+    dryRun: true });
   assert.equal(res.status, 202, `launch refused: ${res.body}`);
   const id = (JSON.parse(res.body) as { id: string }).id;
   assert.ok(id, "launch returns an engagement id");
@@ -254,8 +251,7 @@ describe("console pages read what the launch actually wrote (desktop layout)", (
       methodMix: [] as string[],
       payloadClass: "tautology-quote",
       proofType: "cell-proven",
-      techFingerprints: ["wordpress"],
-    };
+      techFingerprints: ["wordpress"] };
     const contentHash = caseContentHash(pattern);
     const foundryCase: FoundryCase = {
       id: caseIdFor(id, contentHash),
@@ -275,8 +271,7 @@ describe("console pages read what the launch actually wrote (desktop layout)", (
       sourceEngagementId: id,
       lineage: null,
       createdAt: "2026-11-01T14:00:00.000Z",
-      contentHash,
-    };
+      contentHash };
     assert.equal(registerCase(storeDir, foundryCase), true, "the store's own writer registers the case");
 
     const loopRes = mockRes();

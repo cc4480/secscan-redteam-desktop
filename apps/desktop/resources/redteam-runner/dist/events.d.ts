@@ -8,9 +8,9 @@
  *    proof, plan, findings so far. One read gives the console everything.
  *  - engagement.md — the human paper trail (Time | Phase | Actor | Action | Result).
  */
-import type { EngagementEvent, EngagementMode, EngagementPhase, EngagementStatus, Finding, OperationPlan } from "./types.js";
-import type { BatteryCategory } from "./battery.js";
-import { type LogRotationConfig } from "./safety/rotation.js";
+import type { EngagementEvent, EngagementMode, EngagementPhase, EngagementStatus, Finding, OperationPlan } from './types.js';
+import type { BatteryCategory } from './battery.js';
+import { type LogRotationConfig } from './safety/rotation.js';
 /**
  * Statuses that mean the run is over — the same set ui/store.ts defines
  * for its live flag and ui/report-tools.ts for regeneration, exported
@@ -63,7 +63,7 @@ export interface ScribeDefect {
     file: string;
     /** accuracy = contradicts the record; completeness = a promised piece
      * missing; craft = below the locked design standard. */
-    class: "accuracy" | "completeness" | "craft";
+    class: 'accuracy' | 'completeness' | 'craft';
     /** What fails, concretely (the line, the count, the section). */
     detail: string;
     /** What "fixed" looks like. */
@@ -71,7 +71,7 @@ export interface ScribeDefect {
 }
 /** The publisher seat's sign-off stamp on a closing deliverable set. */
 export interface ArtifactSignoff {
-    by: "scribe";
+    by: 'scribe';
     /** ISO timestamp of the signing review. */
     at: string;
     /** Review cycles the set went through (1 = signed on first review). */
@@ -81,7 +81,7 @@ export interface ArtifactSignoff {
  * signature — the same honesty class as deliverableFailed: the set must
  * never read as approved when it was not. */
 export interface ArtifactUnsigned {
-    reason: "defects" | "scribe_unavailable" | "dry-run";
+    reason: 'defects' | 'scribe_unavailable' | 'dry-run';
     /** The final cycle's defect list (empty when the seat never answered). */
     defects: ScribeDefect[];
     /** Review cycles spent before the set shipped unsigned. */
@@ -114,7 +114,7 @@ export declare class EventLog {
     }, rotation?: LogRotationConfig);
     /** Reopen an existing engagement dir (for resume / inspection). */
     static open(dir: string): EventLog;
-    append(partial: Omit<EngagementEvent, "ts" | "seq" | "engagementId">): EngagementEvent;
+    append(partial: Omit<EngagementEvent, 'ts' | 'seq' | 'engagementId'>): EngagementEvent;
     /**
      * v0.26.0: rotate events.jsonl (and engagement.md alongside it) when the
      * log exceeds the rotation cap. The fresh file leads with a `log_rotated`

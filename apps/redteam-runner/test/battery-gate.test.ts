@@ -24,8 +24,7 @@ const base: BatteryGateInput = {
   actions: 575,
   maxActions: 2500,
   rounds: 0,
-  maxRounds: 3,
-};
+  maxRounds: 3 };
 
 const gate = (over: Partial<BatteryGateInput> = {}) => batteryGate({ ...base, ...over });
 

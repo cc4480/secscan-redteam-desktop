@@ -14,8 +14,7 @@ import {
   type ArsenalTransportFn,
   type ArsenalTransportRequest,
   type ArsenalTransportResponse,
-  type DenyReason,
-} from '../src/arsenal/fetch-guard.js'
+  type DenyReason } from '../src/arsenal/fetch-guard.js'
 
 /* Fixture addresses (documentation/fixture data, never connected). */
 const PUBLIC_A = '93.184.216.34'
@@ -105,8 +104,7 @@ describe('allow path', () => {
     const seen: ArsenalTransportRequest[] = []
     const result = await fetchTextChecked(README_URL, {
       resolve: resolverOf({ 'collections.example': [PUBLIC_A] }),
-      transport: staticTransport(textResponse('# Awesome\n'), seen),
-    })
+      transport: staticTransport(textResponse('# Awesome\n'), seen) })
     assert.equal(result.text, '# Awesome\n')
     assert.equal(result.finalUrl, README_URL)
     assert.equal(result.hops, 0)
@@ -124,8 +122,7 @@ describe('allow path', () => {
     const seen: ArsenalTransportRequest[] = []
     await fetchTextChecked(README_URL, {
       resolve: resolverOf({ 'collections.example': [PUBLIC_V6] }),
-      transport: staticTransport(textResponse('ok'), seen),
-    })
+      transport: staticTransport(textResponse('ok'), seen) })
     assert.equal((seen[0] as ArsenalTransportRequest).address, PUBLIC_V6)
     assert.equal((seen[0] as ArsenalTransportRequest).family, 6)
   })
@@ -134,27 +131,23 @@ describe('allow path', () => {
     const seen: ArsenalTransportRequest[] = []
     await fetchTextChecked(README_URL, {
       resolve: resolverOf({ 'collections.example': ['::ffff:5db8:d822'] }),
-      transport: staticTransport(textResponse('ok'), seen),
-    })
+      transport: staticTransport(textResponse('ok'), seen) })
     assert.equal((seen[0] as ArsenalTransportRequest).family, 6)
   })
 
   it('allows 172.32.0.1 — just outside the 172.16.0.0/12 private range', async () => {
     await fetchTextChecked(README_URL, {
       resolve: resolverOf({ 'collections.example': ['172.32.0.1'] }),
-      transport: staticTransport(textResponse('ok')),
-    })
+      transport: staticTransport(textResponse('ok')) })
   })
 
   it('allows application/octet-stream (raw hosts) and text with parameters', async () => {
     await fetchTextChecked(README_URL, {
       resolve: resolverOf({ 'collections.example': [PUBLIC_A] }),
-      transport: staticTransport(textResponse('raw', 'application/octet-stream')),
-    })
+      transport: staticTransport(textResponse('raw', 'application/octet-stream')) })
     await fetchTextChecked(README_URL, {
       resolve: resolverOf({ 'collections.example': [PUBLIC_A] }),
-      transport: staticTransport(textResponse('md', 'text/markdown; charset=utf-8')),
-    })
+      transport: staticTransport(textResponse('md', 'text/markdown; charset=utf-8')) })
   })
 
   it('follows a relative redirect and reports finalUrl + hops', async () => {
@@ -163,8 +156,7 @@ describe('allow path', () => {
       call === 1 ? redirectResponse('/moved.md') : textResponse('landed'), seen)
     const result = await fetchTextChecked(README_URL, {
       resolve: resolverOf({ 'collections.example': [PUBLIC_A] }),
-      transport,
-    })
+      transport })
     assert.equal(result.text, 'landed')
     assert.equal(result.finalUrl, 'https://collections.example/moved.md')
     assert.equal(result.hops, 1)
@@ -176,8 +168,7 @@ describe('allow path', () => {
       call <= 3 ? redirectResponse(`https://collections.example/hop-${call}`) : textResponse('end'))
     const result = await fetchTextChecked(README_URL, {
       resolve: resolverOf({ 'collections.example': [PUBLIC_A] }),
-      transport,
-    })
+      transport })
     assert.equal(result.text, 'end')
     assert.equal(result.hops, 3)
   })
@@ -186,8 +177,7 @@ describe('allow path', () => {
     const result = await fetchTextChecked(README_URL, {
       resolve: resolverOf({ 'collections.example': [PUBLIC_A] }),
       transport: staticTransport(textResponse('1234567890')),
-      maxBodyBytes: 10,
-    })
+      maxBodyBytes: 10 })
     assert.equal(result.text, '1234567890')
   })
 })
@@ -197,8 +187,7 @@ describe('scheme + URL shape denials', () => {
     await expectDenied(
       fetchTextChecked('http://collections.example/readme.md', {
         resolve: resolverOf({ 'collections.example': [PUBLIC_A] }),
-        transport: staticTransport(textResponse('x')),
-      }),
+        transport: staticTransport(textResponse('x')) }),
       'scheme-not-https',
     )
   })
@@ -208,13 +197,11 @@ describe('scheme + URL shape denials', () => {
       'ftp://collections.example/readme.md',
       'file:///etc/passwd',
       'gopher://collections.example/1',
-      'data:text/plain,hello',
-    ]) {
+      'data:text/plain,hello' ]) {
       await expectDenied(
         fetchTextChecked(url, {
           resolve: resolverOf({}),
-          transport: staticTransport(textResponse('x')),
-        }),
+          transport: staticTransport(textResponse('x')) }),
         'scheme-not-https',
       )
     }
@@ -226,8 +213,7 @@ describe('scheme + URL shape denials', () => {
     await expectDenied(
       fetchTextChecked('https://user:secret@collections.example/readme.md', {
         resolve: resolverOf({ 'collections.example': [PUBLIC_A] }, resolveCalls),
-        transport: staticTransport(textResponse('x'), seen),
-      }),
+        transport: staticTransport(textResponse('x'), seen) }),
       'credentials-in-url',
     )
     assert.equal(resolveCalls.length, 0)
@@ -238,8 +224,7 @@ describe('scheme + URL shape denials', () => {
     await expectDenied(
       fetchTextChecked('not a url', {
         resolve: resolverOf({}),
-        transport: staticTransport(textResponse('x')),
-      }),
+        transport: staticTransport(textResponse('x')) }),
       'invalid-url',
     )
   })
@@ -272,16 +257,14 @@ describe('address-range denials (deny if ANY resolved address is non-global)', (
     ['2001:db8::1', 'documentation'],
     ['::ffff:127.0.0.1', 'loopback'],
     ['::ffff:0a00:0001', 'private'],
-    ['64:ff9b::a9fe:a9fe', 'link-local'],
-  ]
+    ['64:ff9b::a9fe:a9fe', 'link-local'] ]
   for (const [address, category] of blocked) {
     it(`denies a resolution to ${address} (${category})`, async () => {
       const seen: ArsenalTransportRequest[] = []
       const error = await expectDenied(
         fetchTextChecked(README_URL, {
           resolve: resolverOf({ 'collections.example': [address] }),
-          transport: staticTransport(textResponse('x'), seen),
-        }),
+          transport: staticTransport(textResponse('x'), seen) }),
         'blocked-address',
       )
       assert.match(error.detail ?? '', new RegExp(category.replace(/[()]/g, '.')))
@@ -294,8 +277,7 @@ describe('address-range denials (deny if ANY resolved address is non-global)', (
     await expectDenied(
       fetchTextChecked(README_URL, {
         resolve: resolverOf({ 'collections.example': [PUBLIC_A, '10.0.0.8'] }),
-        transport: staticTransport(textResponse('x'), seen),
-      }),
+        transport: staticTransport(textResponse('x'), seen) }),
       'blocked-address',
     )
     assert.equal(seen.length, 0)
@@ -305,8 +287,7 @@ describe('address-range denials (deny if ANY resolved address is non-global)', (
     await expectDenied(
       fetchTextChecked(README_URL, {
         resolve: resolverOf({ 'collections.example': ['not-an-ip'] }),
-        transport: staticTransport(textResponse('x')),
-      }),
+        transport: staticTransport(textResponse('x')) }),
       'unparseable-address',
     )
   })
@@ -315,8 +296,7 @@ describe('address-range denials (deny if ANY resolved address is non-global)', (
     await expectDenied(
       fetchTextChecked(README_URL, {
         resolve: resolverOf({ 'collections.example': [] }),
-        transport: staticTransport(textResponse('x')),
-      }),
+        transport: staticTransport(textResponse('x')) }),
       'no-addresses',
     )
   })
@@ -326,8 +306,7 @@ describe('address-range denials (deny if ANY resolved address is non-global)', (
     await expectDenied(
       fetchTextChecked('https://127.0.0.1/readme.md', {
         resolve: resolverOf({}, resolveCalls),
-        transport: staticTransport(textResponse('x')),
-      }),
+        transport: staticTransport(textResponse('x')) }),
       'blocked-address',
     )
     assert.equal(resolveCalls.length, 0)
@@ -337,8 +316,7 @@ describe('address-range denials (deny if ANY resolved address is non-global)', (
     await expectDenied(
       fetchTextChecked('https://[::1]/readme.md', {
         resolve: resolverOf({}),
-        transport: staticTransport(textResponse('x')),
-      }),
+        transport: staticTransport(textResponse('x')) }),
       'blocked-address',
     )
   })
@@ -347,8 +325,7 @@ describe('address-range denials (deny if ANY resolved address is non-global)', (
     await expectDenied(
       fetchTextChecked('https://0.0.0.0/readme.md', {
         resolve: resolverOf({}),
-        transport: staticTransport(textResponse('x')),
-      }),
+        transport: staticTransport(textResponse('x')) }),
       'blocked-address',
     )
   })
@@ -357,8 +334,7 @@ describe('address-range denials (deny if ANY resolved address is non-global)', (
     const seen: ArsenalTransportRequest[] = []
     const result = await fetchTextChecked(`https://${PUBLIC_B}/readme.md`, {
       resolve: resolverOf({}),
-      transport: staticTransport(textResponse('by-ip'), seen),
-    })
+      transport: staticTransport(textResponse('by-ip'), seen) })
     assert.equal(result.text, 'by-ip')
     assert.equal((seen[0] as ArsenalTransportRequest).address, PUBLIC_B)
   })
@@ -374,10 +350,8 @@ describe('redirect policy', () => {
       fetchTextChecked(README_URL, {
         resolve: resolverOf({
           'collections.example': [PUBLIC_A],
-          'metadata.example': ['169.254.169.254'],
-        }),
-        transport,
-      }),
+          'metadata.example': ['169.254.169.254'] }),
+        transport }),
       'blocked-address',
     )
     assert.equal(error.hop, 1)
@@ -388,8 +362,7 @@ describe('redirect policy', () => {
     const error = await expectDenied(
       fetchTextChecked(README_URL, {
         resolve: resolverOf({ 'collections.example': [PUBLIC_A] }),
-        transport,
-      }),
+        transport }),
       'scheme-not-https',
     )
     assert.equal(error.hop, 1)
@@ -404,8 +377,7 @@ describe('redirect policy', () => {
     await expectDenied(
       fetchTextChecked(README_URL, {
         resolve: resolverOf({ 'collections.example': [PUBLIC_A] }),
-        transport,
-      }),
+        transport }),
       'too-many-redirects',
     )
     assert.equal(seen.length, 4, 'initial request + 3 followed redirects, then refusal')
@@ -420,8 +392,7 @@ describe('anti-rebinding: the checked address is the connected address', () => {
     const resolve: ArsenalResolveFn = async () => answers[calls++] as string[]
     const result = await fetchTextChecked(README_URL, {
       resolve,
-      transport: staticTransport(textResponse('pinned'), seen),
-    })
+      transport: staticTransport(textResponse('pinned'), seen) })
     assert.equal(result.text, 'pinned')
     assert.equal(calls, 1, 'no second resolution exists for a rebinding window')
     assert.equal((seen[0] as ArsenalTransportRequest).address, PUBLIC_A)
@@ -448,14 +419,12 @@ describe('response bounds', () => {
       status: 200,
       contentType: 'text/plain',
       location: null,
-      body: bodyOf('12345678', '90abcdef', 'more'),
-    }
+      body: bodyOf('12345678', '90abcdef', 'more') }
     await expectDenied(
       fetchTextChecked(README_URL, {
         resolve: resolverOf({ 'collections.example': [PUBLIC_A] }),
         transport: staticTransport(big),
-        maxBodyBytes: 10,
-      }),
+        maxBodyBytes: 10 }),
       'body-too-large',
     )
   })
@@ -464,8 +433,7 @@ describe('response bounds', () => {
     await expectDenied(
       fetchTextChecked(README_URL, {
         resolve: resolverOf({ 'collections.example': [PUBLIC_A] }),
-        transport: staticTransport(textResponse('{}', 'application/json')),
-      }),
+        transport: staticTransport(textResponse('{}', 'application/json')) }),
       'content-type-not-text',
     )
   })
@@ -474,8 +442,7 @@ describe('response bounds', () => {
     await expectDenied(
       fetchTextChecked(README_URL, {
         resolve: resolverOf({ 'collections.example': [PUBLIC_A] }),
-        transport: staticTransport(textResponse('x', null)),
-      }),
+        transport: staticTransport(textResponse('x', null)) }),
       'content-type-not-text',
     )
   })
@@ -487,8 +454,7 @@ describe('parser-level bypass attempts', () => {
     await expectDenied(
       fetchTextChecked('https://2130706433/readme.md', {
         resolve: resolverOf({}, resolveCalls),
-        transport: staticTransport(textResponse('x')),
-      }),
+        transport: staticTransport(textResponse('x')) }),
       'blocked-address',
     )
     assert.equal(resolveCalls.length, 0)
@@ -499,8 +465,7 @@ describe('parser-level bypass attempts', () => {
     await expectDenied(
       fetchTextChecked('https://0177.0.0.1/readme.md', {
         resolve: resolverOf({}, resolveCalls),
-        transport: staticTransport(textResponse('x')),
-      }),
+        transport: staticTransport(textResponse('x')) }),
       'blocked-address',
     )
     assert.equal(resolveCalls.length, 0)
@@ -510,8 +475,7 @@ describe('parser-level bypass attempts', () => {
     await expectDenied(
       fetchTextChecked('https://collections.example@127.0.0.1/readme.md', {
         resolve: resolverOf({}),
-        transport: staticTransport(textResponse('x')),
-      }),
+        transport: staticTransport(textResponse('x')) }),
       'credentials-in-url',
     )
   })
@@ -521,8 +485,7 @@ describe('parser-level bypass attempts', () => {
     const error = await expectDenied(
       fetchTextChecked(README_URL, {
         resolve: resolverOf({ 'collections.example': [PUBLIC_A] }),
-        transport,
-      }),
+        transport }),
       'blocked-address',
     )
     assert.equal(error.hop, 1)
@@ -536,8 +499,7 @@ describe('operational failures are FetchFailedError, not denials', () => {
         resolve: async () => {
           throw new Error('ENOTFOUND')
         },
-        transport: staticTransport(textResponse('x')),
-      }),
+        transport: staticTransport(textResponse('x')) }),
       'dns-error',
     )
     assert.equal(error.hop, 0)
@@ -551,9 +513,7 @@ describe('operational failures are FetchFailedError, not denials', () => {
           status: 500,
           contentType: 'text/plain',
           location: null,
-          body: bodyOf('boom'),
-        }),
-      }),
+          body: bodyOf('boom') }) }),
       'http-status',
     )
     assert.equal(error.status, 500)
@@ -567,9 +527,7 @@ describe('operational failures are FetchFailedError, not denials', () => {
           status: 301,
           contentType: null,
           location: null,
-          body: bodyOf(),
-        }),
-      }),
+          body: bodyOf() }) }),
       'redirect-without-location',
     )
   })
@@ -579,8 +537,7 @@ describe('operational failures are FetchFailedError, not denials', () => {
       fetchTextChecked(README_URL, {
         resolve: resolverOf({ 'collections.example': [PUBLIC_A] }),
         transport: async () => new Promise<ArsenalTransportResponse>(() => {}),
-        timeoutMs: 25,
-      }),
+        timeoutMs: 25 }),
       'timeout',
     )
     assert.equal(error.reason, 'timeout')

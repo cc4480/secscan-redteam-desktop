@@ -21,8 +21,7 @@ describe('toolTargetHost — resolves the host that will actually be contacted',
     // The bypass: in-scope host, out-of-scope url.
     const host = toolTargetHost(call('http_probe', {
       host: 'in-scope.example.com',
-      url: 'https://out-of-scope.example.net/admin',
-    }))
+      url: 'https://out-of-scope.example.net/admin' }))
     assert.equal(host, 'out-of-scope.example.net')
     assert.notEqual(host, 'in-scope.example.com')
   })

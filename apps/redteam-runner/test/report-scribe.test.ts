@@ -33,8 +33,7 @@ import {
   parseScribeVerdict,
   scribeGate,
   scribeMaxCycles,
-  type ScribeDefect,
-} from '../src/report/scribe.js'
+  type ScribeDefect } from '../src/report/scribe.js'
 import { extractAuthoredHtml, gateAuthoredHtml } from '../src/report/scribe-html.js'
 import { type ReportModel } from '../src/report/deliverables.js'
 import { publisherPrompt, reporterPrompt } from '../src/prompts.js'
@@ -84,9 +83,7 @@ const FIXTURE_MODEL: ReportModel = {
     evidence: `fixture evidence ${i + 1}`,
     fix: `fixture fix ${i + 1}`,
     retest: 're-probe the fixture',
-    status: 'confirmed',
-  })) as ReportModel['findings'],
-}
+    status: 'confirmed' })) as ReportModel['findings'] }
 
 /** Write the fixture closing set: the model + the four readable
  * artifacts + the two binary deliverables (bytes only — emitReportPackage
@@ -114,16 +111,14 @@ function fixtureCtx(dir: string, completeForRole: CompleteFn): Ctx {
     config: { dryRunAgents: false, localSandbox: false, testMode: true },
     deps: { completeForRole },
     hosts: ['secscan.us'],
-    domain: 'secscan.us',
-  } as unknown as Ctx
+    domain: 'secscan.us' } as unknown as Ctx
 }
 
 const REJECT_DEFECT: ScribeDefect = {
   file: 'report.md',
   class: 'accuracy',
   detail: 'report.md states 99 findings; the model carries 2',
-  fix: 'Re-render the counts from the model',
-}
+  fix: 'Re-render the counts from the model' }
 
 describe('scribe gate — parsing and knobs', () => {
   it('parses sign and reject verdicts; off-shape answers are null', () => {
@@ -198,13 +193,11 @@ describe('scribe gate — the close-out loop', () => {
       generatedAt: '2026-11-01T00:00:00.000Z',
       steps: [
         { seq: 7, ts: '2026-11-01T00:00:07.000Z', tool: 'http_probe', command: 'GET https://secscan.us/probe', result: 'marker REDTEAM-MARKER-FIXTURE echoed back in the response body', validation: 'marker-echo', marker: 'FIXTURE', replay: null },
-        { seq: 8, ts: '2026-11-01T00:00:08.000Z', tool: 'http_probe', command: 'GET https://secscan.us/other', result: 'unvalidated noise step result', validation: 'none', replay: null },
-      ],
+        { seq: 8, ts: '2026-11-01T00:00:08.000Z', tool: 'http_probe', command: 'GET https://secscan.us/other', result: 'unvalidated noise step result', validation: 'none', replay: null } ],
       validationTier: 'execution',
       proves: 'http_probe executed the runner-built canary on secscan.us (T1190); marker REDTEAM-MARKER-FIXTURE echoed back.',
       doesNotProve: 'Full impact beyond the executed action.',
-      reverifyCommand: 'redteam-runner reverify --bundle poc/F-1.json --scope secscan.us --execute',
-    }))
+      reverifyCommand: 'redteam-runner reverify --bundle poc/F-1.json --scope secscan.us --execute' }))
     let brief = ''
     const complete: CompleteFn = async (_role, messages) => {
       brief = messages.map(m => m.content).join('\n')
@@ -235,8 +228,7 @@ describe('scribe gate — the close-out loop', () => {
       regenerate: (d) => {
         regenerations++
         writeFileSync(join(d, 'report.md'), readFileSync(join(d, 'report.md'), 'utf8').replace('Findings: 99', 'Findings: 2'))
-      },
-    })
+      } })
     assert.equal(outcome.signed, true)
     assert.equal(outcome.cycles, 2)
     assert.equal(regenerations, 1, 'exactly one regeneration between the two reviews')
@@ -336,16 +328,13 @@ function e2eLlm(opts: { refuseSignOff?: boolean; reviewThrows?: boolean; track?:
   const probe = (category: string, id: number): ToolCallRequest => ({
     id: `call-${id}`,
     name: 'http_probe',
-    arguments: { method: 'GET', url: 'https://secscan.us/probe', category, attackId: 'T1190', hypothesis: `battery test ${category}` },
-  })
+    arguments: { method: 'GET', url: 'https://secscan.us/probe', category, attackId: 'T1190', hypothesis: `battery test ${category}` } })
   const taskJson = (tasks: object[], finish: boolean, note: string): ChatResult =>
     textOnly('```json ' + JSON.stringify({ tasks, finish, note }) + ' ```')
   const FINDINGS_JSON = JSON.stringify({
     findings: TITLES.map((title, i) => ({
       id: `F-${i + 1}`, severity: i === 0 ? 'critical' : 'low', title, attackIds: ['T1190'],
-      evidence: `fixture evidence ${i + 1}`, fix: `fixture fix ${i + 1}`, retest: 're-probe the fixture', status: 'confirmed',
-    })),
-  })
+      evidence: `fixture evidence ${i + 1}`, fix: `fixture fix ${i + 1}`, retest: 're-probe the fixture', status: 'confirmed' })) })
   return async (role: AgentRole, _messages: ChatMessage[], _opts: object): Promise<ChatResult> => {
     counts[role] = (counts[role] ?? 0) + 1
     const has = (s: string) => _messages.some(m => m.content.includes(s))
@@ -362,8 +351,7 @@ function e2eLlm(opts: { refuseSignOff?: boolean; reviewThrows?: boolean; track?:
           return taskJson(
             [
               { kind: 'probe', brief: 'test functionality abuse', attackId: 'T1190', category: 'functionality', maxTurns: 4 },
-              { kind: 'probe', brief: 'test validation rigor', attackId: 'T1190', category: 'validation', maxTurns: 4 },
-            ],
+              { kind: 'probe', brief: 'test validation rigor', attackId: 'T1190', category: 'validation', maxTurns: 4 } ],
             false,
             'covering missing categories',
           )
@@ -409,13 +397,12 @@ describe('scribe gate — end to end', () => {
   afterEach(() => { rmSync(dir, { recursive: true, force: true }) })
 
   const runOpts = (llm: ReturnType<typeof e2eLlm>) => ({
-    mcpToken: 'test',
+
     deepseekApiKey: 'test',
     qwenApiKey: 'test',
     engagementsDir: dir,
     registryPath: join(dir, 'registry.json'),
-    deps: { verify: async () => true, completeForRole: llm as never, prober: fakeProber },
-  })
+    deps: { verify: async () => true, completeForRole: llm as never, prober: fakeProber } })
   const input: EngagementInput = { target: 'secscan.us', mode: 'red', objective: 'scribe e2e', roe: { scope: ['secscan.us'] } }
 
   it("(1e) a completed engagement ships the Scribe's HTML, signed", async () => {
@@ -478,16 +465,14 @@ describe('fleet assembly — the publisher seat', () => {
     outOfScope: ['staging.example.com'],
     accessLevel: 'verified-domain',
     roe: 'Mode: RED. Scope: app.example.com, example.com.',
-    sessionsAllowed: true,
-  }
+    sessionsAllowed: true }
   const fleetCtx = (): PromptContext => ({
     mode: 'red',
     objective: 'assess the fixture attack surface',
     target: 'example.com',
     scopeHosts: ['app.example.com', 'example.com'],
     roe: { scope: ['app.example.com', 'example.com'], outOfScope: ['staging.example.com'] },
-    fleet: { record: FIXTURE_RECORD },
-  })
+    fleet: { record: FIXTURE_RECORD } })
 
   it('(6) the publisher pack carries the scribe soul, both report skills in full, and the cycle knob', () => {
     const prompt = publisherPrompt(fleetCtx())

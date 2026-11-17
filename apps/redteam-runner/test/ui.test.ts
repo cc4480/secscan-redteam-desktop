@@ -57,8 +57,7 @@ function mockRes() {
       res.body = chunks.join("");
       if (res.onEnd) res.onEnd();
     },
-    onEnd: null as null | (() => void),
-  };
+    onEnd: null as null | (() => void) };
   return res;
 }
 
@@ -70,8 +69,7 @@ function cannedEngagement(id: string, status: string): string {
     join(dir, "events.jsonl"),
     [
       { seq: 1, ts: "2026-10-03T10:00:00Z", phase: "authorize", actor: "coordinator", action: "authz", result: "allowed" },
-      { seq: 2, ts: "2026-10-03T10:01:00Z", phase: "recon", actor: "recon", action: "scan", result: "2 hosts up" },
-    ]
+      { seq: 2, ts: "2026-10-03T10:01:00Z", phase: "recon", actor: "recon", action: "scan", result: "2 hosts up" } ]
       .map((e) => JSON.stringify(e))
       .join("\n") + "\n",
   );
@@ -88,10 +86,8 @@ function cannedEngagement(id: string, status: string): string {
       updatedAt: "2026-10-03T10:05:00Z",
       findings: [
         { id: "F-1", severity: "high", title: "SQLi in search", attackIds: ["T1190"], status: "confirmed", tier: 1, target: "example.com" },
-        { id: "F-2", severity: "low", title: "Verbose banner", attackIds: [], status: "confirmed", tier: 0, target: "example.com" },
-      ],
-      batteryCoverage: { cells: [] },
-    }),
+        { id: "F-2", severity: "low", title: "Verbose banner", attackIds: [], status: "confirmed", tier: 0, target: "example.com" } ],
+      batteryCoverage: { cells: [] } }),
   );
   writeFileSync(join(dir, "poc", "F-1.json"), JSON.stringify({ version: 1, bundleId: "poc-1", findingId: "F-1", title: "SQLi in search", steps: [] }));
   writeFileSync(
@@ -99,8 +95,7 @@ function cannedEngagement(id: string, status: string): string {
     JSON.stringify([
       { key: "SS-001", disposition: "confirmed" },
       { key: "SS-002", disposition: "executed-clean" },
-      { key: "SS-003", disposition: "pending" },
-    ]),
+      { key: "SS-003", disposition: "pending" } ]),
   );
   writeFileSync(join(dir, "compliance-pack.md"), "# Pack\n\n<script>alert(1)</script>\n\n[evil](javascript:alert(1))\n");
   return dir;
@@ -144,8 +139,7 @@ describe("launch validation", () => {
     ["empty scope", { target: "a.com", mode: "red", objective: "x", scope: [] }],
     ["scope not array", { target: "a.com", mode: "red", objective: "x", scope: "a.com" }],
     ["bad battery target", { target: "a.com", mode: "red", objective: "x", scope: ["a.com"], targets: ["mainframe"] }],
-    ["bad environment", { target: "a.com", mode: "red", objective: "x", scope: ["a.com"], environment: "moon" }],
-  ];
+    ["bad environment", { target: "a.com", mode: "red", objective: "x", scope: ["a.com"], environment: "moon" }] ];
   for (const [name, body] of badBodies) {
     it(`rejects ${name} with 400 and launches nothing`, async () => {
       const res = mockRes();
@@ -166,8 +160,7 @@ describe("abort route removed (kill switch removed, operator order 2026-11-01)",
       const res = await fetch(`${base}/api/engagements/eng-abort-gone/abort`, {
         method: "POST",
         headers: { authorization: `Bearer ${srv.token}`, "content-type": "application/json" },
-        body: JSON.stringify({ reason: "ui stop" }),
-      });
+        body: JSON.stringify({ reason: "ui stop" }) });
       assert.equal(res.status, 404);
       assert.equal(existsSync(join(tmp, "eng-abort-gone", "abort.json")), false, "no abort signal file may be written");
     } finally {
@@ -266,13 +259,11 @@ describe("server security posture", () => {
       assert.equal(noAuth.status, 401);
 
       const wrong = await fetch(`${base}/api/engagements`, {
-        headers: { authorization: "Bearer wrong" },
-      });
+        headers: { authorization: "Bearer wrong" } });
       assert.equal(wrong.status, 401);
 
       const ok = await fetch(`${base}/api/engagements`, {
-        headers: { authorization: `Bearer ${srv.token}` },
-      });
+        headers: { authorization: `Bearer ${srv.token}` } });
       assert.equal(ok.status, 200);
       assert.deepEqual(await ok.json(), []);
 
@@ -309,8 +300,7 @@ describe("route dispatch strictness (once-over A-1/A-2/A-3)", () => {
       const res = await fetch(`${base}/api/engagements`, {
         method: "POST",
         headers: { authorization: `Bearer ${srv.token}`, "content-type": "application/json" },
-        body: " ".repeat(1_048_577),
-      });
+        body: " ".repeat(1_048_577) });
       assert.equal(res.status, 413);
       assert.deepEqual(await res.json(), { error: "body too large" });
     } finally {
@@ -334,8 +324,7 @@ describe("route dispatch strictness (once-over A-1/A-2/A-3)", () => {
         "/api/engagements/eng-x/proof/F-1/junk",
         "/api/console/scope/junk",
         "/api/jobs/job-1/junk",
-        "/api/watch/profiles/junk",
-      ]) {
+        "/api/watch/profiles/junk" ]) {
         const res = await fetch(`${base}${path}`, { headers: auth });
         assert.equal(res.status, 404, path);
         assert.deepEqual(await res.json(), { error: "not found" }, path);
@@ -343,8 +332,7 @@ describe("route dispatch strictness (once-over A-1/A-2/A-3)", () => {
       const post = await fetch(`${base}/api/foundry/verify/extra`, {
         method: "POST",
         headers: { authorization: `Bearer ${srv.token}`, "content-type": "application/json" },
-        body: "{}",
-      });
+        body: "{}" });
       assert.equal(post.status, 404);
     } finally {
       await srv.close();
@@ -361,11 +349,9 @@ describe("route dispatch strictness (once-over A-1/A-2/A-3)", () => {
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded" },
         body: `token=${"x".repeat(8192)}`,
-        signal: AbortSignal.timeout(5000),
-      }).catch(() => undefined);
+        signal: AbortSignal.timeout(5000) }).catch(() => undefined);
       const after = await fetch(`${base}/api/engagements`, {
-        headers: { authorization: `Bearer ${srv.token}` },
-      });
+        headers: { authorization: `Bearer ${srv.token}` } });
       assert.equal(after.status, 200);
     } finally {
       await srv.close();

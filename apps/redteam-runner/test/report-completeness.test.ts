@@ -12,19 +12,15 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  buildReportDetail, type DetailInput,
-} from '../src/report/detail.js'
+  buildReportDetail, type DetailInput } from '../src/report/detail.js'
 import {
   gradeAnchorClause, isCoverageComplete, noFindingClause, pendingVerdicts,
-  postureClause, type CoverageTotals,
-} from '../src/report/completeness.js'
+  postureClause, type CoverageTotals } from '../src/report/completeness.js'
 
 const complete: CoverageTotals = {
-  total: 108, confirmed: 0, executedClean: 1, killed: 0, blocked: 3, na: 0, pending: 0,
-}
+  total: 108, confirmed: 0, executedClean: 1, killed: 0, blocked: 3, na: 0, pending: 0 }
 const halted: CoverageTotals = {
-  total: 108, confirmed: 0, executedClean: 1, killed: 0, blocked: 3, na: 0, pending: 104,
-}
+  total: 108, confirmed: 0, executedClean: 1, killed: 0, blocked: 3, na: 0, pending: 104 }
 
 function input(coverage: CoverageTotals, over: Partial<DetailInput> = {}): DetailInput {
   return {
@@ -38,11 +34,9 @@ function input(coverage: CoverageTotals, over: Partial<DetailInput> = {}): Detai
     findings: [],
     coverage: {
       totals: coverage, probesUsed: 15, fullBattery: true,
-      notCovered: [], planOnly: [], arms: [],
-    },
+      notCovered: [], planOnly: [], arms: [] },
     surface: {},
-    ...over,
-  }
+    ...over }
 }
 
 describe('completeness predicate', () => {

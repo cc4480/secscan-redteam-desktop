@@ -23,8 +23,7 @@ function ctx(over: Partial<PromptContext> = {}): PromptContext {
     target: 'example.com',
     scopeHosts: ['example.com'],
     roe: { scope: ['example.com'] },
-    ...over,
-  } as PromptContext
+    ...over } as PromptContext
 }
 
 describe('device class resolution', () => {
@@ -39,8 +38,7 @@ describe('device class resolution', () => {
 
   it('a full-battery run covers every selected class, in a stable order', () => {
     const classes = resolveDeviceClasses(ctx({
-      targets: ['linux', 'webapp', 'windows', 'secscan', 'seclayer'] as never,
-    }))
+      targets: ['linux', 'webapp', 'windows', 'secscan', 'seclayer'] as never }))
     assert.deepEqual(classes, ['webapp', 'secscan', 'seclayer', 'windows', 'linux'])
   })
 
@@ -70,8 +68,7 @@ describe('the brief tells an agent which tools go with which system', () => {
 
   it('a full-battery brief covers every system the vulnerabilities may sit on', () => {
     const text = deviceBriefText(ctx({
-      targets: ['windows', 'linux', 'webapp'] as never,
-    }))
+      targets: ['windows', 'linux', 'webapp'] as never }))
     for (const device of ['windows', 'linux', 'webapp'] as const) {
       assert.match(text, new RegExp(`\\(\\\`?${device}\\\`?\\)`), `${device} section missing`)
     }

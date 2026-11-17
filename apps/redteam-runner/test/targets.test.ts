@@ -34,11 +34,11 @@ import {
   targetBatteryChecklistText,
   targetCellBlocked,
   targetCellStatus,
-  targetItemsFor,
-} from '../src/targets.js'
+  targetItemsFor } from '../src/targets.js'
 import type { TargetId, TargetProfile } from '../src/targets.js'
 import { BATTERY_CATEGORIES } from '../src/battery.js'
 import { _resetNucleiProbeCache } from '../src/nuclei/index.js'
+import { _resetMsfProbeCache } from '../src/msf/prereq.js'
 import { lookupTechnique } from '../src/attack.js'
 import { coordinatorPrompt, exploiterPrompt } from '../src/prompts.js'
 import { runEngagement } from '../src/phases.js'
@@ -49,11 +49,10 @@ function promptCtx(fullBattery?: boolean, targets?: TargetId[]) {
     mode: 'red' as const,
     objective: 'full battery test',
     target: 'secscan+seclayer',
-    scopeHosts: ['secscan.us'],
-    roe: { scope: ['secscan.us'] },
+    scopeHosts: ['example.invalid', 'api.example.test', 'seclayer.app'],
+    roe: { scope: ['example.invalid', 'api.example.test', 'seclayer.app'] },
     fullBattery,
-    targets,
-  }
+    targets }
 }
 
 describe('target registry', () => {
@@ -191,8 +190,9 @@ describe('host-exec tooling scoping (v0.10.0, extended v0.11.0)', () => {
       const profile = TARGET_PROFILES[id]
       for (const c of BATTERY_CATEGORIES) {
         // v0.10.0: every cell is probe-able — tools exist for all items.
-        // v0.11.0: the 6 CVE exploit-validation items need msfrpcd, but
-        // every cell still has probe-able items, so no cell is fully blocked.
+        // v0.11.0: the 6 CVE exploit-validation items need a native Metasploit
+        // framework (msfconsole), but every cell still has probe-able items, so
+        // no cell is fully blocked.
         // v0.21.0: same for the 2 nuclei template items.
         assert.equal(targetCellBlocked(profile, c), false, `${id}:${c} probe-able`)
       }
@@ -214,9 +214,8 @@ describe('host-exec tooling scoping (v0.10.0, extended v0.11.0)', () => {
         `windows:WS-105 [${NEEDS_MSFCONSOLE}]`,
         `windows:WS-106 [${NEEDS_MSFCONSOLE}]`,
         `windows:WS-107 [${NEEDS_MSFCONSOLE}]`,
-        `windows:WS-108 [${NEEDS_NUCLEI}]`,
-      ].sort(),
-      'the honest remainder: ticket material, human operator, privileged client, msfrpcd, nuclei',
+        `windows:WS-108 [${NEEDS_NUCLEI}]` ].sort(),
+      'the honest remainder: ticket material, human operator, privileged client, native msfconsole, nuclei',
     )
     // The v0.9.0 marker is fully retired.
     for (const id of ['windows', 'linux'] as TargetId[]) {
@@ -236,8 +235,7 @@ describe('host-exec tooling scoping (v0.10.0, extended v0.11.0)', () => {
     // The blocked mechanic itself still works: a cell where every item is marked → blocked.
     const blockedProfile: TargetProfile = {
       ...win,
-      battery: win.battery.map(b => (b.category === 'logic' ? { ...b, needs: HOST_EXEC_TOOLING } : b)),
-    }
+      battery: win.battery.map(b => (b.category === 'logic' ? { ...b, needs: HOST_EXEC_TOOLING } : b)) }
     assert.equal(targetCellStatus(blockedProfile, 'logic', new Set()), 'blocked')
     assert.equal(targetCellStatus(blockedProfile, 'logic', new Set(['logic'])), 'done', 'probed beats blocked')
   })
@@ -277,16 +275,15 @@ describe('unified plan', () => {
     assert.ok(s.includes('"secscan" | "seclayer"'), 'tag enum narrowed')
   })
   it('inferTargetProfile: mcp path -> seclayer, vendor hosts -> their battery, other hosts -> webapp', () => {
-    assert.equal(inferTargetProfile('https://secscan.us/api/mcp'), 'seclayer')
-    assert.equal(inferTargetProfile('https://secscan.us/api/mcp?x=1'), 'seclayer')
-    assert.equal(inferTargetProfile('https://secscan.us/scan'), 'secscan')
-    assert.equal(inferTargetProfile('https://secscan.us'), 'secscan')
-    assert.equal(inferTargetProfile('https://app.secscan.us/'), 'secscan', 'subdomain of secscan.us')
+    assert.equal(inferTargetProfile('https://api.example.test/api/mcp'), 'seclayer')
+    assert.equal(inferTargetProfile('https://api.example.test/api/mcp?x=1'), 'seclayer')
+    assert.equal(inferTargetProfile('https://example.invalid/scan'), 'secscan')
+    assert.equal(inferTargetProfile('https://example.invalid'), 'secscan')
     assert.equal(inferTargetProfile('https://seclayer.app/'), 'seclayer')
     assert.equal(inferTargetProfile('https://api.seclayer.app/mcp'), 'seclayer', 'subdomain of seclayer.app')
     assert.equal(inferTargetProfile('https://10.9.0.11/'), 'webapp', 'unknown hosts are the generic webapp battery, never a host target')
     assert.equal(inferTargetProfile('https://shop.example.com/search'), 'webapp')
-    assert.equal(inferTargetProfile('https://secscan.us.evil.example/'), 'webapp', 'host matching is anchored, not a loose substring')
+    assert.equal(inferTargetProfile('https://seclayer.app.evil.example/'), 'webapp', 'host matching is anchored, not a loose substring')
     assert.equal(inferTargetProfile('not a url'), 'webapp')
   })
 })
@@ -324,24 +321,22 @@ describe('full-battery coverage mechanics', () => {
   // These tests assert an EXACT completion line, and that line interpolates the
   // ledger totals, which depend on which items have their prerequisites met
   // (see prerequisiteMet). It reads the environment, so a machine that actually
-  // has nuclei or msfrpcd configured reports different totals and fails here —
-  // the suite passed only because CI is bare. Pin the environment, matching the
-  // "no network, no API keys" contract in this file's header and the same guard
-  // item-ledger.test.ts already uses for prerequisiteMet.
+  // has nuclei or a local msfconsole configured reports different totals and
+  // fails here — the suite passed only because CI is bare. Pin the environment,
+  // matching the "no network, no API keys" contract in this file's header and
+  // the same guard item-ledger.test.ts already uses for prerequisiteMet.
   //
-  // REDTEAM_NUCLEI_BIN is included because nucleiBinaryPresent() treats a set
-  // value as present without probing. The probe is cached module-wide, so the
-  // cache is reset on both sides of every test or a value read once leaks into
-  // the rest of the file.
+  // REDTEAM_NUCLEI_BIN/REDTEAM_MSFCONSOLE_BIN are included because presence
+  // checks can treat explicit paths as present without probing. The MSF probe is
+  // cached module-wide, so reset it on both sides of every test or a value read
+  // once leaks into the rest of the file.
   const PREREQ_ENV = [
-    'REDTEAM_MSFRPC_USER',
-    'REDTEAM_MSFRPC_PASS',
+    'REDTEAM_MSFCONSOLE_BIN',
     'REDTEAM_KRB_CCACHE_B64',
     'REDTEAM_KRB_CCACHE_PATH',
     'REDTEAM_KRB_KIRBI_B64',
     'REDTEAM_NFS_TEST_CLIENT',
-    'REDTEAM_NUCLEI_BIN',
-  ]
+    'REDTEAM_NUCLEI_BIN' ]
   let savedEnv: Record<string, string | undefined>
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'rt-fb-'))
@@ -351,6 +346,7 @@ describe('full-battery coverage mechanics', () => {
       delete process.env[k]
     }
     _resetNucleiProbeCache()
+    _resetMsfProbeCache()
   })
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true })
@@ -359,22 +355,21 @@ describe('full-battery coverage mechanics', () => {
       else process.env[k] = savedEnv[k]
     }
     _resetNucleiProbeCache()
+    _resetMsfProbeCache()
   })
 
   const textOnly = (text: string): ChatResult => ({ text, toolCalls: [], provider: 'fake', model: 'fake' })
   const taskJson = (tasks: object[], finish: boolean, note: string): ChatResult =>
     textOnly('```json ' + JSON.stringify({ tasks, finish, note }) + ' ```')
   const fakeProber = {
-    probe: async () => ({ status: 200, headers: {}, bodySnippet: 'ok', ms: 5 }),
-  }
+    probe: async () => ({ status: 200, headers: {}, bodySnippet: 'ok', ms: 5 }) }
   const baseInput: EngagementInput = {
     target: 'secscan+seclayer',
     mode: 'red',
     objective: 'full battery test',
-    roe: { scope: ['secscan.us'] },
+    roe: { scope: ['example.invalid', 'api.example.test'] },
     fullBattery: true,
-    targets: ['secscan', 'seclayer'],
-  }
+    targets: ['secscan', 'seclayer'] }
 
   /** Scripted LLM: coordinator tasks per-target cells; exploiter probes with targetProfile (explicit for secscan, URL-inferred for seclayer). */
   function scriptedLlm(seclayerCells: boolean) {
@@ -386,29 +381,25 @@ describe('full-battery coverage mechanics', () => {
       name: 'http_probe',
       arguments: {
         method: 'POST',
-        url: target === 'seclayer' ? 'https://secscan.us/api/mcp' : 'https://secscan.us/scan',
+        url: target === 'seclayer' ? 'https://api.example.test/api/mcp' : 'https://example.invalid/scan',
         category,
         attackId: 'T1190',
         // Explicit tag for secscan cells; seclayer cells rely on /api/mcp URL inference.
         ...(target === 'secscan' ? { targetProfile: 'secscan' } : {}),
         batteryItem: firstItem(target, category).id, // v0.18.0: tag the item under test
-        hypothesis: `full battery ${target} ${category}`,
-      },
-    })
+        hypothesis: `full battery ${target} ${category}` } })
     return async (role: AgentRole, messages: ChatMessage[], _opts: object): Promise<ChatResult> => {
       const has = (s: string) => messages.some(m => m.content.includes(s))
       if (role === 'coordinator') {
         if (has('Transition awaiting sign-off')) return textOnly('SIGN-OFF: test approval.')
         if (has('DECOMPOSE')) {
           const tasks = ['logic', 'functionality', 'validation'].map(category => ({
-            kind: 'probe', brief: `test secscan ${category}`, attackId: 'T1190', category, maxTurns: 3,
-          }))
+            kind: 'probe', brief: `test secscan ${category}`, attackId: 'T1190', category, maxTurns: 3 }))
           return taskJson(tasks, false, 'secscan cells')
         }
         if (has('RE-PLAN') && seclayerCells && !has('OVERRIDE')) {
           const tasks = ['logic', 'functionality', 'validation'].map(category => ({
-            kind: 'probe', brief: `test seclayer ${category}`, attackId: 'T1190', category, maxTurns: 3,
-          }))
+            kind: 'probe', brief: `test seclayer ${category}`, attackId: 'T1190', category, maxTurns: 3 }))
           return taskJson(tasks, false, 'seclayer cells')
         }
         return taskJson([], true, 'done')
@@ -433,15 +424,14 @@ describe('full-battery coverage mechanics', () => {
     let n = 0
     const fired = new Set<string>() // one probe per task — the fake loop doesn't record tool calls as assistant messages
     const urls: Record<string, string> = {
-      secscan: 'https://secscan.us/scan',
-      seclayer: 'https://secscan.us/api/mcp',
+      secscan: 'https://example.invalid/scan',
+      seclayer: 'https://api.example.test/api/mcp',
       // Public-form stand-ins (TEST-NET-3) for the host targets, listed in
       // the test's ROE scope below: the dispatch scope gate refuses
       // out-of-scope targets before the prober, so the host cells must be
       // scoped like a real full-battery engagement scopes them.
       windows: 'https://203.0.113.11/',
-      linux: 'https://203.0.113.12/',
-    }
+      linux: 'https://203.0.113.12/' }
     const probe = (target: string, category: string): ToolCallRequest => ({
       id: `call-${++n}`,
       name: 'http_probe',
@@ -454,12 +444,9 @@ describe('full-battery coverage mechanics', () => {
         batteryItem: TARGET_PROFILES[target as 'secscan' | 'seclayer' | 'windows' | 'linux'].battery.find(
           b => b.category === category && !b.needs,
         )!.id, // v0.18.0: tag the item under test
-        hypothesis: `full battery ${target} ${category}`,
-      },
-    })
+        hypothesis: `full battery ${target} ${category}` } })
     const taskFor = (target: string, category: string) => ({
-      kind: 'probe', brief: `test ${target} ${category}`, attackId: 'T1018', category, maxTurns: 3,
-    })
+      kind: 'probe', brief: `test ${target} ${category}`, attackId: 'T1018', category, maxTurns: 3 })
     return async (role: AgentRole, messages: ChatMessage[], _opts: object): Promise<ChatResult> => {
       const has = (s: string) => messages.some(m => m.content.includes(s))
       if (role === 'coordinator') {
@@ -507,9 +494,7 @@ describe('full-battery coverage mechanics', () => {
               batteryItem: item.id,
               targetProfile: target,
               verdict: 'na',
-              evidence: 'no applicable surface in scripted test scope',
-            },
-          })
+              evidence: 'no applicable surface in scripted test scope' } })
         }
         return { text: `${target} ${category} hypothesis`, toolCalls, provider: 'fake', model: 'fake' }
       }
@@ -519,13 +504,12 @@ describe('full-battery coverage mechanics', () => {
 
   async function run(input: EngagementInput, llm: (role: AgentRole, messages: ChatMessage[], opts: object) => Promise<ChatResult>) {
     return runEngagement(input, {
-      mcpToken: 'test',
+
       deepseekApiKey: 'test',
       qwenApiKey: 'test',
       engagementsDir: dir,
       maxActions: 3000, // v0.18.0: per-item verdict tests declare na for hundreds of items
-      deps: { verify: async () => true, completeForRole: llm as never, prober: fakeProber },
-    })
+      deps: { verify: async () => true, completeForRole: llm as never, prober: fakeProber } })
   }
 
   it('6/6 web cells probed but items pending → gate refuses complete, names pending items', async () => {
@@ -560,8 +544,7 @@ describe('full-battery coverage mechanics', () => {
     const input: EngagementInput = {
       ...baseInput,
       targets: undefined, // default: all four
-      roe: { scope: ['secscan.us', '203.0.113.11', '203.0.113.12'] },
-    }
+      roe: { scope: ['example.invalid', 'api.example.test', '203.0.113.11', '203.0.113.12'] } }
     const res = await run(input, scriptedLlm12())
     assert.equal(res.status, 'complete')
     const report = readFileSync(join(dir, res.engagementId, 'report.md'), 'utf8')
@@ -618,30 +601,25 @@ describe('halted engagement still ships accountability artifacts', () => {
           {
             id: 'c1',
             name: 'http_probe',
-            arguments: { method: 'GET', url: 'https://secscan.us/', category: 'logic', attackId: 'T1190', targetProfile: 'secscan', hypothesis: 'recon probe' },
-          },
-        ],
+            arguments: { method: 'GET', url: 'https://example.invalid/', category: 'logic', attackId: 'T1190', targetProfile: 'secscan', hypothesis: 'recon probe' } } ],
         provider: 'fake',
-        model: 'fake',
-      }
+        model: 'fake' }
     }
     return textOnly('noop')
   }
 
   it('a capped run closes INCOMPLETE (not halted) and still writes report.md + safety manifest + item verdicts', async () => {
     const input: EngagementInput = {
-      target: 'secscan.us',
+      target: 'example.invalid',
       mode: 'red',
       objective: 'halt-artifact test',
-      roe: { scope: ['secscan.us'] },
-    }
+      roe: { scope: ['example.invalid'] } }
     const res = await runEngagement(input, {
-      mcpToken: 'test',
+
       deepseekApiKey: 'test',
       engagementsDir: dir,
       maxActions: 1, // force an action-cap HaltError on the first dispatched probe
-      deps: { verify: async () => true, completeForRole: haltLlm as never, prober: fakeProber },
-    })
+      deps: { verify: async () => true, completeForRole: haltLlm as never, prober: fakeProber } })
 
     // Q-NOHALT: a spent budget no longer throws. The run finishes its phases
     // and the report records the incomplete battery; the artifacts still ship.

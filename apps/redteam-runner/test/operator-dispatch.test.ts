@@ -37,8 +37,7 @@ function fakeDeps(marker: string, counters: { probe: number; msf: number; nmap: 
       probe: async () => {
         counters.probe++;
         return { status: 200, headers: {}, bodySnippet: marker, ms: 1 };
-      },
-    } as unknown as RunnerDeps["prober"],
+      } } as unknown as RunnerDeps["prober"],
     msfExecutor: {
       search: async () => {
         counters.msf++;
@@ -47,8 +46,7 @@ function fakeDeps(marker: string, counters: { probe: number; msf: number; nmap: 
       run: async () => {
         counters.msf++;
         return { summary: `${marker} msf run: module executed, marker echoed`, ok: true, output: "marker echoed" };
-      },
-    } as unknown as RunnerDeps["msfExecutor"],
+      } } as unknown as RunnerDeps["msfExecutor"],
     nmapExecutor: {
       scan: async () => {
         counters.nmap++;
@@ -62,17 +60,10 @@ function fakeDeps(marker: string, counters: { probe: number; msf: number; nmap: 
                 address: "127.0.0.1",
                 hostnames: [],
                 ports: [
-                  { port: 80, protocol: "tcp", state: "open", service: "http", product: "", version: "", scripts: {} },
-                ],
-                osMatches: [],
-              },
-            ],
-          },
-        };
+                  { port: 80, protocol: "tcp", state: "open", service: "http", product: "", version: "", scripts: {} } ],
+                osMatches: [] } ] } };
       },
-      profiles: async () => ({ message: "profiles" }),
-    } as unknown as RunnerDeps["nmapExecutor"],
-  };
+      profiles: async () => ({ message: "profiles" }) } as unknown as RunnerDeps["nmapExecutor"] };
 }
 
 function testEnv(home: string, extra: Record<string, string> = {}): NodeJS.ProcessEnv {
@@ -87,8 +78,7 @@ function makeDispatcher(marker: string, extraEnv: Record<string, string> = {}) {
   const counters = { probe: 0, msf: 0, nmap: 0 };
   const dispatcher = createOperatorDispatcher({
     deps: fakeDeps(marker, counters),
-    env: testEnv(home, extraEnv),
-  });
+    env: testEnv(home, extraEnv) });
   return { home, counters, dispatcher };
 }
 
@@ -114,8 +104,7 @@ describe("operator dispatch (no engagementId)", () => {
       action: "search",
       targetProfile: "linux",
       host: "127.0.0.1",
-      query: "fake",
-    });
+      query: "fake" });
     assert.match(search, /msf search: 1 module matched/);
     // `run` is the action the engagement design phase-gates to exploit and
     // tier-gates hardest; the operator posture (exploit phase, Tier 2)
@@ -124,8 +113,7 @@ describe("operator dispatch (no engagementId)", () => {
       action: "run",
       targetProfile: "linux",
       host: "127.0.0.1",
-      module: "exploit/fake/module",
-    });
+      module: "exploit/fake/module" });
     assert.match(run, /msf run: module executed/);
     assert.equal(counters.msf, 2);
   });
@@ -143,8 +131,7 @@ describe("operator dispatch (no engagementId)", () => {
         action: "scan",
         targetProfile: "linux",
         host: "127.0.0.1",
-        profile: "quick",
-      });
+        profile: "quick" });
       assert.equal(counters.nmap, 1);
       assert.match(out, /nmap scan complete/);
       assert.match(out, /80\/tcp open/);
@@ -195,8 +182,7 @@ describe("operator dispatch (no engagementId)", () => {
 
     const withId = await EXEC_TOOLS_BY_NAME.get("http_probe")!.run({
       engagementId: "eng-op-fixture",
-      url: PROBE_URL,
-    });
+      url: PROBE_URL });
     assert.match(withId, /LIVE-CTX/, "id-bearing call ran in the engagement's context");
     assert.equal(live.counters.probe, 1);
     assert.equal(op.counters.probe, 1, "operator context untouched by the engagement call");

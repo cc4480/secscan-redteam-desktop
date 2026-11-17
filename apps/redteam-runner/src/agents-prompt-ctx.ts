@@ -10,12 +10,13 @@
  */
 
 import { type Ctx } from './context.js'
-import { type PromptContext } from './prompts.js'
+import { isCompactLocalProvider, type PromptContext } from './prompts.js'
 import { isPrivateOrLoopbackHost } from './prober.js'
 import { verifiedRecordFor } from './prompts/fleet-assembly.js'
 import { memoryStateFor } from './memory/lifecycle.js'
 
 export function promptCtx(ctx: Ctx): PromptContext {
+  const compactLocal = isCompactLocalProvider()
   return {
     mode: ctx.input.mode,
     objective: ctx.input.objective,
@@ -34,6 +35,10 @@ export function promptCtx(ctx: Ctx): PromptContext {
     // and the pack assembled (post-authorize). It reaches the system
     // prompts through memoryBlock and is journaled with them.
     memoryBrief: memoryStateFor(ctx)?.startPack?.text,
+    // Local/small models need compact instructions (~4k tokens total) so
+    // prompts fit before the response; fleet layers and long role prose
+    // are replaced with short seat prompts in that mode.
+    compactLocal,
     // Phase 2 W3: the fleet prompt-assembly input, built from the
     // AUTHORIZE phase's stamped verification record when authorize has
     // stamped one. Production runs are gated in runEngagement: it calls

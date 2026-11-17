@@ -24,8 +24,7 @@ import {
   runScore,
   targetKey,
   type EvalRun,
-  type MetricSet,
-} from "../src/harness2/scoring.js";
+  type MetricSet } from "../src/harness2/scoring.js";
 import { openHarness2Store, type Harness2Store, type RunBundle } from "../src/harness2/store.js";
 import { MAX_PAIRS, MIN_USABLE_RUNS, selectPairs, WINDOW_SIZE } from "../src/harness2/pair-select.js";
 import type { PairRun } from "../src/harness2/pair-runs.js";
@@ -47,8 +46,7 @@ function evalRun(over: Partial<EvalRun> = {}): EvalRun {
     steps: 10,
     tokens: 100,
     crashed: false,
-    ...over,
-  };
+    ...over };
 }
 
 function metricSet(over: Partial<MetricSet> = {}): MetricSet {
@@ -64,8 +62,7 @@ function metricSet(over: Partial<MetricSet> = {}): MetricSet {
     steps: 10,
     tok: 1000,
     cr: 0.125,
-    ...over,
-  };
+    ...over };
 }
 
 const HELD_OUT = Array.from({ length: 8 }, (_, index) => `h${index + 1}.example.test`);
@@ -82,8 +79,7 @@ function gate(over: {
     candidate: metricSet(over.candidate),
     heldOutTargets: over.heldOut ?? HELD_OUT,
     trainingTargets: over.training ?? ["seed.example.test"],
-    logGap: over.logGap,
-  });
+    logGap: over.logGap });
 }
 
 function tempPaths(prefix: string): Harness2Paths {
@@ -110,8 +106,7 @@ function pairRun(over: Partial<PairRun> = {}): PairRun {
     tokensTotal: 100,
     crashed: false,
     failureMode: "none",
-    ...over,
-  };
+    ...over };
 }
 
 function bundle(over: Partial<RunBundle> = {}): RunBundle {
@@ -131,8 +126,7 @@ function bundle(over: Partial<RunBundle> = {}): RunBundle {
     tokensTotal: 100,
     crashed: false,
     failureMode: "timeout",
-    ...over,
-  };
+    ...over };
 }
 
 // ---------------------------------------------------------------------------
@@ -145,8 +139,7 @@ describe("section-8 metrics", () => {
       evalRun({ success: true, vulnsFound: 2, claimsTotal: 2, steps: 10, tokens: 100 }),
       evalRun({ success: true, vulnsFound: 1, claimsTotal: 2, falsePositives: 1, steps: 20, tokens: 200 }),
       evalRun({ success: false, vulnsFound: 0, claimsTotal: 0, steps: 30, tokens: 300 }),
-      evalRun({ success: false, vulnsFound: 1, claimsTotal: 3, falsePositives: 2, steps: 40, tokens: 400, crashed: true }),
-    ];
+      evalRun({ success: false, vulnsFound: 1, claimsTotal: 3, falsePositives: 2, steps: 40, tokens: 400, crashed: true }) ];
     const metrics = computeMetrics(runs);
     assert.equal(metrics.n, 4);
     assert.equal(metrics.successes, 2);
@@ -182,8 +175,7 @@ describe("section-8 metrics", () => {
       durationMs: 5,
       harness: { runnerVersion: "test", layerIds: [], componentHashes: {} },
       startedAt: "2026-10-18T00:00:00.000Z",
-      finishedAt: "2026-10-18T00:00:01.000Z",
-    };
+      finishedAt: "2026-10-18T00:00:01.000Z" };
     const run = fromRunMetrics(metrics);
     assert.equal(run.claimsTotal, 3);
     assert.equal(run.tokens, 42);
@@ -352,8 +344,7 @@ describe("section-9 window", () => {
       pairRun({ ts: now - day, harnessVersion: "h-current", runId: "cur-3" }),
       pairRun({ ts: now - 2 * day, harnessVersion: "h-old", runId: "old-1" }),
       pairRun({ ts: now - 3 * day, harnessVersion: "h-old", runId: "old-2" }),
-      pairRun({ ts: now - 200 * day, harnessVersion: "h-old", runId: "ancient" }),
-    ];
+      pairRun({ ts: now - 200 * day, harnessVersion: "h-old", runId: "ancient" }) ];
     const selection = selectPairs({ rows, harnessVersion: "h-current", nowMs: now });
     assert.equal(selection.windowMethod, "fallback-90d");
     assert.equal(selection.windowSize, 5);
@@ -367,8 +358,7 @@ describe("section-9 window", () => {
       pairRun({ runId: "ok-3" }),
       pairRun({ runId: "ok-4" }),
       pairRun({ runId: "crashed", crashed: true, outcome: "aborted" }),
-      pairRun({ runId: "zero-step", stepsCount: 0 }),
-    ];
+      pairRun({ runId: "zero-step", stepsCount: 0 }) ];
     const selection = selectPairs({ rows, harnessVersion: "h-current" });
     assert.equal(selection.windowSize, 4);
     assert.deepEqual(selection.window.runs.map((run) => run.runId).sort(), ["ok-1", "ok-2", "ok-3", "ok-4"]);
@@ -384,8 +374,7 @@ describe("section-9 window", () => {
             runId: `stored-${index}`,
             ts: 1_700_000_000_000 + index * 1000,
             success: index < 3,
-            failureMode: index < 3 ? "none" : "missed-vuln",
-          }),
+            failureMode: index < 3 ? "none" : "missed-vuln" }),
           [],
         );
       }
@@ -419,8 +408,7 @@ describe("section-9 cold start", () => {
       pairRun({ runId: "t-300", tokensTotal: 300 }),
       pairRun({ runId: "t-100", tokensTotal: 100 }),
       pairRun({ runId: "t-400", tokensTotal: 400 }),
-      pairRun({ runId: "t-200", tokensTotal: 200 }),
-    ];
+      pairRun({ runId: "t-200", tokensTotal: 200 }) ];
     const selection = selectPairs({ rows, harnessVersion: "h-current" });
     assert.equal(selection.mode, "HARDEN");
     assert.deepEqual(selection.pairs, [], "HARDEN cites successful runs, not contrasted pairs");
@@ -434,8 +422,7 @@ describe("section-9 cold start", () => {
       pairRun({ runId: "f-2", success: false, outcome: "failure", failureMode: "missed-vuln" }),
       pairRun({ runId: "f-3", success: false, outcome: "failure", failureMode: "timeout" }),
       pairRun({ runId: "f-4", success: false, outcome: "failure", failureMode: "tool-error" }),
-      pairRun({ runId: "f-5", success: false, outcome: "failure", failureMode: "fp-blowup" }),
-    ];
+      pairRun({ runId: "f-5", success: false, outcome: "failure", failureMode: "fp-blowup" }) ];
     const selection = selectPairs({ rows, harnessVersion: "h-current" });
     assert.equal(selection.mode, "REPAIR-FOUNDATION");
     assert.deepEqual(selection.pairs, []);
@@ -467,8 +454,7 @@ describe("section-9 contrasted pairs", () => {
         claimsTotal: 2,
         falsePositives: 2,
         tokensTotal: 500,
-        stepsCount: 50,
-      }),
+        stepsCount: 50 }),
     );
     return [...good, ...bad];
   }
@@ -506,8 +492,7 @@ describe("section-9 contrasted pairs", () => {
       pairRun({ runId: "b-shop", targetSubclass: "shop", success: false, outcome: "failure", failureMode: "timeout", tokensTotal: 500, stepsCount: 50, claimsTotal: 2, falsePositives: 2, vulnsFound: 0 }),
       pairRun({ runId: "b-blog", targetSubclass: "blog", success: false, outcome: "failure", failureMode: "timeout", tokensTotal: 600, stepsCount: 50, claimsTotal: 2, falsePositives: 2, vulnsFound: 0 }),
       pairRun({ runId: "b-shop-2", targetSubclass: "shop", success: false, outcome: "failure", failureMode: "missed-vuln", tokensTotal: 900, stepsCount: 60, claimsTotal: 2, falsePositives: 2, vulnsFound: 0 }),
-      pairRun({ runId: "b-blog-2", targetSubclass: "blog", success: false, outcome: "failure", failureMode: "missed-vuln", tokensTotal: 800, stepsCount: 60, claimsTotal: 2, falsePositives: 2, vulnsFound: 0 }),
-    ];
+      pairRun({ runId: "b-blog-2", targetSubclass: "blog", success: false, outcome: "failure", failureMode: "missed-vuln", tokensTotal: 800, stepsCount: 60, claimsTotal: 2, falsePositives: 2, vulnsFound: 0 }) ];
     const selection = selectPairs({ rows, harnessVersion: "h-current" });
     assert.equal(selection.mode, "REPAIR");
     assert.ok(selection.pairs.length >= 1);

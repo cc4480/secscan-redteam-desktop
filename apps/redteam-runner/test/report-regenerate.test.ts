@@ -48,9 +48,7 @@ const FINDINGS = [
   {
     id: "F-1", severity: "high", title: "Fixture flaw", attackIds: ["T1190"],
     evidence: "fixture evidence", fix: "Apply the fixture patch.", retest: "Re-probe the fixture.",
-    status: "confirmed", accountableOperator: "Carlos",
-  },
-];
+    status: "confirmed", accountableOperator: "Carlos" } ];
 
 const REPORT_MD =
   "# Engagement report\n\nFixture narrative prose.\n\n" +
@@ -74,8 +72,7 @@ function recordedModel(id: string): ReportModel {
     findingCount: 1,
     batteryTotals: { total: 3, confirmed: 1, executedClean: 2, killed: 0, blocked: 0, na: 0, pending: 0 },
     coverageCells: [],
-    findings: FINDINGS as ReportModel["findings"],
-  };
+    findings: FINDINGS as ReportModel["findings"] };
 }
 
 /** A recorded engagement whose deliverable set is short: only report.md
@@ -102,8 +99,7 @@ function recordedEngagement(id: string, over: { status?: string; deliverableFail
       updatedAt: "2026-11-01T09:00:00.000Z",
       ...(failed
         ? { deliverableFailed: true, deliverables: { "report.md": join(dir, "report.md") } }
-        : {}),
-    }),
+        : {}) }),
   );
   writeFileSync(join(dir, "report.md"), REPORT_MD);
   writeFileSync(join(dir, "report.json"), JSON.stringify(recordedModel(id), null, 2) + "\n");
@@ -115,8 +111,7 @@ function recordedEngagement(id: string, over: { status?: string; deliverableFail
       target: "https://example.com", operator: "Carlos", generatedAt: "2026-11-01T09:00:00.000Z",
       steps: [], validationTier: "observation",
       proves: "The fixture flaw responded as recorded.", doesNotProve: "No impact beyond the fixture.",
-      reverifyCommand: "curl https://example.com",
-    }),
+      reverifyCommand: "curl https://example.com" }),
   );
   return dir;
 }
@@ -226,16 +221,14 @@ function deadEngagement(id: string, over: { status?: string } = {}): string {
       findings: FINDINGS,
       eventCount: 3,
       startedAt: "2026-11-02T08:00:00.000Z",
-      updatedAt: "2026-11-02T08:05:00.000Z",
-    }),
+      updatedAt: "2026-11-02T08:05:00.000Z" }),
   );
   writeFileSync(
     join(dir, "events.jsonl"),
     [
       { seq: 1, ts: "2026-11-02T08:00:00.000Z", engagementId: id, phase: "authorize", actor: "runner", action: "authorized", result: "Ownership verified." },
       { seq: 2, ts: "2026-11-02T08:03:00.000Z", engagementId: id, phase: "exploit", actor: "exploiter", action: "probe", result: "Fixture flaw observed." },
-      { seq: 3, ts: "2026-11-02T08:05:00.000Z", engagementId: id, phase: "exploit", actor: "runner", action: "finding_recorded", result: "F-1 recorded." },
-    ].map((e) => JSON.stringify(e)).join("\n") + "\n",
+      { seq: 3, ts: "2026-11-02T08:05:00.000Z", engagementId: id, phase: "exploit", actor: "runner", action: "finding_recorded", result: "F-1 recorded." } ].map((e) => JSON.stringify(e)).join("\n") + "\n",
   );
   writeFileSync(
     join(dir, "poc", "F-1.json"),
@@ -245,8 +238,7 @@ function deadEngagement(id: string, over: { status?: string } = {}): string {
       target: "https://example.com", operator: "Carlos", generatedAt: "2026-11-02T08:05:00.000Z",
       steps: [], validationTier: "observation",
       proves: "The fixture flaw responded as recorded.", doesNotProve: "No impact beyond the fixture.",
-      reverifyCommand: "curl https://example.com",
-    }),
+      reverifyCommand: "curl https://example.com" }),
   );
   return dir;
 }

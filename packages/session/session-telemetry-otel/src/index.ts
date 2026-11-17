@@ -49,7 +49,10 @@ export enum SessionTelemetryMode {
 }
 
 /** Default session-sharing policy for schema and direct construction. */
-export const DEFAULT_TELEMETRY_MODE = SessionTelemetryMode.FEEDBACK_ONLY
+export const DEFAULT_TELEMETRY_MODE = SessionTelemetryMode.DISABLED
+
+/** Default OTLP/HTTP logs endpoint used when an uploading mode omits `exporter.url`. */
+export const DEFAULT_TELEMETRY_EXPORTER_URL = 'http://127.0.0.1:4318/v1/logs'
 
 const DISABLED_FEEDBACK_WARNING = 'OpenTelemetry session upload is DISABLED; this feedback is not uploaded through OpenTelemetry'
 const NON_CANONICAL_EVENT_WARNING = 'session telemetry ignored an event absent from the canonical session log'
@@ -174,10 +177,9 @@ export class OpenTelemetrySessionBackend extends SessionTelemetryBackend {
       return
     }
 
-    const url = config.exporter?.url
-    if (url === undefined || url.length === 0) {
-      throw new Error('session-telemetry-otel: exporter.url is required (the full OTLP logs endpoint)')
-    }
+    const url = config.exporter?.url === undefined || config.exporter.url.length === 0
+      ? DEFAULT_TELEMETRY_EXPORTER_URL
+      : config.exporter.url
     let parsed: URL
     try {
       parsed = new URL(url)
@@ -219,7 +221,7 @@ export class OpenTelemetrySessionBackend extends SessionTelemetryBackend {
           // ignore the rest. App identity travels in the Resource
           // (service.name/version); the transport-level user-agent is the
           // SDK's own, per the axiom.
-          exporter: new OTLPLogExporter(config.exporter),
+          exporter: new OTLPLogExporter({ ...config.exporter, url }),
         }),
       ],
     })

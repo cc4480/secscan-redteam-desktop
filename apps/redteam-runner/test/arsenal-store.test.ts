@@ -21,8 +21,7 @@ import {
   buildAndSwapArsenalIndex,
   openArsenalServingStore,
   readArsenalIndexMeta,
-  type ArsenalBuildData,
-} from '../src/arsenal/index-store.js'
+  type ArsenalBuildData } from '../src/arsenal/index-store.js'
 
 let dir: string
 let dbPath: string
@@ -50,8 +49,7 @@ function sampleData(over: Partial<ArsenalBuildData> = {}): ArsenalBuildData {
         topic: 'Lists',
         fetchedAt: '2026-10-31T00:00:00.000Z',
         entryCount: 2,
-        fetchError: null,
-      },
+        fetchError: null },
       {
         slug: 'web-hacking',
         name: 'Web Hacking',
@@ -60,9 +58,7 @@ function sampleData(over: Partial<ArsenalBuildData> = {}): ArsenalBuildData {
         topic: 'Web',
         fetchedAt: null,
         entryCount: 1,
-        fetchError: null,
-      },
-    ],
+        fetchError: null } ],
     entries: [
       {
         name: 'Common Passwords',
@@ -71,8 +67,7 @@ function sampleData(over: Partial<ArsenalBuildData> = {}): ArsenalBuildData {
         collectionSlug: 'seclists',
         tags: ['password'],
         targets: ['WA'],
-        battery: [],
-      },
+        battery: [] },
       {
         name: 'DNS Subdomains',
         url: 'https://example.test/seclists/dns-subdomains',
@@ -80,8 +75,7 @@ function sampleData(over: Partial<ArsenalBuildData> = {}): ArsenalBuildData {
         collectionSlug: 'seclists',
         tags: [],
         targets: [],
-        battery: [],
-      },
+        battery: [] },
       {
         name: 'JWT Tool',
         url: 'https://example.test/web-hacking/jwt-tool',
@@ -89,14 +83,11 @@ function sampleData(over: Partial<ArsenalBuildData> = {}): ArsenalBuildData {
         collectionSlug: 'web-hacking',
         tags: ['jwt'],
         targets: ['WA'],
-        battery: ['F-10'],
-      },
-    ],
+        battery: ['F-10'] } ],
     unparsedCount: 1,
     dupeCount: 2,
     prioritySlugs: ['seclists'],
-    ...over,
-  }
+    ...over }
 }
 
 function fileHash(path: string): string {
@@ -126,9 +117,7 @@ describe('arsenal index store — swap protocol (T6)', () => {
         collectionSlug: 'seclists',
         tags: [],
         targets: [],
-        battery: [],
-      },
-    ]
+        battery: [] } ]
     const second = buildAndSwapArsenalIndex(dbPath, grown)
     assert.equal(second.generation, 2)
     assert.equal(readArsenalIndexMeta(dbPath)?.generation, 2)

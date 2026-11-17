@@ -16,6 +16,7 @@
  */
 
 export type { PromptContext } from "./prompts/shared.js";
+export { isCompactLocalProvider } from "./prompts/shared.js";
 export { coordinatorPrompt } from "./prompts/coordinator.js";
 export { reconPrompt } from "./prompts/recon.js";
 export { exploiterPrompt } from "./prompts/exploiter.js";

@@ -38,13 +38,13 @@
  * pretending a test ran when its setup was missing.
  */
 import { BATTERY_CATEGORIES, CATEGORY_LABELS } from "../battery.js";
-import { ALL_TARGETS, BATTERY_ITEM_COUNTS, FULL_BATTERY_TARGETS, HOST_EXEC_TOOLING, NEEDS_HUMAN_OPERATOR, NEEDS_KERBEROS_TICKET, NEEDS_MSFRPCD, NEEDS_NUCLEI, NEEDS_PRIVILEGED_CLIENT, TARGET_PREFIXES, TOTAL_BATTERY_ITEMS, isTargetId } from "./types.js";
+import { ALL_TARGETS, BATTERY_ITEM_COUNTS, FULL_BATTERY_TARGETS, HOST_EXEC_TOOLING, NEEDS_HUMAN_OPERATOR, NEEDS_KERBEROS_TICKET, NEEDS_MSFCONSOLE, NEEDS_NUCLEI, NEEDS_PRIVILEGED_CLIENT, TARGET_PREFIXES, TOTAL_BATTERY_ITEMS, isTargetId } from "./types.js";
 import { SECSCAN_PROFILE } from "./secscan.js";
 import { SECLAYER_PROFILE } from "./seclayer.js";
 import { WEBAPP_PROFILE } from "./webapp.js";
 import { WINDOWS_PROFILE } from "./windows.js";
 import { LINUX_PROFILE } from "./linux.js";
-export { ALL_TARGETS, BATTERY_ITEM_COUNTS, FULL_BATTERY_TARGETS, HOST_EXEC_TOOLING, NEEDS_HUMAN_OPERATOR, NEEDS_KERBEROS_TICKET, NEEDS_MSFRPCD, NEEDS_NUCLEI, NEEDS_PRIVILEGED_CLIENT, TARGET_PREFIXES, TOTAL_BATTERY_ITEMS, isTargetId };
+export { ALL_TARGETS, BATTERY_ITEM_COUNTS, FULL_BATTERY_TARGETS, HOST_EXEC_TOOLING, NEEDS_HUMAN_OPERATOR, NEEDS_KERBEROS_TICKET, NEEDS_MSFCONSOLE, NEEDS_NUCLEI, NEEDS_PRIVILEGED_CLIENT, TARGET_PREFIXES, TOTAL_BATTERY_ITEMS, isTargetId };
 export const TARGET_PROFILES = {
     secscan: SECSCAN_PROFILE,
     seclayer: SECLAYER_PROFILE,
@@ -102,7 +102,7 @@ export function inferTargetProfile(url) {
         if (u.pathname.toLowerCase().startsWith("/api/mcp"))
             return "seclayer";
         const host = u.hostname.toLowerCase();
-        if (host === "secscan.us" || host.endsWith(".secscan.us"))
+        if (host === "example.invalid")
             return "secscan";
         if (host === "seclayer.app" || host.endsWith(".seclayer.app"))
             return "seclayer";

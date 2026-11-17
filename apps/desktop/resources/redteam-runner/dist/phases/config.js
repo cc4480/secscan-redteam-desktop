@@ -16,24 +16,15 @@ function parseEnvPositiveNumber(raw, name) {
     return n;
 }
 export function resolveConfig(env, opts = {}) {
-    // The SecScan MCP token is NOT a startup requirement: it is only read
-    // when the operator opts into service verification
-    // (REDTEAM_VERIFY_VIA_SERVICE=1). The default authorize path verifies
-    // from the engagement record and never touches the service.
-    const mcpToken = opts.mcpToken ?? env['SECSCAN_MCP_TOKEN'] ?? '';
-    const verifyViaService = opts.verifyViaService ?? env['REDTEAM_VERIFY_VIA_SERVICE'] === '1';
-    if (verifyViaService && !mcpToken) {
-        throw new Error('[runner] REDTEAM_VERIFY_VIA_SERVICE=1 asks the SecScan service to verify domains, but SECSCAN_MCP_TOKEN is not set. Enter the SecScan MCP token via the Secure Vault, or unset REDTEAM_VERIFY_VIA_SERVICE to verify from the engagement record.');
-    }
     const deepseekApiKey = opts.deepseekApiKey ?? env['DEEPSEEK_API_KEY'];
     const modelApiKey = opts.modelApiKey ?? env['MODEL_API_KEY'] ?? env['META_API_KEY'];
     // A live engagement needs ONE configured model provider: the fleet's
     // Meta key, a DeepSeek key, or the offline local provider
-    // (REDTEAM_LLM_PROVIDER=local, keyless by design). Nothing else — in
-    // particular not the SecScan service — gates the start.
+    // (REDTEAM_LLM_PROVIDER=local, keyless by design). No external service
+    // gates the start.
     const localProvider = env['REDTEAM_LLM_PROVIDER']?.trim().toLowerCase() === 'local';
     if (!modelApiKey && !deepseekApiKey && !localProvider && !opts.dryRunAgents) {
-        throw new Error("[runner] No model provider key is configured. Set MODEL_API_KEY (Meta Model API — the fleet's provider) via the Secure Vault (it lands in the environment).");
+        throw new Error("[runner] No model provider key is configured. Set MODEL_API_KEY (Meta Model API - the fleet's provider) via the Secure Vault (it lands in the environment).");
     }
     // v0.6: no role currently routes to Qwen (see llm-router/src/policy.ts),
     // so its key is optional here. It's still read/threaded through so
@@ -53,18 +44,12 @@ export function resolveConfig(env, opts = {}) {
     // memory/cli.ts and memory/lifecycle.ts enforce).
     const memoryRootEnv = env['REDTEAM_MEMORY_ROOT'];
     if (memoryRootEnv !== undefined && memoryRootEnv.trim() === '') {
-        throw new MemoryError('SCHEMA_INVALID', 'REDTEAM_MEMORY_ROOT is set but empty — misconfiguration fails loud');
+        throw new MemoryError('SCHEMA_INVALID', 'REDTEAM_MEMORY_ROOT is set but empty - misconfiguration fails loud');
     }
     const memoryRoot = opts.memoryRoot ?? memoryRootEnv ?? join(dirname(registryPath), 'memory');
     return {
-        // Blank-but-present SECSCAN_MCP_URL (the .env.example convention for
-        // "unset, use the default") must fall through too — "" ?? x is "",
-        // not x, so a stray fetch("") blew up here before the .trim()/|| guard.
-        mcpEndpoint: opts.mcpEndpoint || env['SECSCAN_MCP_URL']?.trim() || 'https://secscan.us/api/mcp',
-        mcpToken,
         deepseekApiKey: deepseekApiKey ?? '',
         modelApiKey: modelApiKey ?? '',
-        verifyViaService,
         qwenApiKey: qwenApiKey ?? '',
         maxReconTurns: opts.maxReconTurns ?? 10,
         maxExploitProbes: opts.maxExploitProbes ?? 12,

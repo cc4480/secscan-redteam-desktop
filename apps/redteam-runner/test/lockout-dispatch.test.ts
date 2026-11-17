@@ -64,8 +64,7 @@ function fakeCtx(opts: {
     events: {
       dir: '/tmp/lockout-dispatch-test-no-such-dir',
       engagementId: 'eng-lockout-test',
-      append: (e: FakeEvents) => appended.push(e),
-    },
+      append: (e: FakeEvents) => appended.push(e) },
     tier: { current: 2, declared: 2, chainSteps: new Map<string, number>() },
     safety: { limiter, lockout: guard, rpsPerHost: 5 },
     itemLedger: new Map(),
@@ -78,8 +77,7 @@ function fakeCtx(opts: {
       probe: async (req: { url: string }) => {
         probes.push(req)
         return { status: 200, ms: 1, bodySnippet: 'ok' }
-      },
-    },
+      } },
     hostExecutor: {
       sshExec: async (a: { host: string; command: string }) => {
         sshCommands.push(a.command)
@@ -88,9 +86,7 @@ function fakeCtx(opts: {
       smbExec: async (a: { host: string; command: string }) => {
         smbCommands.push(a.command)
         return next(smbQueue, a.host)
-      },
-    },
-  } as unknown as Ctx
+      } } } as unknown as Ctx
   return { ctx, appended, sshCommands, smbCommands, probes, guard, limiter }
 }
 
@@ -108,8 +104,7 @@ describe('dispatch lockout gate — budget (spec §7.10)', () => {
     const host = 'app.example.com'
     const { ctx, appended, sshCommands, probes, guard, limiter } = fakeCtx({
       scope: [host],
-      sshResults: [FAIL_SSH],
-    })
+      sshResults: [FAIL_SSH] })
     for (let n = 1; n <= 4; n++) {
       const r = await dispatchTool(ctx, 'exploiter', 'exploit', sshCall(host, n))
       assert.match(r.result, /Permission denied/, `call ${n} executes and fails validation`)
@@ -179,8 +174,7 @@ describe('dispatch lockout gate — signal trip + resume (spec §7.12)', () => {
     const host = 'app.example.com'
     const { ctx, appended, sshCommands, guard } = fakeCtx({
       scope: [host],
-      sshResults: [LOCKED_SSH, CLEAN_SSH],
-    })
+      sshResults: [LOCKED_SSH, CLEAN_SSH] })
     const first = await dispatchTool(ctx, 'exploiter', 'exploit', sshCall(host, 1))
     assert.match(first.result, /pam_faillock/, 'the signalling call itself executed')
     assert.equal(guard.isTripped(host), true)
@@ -211,8 +205,7 @@ describe('dispatch lockout gate — signal trip + resume (spec §7.12)', () => {
     const { ctx, sshCommands, smbCommands, guard } = fakeCtx({
       scope: [host],
       smbResults: [LOCKED_SMB],
-      sshResults: [CLEAN_SSH],
-    })
+      sshResults: [CLEAN_SSH] })
     const smb = await dispatchTool(
       ctx,
       'exploiter',

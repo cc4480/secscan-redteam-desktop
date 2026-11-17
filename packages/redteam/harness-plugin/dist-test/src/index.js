@@ -66,7 +66,7 @@
 import { ROLE_MODEL_POLICY, defaultSoulText } from '@secscan/redteam-llm-router';
 import { installAuthGate } from './auth-gate.js';
 import { REDTEAM_PROFILE } from './redteam-profile.js';
-import { deferredToolNames, isDeferredTool, isLocalAssembly, isTightWindow, localProfileText, tinyToolNames } from './local-profile.js';
+import { deferredToolNames, isDeferredTool, isFullWindow, isLocalAssembly, isTightWindow, localProfileText, tinyToolNames } from './local-profile.js';
 import { FleetBriefError, fleetBriefs } from './role-briefs.js';
 export const name = 'secscan-redteam';
 // 'tools' for the pre-execute hook surface, 'systemPrompt' for the section registry.
@@ -637,6 +637,7 @@ export function apply(ctx) {
     // tools the local route declines to pay for, so their schemas are not sent.
     // This reduces model-visible input, the request header still records the tool
     // list that actually went out, and the scan-facing schemas stay mounted.
+    // Large windows receive the full assembled profile and keep the full tool set.
     ctx.on('system-prompt/assemble', async (assembly, context, next) => {
         const resolved = await next();
         if (!isLocalAssembly(context))
@@ -648,6 +649,8 @@ export function apply(ctx) {
             const tiny = tinyToolNames();
             return { ...resolved, tools: resolved.tools.filter(tool => tiny.has(tool.name)) };
         }
+        if (isFullWindow(window))
+            return resolved;
         const deferred = deferredToolNames();
         if (deferred === undefined || deferred.size === 0)
             return resolved;

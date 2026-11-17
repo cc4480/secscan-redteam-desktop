@@ -20,8 +20,7 @@ import {
   currentSeatSpeaker,
   findingSpeakers,
   reportAuthorSpeaker,
-  speakerForActor,
-} from "../src/ui/speaker.js";
+  speakerForActor } from "../src/ui/speaker.js";
 import { mergeVerdictBlock } from "../src/dispatch/verdicts.js";
 import type { Ctx, LiveFinding } from "../src/context.js";
 import type { EngagementEvent, Finding } from "../src/types.js";
@@ -35,8 +34,7 @@ function ev(over: Partial<EngagementEvent>): EngagementEvent {
     actor: "runner",
     action: "reasoning",
     result: "",
-    ...over,
-  };
+    ...over };
 }
 
 describe("speakerForActor", () => {
@@ -60,8 +58,7 @@ describe("currentSeatSpeaker", () => {
       ev({ seq: 1, actor: "coordinator", action: "reasoning" }),
       ev({ seq: 2, actor: "recon", action: "reasoning" }),
       ev({ seq: 3, actor: "exploiter", action: "task_complete" }),
-      ev({ seq: 4, actor: "runner", action: "report_grade", phase: "report" }),
-    ];
+      ev({ seq: 4, actor: "runner", action: "report_grade", phase: "report" }) ];
     assert.deepEqual(currentSeatSpeaker(events), { name: "NEO", role: "exploiter" });
   });
 
@@ -71,8 +68,7 @@ describe("currentSeatSpeaker", () => {
       // bookkeeping stamps abort_engagement 'coordinator' regardless of
       // the calling role — an asserted stamp, never speaker evidence.
       ev({ seq: 2, actor: "coordinator", action: "abort_engagement" }),
-      ev({ seq: 3, actor: "coordinator", action: "task_spawn" }),
-    ];
+      ev({ seq: 3, actor: "coordinator", action: "task_spawn" }) ];
     assert.deepEqual(currentSeatSpeaker(events), { name: "TANK", role: "recon" });
   });
 
@@ -86,8 +82,7 @@ describe("reportAuthorSpeaker", () => {
   it("stamps the reporter only when its loop reasoned in the report phase", () => {
     const events = [
       ev({ seq: 1, actor: "exploiter", action: "reasoning" }),
-      ev({ seq: 2, actor: "reporter", action: "reasoning", phase: "report" }),
-    ];
+      ev({ seq: 2, actor: "reporter", action: "reasoning", phase: "report" }) ];
     assert.deepEqual(reportAuthorSpeaker(events), { name: "TRINITY", role: "reporter" });
   });
 
@@ -96,8 +91,7 @@ describe("reportAuthorSpeaker", () => {
       ev({ seq: 1, actor: "exploiter", action: "reasoning" }),
       ev({ seq: 2, actor: "runner", action: "report_grade", phase: "report" }),
       // Reporter reasoning in a DIFFERENT phase is not report authorship.
-      ev({ seq: 3, actor: "reporter", action: "reasoning", phase: "exploit" }),
-    ];
+      ev({ seq: 3, actor: "reporter", action: "reasoning", phase: "exploit" }) ];
     assert.equal(reportAuthorSpeaker(events), undefined);
   });
 });
@@ -108,12 +102,10 @@ describe("findingSpeakers", () => {
       { id: "F-1", producer: "exploiter" },
       { id: "F-2", producer: "runner" },
       { id: "F-3" },
-      { id: "F-4", producer: "recon" },
-    ] as Finding[];
+      { id: "F-4", producer: "recon" } ] as Finding[];
     assert.deepEqual(findingSpeakers(findings), {
       "F-1": { name: "NEO", role: "exploiter" },
-      "F-4": { name: "TANK", role: "recon" },
-    });
+      "F-4": { name: "TANK", role: "recon" } });
   });
 });
 
@@ -137,9 +129,7 @@ describe("mergeVerdictBlock producer stamping", () => {
       events: {
         engagementId: "eng-test",
         append: () => {},
-        updateState: () => {},
-      },
-    } as unknown as Ctx;
+        updateState: () => {} } } as unknown as Ctx;
     const block =
       "verdicts:\n```json\n{\"verdicts\": [{\"kind\": \"confirmed\", \"severity\": \"high\", " +
       "\"vulnClass\": \"sqli\", \"attackId\": \"T1190\", \"evidence\": \"tautology reflected\", " +

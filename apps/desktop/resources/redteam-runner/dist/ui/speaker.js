@@ -1,9 +1,9 @@
 const STAMP_BY_ACTOR = {
     coordinator: { name: "MORPHEUS", role: "lead" },
-    recon: { name: "OPERATOR", role: "recon" },
+    recon: { name: "TANK", role: "recon" },
     exploiter: { name: "NEO", role: "exploiter" },
-    reporter: { name: "ARCHITECT", role: "reporter" },
-    architect: { name: "ARCHITECT", role: "architect" },
+    reporter: { name: "TRINITY", role: "reporter" },
+    architect: { name: "AGENT SMITH", role: "architect" },
 };
 /**
  * The stamp for one execution-side actor, or undefined when the actor

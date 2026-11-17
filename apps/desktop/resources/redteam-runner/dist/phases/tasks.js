@@ -1,26 +1,26 @@
 /**
  * Coordinator task model: TaskDef/TaskResult, runTask, runBatch, validateTasks (v0.19.0 refactor — extracted from phases.ts).
  */
-import { BATTERY_CATEGORIES } from "../battery.js";
-import { HaltError } from "../context.js";
-import { EXPLOIT_TOOLS, RECON_TOOLS } from "../tools.js";
-import { agentLoop, promptCtx } from "../agents.js";
-import { lookupTechnique } from "../attack.js";
-import { mergeVerdictBlock } from "../dispatch.js";
-import { withBridgeTools } from "../dispatch/bridge-gate.js";
-import { taskPrompt } from "../prompts.js";
-import { techniqueAllowed } from "../gate.js";
-import { completeGraphSubtask, failGraphSubtask, graphSubtaskFor, startGraphSubtask, } from "../workgraph/wiring.js";
-import { requestCoderArtifact } from "../exploit-cell/coder.js";
+import { BATTERY_CATEGORIES } from '../battery.js';
+import { HaltError } from '../context.js';
+import { EXPLOIT_TOOLS, RECON_TOOLS } from '../tools.js';
+import { agentLoop, promptCtx } from '../agents.js';
+import { lookupTechnique } from '../attack.js';
+import { mergeVerdictBlock } from '../dispatch.js';
+import { withBridgeTools } from '../dispatch/bridge-gate.js';
+import { taskPrompt } from '../prompts.js';
+import { techniqueAllowed } from '../gate.js';
+import { completeGraphSubtask, failGraphSubtask, graphSubtaskFor, startGraphSubtask, } from '../workgraph/wiring.js';
+import { requestCoderArtifact } from '../exploit-cell/coder.js';
 /**
  * "Spawn a subagent": execute one discrete task as a bounded foundation loop
  * with a task-scoped specialist prompt. Fresh context, cyber task definition.
  */
 export async function runTask(ctx, task) {
-    const role = task.kind === "recon" ? "recon" : "exploiter";
+    const role = task.kind === 'recon' ? 'recon' : 'exploiter';
     // Q-BRIDGE-TOOLS: bridge tools join the surface when the bridge
     // is live on this machine (bridge-gate.ts).
-    const tools = await withBridgeTools(ctx, "exploit", task.kind === "recon" ? RECON_TOOLS : EXPLOIT_TOOLS);
+    const tools = await withBridgeTools(ctx, 'exploit', task.kind === 'recon' ? RECON_TOOLS : EXPLOIT_TOOLS);
     const probesBefore = ctx.probesUsed;
     const findingsBefore = ctx.liveFindings.length;
     const killedBefore = ctx.killedLive.length;
@@ -31,12 +31,12 @@ export async function runTask(ctx, task) {
     if (graphSub)
         startGraphSubtask(ctx, graphSub.id);
     ctx.events.append({
-        phase: "exploit",
-        actor: "coordinator",
-        action: "task_spawn",
+        phase: 'exploit',
+        actor: 'coordinator',
+        action: 'task_spawn',
         target: task.id,
         attackId: task.attackId,
-        result: `[${task.kind}] ${task.brief.slice(0, 200)}${task.category ? ` (${task.category})` : ""}`,
+        result: `[${task.kind}] ${task.brief.slice(0, 200)}${task.category ? ` (${task.category})` : ''}`,
     });
     // Fleet audit M1: a task that declares a custom-code need gets its
     // artifact from the coder (TANK) seat BEFORE the specialist loop starts;
@@ -58,9 +58,9 @@ export async function runTask(ctx, task) {
         }
         catch (err) {
             ctx.events.append({
-                phase: "exploit",
-                actor: "runner",
-                action: "coder_artifact_failed",
+                phase: 'exploit',
+                actor: 'runner',
+                action: 'coder_artifact_failed',
                 target: task.id,
                 attackId: task.attackId,
                 result: `Coder (TANK) artifact request failed for declared need "${task.codeNeed.slice(0, 200)}": ${err.message} — task proceeds without a coder artifact.`,
@@ -69,9 +69,9 @@ export async function runTask(ctx, task) {
     }
     let summary;
     try {
-        summary = await agentLoop(ctx, role, "exploit", taskPrompt(promptCtx(ctx), task), coderArtifact
+        summary = await agentLoop(ctx, role, 'exploit', taskPrompt(promptCtx(ctx), task), coderArtifact
             ? `Execute the task now.\n\nCODER ARTIFACT (built by TANK, the coder seat, for this task's declared custom-code need: ${task.codeNeed}) — use this artifact verbatim as the task's payload/script; do not regenerate it inline:\n${coderArtifact}`
-            : "Execute the task now.", tools, task.maxTurns);
+            : 'Execute the task now.', tools, task.maxTurns);
     }
     catch (err) {
         if (graphSub)
@@ -87,9 +87,9 @@ export async function runTask(ctx, task) {
     const verdictNote = `probes +${ctx.probesUsed - probesBefore}, ` +
         `confirmed +${ctx.liveFindings.length - findingsBefore}, killed +${ctx.killedLive.length - killedBefore}`;
     ctx.events.append({
-        phase: "exploit",
+        phase: 'exploit',
         actor: role,
-        action: "task_complete",
+        action: 'task_complete',
         target: task.id,
         attackId: task.attackId,
         result: `${verdictNote}. ${summary.slice(0, 600)}`,
@@ -109,31 +109,71 @@ export async function runTask(ctx, task) {
 /**
  * Fan-out with a concurrency cap: red fans out independent tasks in parallel,
  * black runs strictly one at a time (stealth). HaltError always propagates.
- */
-export async function runBatch(ctx, tasks, cap) {
+ *
+ * Parallel tasks share `ctx`, so each task before/after snapshot overlaps its
+ * siblings work: task A "findings after" already includes what task B found.
+ * Reporting those raw projections attributed every sibling probes and findings
+ * to each task, and those numbers are what the coordinator re-plans from. A chunk
+ * delta is therefore reconciled here and attributed ONCE - to the first task - with
+ * the rest zeroed and every result marked `shared`, so nothing double-counts.
+ */ export async function runBatch(ctx, tasks, cap) {
     const results = [];
     for (let i = 0; i < tasks.length; i += cap) {
         const chunk = tasks.slice(i, i + cap);
-        const settled = await Promise.allSettled(chunk.map((t) => runTask(ctx, t)));
-        for (let j = 0; j < settled.length; j++) {
-            const s = settled[j];
-            if (s.status === "fulfilled") {
-                results.push(s.value);
+        const settled = await Promise.allSettled(chunk.map(t => runTask(ctx, t)));
+        const fulfilled = [];
+        // settled is chunk.map(...) settled: same order, same length; ?. below is type-checker cover only.
+        for (const [j, s] of settled.entries()) {
+            if (s.status === 'fulfilled') {
+                fulfilled.push(s.value);
             }
             else {
                 if (s.reason instanceof HaltError)
                     throw s.reason;
                 ctx.events.append({
-                    phase: "exploit",
-                    actor: "runner",
-                    action: "task_failed",
-                    target: chunk[j].id,
+                    phase: 'exploit',
+                    actor: 'runner',
+                    action: 'task_failed',
+                    target: chunk[j]?.id,
                     result: `Task failed: ${String(s.reason).slice(0, 300)}`,
                 });
             }
         }
+        if (fulfilled.length > 1)
+            reconcileChunkDeltas(fulfilled);
+        results.push(...fulfilled);
     }
     return results;
+}
+/**
+ * Attribute a parallel chunk true delta once instead of once per task.
+ * @param fulfilled - The chunk results; mutated in place.
+ */
+export function reconcileChunkDeltas(fulfilled) {
+    const probesBase = Math.min(...fulfilled.map(r => r.probesBefore));
+    const findingsBase = Math.min(...fulfilled.map(r => r.findingsBefore));
+    const killedBase = Math.min(...fulfilled.map(r => r.killedBefore));
+    const probesEnd = Math.max(...fulfilled.map(r => r.probesAfter));
+    const findingsEnd = Math.max(...fulfilled.map(r => r.findingsAfter));
+    const killedEnd = Math.max(...fulfilled.map(r => r.killedAfter));
+    fulfilled.forEach((r, index) => {
+        // Marked shared even for the task that carries the number: it is the chunk
+        // delta, not a measurement of that one task own work.
+        r.attribution = 'shared';
+        if (index === 0) {
+            r.probesBefore = probesBase;
+            r.probesAfter = probesEnd;
+            r.findingsBefore = findingsBase;
+            r.findingsAfter = findingsEnd;
+            r.killedBefore = killedBase;
+            r.killedAfter = killedEnd;
+            return;
+        }
+        // Siblings report no delta of their own - the chunk was already attributed.
+        r.probesBefore = r.probesAfter;
+        r.findingsBefore = r.findingsAfter;
+        r.killedBefore = r.killedAfter;
+    });
 }
 let taskCounter = 0;
 /**
@@ -146,43 +186,45 @@ export function validateTasks(ctx, raw, cap) {
     const overCap = raw.slice(cap);
     for (const r of overCap) {
         ctx.events.append({
-            phase: "exploit",
-            actor: "runner",
-            action: "task_rejected",
-            result: `Task over concurrency cap (${cap}/round): re-plan it next round. Brief was: ${String(r["brief"] ?? "").slice(0, 120)}`,
+            phase: 'exploit',
+            actor: 'runner',
+            action: 'task_rejected',
+            result: `Task over concurrency cap (${cap}/round): re-plan it next round. Brief was: ${String(r['brief'] ?? '').slice(0, 120)}`,
         });
     }
     for (const r of raw.slice(0, cap)) {
-        const kind = r["kind"] === "recon" ? "recon" : "probe";
-        const brief = String(r["brief"] ?? "").trim().slice(0, 800);
+        const kind = r['kind'] === 'recon' ? 'recon' : 'probe';
+        const brief = String(r['brief'] ?? '').trim().slice(0, 800);
         if (!brief)
             continue;
-        let attackId = typeof r["attackId"] === "string" ? r["attackId"].toUpperCase() : undefined;
-        if (attackId && (!lookupTechnique(attackId) || !techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe, { testMode: ctx.config?.testMode === true }))) {
+        const attackId = typeof r['attackId'] === 'string' ? r['attackId'].toUpperCase() : undefined;
+        const techniqueOpts = { testMode: ctx.config?.testMode === true };
+        if (attackId && (!lookupTechnique(attackId) ||
+            !techniqueAllowed(attackId, ctx.input.mode, ctx.input.roe, techniqueOpts))) {
             ctx.events.append({
-                phase: "exploit",
-                actor: "runner",
-                action: "task_rejected",
+                phase: 'exploit',
+                actor: 'runner',
+                action: 'task_rejected',
                 attackId,
                 result: `Task rejected: attackId ${attackId} unknown or ROE-excluded. Brief was: ${brief.slice(0, 120)}`,
             });
             continue;
         }
         let category;
-        if (kind === "probe") {
-            const c = String(r["category"] ?? "").toLowerCase();
+        if (kind === 'probe') {
+            const c = String(r['category'] ?? '').toLowerCase();
             if (!BATTERY_CATEGORIES.includes(c)) {
                 ctx.events.append({
-                    phase: "exploit",
-                    actor: "runner",
-                    action: "task_rejected",
+                    phase: 'exploit',
+                    actor: 'runner',
+                    action: 'task_rejected',
                     result: `Task rejected: probe task needs a battery category (logic|functionality|validation). Brief was: ${brief.slice(0, 120)}`,
                 });
                 continue;
             }
             category = c;
         }
-        const maxTurns = Math.min(Math.max(Number(r["maxTurns"]) || 6, 2), 8);
+        const maxTurns = Math.min(Math.max(Number(r['maxTurns']) || 6, 2), 8);
         // A batteryItem only means something on a probe task: it names the battery
         // item the probe is evidence for, and the dispatch layer reconciles the
         // result against it. A recon task has no such item, so a batteryItem on one
@@ -190,15 +232,15 @@ export function validateTasks(ctx, raw, cap) {
         // It is dropped here rather than passed down, because passing it through
         // produces "did not resolve to a selected battery item" on every call and
         // invites the reader to think something failed when nothing did.
-        const rawItem = typeof r["batteryItem"] === "string" ? r["batteryItem"].trim() : "";
-        const batteryItem = kind === "probe" && rawItem ? rawItem.slice(0, 40) : undefined;
+        const rawItem = typeof r['batteryItem'] === 'string' ? r['batteryItem'].trim() : '';
+        const batteryItem = kind === 'probe' && rawItem ? rawItem.slice(0, 40) : undefined;
         // A codeNeed only means something on a probe task, for the batteryItem
         // reason above: it declares code the EXECUTING task must generate (a
         // payload, script, or encoder the coder seat builds). A recon task
         // never crafts payloads, so a codeNeed on one is dropped here rather
         // than spending a coder call on a task that cannot consume it.
-        const rawNeed = typeof r["codeNeed"] === "string" ? r["codeNeed"].trim() : "";
-        const codeNeed = kind === "probe" && rawNeed ? rawNeed.slice(0, 300) : undefined;
+        const rawNeed = typeof r['codeNeed'] === 'string' ? r['codeNeed'].trim() : '';
+        const codeNeed = kind === 'probe' && rawNeed ? rawNeed.slice(0, 300) : undefined;
         tasks.push({ id: `task-${++taskCounter}`, kind, brief, attackId, category, batteryItem, codeNeed, maxTurns });
     }
     return tasks;

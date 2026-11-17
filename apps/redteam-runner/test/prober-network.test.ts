@@ -120,8 +120,7 @@ describe('WebProber real network behavior (loopback servers only)', () => {
     for (const s of sockets) s.destroy()
     await Promise.all([
       new Promise<void>(r => server.close(() => r())),
-      new Promise<void>(r => garbage.close(() => r())),
-    ])
+      new Promise<void>(r => garbage.close(() => r())) ])
   })
 
   it('default timeout is the documented 20s', () => {

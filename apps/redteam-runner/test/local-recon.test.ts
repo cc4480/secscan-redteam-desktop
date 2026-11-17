@@ -22,30 +22,24 @@ import { type EngagementInput } from "../src/types.js";
 
 const SYSTEM_INFO = JSON.stringify({
   system: "Windows", release: "11", version: "10.0.26200", machine: "AMD64",
-  hostname: "CHO-ZEN1", user: "Cho-zen", cpu_percent: 12.5, mem_percent: 40,
-});
+  hostname: "CHO-ZEN1", user: "Cho-zen", cpu_percent: 12.5, mem_percent: 40 });
 
 type Tier2Name = keyof typeof LOCAL_TIER2_BLOCKS;
 
 const SHELL_FIXTURES: Record<Tier2Name, string> = {
   volumes: JSON.stringify([
     { name: "C:", fileSystem: "NTFS", sizeBytes: 500_107_862_016, freeBytes: 120_440_463_360 },
-    { name: "D:", fileSystem: "NTFS", sizeBytes: 2_000_398_934_016, freeBytes: 900_000_000_000 },
-  ]),
+    { name: "D:", fileSystem: "NTFS", sizeBytes: 2_000_398_934_016, freeBytes: 900_000_000_000 } ]),
   accounts: JSON.stringify([
     { name: "Cho-zen", kind: "local user", enabled: true, groups: ["Administrators", "Users"] },
-    { name: "looko", kind: "local user", enabled: false, groups: ["Users"] },
-  ]),
+    { name: "looko", kind: "local user", enabled: false, groups: ["Users"] } ]),
   patches: JSON.stringify([
     { id: "KB5066133", installedOn: "2026-10-12" },
-    { id: "KB5065426", installedOn: "2026-09-09" },
-  ]),
+    { id: "KB5065426", installedOn: "2026-09-09" } ]),
   software: JSON.stringify([
     { name: "Docker Desktop", version: "4.34.0", publisher: "Docker Inc." },
     { name: "Docker Desktop", version: "4.34.0", publisher: "Docker Inc." },
-    { name: "Git", version: "2.47.0" },
-  ]),
-};
+    { name: "Git", version: "2.47.0" } ]) };
 
 /** A stub paired channel answering the tier-0 ops and the fixed tier-2 scripts. */
 function stubChannel(systemInfo: string = SYSTEM_INFO): { channel: LocalChannel; calls: string[] } {
@@ -53,8 +47,7 @@ function stubChannel(systemInfo: string = SYSTEM_INFO): { channel: LocalChannel;
   const answers: Record<string, string> = {
     system_info: systemInfo,
     list_processes: "{\"count\": 2, \"processes\": [{\"pid\": 4, \"exe\": \"System\"}, {\"pid\": 900, \"exe\": \"explorer.exe\", \"parent\": 4}]}",
-    list_dir: "file-a.txt\nfile-b.txt",
-  };
+    list_dir: "file-a.txt\nfile-b.txt" };
   const channel: LocalChannel = {
     async call(tool: PcAgentTool, args: Record<string, unknown>) {
       calls.push(tool);
@@ -67,8 +60,7 @@ function stubChannel(systemInfo: string = SYSTEM_INFO): { channel: LocalChannel;
       const answer = answers[tool];
       if (answer === undefined) throw new Error(`stub has no answer for ${tool}`);
       return answer;
-    },
-  };
+    } };
   return { channel, calls };
 }
 
@@ -81,8 +73,7 @@ function localCtx(dir: string, over: Partial<EngagementInput> = {}): LocalCollec
     operatorName: "Carlos",
     targets: ["windows"],
     localHost: true,
-    ...over,
-  };
+    ...over };
   const events = new EventLog(dir, "eng-rp11-recon", { target: input.target, mode: input.mode, objective: input.objective });
   return { input, events };
 }

@@ -36,8 +36,7 @@ import {
   S_DROP_THRESHOLD,
   guardrailTouches,
   readMonitorEvaluations,
-  runAutoRollbackMonitor,
-} from "../src/harness2/monitor.js";
+  runAutoRollbackMonitor } from "../src/harness2/monitor.js";
 import { readExperience, resolveExperiencePath } from "../src/harness2/experience.js";
 import { openHarness2Store } from "../src/harness2/store.js";
 import type { MetricSet } from "../src/harness2/scoring.js";
@@ -79,8 +78,7 @@ function adoptGate(over: { base?: Partial<MetricSet>; candidate?: Partial<Metric
     base: metricSet(over.base),
     candidate: metricSet({ successes: 6, sr: 0.75, falsePositives: 1, fpr: 0.125, steps: 9, tok: 900, ...over.candidate }),
     heldOutTargets: over.heldOutTargets ?? heldOut(),
-    trainingTargets: ["train-1.example"],
-  };
+    trainingTargets: ["train-1.example"] };
 }
 
 function consolidate(over: Partial<ConsolidateInput> = {}) {
@@ -93,8 +91,7 @@ function consolidate(over: Partial<ConsolidateInput> = {}) {
     cycleId: "cycle-1",
     date: DAY,
     now: NOW,
-    ...over,
-  });
+    ...over });
 }
 
 function experienceText(targetClass = "webapp"): string {
@@ -119,8 +116,7 @@ function writeRawLayer(id: string, yaml: string, metaOver: Record<string, unknow
     evidenceRunId: "run-raw",
     installedAt: `${DAY}T09:00:00.000Z`,
     sha256: createHash("sha256").update(body).digest("hex"),
-    ...metaOver,
-  };
+    ...metaOver };
   writeFileSync(join(dir, "meta.json"), JSON.stringify(meta, null, 2));
   return dir;
 }
@@ -155,8 +151,7 @@ function seedRuns(runs: readonly SeedRun[]): void {
           stepsCount: run.steps ?? 10,
           tokensTotal: run.tokens ?? 1000,
           crashed: run.crashed ?? false,
-          failureMode: run.crashed ? "timeout" : "none",
-        },
+          failureMode: run.crashed ? "timeout" : "none" },
         [],
       );
     }
@@ -176,8 +171,7 @@ function setupMonitoredLayer(id: string, sAtAdoption?: number, crAtAdoption?: nu
     adoptedAtMs: ADOPTED_MS,
     adoptedAtIso: new Date(ADOPTED_MS).toISOString(),
     ...(sAtAdoption !== undefined ? { sAtAdoption } : {}),
-    ...(crAtAdoption !== undefined ? { crAtAdoption } : {}),
-  });
+    ...(crAtAdoption !== undefined ? { crAtAdoption } : {}) });
 }
 
 function badRuns(count: number, start = 2000): SeedRun[] {
@@ -236,8 +230,7 @@ describe("section 11.4: layer file headers", () => {
       parents: ["wp-1", "wp-2"],
       cycleId: "cycle-9",
       metricDeltas: "S +0.100; SR +0.100",
-      status: "active",
-    });
+      status: "active" });
     assert.ok(body.startsWith(`${LAYER_HEADER_BEGIN}\n`), "header opens the layer file");
     const header = readLayerHeader(body);
     assert.ok(header);
@@ -267,8 +260,7 @@ describe("section 11.4: layer file headers", () => {
       parents: [],
       cycleId: "cycle-1",
       metricDeltas: "n/a",
-      status: "active",
-    });
+      status: "active" });
     installLayer(paths, layerFor("wp-h", { yaml: headered }), { installedAt: `${DAY}T09:00:00.000Z` });
     const parsed = readLayer(paths, "wp-h");
     assert.ok(parsed);
@@ -409,8 +401,7 @@ describe("section 11.3: rollback to the permanent archive", () => {
       runIds: ["run-1", "run-2"],
       deltas: { vulnsFound: -2, falsePositives: 1, steps: -1, tokensIn: -100, tokensOut: 0 },
       baseRuns: 4,
-      candidateRuns: 4,
-    });
+      candidateRuns: 4 });
     assert.deepEqual(result.activeBefore, ["wp-a", "wp-b"]);
     assert.deepEqual(result.activeIds, ["wp-a"]);
     assert.deepEqual(activeLayerIds(paths), ["wp-a"]);
@@ -472,8 +463,7 @@ describe("section 11.3: rollback to the permanent archive", () => {
       incidentDetail: "active layer references pinned guardrail src/safety",
       pinned: ["src/safety"],
       date: DAY,
-      now: NOW,
-    });
+      now: NOW });
     assert.equal(result.incident, true);
     assert.match(result.archiveDir, /-incident-guardrail-touch$/);
     assert.equal(readArchiveManifest(result.archiveDir)?.kind, "incident");

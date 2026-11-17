@@ -8,12 +8,11 @@
  */
 import { type AgentRole, type JsonSchemaTool, type ResponseFormat } from '@secscan/redteam-llm-router';
 import { type DeliverableSpec, type RoundCaps } from './turn-integrity.js';
-import { type PromptContext } from './prompts.js';
 import { type EngagementPhase } from './types.js';
 import { type Ctx } from './context.js';
+export { DEFAULT_REPAIR_CAP } from './agents-budget.js';
+export { promptCtx } from './agents-prompt-ctx.js';
 export type { DeliverableSpec, RoundCaps } from './turn-integrity.js';
-/** Default tool-call repair budget per agentLoop invocation (RC Item 6). */
-export declare const DEFAULT_REPAIR_CAP = 3;
 export declare function agentLoop(ctx: Ctx, role: AgentRole, phase: EngagementPhase, system: string, user: string, tools: JsonSchemaTool[], maxTurns: number, opts?: {
     /** Called when the model stops calling tools. Return a follow-up prompt to
      *  keep the phase going, or null to finish the phase. */
@@ -46,5 +45,4 @@ export declare function agentLoop(ctx: Ctx, role: AgentRole, phase: EngagementPh
     /** When declared, the turn is not finished until this file exists. */
     deliverable?: DeliverableSpec;
 }): Promise<string>;
-export declare function promptCtx(ctx: Ctx): PromptContext;
 export declare function commanderRedirect(ctx: Ctx, reason: string, redirectCount?: number): Promise<string>;

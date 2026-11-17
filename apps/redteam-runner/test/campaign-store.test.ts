@@ -30,8 +30,7 @@ import {
   settleFailedWave,
   transactCampaign,
   type CreateCampaignInput,
-  type EngagementResultLike,
-} from '../src/campaign/store.js'
+  type EngagementResultLike } from '../src/campaign/store.js'
 import { CampaignSchemaError } from '../src/campaign/schema.js'
 
 let root: string
@@ -55,8 +54,7 @@ function input(over: Partial<CreateCampaignInput> = {}): CreateCampaignInput {
     scope: { hosts: ['127.0.0.1'], verificationRef: 'dns-txt:fixture-2026-10-31' },
     caps: { maxWaves: 2 },
     createdBy: 'Carlos',
-    ...over,
-  }
+    ...over }
 }
 
 function result(over: Partial<EngagementResultLike> = {}): EngagementResultLike {
@@ -66,10 +64,8 @@ function result(over: Partial<EngagementResultLike> = {}): EngagementResultLike 
       { status: 'confirmed', severity: 'critical' },
       { status: 'confirmed', severity: 'low' },
       { status: 'killed', severity: 'medium' },
-      { status: 'deferred', severity: 'info' },
-    ],
-    ...over,
-  }
+      { status: 'deferred', severity: 'info' } ],
+    ...over }
 }
 
 describe('createCampaign', () => {
@@ -199,8 +195,7 @@ describe('wave bookkeeping', () => {
       confirmed: 2,
       killed: 1,
       deferred: 1,
-      bySeverity: { critical: 1, high: 0, medium: 1, low: 1, info: 1 },
-    })
+      bySeverity: { critical: 1, high: 0, medium: 1, low: 1, info: 1 } })
     assert.equal(loadCampaign(campaignsDir, 'camp-alpha').status, 'awaiting-advance')
   })
 
@@ -240,8 +235,7 @@ describe('wave bookkeeping', () => {
       confirmed: 0,
       killed: 0,
       deferred: 0,
-      bySeverity: { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
-    })
+      bySeverity: { critical: 0, high: 0, medium: 0, low: 0, info: 0 } })
   })
 })
 

@@ -49,8 +49,7 @@ function response(returns: boolean[]): FakeResponse {
       return result
     },
     end: () => undefined,
-    on: () => res,
-  }
+    on: () => res }
   return { res: res as never, writes }
 }
 
@@ -61,12 +60,10 @@ function request(): { req: never; disconnect: () => void } {
     on: (event: string, cb: () => void) => {
       if (event === 'close') handlers.push(cb)
       return req
-    },
-  }
+    } }
   return {
     req: req as never,
-    disconnect: () => { for (const h of handlers) h() },
-  }
+    disconnect: () => { for (const h of handlers) h() } }
 }
 
 function store(dir: string): UiStore {

@@ -12,13 +12,11 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
   locateFoundry,
-  readSnapshot,
-} from '../src/foundry/locate.js'
+  readSnapshot } from '../src/foundry/locate.js'
 import {
   parseRunOutput,
   parseVerifyOutput,
-  runGateCli,
-} from '../src/foundry/gate.js'
+  runGateCli } from '../src/foundry/gate.js'
 
 function tmpRoot(): string {
   return mkdtempSync(join(tmpdir(), 'foundry-locate-'))
@@ -32,8 +30,7 @@ function writeSnapshot(dir: string, bundles: unknown[]): void {
       snapshot: 'fixture-snapshot',
       generated_at: '2026-10-25T00:00:00Z',
       source: { datasets: bundles.length, gold: 1, silver: 1, live_cases: 0 },
-      bundles,
-    }),
+      bundles }),
   )
 }
 
@@ -41,14 +38,11 @@ const FIXTURE_BUNDLES = [
   {
     slug: 'sqli-product-search', family_id: 'sqli-product-search', loop_tier: 'GOLD',
     vuln_class: 'sql-injection', cwe: 'CWE-89', tier: 1, status: 'validated',
-    bundle_hash: 'a'.repeat(64), fitness: { fitness: 0.5864 }, panel: { pass_rate: 0.75 },
-  },
+    bundle_hash: 'a'.repeat(64), fitness: { fitness: 0.5864 }, panel: { pass_rate: 0.75 } },
   {
     slug: 'xss-reflected-search', family_id: 'xss-reflected-search', loop_tier: 'SILVER',
     vuln_class: 'cross-site-scripting', cwe: 'CWE-79', tier: 1, status: 'validated',
-    bundle_hash: 'b'.repeat(64), fitness: { fitness: 0.5875 }, panel: { pass_rate: 0.75 },
-  },
-]
+    bundle_hash: 'b'.repeat(64), fitness: { fitness: 0.5875 }, panel: { pass_rate: 0.75 } } ]
 
 function writeGatePackage(root: string): string {
   const snapshotDir = join(root, 'snapshot')

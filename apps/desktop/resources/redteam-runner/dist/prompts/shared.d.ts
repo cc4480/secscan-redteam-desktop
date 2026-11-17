@@ -39,6 +39,12 @@ export interface PromptContext {
      */
     memoryBrief?: string;
     /**
+     * Compact instructions for local/small models: the fleet skill assembly
+     * and long role prose are replaced with short, essential prompts so the
+     * request fits small context windows (~4k tokens of instructions).
+     */
+    compactLocal?: boolean;
+    /**
      * Phase 2 W3: the fleet prompt-assembly input (prompts/fleet-assembly.ts).
      * agents.ts promptCtx sets it from the AUTHORIZE phase's stamped record
      * (Ctx.verificationProof / verifiedAt / verifiedScope) on every live
@@ -75,3 +81,4 @@ export declare const MODE_BRIEF: Record<EngagementMode, string>;
 /** The standing mandate, injected into every role: novelty over convention.
  *  The old attacks are dead; we are paid for the one the target has never seen. */
 export declare function creativeDoctrine(): string;
+export declare function isCompactLocalProvider(env?: NodeJS.ProcessEnv): boolean;

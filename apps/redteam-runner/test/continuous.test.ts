@@ -40,8 +40,7 @@ import {
   runWatchCycle,
   type WatchProfile,
   type WatchBaseline,
-  type BaselineEntry,
-} from "../src/continuous/index.js";
+  type BaselineEntry } from "../src/continuous/index.js";
 import type { EngagementInput, EngagementResult, Finding } from "../src/types.js";
 import type { RunOptions } from "../src/phases.js";
 
@@ -58,12 +57,10 @@ function mkProfile(over: Record<string, unknown> = {}): Record<string, unknown> 
       mode: "red",
       objective: "continuous validation",
       roe: { scope: ["acme.com"] },
-      fullBattery: true,
-    },
+      fullBattery: true },
     cadence: { intervalHours: 168 },
     scopeValidUntil: FUTURE,
-    ...over,
-  };
+    ...over };
 }
 
 function writeProfile(dir: string, over: Record<string, unknown> = {}): string {
@@ -82,8 +79,7 @@ function finding(over: Partial<Finding> = {}): Finding {
     fix: "parameterize",
     retest: "re-run",
     status: "confirmed",
-    ...over,
-  };
+    ...over };
 }
 
 describe("watch profiles", () => {
@@ -173,9 +169,7 @@ describe("drift classification (phase 1, pure)", () => {
         status: "open" as const,
         engagementId: "watch-acme-weekly-20260101-aaaa",
         findingId: `F-${i + 1}`,
-        ...e,
-      })),
-    };
+        ...e })) };
   }
 
   it("classifies new / unchanged / missing; ignores killed findings", () => {
@@ -233,8 +227,7 @@ describe("drift resolution (phase 2, reverify-gated)", () => {
       status: "open",
       engagementId: "eng-old",
       findingId: "F-2",
-      ...over,
-    };
+      ...over };
   }
 
   it("reproduced → reopened; not-reproduced → remediated", async () => {
@@ -244,13 +237,11 @@ describe("drift resolution (phase 2, reverify-gated)", () => {
       writeFileSync(join(dir, "eng-old", "poc", "F-2.json"), JSON.stringify({ bundleId: "b" }));
       const [reopened] = await resolveMissingDrift([entry()], dir, async () => ({
         verdict: "reproduced",
-        note: "marker echoed",
-      }));
+        note: "marker echoed" }));
       assert.equal(reopened!.disposition, "reopened");
       const [remediated] = await resolveMissingDrift([entry()], dir, async () => ({
         verdict: "not-reproduced",
-        note: "no echo",
-      }));
+        note: "no echo" }));
       assert.equal(remediated!.disposition, "remediated");
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -264,14 +255,12 @@ describe("drift resolution (phase 2, reverify-gated)", () => {
       writeFileSync(join(dir, "eng-old", "poc", "F-2.json"), JSON.stringify({ bundleId: "b" }));
       const [changed] = await resolveMissingDrift([entry()], dir, async () => ({
         verdict: "target-changed",
-        note: "connection refused",
-      }));
+        note: "connection refused" }));
       assert.equal(changed!.disposition, "needs-review");
       assert.match(changed!.note, /Not marked remediated/);
       const [noBundle] = await resolveMissingDrift([entry({ findingId: "F-99" })], dir, async () => ({
         verdict: "not-reproduced",
-        note: "should never run",
-      }));
+        note: "should never run" }));
       assert.equal(noBundle!.disposition, "needs-review");
       const [threw] = await resolveMissingDrift([entry()], dir, async () => {
         throw new Error("boom");
@@ -291,8 +280,7 @@ describe("baseline folding", () => {
       profileName: "acme-weekly",
       engagementId: "eng-1",
       classification: { newFindings: [f1], unchanged: [], missing: [] },
-      resolved: [],
-    });
+      resolved: [] });
     base = applyDriftToBaseline(base, report, "acme.com", "eng-1", NOW.toISOString());
     assert.equal(base.entries.length, 1);
     assert.equal(base.entries[0]!.status, "open");
@@ -327,10 +315,8 @@ describe("baseline folding", () => {
       classification: {
         newFindings: [finding({ id: "F-3", severity: "critical", attackIds: ["T1110"] })],
         unchanged: [],
-        missing: [],
-      },
-      resolved: [],
-    });
+        missing: [] },
+      resolved: [] });
     const md = renderDriftMarkdown(report);
     assert.match(md, /Continuous drift/);
     assert.match(md, /deploy abc123/);
@@ -389,8 +375,7 @@ describe("watch cycles (integration, injected runner)", () => {
         const verdict = ctx.reverifyVerdicts[base] ?? "not-reproduced";
         return { verdict, note: `fake ${verdict}` };
       },
-      ...extra,
-    };
+      ...extra };
   }
 
   function teardown(ctx: Ctx) {
@@ -402,8 +387,7 @@ describe("watch cycles (integration, injected runner)", () => {
     try {
       ctx.findingsPlan = [
         [finding({ id: "F-1", severity: "critical", attackIds: ["T1190"] }), finding({ id: "F-2", severity: "high", attackIds: ["T1046"] })],
-        [finding({ id: "F-1", severity: "critical", attackIds: ["T1190"], title: "sqli, reworded" }), finding({ id: "F-3", severity: "medium", attackIds: ["T1110"] })],
-      ];
+        [finding({ id: "F-1", severity: "critical", attackIds: ["T1190"], title: "sqli, reworded" }), finding({ id: "F-3", severity: "medium", attackIds: ["T1110"] })] ];
       ctx.reverifyVerdicts = { "F-2.json": "not-reproduced" }; // T1046 fixed between runs
 
       const r1 = await runWatchCycle(cycleOpts(ctx));

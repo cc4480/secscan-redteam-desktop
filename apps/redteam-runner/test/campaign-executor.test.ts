@@ -58,8 +58,7 @@ function makeCampaign(id = 'camp-exec', maxWaves = 2): void {
     objective: 'Prove the campaign executor end to end',
     scope: { hosts: ['app.example.test'], verificationRef: 'dns-txt:fixture' },
     caps: { maxWaves },
-    createdBy: 'Carlos',
-  })
+    createdBy: 'Carlos' })
 }
 
 /** A fake engagement runner: captures every input, returns canned results in order. */
@@ -80,14 +79,11 @@ const wave1Result: EngagementResult = {
   reportPath: 'engagements/live/x/report.md',
   findings: [
     finding('F-1', 'confirmed', 'high', 'Stored XSS in profile bio'),
-    finding('F-2', 'killed', 'low', 'SQL injection in id parameter'),
-  ],
-}
+    finding('F-2', 'killed', 'low', 'SQL injection in id parameter') ] }
 const wave2Result: EngagementResult = {
   engagementId: 'ignored-by-executor',
   status: 'complete',
-  findings: [finding('F-1', 'confirmed', 'critical', 'IDOR on invoice download')],
-}
+  findings: [finding('F-1', 'confirmed', 'critical', 'IDOR on invoice download')] }
 
 describe('campaign executor — gated advance (C-1)', () => {
   it('refuses wave 1 without a start decision, wave 2 without an advance decision, and binds scope + brief when authorized', async () => {
@@ -146,8 +142,7 @@ describe('campaign executor — gated advance (C-1)', () => {
       campaignId: 'camp-exec',
       runFn,
       completion: async () => 'the planner rambles on with no json at all',
-      historyDigest: 'Wave 1 confirmed: Stored XSS in profile bio (high). Wave 1 killed: SQL injection in id parameter.',
-    })
+      historyDigest: 'Wave 1 confirmed: Stored XSS in profile bio (high). Wave 1 killed: SQL injection in id parameter.' })
     assert.equal(r2.plan.source, 'fallback')
     assert.match(r2.plan.fallbackReason ?? '', /no coordinator completion configured/)
     assert.equal(r2.campaign.status, 'complete', 'wave cap 2 reached — campaign completes')
@@ -202,8 +197,7 @@ describe('campaign planner validation', () => {
     const kind = getCampaignKind('web-hunt')
     const planned = await planNextWave(rec, kind, 1, {
       completion: async () =>
-        JSON.stringify({ aim: 'Hit auth first', focusVectors: ['auth-session', 'not-a-vector', 'injection', 'auth-session'], rationale: 'auth pays' }),
-    })
+        JSON.stringify({ aim: 'Hit auth first', focusVectors: ['auth-session', 'not-a-vector', 'injection', 'auth-session'], rationale: 'auth pays' }) })
     assert.equal(planned.source, 'coordinator')
     assert.deepEqual(planned.focusVectors, ['auth-session', 'injection'])
     assert.equal(planned.dropped.length, 2)

@@ -14,6 +14,8 @@ import type { UiLaunchRequest } from "./types.js";
  */
 export declare function buildLocalLaunchBody(a: Record<string, unknown>, host?: string): {
     body: UiLaunchRequest;
+} | {
+    error: string;
 };
 /** The local launch surface, appended to the cockpit list. */
 export declare const LOCAL_TOOLS: ToolDef[];

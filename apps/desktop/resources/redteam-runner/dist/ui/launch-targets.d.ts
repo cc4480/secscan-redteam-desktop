@@ -2,7 +2,7 @@
  * Clean a target as typed in conversation: trim, drop surrounding quotes,
  * and strip trailing sentence punctuation. A target typed at the end of a
  * sentence carries its punctuation with it — the keeper's first console
- * launch (eng-2026-10-28-df5a1c0d) took "https://secscan.us," verbatim and
+ * launch took a target URL with trailing punctuation verbatim and
  * the comma became part of the host the scope check saw. Inner characters
  * are never touched: a port or path keeps its punctuation.
  *

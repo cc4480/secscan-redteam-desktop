@@ -8,17 +8,17 @@
  *    proof, plan, findings so far. One read gives the console everything.
  *  - engagement.md — the human paper trail (Time | Phase | Actor | Action | Result).
  */
-import { appendFileSync, mkdirSync, readFileSync, renameSync, writeFileSync, existsSync } from "node:fs";
-import { basename, join } from "node:path";
-import { maybeRotateLog } from "./safety/rotation.js";
-import { redact } from "./events/redact.js";
+import { appendFileSync, mkdirSync, readFileSync, renameSync, writeFileSync, existsSync } from 'node:fs';
+import { basename, join } from 'node:path';
+import { maybeRotateLog } from './safety/rotation.js';
+import { redact } from './events/redact.js';
 /**
  * Statuses that mean the run is over — the same set ui/store.ts defines
  * for its live flag and ui/report-tools.ts for regeneration, exported
  * from here because every record consumer already imports this module
  * and writeEvent's phase guard below needs it too.
  */
-export const TERMINAL_STATUSES = new Set(["complete", "halted", "blocked"]);
+export const TERMINAL_STATUSES = new Set(['complete', 'halted', 'blocked']);
 export class EventLog {
     dir;
     engagementId;
@@ -48,8 +48,8 @@ export class EventLog {
             target: init.target,
             mode: init.mode,
             objective: init.objective,
-            status: "authorizing",
-            phase: "authorize",
+            status: 'authorizing',
+            phase: 'authorize',
             verified: false,
             plan: null,
             findings: [],
@@ -63,15 +63,15 @@ export class EventLog {
             // mechanical: if that pid is gone, the run is over, whatever the file says.
             ownerPid: process.pid,
         };
-        writeFileSync(join(dir, "engagement.md"), `# Engagement ${engagementId}\n\n| Time | Phase | Actor | Action | Result |\n|------|-------|-------|--------|--------|\n`);
+        writeFileSync(join(dir, 'engagement.md'), `# Engagement ${engagementId}\n\n| Time | Phase | Actor | Action | Result |\n|------|-------|-------|--------|--------|\n`);
         this.persistState();
     }
     /** Reopen an existing engagement dir (for resume / inspection). */
     static open(dir) {
-        const statePath = join(dir, "state.json");
+        const statePath = join(dir, 'state.json');
         if (!existsSync(statePath))
             throw new Error(`[events] no state.json in ${dir}`);
-        const raw = JSON.parse(readFileSync(statePath, "utf8"));
+        const raw = JSON.parse(readFileSync(statePath, 'utf8'));
         const log = Object.create(EventLog.prototype);
         log.dir = dir;
         log.engagementId = raw.engagementId;
@@ -93,22 +93,22 @@ export class EventLog {
     rotateIfNeeded() {
         if (!this.rotation)
             return;
-        const outcome = maybeRotateLog(join(this.dir, "events.jsonl"), this.rotation, {
+        const outcome = maybeRotateLog(join(this.dir, 'events.jsonl'), this.rotation, {
             firstSeq: this.rotationBase,
             lastSeq: this.seq,
         });
-        if (!outcome.rotated)
+        if (!outcome.rotated || outcome.archivePath === undefined)
             return;
-        const mdOutcome = maybeRotateLog(join(this.dir, "engagement.md"), this.rotation);
-        if (mdOutcome.rotated) {
-            writeFileSync(join(this.dir, "engagement.md"), `# Engagement ${this.engagementId}\n\n| Time | Phase | Actor | Action | Result |\n|------|-------|-------|--------|--------|\n` +
+        const mdOutcome = maybeRotateLog(join(this.dir, 'engagement.md'), this.rotation);
+        if (mdOutcome.rotated && mdOutcome.archivePath !== undefined) {
+            writeFileSync(join(this.dir, 'engagement.md'), `# Engagement ${this.engagementId}\n\n| Time | Phase | Actor | Action | Result |\n|------|-------|-------|--------|--------|\n` +
                 `| ${new Date().toISOString()} | ${this.state.phase} | runner | log rotated | prior rows archived to ${basename(mdOutcome.archivePath)} |\n`);
         }
         this.rotationBase = this.seq + 1;
         this.writeEvent({
             phase: this.state.phase,
-            actor: "runner",
-            action: "log_rotated",
+            actor: 'runner',
+            action: 'log_rotated',
             result: `events.jsonl rotated to ${basename(outcome.archivePath)} (seq ${outcome.firstSeq}-${outcome.lastSeq}); engagement.md rotated alongside`,
         });
     }
@@ -123,9 +123,9 @@ export class EventLog {
         // and by known literal values before writing. The in-memory event keeps the
         // raw data for callers; only the persisted copies are redacted.
         const safe = redact(ev);
-        appendFileSync(join(this.dir, "events.jsonl"), JSON.stringify(safe) + "\n");
-        const mdLine = `| ${safe.ts} | ${safe.phase} | ${safe.actor} | ${safe.action}${safe.attackId ? ` (${safe.attackId})` : ""} | ${oneLine(safe.result)} |\n`;
-        appendFileSync(join(this.dir, "engagement.md"), mdLine);
+        appendFileSync(join(this.dir, 'events.jsonl'), JSON.stringify(safe) + '\n');
+        const mdLine = `| ${safe.ts} | ${safe.phase} | ${safe.actor} | ${safe.action}${safe.attackId ? ` (${safe.attackId})` : ''} | ${oneLine(safe.result)} |\n`;
+        appendFileSync(join(this.dir, 'engagement.md'), mdLine);
         this.state.eventCount = ev.seq;
         // S2-H10: once the record is terminal, an appended event must not
         // move its phase. The close paths stamp the terminal phase via
@@ -154,21 +154,21 @@ export class EventLog {
         // then returns null and the engagement flickers out of listings) and
         // a crash mid-write leaves a permanently unparseable state. Rename
         // publishes the old state or the new one, never a partial file.
-        const path = join(this.dir, "state.json");
+        const path = join(this.dir, 'state.json');
         const tmp = `${path}.tmp-${process.pid}`;
         writeFileSync(tmp, JSON.stringify(this.state, null, 2));
         renameSync(tmp, path);
     }
 }
 function oneLine(s) {
-    return s.replace(/\|/g, "\\|").replace(/\s+/g, " ").trim().slice(0, 300);
+    return s.replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim().slice(0, 300);
 }
 /** Read-only tail for the console: events after `afterSeq`. */
 export function readEvents(dir, afterSeq = 0, limit = 200) {
-    const path = join(dir, "events.jsonl");
+    const path = join(dir, 'events.jsonl');
     if (!existsSync(path))
         return [];
-    const lines = readFileSync(path, "utf8").split("\n").filter(Boolean);
+    const lines = readFileSync(path, 'utf8').split('\n').filter(Boolean);
     const out = [];
     for (const line of lines) {
         try {
@@ -187,11 +187,11 @@ export function readEvents(dir, afterSeq = 0, limit = 200) {
 }
 /** Read-only state snapshot for the console. */
 export function readState(dir) {
-    const path = join(dir, "state.json");
+    const path = join(dir, 'state.json');
     if (!existsSync(path))
         return null;
     try {
-        return JSON.parse(readFileSync(path, "utf8"));
+        return JSON.parse(readFileSync(path, 'utf8'));
     }
     catch {
         return null;

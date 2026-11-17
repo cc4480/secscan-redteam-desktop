@@ -1,0 +1,111 @@
+/**
+ * DeepSeek provider — the ONLY active provider in v0.1.
+ *
+ * Wire format: OpenAI-compatible Chat Completions over HTTPS
+ * (POST {baseUrl}/chat/completions). Tool calls are translated between the
+ * router's JSON-Schema form and the OpenAI `tools`/`tool_calls` form.
+ *
+ * Models (wire-format IDs — confirmed against the live API 2026-10-04; a
+ * "deepseek-v4.1-flash" request was rejected with "The supported API model
+ * names are deepseek-flash, deepseek-v4-pro" — so despite the v4.1 product/
+ * version naming, these two are what the API actually accepts):
+ *   - deepseek-flash   — DeepSeek-V4.1-Flash: fast, cheap, strong tool use.
+ *   - deepseek-v4-pro  — DeepSeek-V4.1-Pro: premium reasoning, for
+ *     thinking/difficult tasks (exploiter role).
+ *
+ * Auth: DEEPSEEK_API_KEY env var ONLY. The key is sent as a Bearer token and
+ * is never logged, never included in errors, and never written anywhere.
+ */
+import { fleetValue } from '../resolver.js';
+import { providerErrorFromResponse, providerTransportError } from '../errors.js';
+import { applyResponseFormat, fromWireToolCalls, toWireMessages, toWireTools } from './openai-wire.js';
+import { completionSignal, resolveCompletionTimeoutMs } from '../timeout.js';
+export const DEEPSEEK_API_KEY_ENV = 'DEEPSEEK_API_KEY';
+export const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1';
+export const DEEPSEEK_MODELS = {
+    flash: 'deepseek-flash',
+    pro: 'deepseek-v4-pro',
+};
+// Wire translation is the shared OpenAI-compatible one (openai-wire.ts) —
+// this provider previously carried a private copy, which drifted from the
+// shared tool-pairing guarantee; there is now exactly one translation.
+export class DeepSeekProvider {
+    id = 'deepseek';
+    label = 'DeepSeek';
+    baseUrl;
+    constructor(baseUrl = DEEPSEEK_BASE_URL) {
+        this.baseUrl = baseUrl.replace(/\/+$/, '');
+    }
+    isConfigured() {
+        return !!fleetValue(DEEPSEEK_API_KEY_ENV);
+    }
+    apiKey(options) {
+        // The resilience pool's per-attempt credential wins over the resolved
+        // value; the fleet resolver (launching environment by default, the
+        // app credentials store when the host installs one) is consulted per
+        // call, so a key seated after startup reaches the next dispatch.
+        const key = options?.apiKey ?? fleetValue(DEEPSEEK_API_KEY_ENV);
+        if (!key) {
+            throw new Error(`[llm-router] ${DEEPSEEK_API_KEY_ENV} is not set. ` +
+                'Enter your DeepSeek API key via the Secure Vault, ' +
+                `or export ${DEEPSEEK_API_KEY_ENV} before starting. The key is never stored in code or docs.`);
+        }
+        return key;
+    }
+    async complete(options) {
+        const body = {
+            model: options.model,
+            messages: toWireMessages(options.messages),
+            temperature: options.temperature ?? 0.2,
+        };
+        // Fleet thinking gate (the A/B switch): REDTEAM_DEEPSEEK_THINKING=off
+        // disables thinking on every fleet dispatch, in the plugin path's wire
+        // form. Any other value, or the name unset, leaves the body unchanged.
+        if (fleetValue('REDTEAM_DEEPSEEK_THINKING') === 'off')
+            body['thinking'] = { type: 'disabled' };
+        if (options.maxTokens)
+            body['max_tokens'] = options.maxTokens;
+        const wireTools = toWireTools(options.tools);
+        if (wireTools)
+            body['tools'] = wireTools;
+        applyResponseFormat(body, this.id, options);
+        let res;
+        try {
+            res = await fetch(`${this.baseUrl}/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${this.apiKey(options)}`,
+                },
+                body: JSON.stringify(body),
+                signal: completionSignal(options.signal, options.timeoutMs ?? resolveCompletionTimeoutMs()),
+            });
+        }
+        catch (err) {
+            throw providerTransportError(this.id, '[llm-router] DeepSeek request failed', err);
+        }
+        if (!res.ok) {
+            // Never echo the key; the ProviderError carries status + provider
+            // code + reset hints for the classifier, message in the legacy shape.
+            throw await providerErrorFromResponse(this.id, 'DeepSeek', res);
+        }
+        const data = (await res.json());
+        const choice = data.choices?.[0] ?? {};
+        const message = choice.message ?? {};
+        return {
+            text: message.content ?? '',
+            reasoning: message.reasoning_content ?? undefined,
+            toolCalls: fromWireToolCalls(message),
+            usage: data.usage
+                ? {
+                    promptTokens: data.usage.prompt_tokens,
+                    completionTokens: data.usage.completion_tokens,
+                    totalTokens: data.usage.total_tokens,
+                }
+                : undefined,
+            provider: this.id,
+            model: options.model,
+            requestBody: body,
+        };
+    }
+}

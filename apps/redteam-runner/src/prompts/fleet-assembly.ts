@@ -239,12 +239,29 @@ export function verifiedRecordFor(ctx: Ctx): VerifiedEngagementRecord {
  * @throws Error when a mapped soul or skill body is missing from the
  *   fleet package (a broken package must fail loud, not prompt silently)
  */
+function compactVerifiedEngagement(record: VerifiedEngagementRecord): string {
+  const scope = record.targets.join(', ') || '(none)'
+  const out = record.outOfScope?.length ? ` Out-of-scope (deny): ${record.outOfScope.join(', ')}.` : ''
+  return [
+    '## Verified engagement (attested)',
+    `- Engagement: ${record.engagementId}`,
+    `- Owner/operator: ${record.owner} / ${record.operator}`,
+    `- Proof: ${record.proofMethod} @ ${record.verifiedAt}`,
+    `- Targets in scope: ${scope}.${out}`,
+    `- Access: ${record.accessLevel}. Sessions allowed: ${record.sessionsAllowed ? 'yes' : 'no'}.`,
+    `- ROE: ${record.roe}`,
+  ].join('\n')
+}
+
 export function buildFleetPrompt(
   role: FleetSeatRole,
   seatText: string,
   ctx: PromptContext,
 ): string {
   if (!ctx.fleet) return seatText
+  if (ctx.compactLocal) {
+    return `${compactVerifiedEngagement(ctx.fleet.record)}\n\n${seatText}`
+  }
   const assets = fleetAssets()
   const knobs: ResolvedKnobs = resolveKnobs(ctx.fleet.charterKnobs, ctx.fleet.engagementKnobs)
   const record: VerifiedEngagementRecord = {

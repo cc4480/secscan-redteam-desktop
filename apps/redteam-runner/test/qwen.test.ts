@@ -18,8 +18,7 @@ import {
   QWEN_MODELS,
   ROLE_MODEL_POLICY,
   complete,
-  listProviders,
-} from '@secscan/redteam-llm-router'
+  listProviders } from '@secscan/redteam-llm-router'
 
 const realFetch = globalThis.fetch
 
@@ -33,8 +32,7 @@ function okResponse(payload: unknown): Response {
     ok: true,
     status: 200,
     json: async () => payload,
-    text: async () => JSON.stringify(payload),
-  } as Response
+    text: async () => JSON.stringify(payload) } as Response
 }
 
 describe('Qwen provider', () => {
@@ -55,13 +53,8 @@ describe('Qwen provider', () => {
               content: 'hypothesis: IDOR on /api/scans/{id}',
               reasoning_content: 'considering object-level authz...',
               tool_calls: [
-                { id: 'call_1', function: { name: 'http_probe', arguments: '{"method":"GET","url":"https://x/"}' } },
-              ],
-            },
-          },
-        ],
-        usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 },
-      })
+                { id: 'call_1', function: { name: 'http_probe', arguments: '{"method":"GET","url":"https://x/"}' } } ] } } ],
+        usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 } })
     })
   })
 
@@ -158,8 +151,7 @@ describe('role model policy (v0.6)', () => {
     assert.deepEqual(ROLE_MODEL_POLICY.exploiter, {
       provider: 'deepseek',
       model: 'deepseek-v4-pro',
-      reasoningEffort: 'high',
-    })
+      reasoningEffort: 'high' })
     for (const role of ['coordinator', 'recon', 'reporter', 'architect'] as const) {
       assert.equal(ROLE_MODEL_POLICY[role].provider, 'deepseek')
       assert.equal(ROLE_MODEL_POLICY[role].model, 'deepseek-flash')

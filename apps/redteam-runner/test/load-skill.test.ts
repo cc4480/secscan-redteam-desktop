@@ -17,8 +17,7 @@ import { EXPLOIT_TOOLS, FULL_TOOLS, RECON_TOOLS } from '../src/tools/compose.js'
 const call = (name: string, args: Record<string, unknown>): ToolCallRequest => ({
   id: `call-${name}`,
   name,
-  arguments: args,
-})
+  arguments: args })
 // The skill-load handler touches no engagement state — resolution is
 // against the fleet package root, exactly as assembly resolves it. The
 // bookkeeping handler answers its allowlist check before touching any.

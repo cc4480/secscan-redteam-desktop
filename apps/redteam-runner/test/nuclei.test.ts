@@ -34,8 +34,7 @@ import {
   overlapHint,
   nucleiCountLine,
   _resetNucleiProbeCache,
-  type SpawnFn,
-} from "../src/nuclei/index.js";
+  type SpawnFn } from "../src/nuclei/index.js";
 import { toolMinTier } from "../src/accountability/tiers.js";
 import { prerequisiteMet } from "../src/coverage/items.js";
 import { handleNucleiTools } from "../src/dispatch/nuclei.js";
@@ -51,8 +50,7 @@ const TL_OUTPUT = [
   "/root/nuclei-templates/http/cves/2021/CVE-2021-44228.yaml",
   "/root/nuclei-templates/http/cves/2017/CVE-2017-0144.yaml",
   "/root/nuclei-templates/http/misconfiguration/rdp-misconfig.yaml",
-  "/root/nuclei-templates/dos/http-dos.yaml",
-].join("\n");
+  "/root/nuclei-templates/dos/http-dos.yaml" ].join("\n");
 
 const JSONL_OUTPUT = [
   JSON.stringify({
@@ -60,16 +58,13 @@ const JSONL_OUTPUT = [
     info: { name: "Log4Shell RCE", severity: "critical", tags: ["cve", "rce"] },
     host: "https://10.9.0.12",
     "matched-at": "https://10.9.0.12/login",
-    "extracted-results": ["REDTEAM-ok"],
-  }),
+    "extracted-results": ["REDTEAM-ok"] }),
   "this line is not json",
   JSON.stringify({
     "template-id": "rdp-misconfig",
     info: { name: "RDP misconfiguration", severity: "high", tags: ["misconfig"] },
     host: "https://10.9.0.12",
-    "matched-at": "https://10.9.0.12:3389",
-  }),
-].join("\n");
+    "matched-at": "https://10.9.0.12:3389" }) ].join("\n");
 
 function fakeSpawn(opts: { tl?: string; jsonl?: string; onArgv?: (argv: string[]) => void; hang?: boolean } = {}): SpawnFn & { calls: string[][] } {
   const calls: string[][] = [];
@@ -84,8 +79,7 @@ function fakeSpawn(opts: { tl?: string; jsonl?: string; onArgv?: (argv: string[]
       stderr: "",
       exitCode: 0,
       killed: false,
-      timedOut: false,
-    };
+      timedOut: false };
   }) as SpawnFn & { calls: string[][] };
   fn.calls = calls;
   return fn;
@@ -119,8 +113,7 @@ describe("nuclei policy", () => {
       target: "https://10.9.0.12; rm -rf /",
       filter: { tags: ["cve"] },
       rateLimit: 2,
-      timeoutS: 60,
-    });
+      timeoutS: 60 });
     // The hostile target is ONE argv element — no shell, no splitting.
     assert.ok(argv.includes("https://10.9.0.12; rm -rf /"));
     assert.ok(argv.includes("-exclude-tags") && argv.includes("dos"));
@@ -229,8 +222,7 @@ describe("nuclei template list parsing", () => {
 describe("nuclei template→battery mapping", () => {
   const log4shell = {
     templateId: "CVE-2021-44228", name: "Log4Shell", severity: "critical",
-    host: "h", matchedAt: "h", cve: "CVE-2021-44228", tags: ["cve"], excerpt: "",
-  };
+    host: "h", matchedAt: "h", cve: "CVE-2021-44228", tags: ["cve"], excerpt: "" };
 
   it("CVE already confirmed → overlap (one finding, two evidence sources)", () => {
     const o = mapTemplateToBattery(log4shell, "windows", new Set(["CVE-2021-44228"]));
@@ -310,15 +302,13 @@ describe("nuclei_exec wiring", () => {
       safety: { rpsPerHost: 2 },
       nucleiExecutor: testExecutor(fakeSpawn()),
       nuclei: { templateExecutions: 0, templatesRun: 0, findings: 0 },
-      ...over,
-    } as never;
+      ...over } as never;
   }
 
   const call = (action: string, extra: Record<string, unknown> = {}): ToolCallRequest => ({
     id: "call-nuclei",
     name: "nuclei_exec",
-    arguments: { action, host: "10.9.0.12", category: "functionality", targetProfile: "windows", attackId: "T1595.002", ...extra },
-  });
+    arguments: { action, host: "10.9.0.12", category: "functionality", targetProfile: "windows", attackId: "T1595.002", ...extra } });
 
   it("run is refused outside the exploit phase", async () => {
     const r = await handleNucleiTools(fakeCtx(), "exploiter", "recon", call("run"), (call("run") as { arguments: Record<string, unknown> }).arguments);
@@ -405,13 +395,9 @@ describe("nuclei_exec engagement wiring", () => {
                 arguments: {
                   action: "run", host: "10.9.0.12", category: "functionality",
                   targetProfile: "windows", attackId: "T1595.002", tags: ["cve"],
-                  hypothesis: "WS-108 template checks", batteryItem: "WS-108",
-                },
-              },
-            ],
+                  hypothesis: "WS-108 template checks", batteryItem: "WS-108" } } ],
             provider: "fake",
-            model: "fake",
-          };
+            model: "fake" };
         }
         return textOnly("TRIED: nuclei run / OBSERVED: 2 findings / VERDICT: killed - templates need review");
       }
@@ -425,17 +411,14 @@ describe("nuclei_exec engagement wiring", () => {
       target: "10.9.0.12",
       mode: "red",
       objective: "nuclei wiring test",
-      roe: { scope: ["10.9.0.12"] },
-    };
+      roe: { scope: ["10.9.0.12"] } };
     const nucleiExecutor = new NucleiExecutor({ env: TEST_ENV, spawn, probeBinary: async () => true });
     const res = await runEngagement(input, {
-      mcpToken: "test",
       deepseekApiKey: "test",
       qwenApiKey: "test",
       engagementsDir: dir,
       registryPath: join(dir, "registry.json"),
-      deps: { verify: async () => true, completeForRole: scriptedLlm() as never, nucleiExecutor },
-    });
+      deps: { verify: async () => true, completeForRole: scriptedLlm() as never, nucleiExecutor } });
     assert.equal(res.status, "complete");
     // The subprocess actually ran (scope-checked host, runner-built argv).
     assert.ok(spawn.calls.length > 0);

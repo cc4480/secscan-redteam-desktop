@@ -38,8 +38,7 @@ const FINDING_LINE = JSON.stringify({
   "template-id": "CVE-2021-44228",
   info: { name: "Log4Shell RCE", severity: "critical", tags: ["cve", "rce"] },
   host: "https://10.9.0.12",
-  "matched-at": "https://10.9.0.12/login",
-});
+  "matched-at": "https://10.9.0.12/login" });
 
 interface Canned {
   stdout?: string;
@@ -55,8 +54,7 @@ function cannedSpawn(c: Canned): SpawnFn {
     stderr: c.stderr ?? "",
     exitCode: c.exitCode === undefined ? 0 : c.exitCode,
     killed: c.killed ?? false,
-    timedOut: c.timedOut ?? false,
-  });
+    timedOut: c.timedOut ?? false });
 }
 
 function testExecutor(spawn: SpawnFn): NucleiExecutor {
@@ -74,8 +72,7 @@ describe("nuclei executor — process failure is not a clean empty success (S4-H
     const exec = testExecutor(cannedSpawn({
       exitCode: 1,
       stdout: "",
-      stderr: "[ERR] could not load template /missing/templates/http/cves.yaml: no such file or directory\n[INF] templates loaded: 0",
-    }));
+      stderr: "[ERR] could not load template /missing/templates/http/cves.yaml: no such file or directory\n[INF] templates loaded: 0" }));
     const res = await exec.run(runArgs);
     assert.ok(res.refused, "a non-zero exit with no parsed findings must be a refused-style failure");
     assert.ok(res.refused.includes("could not load template /missing/templates/http/cves.yaml"), "the failure carries the first lines of stderr");
@@ -87,8 +84,7 @@ describe("nuclei executor — process failure is not a clean empty success (S4-H
     const exec = testExecutor(cannedSpawn({
       exitCode: null,
       stdout: "",
-      stderr: "spawn /usr/bin/nuclei ENOENT",
-    }));
+      stderr: "spawn /usr/bin/nuclei ENOENT" }));
     const res = await exec.run(runArgs);
     assert.ok(res.refused, "exitCode null outside the timedOut/killed paths must be a failure");
     assert.ok(res.refused.includes("ENOENT"), "the failure carries the stderr text");
@@ -165,23 +161,20 @@ function handlerCtx(exec: NucleiExecutor): never {
     hosts: SCOPE,
     safety: { rpsPerHost: 2 },
     nucleiExecutor: exec,
-    nuclei: { templateExecutions: 0, templatesRun: 0, findings: 0 },
-  } as never;
+    nuclei: { templateExecutions: 0, templatesRun: 0, findings: 0 } } as never;
 }
 
 const runCall = (): ToolCallRequest => ({
   id: "call-nuclei-exit",
   name: "nuclei_exec",
-  arguments: { action: "run", host: HOST, category: "functionality", targetProfile: "windows", attackId: "T1595.002" },
-});
+  arguments: { action: "run", host: HOST, category: "functionality", targetProfile: "windows", attackId: "T1595.002" } });
 
 describe("nuclei dispatch — a process failure surfaces as a failure (S4-H4)", () => {
   it("exitCode 1 run → DENIED-prefixed result carrying the stderr text; honest counters do not move", async () => {
     const exec = testExecutor(cannedSpawn({
       exitCode: 1,
       stdout: "",
-      stderr: "[ERR] could not load template /missing/templates/x.yaml: no such file or directory",
-    }));
+      stderr: "[ERR] could not load template /missing/templates/x.yaml: no such file or directory" }));
     const ctx = handlerCtx(exec);
     const call = runCall();
     const r = await handleNucleiTools(ctx, "exploiter", "exploit", call, call.arguments as Record<string, unknown>);
@@ -213,14 +206,12 @@ function routerCtx(exec: NucleiExecutor, ledger: Map<string, ItemVerdict>): neve
       dir: "/tmp/nuclei-exit-code-test-no-such-dir",
       engagementId: "eng-nuclei-exit-code-test",
       append: () => {},
-      updateState: () => {},
-    },
+      updateState: () => {} },
     tier: { current: 2, declared: 2, chainSteps: new Map<string, number>() },
     safety: { limiter: new TargetRateLimiter({ rpsPerHost: 1000, burst: 1000 }, () => 0), rpsPerHost: 2 },
     itemLedger: ledger,
     nucleiExecutor: exec,
-    nuclei: { templateExecutions: 0, templatesRun: 0, findings: 0 },
-  } as never;
+    nuclei: { templateExecutions: 0, templatesRun: 0, findings: 0 } } as never;
 }
 
 function pendingLedger(): Map<string, ItemVerdict> {
@@ -235,9 +226,7 @@ function pendingLedger(): Map<string, ItemVerdict> {
       itemId: "WS-108",
       category: "functionality",
       name: "Template-based checks via Nuclei",
-      disposition: "pending",
-    }],
-  ]);
+      disposition: "pending" }] ]);
 }
 
 const routerCall = (): ToolCallRequest => ({
@@ -245,9 +234,7 @@ const routerCall = (): ToolCallRequest => ({
   name: "nuclei_exec",
   arguments: {
     action: "run", host: HOST, category: "functionality", targetProfile: "windows",
-    attackId: "T1595.002", batteryItem: "WS-108",
-  },
-});
+    attackId: "T1595.002", batteryItem: "WS-108" } });
 
 describe("nuclei router — attempted-marking (S4-H4)", () => {
   it("a process-failed run does NOT mark the battery item attempted", async () => {
@@ -255,8 +242,7 @@ describe("nuclei router — attempted-marking (S4-H4)", () => {
     const exec = testExecutor(cannedSpawn({
       exitCode: 1,
       stdout: "",
-      stderr: "[ERR] could not load template /missing/templates/x.yaml: no such file or directory",
-    }));
+      stderr: "[ERR] could not load template /missing/templates/x.yaml: no such file or directory" }));
     const r = await dispatchTool(routerCtx(exec, ledger), "exploiter", "exploit", routerCall());
     assert.ok(r.result.startsWith("DENIED"), `expected a DENIED-prefixed failure, got: ${r.result.slice(0, 80)}`);
     assert.equal(ledger.get("windows:WS-108")?.disposition, "pending", "a scan that never ran must not be recorded as attempted");

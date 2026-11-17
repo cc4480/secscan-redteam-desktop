@@ -8,12 +8,11 @@
 #     domain-ownership verification is local — the app issues the challenge
 #     token itself, checks the `_secscan-challenge.<domain>` DNS TXT record
 #     itself, and records verified domains in a local file
-#     (@secscan/redteam-auth-gate's local.ts). No SECSCAN_MCP_TOKEN exists.
+    #     (@secscan/redteam-auth-gate's local.ts). No external verification token exists.
 #   - SecLayer testing is native — the runner's in-process suites
 #     (seclayer_redteam / seclayer_bola / seclayer_api / seclayer_webhook /
-#     seclayer_dast / seclayer_aggressive). The old `npx @seclayer/mcp` row
-#     (an npm fetch at spawn against a hosted backend) is removed; no
-#     SECLAYER_API_KEY exists.
+#     seclayer_dast / seclayer_aggressive) with no external SecLayer service,
+#     token, or MCP hop.
 #
 # Install: `dsh plugin --profile <name> add /path/to/secscan-redteam/harness-plugin`
 # then merge this file's entries into the profile's cordis.patch.yml

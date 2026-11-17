@@ -75,6 +75,11 @@ export const DEFAULT_REPAIR_CAP = 3
  * answers with exactly one corrected call; the name may change only for
  * an unknown-tool defect, and then only to an offered tool.
  */
+function isCompactLocalRepair(): boolean {
+  const p = (process.env['REDTEAM_LLM_PROVIDER'] ?? '').trim().toLowerCase()
+  return p === 'local' || p === 'ollama'
+}
+
 export function buildRepairPrompt(
   call: ToolCallRequest,
   d: DispatchResult,
@@ -82,6 +87,24 @@ export function buildRepairPrompt(
   spent: number,
   cap: number,
 ): string {
+  if (isCompactLocalRepair()) {
+    const defect = d.repairable ?? ''
+    const unknownTool = defect.startsWith('unknown tool')
+    const base = [
+      `TOOL-CALL REPAIR (${spent}/${cap}): refused before execution (call-shape defect, not policy). Fix and resend one corrected tool call; gates re-run.`,
+      `Tool: ${call.name}. Defect: ${defect}.`,
+      `Args: ${JSON.stringify(call.arguments ?? {})}`,
+    ]
+    if (unknownTool) {
+      base.push('Tool name unknown. Use one of: ' + tools.map(t => t.name).join(', '))
+    } else {
+      const tool = tools.find(t => t.name === call.name)
+      if (tool) base.push(`Schema: ${JSON.stringify(tool.parameters)}`)
+      base.push('Keep same tool name and intent/target; change only what defect requires.')
+    }
+    base.push('Reply with exactly one corrected tool call.')
+    return base.join('\n')
+  }
   const defect = d.repairable ?? ''
   const unknownTool = defect.startsWith('unknown tool')
   const lines: string[] = [

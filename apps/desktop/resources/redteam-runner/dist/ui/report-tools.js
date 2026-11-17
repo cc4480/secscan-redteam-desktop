@@ -5,16 +5,16 @@
  * regeneration of the deliverable set from an engagement's recorded
  * state when a closing artifact is missing.
  */
-import { join } from "node:path";
-import { engagementDir } from "./store.js";
-import { readEvents, readState, TERMINAL_STATUSES } from "../events.js";
-import { findingSpeakers, reportAuthorSpeaker } from "./speaker.js";
-import { DELIVERABLE_FILES, deliverableToolFields, verifyDeliverables } from "../report/deliverables.js";
-import { regenerateReport } from "../report/regenerate.js";
+import { join } from 'node:path';
+import { engagementDir } from './store.js';
+import { readEvents, readState, TERMINAL_STATUSES } from '../events.js';
+import { findingSpeakers, reportAuthorSpeaker } from './speaker.js';
+import { DELIVERABLE_FILES, deliverableToolFields, verifyDeliverables } from '../report/deliverables.js';
+import { regenerateReport } from '../report/regenerate.js';
 const ID_ONLY = () => ({
-    type: "object",
-    properties: { id: { type: "string", description: "Engagement id" } },
-    required: ["id"],
+    type: 'object',
+    properties: { id: { type: 'string', description: 'Engagement id' } },
+    required: ['id'],
     additionalProperties: false,
 });
 /**
@@ -38,16 +38,16 @@ function reportJsonSpeakers(raw) {
 }
 /** engagement_report — the finished report, for delivery in the thread. */
 export const reportTool = {
-    name: "engagement_report",
-    description: "The finished report for an engagement: the report content for delivery in the thread, plus the in-app artifact paths. " +
-        "Returns ready:false while the run is still going — keep polling engagement_status instead of treating that as an error. " +
-        "When the run has ended without a report (a recorded end, or a non-terminal record with no live run behind it), ready:false " +
-        "instead names engagement_regenerate_report as the repair. " +
-        "When the result names a speaker, that is the fleet seat whose recorded execution authored the report — attribute the delivery to that seat.",
+    name: 'engagement_report',
+    description: 'The finished report for an engagement: the report content for delivery in the thread, plus the in-app artifact paths. ' +
+        'Returns ready:false while the run is still going — keep polling engagement_status instead of treating that as an error. ' +
+        'When the run has ended without a report (a recorded end, or a non-terminal record with no live run behind it), ready:false ' +
+        'instead names engagement_regenerate_report as the repair. ' +
+        'When the result names a speaker, that is the fleet seat whose recorded execution authored the report — attribute the delivery to that seat.',
     inputSchema: ID_ONLY(),
     run: async (store, a) => {
-        const id = String(a["id"] ?? "");
-        const content = store.readTextArtifact(id, "report.md");
+        const id = String(a['id'] ?? '');
+        const content = store.readTextArtifact(id, 'report.md');
         if (content === null) {
             // No report file: distinguish a run that has not finished from an id
             // nothing knows. The store record or a state file proves existence.
@@ -55,8 +55,8 @@ export const reportTool = {
             const st = dir ? readState(dir) : null;
             const rec = store.get(id);
             if (!st && !rec)
-                return { status: 404, body: { error: "unknown engagement" } };
-            const status = st?.status ?? rec?.status ?? "starting";
+                return { status: 404, body: { error: 'unknown engagement' } };
+            const status = st?.status ?? rec?.status ?? 'starting';
             // The run has ended without a report when its recorded status is
             // terminal, or when no live record exists in the store at all: a
             // process-killed run never records a terminal status, and with
@@ -79,6 +79,8 @@ export const reportTool = {
         // report.md exists, so state.json does too (engagementDir requires it)
         // and the directory join is safe. Q-DELIVERABLES-AUTOFIRE: deliverableToolFields.
         const dir = engagementDir(store.engagementsDir, id);
+        if (dir === undefined)
+            return { status: 404, body: { error: 'unknown engagement' } };
         // Speaker stamps (ui/speaker.ts): the report's author, present only
         // when the reporter loop genuinely ran (a halted/blocked end's
         // mechanical report names no author), and per-finding producers
@@ -101,7 +103,7 @@ export const reportTool = {
         const speaker = st
             ? reportAuthorSpeaker(readEvents(dir, Math.max(0, st.eventCount - 1000), 1000))
             : undefined;
-        const speakers = reportJsonSpeakers(store.readTextArtifact(id, "report.json"));
+        const speakers = reportJsonSpeakers(store.readTextArtifact(id, 'report.json'));
         return {
             status: 200,
             body: {
@@ -111,7 +113,7 @@ export const reportTool = {
                 // carry the recorded status so a consumer keying on ready can
                 // tell a halt/blocked report from a finished one.
                 ...(st ? { status: st.status } : {}),
-                reportPath: join(dir, "report.md"),
+                reportPath: join(dir, 'report.md'),
                 ...deliverableToolFields(dir),
                 ...(signoff ? { signoff } : {}),
                 ...(speaker ? { speaker } : {}),
@@ -128,15 +130,15 @@ export const reportTool = {
 /** engagement_regenerate_report — re-fire report generation for a
  * recorded engagement end whose deliverable set is incomplete. */
 export const regenerateTool = {
-    name: "engagement_regenerate_report",
-    description: "Re-fire report generation for a finished engagement whose deliverable set is incomplete (engagement_status names the " +
+    name: 'engagement_regenerate_report',
+    description: 'Re-fire report generation for a finished engagement whose deliverable set is incomplete (engagement_status names the ' +
         "missing files): reassembles report.html and the sibling artifacts from the engagement's recorded state and verifies " +
-        "the full set on disk. A complete set is a no-op success. Runs on a recorded end (complete / halted / blocked), or on a " +
-        "dead end — a non-terminal record with no live run behind it, regenerated as an ended, uncompleted run with no grade — " +
-        "never on a live run, and only on an engagement that exists.",
+        'the full set on disk. A complete set is a no-op success. Runs on a recorded end (complete / halted / blocked), or on a ' +
+        'dead end — a non-terminal record with no live run behind it, regenerated as an ended, uncompleted run with no grade — ' +
+        'never on a live run, and only on an engagement that exists.',
     inputSchema: ID_ONLY(),
     run: async (store, a) => {
-        const id = String(a["id"] ?? "");
+        const id = String(a['id'] ?? '');
         const dir = engagementDir(store.engagementsDir, id);
         if (!dir) {
             if (store.get(id)) {
@@ -145,11 +147,11 @@ export const regenerateTool = {
                     body: { error: `engagement ${id} has no recorded state yet — there is nothing to regenerate from` },
                 };
             }
-            return { status: 404, body: { error: "unknown engagement" } };
+            return { status: 404, body: { error: 'unknown engagement' } };
         }
         const st = readState(dir);
         if (!st)
-            return { status: 404, body: { error: "unknown engagement" } };
+            return { status: 404, body: { error: 'unknown engagement' } };
         // A non-terminal recorded status is a dead end — eligible for
         // regeneration — only when the store holds no live record for the
         // engagement at all: its process is gone (killed, crashed, or the
@@ -161,8 +163,8 @@ export const regenerateTool = {
             return {
                 status: 409,
                 body: {
-                    error: `engagement ${id} is ${liveRec?.running ? "still running" : `not at a recorded end (status: ${st.status})`} — ` +
-                        "regeneration runs on a recorded end; poll engagement_status instead",
+                    error: `engagement ${id} is ${liveRec?.running ? 'still running' : `not at a recorded end (status: ${st.status})`} — ` +
+                        'regeneration runs on a recorded end; poll engagement_status instead',
                 },
             };
         }
@@ -174,8 +176,8 @@ export const regenerateTool = {
                     id,
                     regenerated: false,
                     ...deliverableToolFields(dir),
-                    summary: `Engagement ${id}'s deliverable set is already complete (${DELIVERABLE_FILES.join(", ")}) — nothing to regenerate. ` +
-                        "Deliver it with engagement_report.",
+                    summary: `Engagement ${id}'s deliverable set is already complete (${DELIVERABLE_FILES.join(', ')}) — nothing to regenerate. ` +
+                        'Deliver it with engagement_report.',
                 },
             };
         }
@@ -190,8 +192,8 @@ export const regenerateTool = {
                     ...deliverableToolFields(dir),
                     ...(outcome.ok ? {} : { missing: outcome.missing }),
                     summary: outcome.ok
-                        ? `Deliverable set for engagement ${id} regenerated from its recorded state and verified complete: ${DELIVERABLE_FILES.join(", ")}. Deliver it with engagement_report.`
-                        : `Regeneration for engagement ${id} ran but the set is still incomplete — missing: ${outcome.missing.join(", ")}. The gap is recorded on the engagement's deliverable_failed record.`,
+                        ? `Deliverable set for engagement ${id} regenerated from its recorded state and verified complete: ${DELIVERABLE_FILES.join(', ')}. Deliver it with engagement_report.`
+                        : `Regeneration for engagement ${id} ran but the set is still incomplete — missing: ${outcome.missing.join(', ')}. The gap is recorded on the engagement's deliverable_failed record.`,
                 },
             };
         }

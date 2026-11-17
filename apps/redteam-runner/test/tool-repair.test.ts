@@ -40,8 +40,7 @@ function dispatchCtx() {
       limiter: { acquire: async () => {} },
       autoHalt: { isHalted: () => false, haltReason: () => undefined, recordOutcome: () => undefined },
       killSwitchAborts: 0,
-      rpsPerHost: 5,
-    },
+      rpsPerHost: 5 },
     itemLedger: new Map(),
     opsecCooldown: new Set<string>(),
     coverage: new Set<string>(),
@@ -52,9 +51,7 @@ function dispatchCtx() {
       probe: async (req: { url: string }) => {
         probes.push(req);
         return { status: 200, ms: 1, bodySnippet: "ok" };
-      },
-    },
-  } as unknown as Ctx;
+      } } } as unknown as Ctx;
   return { ctx, probes };
 }
 
@@ -111,8 +108,7 @@ function loopCtx(dir: string, completeForRole: CompleteFn): { ctx: Ctx; probes: 
       mode: "red",
       objective: "test",
       target: "shop.example.test",
-      roe: { blackoutWindows: [], scope: ["shop.example.test"] },
-    },
+      roe: { blackoutWindows: [], scope: ["shop.example.test"] } },
     deps: { completeForRole },
     events: new EventLog(dir, "eng-repair", { target: "shop.example.test", mode: "red", objective: "test" }),
     hostKill: { aborted: false, controllers: new Set<AbortController>() },
@@ -120,8 +116,7 @@ function loopCtx(dir: string, completeForRole: CompleteFn): { ctx: Ctx; probes: 
       killSwitchAborts: 0,
       limiter: { acquire: async () => {} },
       autoHalt: { isHalted: () => false, haltReason: () => undefined, recordOutcome: () => undefined },
-      rpsPerHost: 5,
-    },
+      rpsPerHost: 5 },
     tier: { current: 2, declared: 2, chainSteps: new Map<string, number>() },
     hosts: ["shop.example.test"],
     domain: "shop.example.test",
@@ -139,9 +134,7 @@ function loopCtx(dir: string, completeForRole: CompleteFn): { ctx: Ctx; probes: 
       probe: async (req: { url: string }) => {
         probes.push(req);
         return { status: 200, ms: 1, bodySnippet: "ok" };
-      },
-    },
-  } as unknown as Ctx;
+      } } } as unknown as Ctx;
   return { ctx, probes };
 }
 
@@ -233,8 +226,7 @@ describe("tool-call repair in agentLoop", () => {
           return {
             text: "",
             toolCalls: [1, 2, 3, 4].map((i) => ({ id: `b-${i}`, name: "http_probe", arguments: { url: "not a url" } })),
-            usage: USAGE,
-          };
+            usage: USAGE };
         }
         return idleTurn;
       };

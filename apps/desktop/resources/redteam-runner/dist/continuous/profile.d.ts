@@ -11,11 +11,11 @@
  * ```json
  * {
  *   "version": 1,
- *   "name": "secscan-us-weekly",
+ *   "name": "target-weekly",
  *   "engagement": {
- *     "target": "secscan.us", "mode": "red",
+ *     "target": "target.invalid", "mode": "red",
  *     "objective": "continuous external attack-surface validation",
- *     "roe": { "scope": ["secscan.us"] },
+ *     "roe": { "scope": ["target.invalid"] },
  *     "fullBattery": true
  *   },
  *   "cadence": { "intervalHours": 168 },

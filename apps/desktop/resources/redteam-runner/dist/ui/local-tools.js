@@ -20,6 +20,7 @@
  * The console chat and the desktop host's chat consume one MCP tool
  * list (mcp-endpoint.ts), so this tool appears on both surfaces.
  */
+import { resolveLaunchOperator } from "./engagement-tools.js";
 import { hostname } from "node:os";
 import { capture } from "./mcp-tools.js";
 import { handleLaunch } from "./routes/engagements.js";
@@ -52,8 +53,20 @@ export function buildLocalLaunchBody(a, host = hostname()) {
     const client = typeof a["client"] === "string" && a["client"].trim() ? a["client"].trim() : undefined;
     if (operatorName)
         body.operatorName = operatorName;
-    else if (!client)
-        body.operatorName = "the desktop user";
+    // Never a placeholder. The operator name IS the ownership basis the authorize
+    // phase consumes, so the old "the desktop user" constant had the record attest
+    // that a named person claimed ownership when nobody had. Fall back to a REAL
+    // identity instead: the configured operator, then the account running the app.
+    else if (!client) {
+        const resolved = resolveLaunchOperator();
+        if (!resolved) {
+            return {
+                error: "operatorName is required: the engagement record must name the person"
+                    + " attesting ownership, and no configured operator or OS account could be resolved.",
+            };
+        }
+        body.operatorName = resolved;
+    }
     if (client)
         body.client = client;
     if (a["tier"] === 0 || a["tier"] === 1 || a["tier"] === 2)
@@ -85,6 +98,8 @@ const localLaunchTool = {
     },
     run: async (store, a) => {
         const built = buildLocalLaunchBody(a);
+        if ("error" in built)
+            return { status: 400, body: { error: built.error } };
         const c = capture();
         await handleLaunch(store, {}, c.res, built.body);
         const out = c.result();

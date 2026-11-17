@@ -1,5 +1,5 @@
 {
-  "name": "@local/demo-mcp",
+  "name": "@local/config-bundle",
   "version": "1.0.0",
   "private": true,
   "type": "module",

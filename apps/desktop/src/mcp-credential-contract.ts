@@ -12,10 +12,9 @@
  * environment: the runner row builds its URL and its `Authorization` header
  * from `process.env` at composition time. A rename here breaks the store, the
  * form, and the patch together rather than silently leaving one of them
- * reading a name nothing supplies. The SecScan and Seclayer rows are native
- * now and read no credential names, so their names left this contract with
- * them; a stored entry under a retired name is pruned on the next write,
- * because the store's merge carries only the names listed here.
+ * reading a name nothing supplies. A stored entry under a retired name is
+ * pruned on the next write, because the store's merge carries only the names
+ * listed here.
  */
 export const MCP_ENVIRONMENT_NAMES = ['REDTEAM_UI_TOKEN', 'REDTEAM_MCP_URL'] as const
 

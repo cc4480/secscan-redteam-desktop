@@ -30,172 +30,138 @@
  * The console chat and the desktop host's chat consume one MCP tool list
  * (mcp-endpoint.ts), so these tools appear on both surfaces at once.
  */
-import { capture } from "./mcp-tools.js";
-import { handleDetail, handleLaunch } from "./routes/engagements.js";
-import { engagementDir } from "./store.js";
-import { readEvents } from "../events.js";
-import { verifyDeliverables } from "../report/deliverables.js";
-import { regenerateTool, reportTool } from "./report-tools.js";
-import { currentSeatSpeaker, findingSpeakers } from "./speaker.js";
-import { findSiblingCommand } from "../workflows/commands.js";
-const str = (d) => ({ type: "string", description: d });
-const req = (d) => ({ type: "string", description: d });
-/**
- * Clean a target as typed in conversation: trim, drop surrounding quotes,
- * and strip trailing sentence punctuation. A target typed at the end of a
- * sentence carries its punctuation with it — the keeper's first console
- * launch (eng-2026-10-28-df5a1c0d) took "https://secscan.us," verbatim and
- * the comma became part of the host the scope check saw. Inner characters
- * are never touched: a port or path keeps its punctuation.
- *
- * @param raw - The target exactly as given.
- * @returns The cleaned target.
- */
-export function cleanTarget(raw) {
-    let t = raw.trim().replace(/^["'`]+/, "");
-    // Sentence punctuation and the closing quote travel together — `"…".` —
-    // so strip both classes until the tail is stable, never just one pass.
-    while (/[.,;:"'`]$/.test(t))
-        t = t.slice(0, -1);
-    return t.trim();
-}
-/**
- * The host a cleaned target names — the default single-host scope.
- *
- * @param cleaned - A target after {@link cleanTarget}.
- * @returns The hostname, or null when no host can be read from the target.
- */
-export function targetHost(cleaned) {
-    try {
-        const host = new URL(cleaned).hostname;
-        if (host)
-            return host;
-        // "secscan.us:8443" parses as a URL with scheme "secscan.us:" and an
-        // empty host — fall through to the bare-host reading below.
-    }
-    catch {
-        // Not a URL at all: also the bare-host reading below.
-    }
-    // A bare host ("secscan.us", optionally with a port) is a normal way to
-    // name a target in chat.
-    if (/^[A-Za-z0-9.-]+(:\d+)?$/.test(cleaned))
-        return cleaned.replace(/:\d+$/, "");
-    return null;
-}
-/**
- * Build the launch request an engagement_launch call hands to the launch
- * handler: cleaned target, red mode unless black was asked for, scope
- * defaulted to the target's host, and a named operator on the record; a named sibling command stamps its registry tier/targets/phases (S2-H2).
- *
- * The operator name matters beyond bookkeeping: authorizePhase attests
- * ownership from the engagement record (operatorName ?? client), so a chat
- * launch always names the person asking — falling back to a plain
- * "the desktop user" when the caller supplied neither — and the record
- * never carries a nameless attestation.
- *
- * @param a - The tool arguments as the agent supplied them.
- * @returns The launch request, or the error the caller should be told.
- */
+import { capture } from './mcp-tools.js';
+import { handleDetail, handleLaunch } from './routes/engagements.js';
+import { engagementDir } from './store.js';
+import { readEvents } from '../events.js';
+import { verifyDeliverables } from '../report/deliverables.js';
+import { regenerateTool, reportTool } from './report-tools.js';
+import { currentSeatSpeaker, findingSpeakers } from './speaker.js';
+import { findSiblingCommand } from '../workflows/commands.js';
+const str = (d) => ({ type: 'string', description: d });
+const req = (d) => ({ type: 'string', description: d });
+import { cleanTarget, resolveLaunchOperator, targetHost } from './launch-targets.js';
+export { cleanTarget, resolveLaunchOperator, targetHost } from './launch-targets.js';
 export function buildLaunchBody(a) {
-    const target = cleanTarget(typeof a["target"] === "string" ? a["target"] : "");
+    const target = cleanTarget(typeof a['target'] === 'string' ? a['target'] : '');
     if (!target)
-        return { error: "target is required: name the site or host to test" };
-    const objective = typeof a["objective"] === "string" ? a["objective"].trim() : "";
+        return { error: 'target is required: name the site or host to test' };
+    const objective = typeof a['objective'] === 'string' ? a['objective'].trim() : '';
     if (!objective)
         return { error: "objective is required: the user's ask, in their words" };
     const host = targetHost(target);
     if (!host)
-        return { error: `could not read a host from target ${JSON.stringify(a["target"])} — give a URL or a bare host` };
+        return { error: `could not read a host from target ${JSON.stringify(a['target'])} — give a URL or a bare host` };
     let scope;
-    if (Array.isArray(a["scope"]) && a["scope"].length > 0 && a["scope"].every((s) => typeof s === "string" && s.trim())) {
-        scope = a["scope"].map((s) => s.trim());
+    if (Array.isArray(a['scope']) && a['scope'].length > 0 && a['scope'].every(s => typeof s === 'string' && s.trim())) {
+        scope = a['scope'].map(s => s.trim());
     }
     else {
         scope = [host];
     }
-    const body = { target, mode: a["mode"] === "black" ? "black" : "red", objective, scope };
-    // S2-H2: a sibling command names itself in `command`; stamp the body from its registry spec — an unknown name stamps nothing. Explicit tier/targets arguments override.
-    const sibling = typeof a["command"] === "string" ? findSiblingCommand(a["command"]) : undefined;
-    if (sibling)
-        Object.assign(body, { command: sibling.name, tier: sibling.tier, targets: [...sibling.targets], phases: [...sibling.phases] });
-    if (Array.isArray(a["targets"]) && a["targets"].length > 0 && a["targets"].every((s) => typeof s === "string" && s.trim()))
-        body.targets = a["targets"].map((s) => s.trim());
-    if (Array.isArray(a["outOfScope"]) && a["outOfScope"].length > 0 && a["outOfScope"].every((s) => typeof s === "string" && s.trim())) {
-        body.outOfScope = a["outOfScope"].map((s) => s.trim());
+    const body = { target, mode: a['mode'] === 'black' ? 'black' : 'red', objective, scope };
+    // S2-H2: a sibling command names itself in `command`; stamp the body
+    // from its registry spec — an unknown name stamps nothing. Explicit
+    // tier/targets arguments override.
+    const sibling = typeof a['command'] === 'string' ? findSiblingCommand(a['command']) : undefined;
+    if (sibling) {
+        Object.assign(body, {
+            command: sibling.name,
+            tier: sibling.tier,
+            targets: [...sibling.targets],
+            phases: [...sibling.phases],
+        });
     }
-    const operatorName = typeof a["operatorName"] === "string" && a["operatorName"].trim() ? a["operatorName"].trim() : undefined;
-    const client = typeof a["client"] === "string" && a["client"].trim() ? a["client"].trim() : undefined;
+    if (Array.isArray(a['targets']) && a['targets'].length > 0 && a['targets'].every(s => typeof s === 'string' && s.trim()))
+        body.targets = a['targets'].map(s => s.trim());
+    if (Array.isArray(a['outOfScope']) && a['outOfScope'].length > 0 && a['outOfScope'].every(s => typeof s === 'string' && s.trim())) {
+        body.outOfScope = a['outOfScope'].map(s => s.trim());
+    }
+    const operatorName = typeof a['operatorName'] === 'string' && a['operatorName'].trim() ? a['operatorName'].trim() : undefined;
+    const client = typeof a['client'] === 'string' && a['client'].trim() ? a['client'].trim() : undefined;
     if (operatorName)
         body.operatorName = operatorName;
-    else if (!client)
-        body.operatorName = "the desktop user";
+    // Never a placeholder. The operator name IS the ownership basis the authorize
+    // phase consumes, so the old "the desktop user" constant had the record attest
+    // that a named person claimed ownership when nobody had. Fall back to a REAL
+    // identity instead: the configured operator, then the account running the app.
+    else if (!client) {
+        const resolved = resolveLaunchOperator();
+        if (!resolved) {
+            return {
+                error: 'operatorName is required: the engagement record must name the person'
+                    + ' attesting ownership, and no configured operator or OS account could be resolved.',
+            };
+        }
+        body.operatorName = resolved;
+    }
     if (client)
         body.client = client;
-    if (typeof a["fullBattery"] === "boolean")
-        body.fullBattery = a["fullBattery"];
-    if (a["localHost"] === true)
+    if (typeof a['fullBattery'] === 'boolean')
+        body.fullBattery = a['fullBattery'];
+    if (a['localHost'] === true)
         body.localHost = true;
-    if (a["tier"] === 0 || a["tier"] === 1 || a["tier"] === 2)
-        body.tier = a["tier"];
-    if (a["environment"] === "staging" || a["environment"] === "production")
-        body.environment = a["environment"];
-    if (typeof a["confirmProduction"] === "boolean")
-        body.confirmProduction = a["confirmProduction"];
-    if (typeof a["confirmTier2Production"] === "boolean")
-        body.confirmTier2Production = a["confirmTier2Production"];
-    if (typeof a["maxActions"] === "number" && Number.isFinite(a["maxActions"]))
-        body.maxActions = a["maxActions"];
-    if (a["dryRun"] === true)
+    if (a['tier'] === 0 || a['tier'] === 1 || a['tier'] === 2)
+        body.tier = a['tier'];
+    if (a['environment'] === 'staging' || a['environment'] === 'production')
+        body.environment = a['environment'];
+    if (typeof a['confirmProduction'] === 'boolean')
+        body.confirmProduction = a['confirmProduction'];
+    if (typeof a['confirmTier2Production'] === 'boolean')
+        body.confirmTier2Production = a['confirmTier2Production'];
+    if (typeof a['maxActions'] === 'number' && Number.isFinite(a['maxActions']))
+        body.maxActions = a['maxActions'];
+    if (a['dryRun'] === true)
         body.dryRun = true;
     return { body };
 }
 const ID_ONLY = () => ({
-    type: "object",
-    properties: { id: req("Engagement id") },
-    required: ["id"],
+    type: 'object',
+    properties: { id: req('Engagement id') },
+    required: ['id'],
     additionalProperties: false,
 });
 /** engagement_launch — see the module doc for the design. */
 const launchTool = {
-    name: "engagement_launch",
-    description: "Start a security engagement on a target the user named, inside this app. This is the tool that fulfils a scan or test request: " +
-        "it runs the in-house pipeline (authorize from the engagement record, recon, exploit, report) and returns the engagement id. " +
-        "Give target as the user gave it — a URL or a bare host; trailing sentence punctuation is cleaned and the scope defaults to the " +
+    name: 'engagement_launch',
+    description: 'Start a security engagement on a target the user named, inside this app. This is the tool that fulfils a scan or test request: ' +
+        'it runs the in-house pipeline (authorize from the engagement record, recon, exploit, report) and returns the engagement id. ' +
+        'Give target as the user gave it — a URL or a bare host; trailing sentence punctuation is cleaned and the scope defaults to the ' +
         "target's host. objective is the user's ask in their words. After launching, poll engagement_status and narrate each phase change; " +
-        "when the run completes, call engagement_report and deliver the report in the thread.",
+        'when the run completes, call engagement_report and deliver the report in the thread.',
     inputSchema: {
-        type: "object",
+        type: 'object',
         properties: {
-            target: req("Target as the user gave it: a URL or a bare host"),
+            target: req('Target as the user gave it: a URL or a bare host'),
             objective: req("The user's ask, in their words"),
             command: str("The sibling operator command being fulfilled (nmap, deepscan, nuclei, metasploit — pcscan uses engagement_launch_local). Stamps the launch with that command's registry tier, target families, and phases; omit for a plain /scan."),
-            targets: { type: "array", items: { type: "string" }, description: "Target families for the engagement (webapp, windows, linux, cloud, api, ai, secscan, seclayer). Default: the named command's families." },
-            mode: { type: "string", enum: ["red", "black"], description: "red = full knowledge (default), black = no prior knowledge" },
-            operatorName: str("The user asking, by name — the operator the engagement record attests"),
-            client: str("Client name for the report; also attests when no operator is named"),
-            scope: { type: "array", items: { type: "string" }, description: "Exact in-scope hosts. Default: the target's host only." },
-            outOfScope: { type: "array", items: { type: "string" }, description: "Exact out-of-scope hosts — never touched, even when inside scope (deny beats allow). Default: none." },
-            fullBattery: { type: "boolean", description: "Run the full battery (default true)" },
-            tier: { type: "integer", enum: [0, 1, 2], description: "Autonomy tier; production defaults to 1" },
-            environment: { type: "string", enum: ["staging", "production"] },
-            confirmProduction: { type: "boolean", description: "Required to run against production" },
-            confirmTier2Production: { type: "boolean", description: "Required for Tier 2 on production" },
-            maxActions: { type: "integer", description: "Cap on agent actions for the whole engagement (default 60)" },
-            dryRun: { type: "boolean", description: "Plan only; touch nothing" },
+            targets: { type: 'array', items: { type: 'string' }, description: "Target families for the engagement (webapp, windows, linux, cloud, api, ai, secscan, seclayer). Default: the named command's families." },
+            mode: { type: 'string', enum: ['red', 'black'], description: 'red = full knowledge (default), black = no prior knowledge' },
+            operatorName: str('The user asking, by name — the operator the engagement record attests'),
+            client: str('Client name for the report; also attests when no operator is named'),
+            scope: { type: 'array', items: { type: 'string' }, description: "Exact in-scope hosts. Default: the target's host only." },
+            outOfScope: { type: 'array', items: { type: 'string' }, description: 'Exact out-of-scope hosts — never touched, even when inside scope (deny beats allow). Default: none.' },
+            fullBattery: { type: 'boolean', description: 'Run the full battery (default true)' },
+            tier: { type: 'integer', enum: [0, 1, 2], description: 'Autonomy tier; production defaults to 1' },
+            environment: { type: 'string', enum: ['staging', 'production'] },
+            confirmProduction: { type: 'boolean', description: 'Required to run against production' },
+            confirmTier2Production: { type: 'boolean', description: 'Required for Tier 2 on production' },
+            maxActions: { type: 'integer', description: 'Cap on agent actions for the whole engagement (default 60)' },
+            dryRun: { type: 'boolean', description: 'Plan only; touch nothing' },
         },
-        required: ["target", "objective"],
+        required: ['target', 'objective'],
         additionalProperties: false,
     },
     run: async (store, a) => {
         const built = buildLaunchBody(a);
-        if ("error" in built)
+        if ('error' in built)
             return { status: 400, body: { error: built.error } };
         const c = capture();
         await handleLaunch(store, {}, c.res, built.body);
         const out = c.result();
         if (out.status !== 202)
             return out;
-        const id = out.body.id ?? "";
+        const id = out.body.id ?? '';
         return {
             status: 202,
             body: {
@@ -204,41 +170,41 @@ const launchTool = {
                 mode: built.body.mode,
                 scope: built.body.scope,
                 summary: `Engagement ${id} launched against ${built.body.target} (mode ${built.body.mode}). It runs in this app — ` +
-                    (built.body.phases ? `phases ${built.body.phases.join(", ")}${built.body.command ? ` per the /${built.body.command} command` : ""}. ` : "authorize, recon, exploit, report. ") +
-                    "Poll engagement_status with this id and narrate each phase change in the thread; " +
-                    "when it completes, call engagement_report and deliver the report here.",
+                    (built.body.phases ? `phases ${built.body.phases.join(', ')}${built.body.command ? ` per the /${built.body.command} command` : ''}. ` : 'authorize, recon, exploit, report. ') +
+                    'Poll engagement_status with this id and narrate each phase change in the thread; ' +
+                    'when it completes, call engagement_report and deliver the report here.',
             },
         };
     },
 };
 /** engagement_status — one detail snapshot reshaped for narration. */
 const statusTool = {
-    name: "engagement_status",
-    description: "Progress snapshot for one engagement, shaped for narrating in chat: status, current phase, event count, findings so far, " +
-        "whether it is live, and the reason when it blocked or halted. Poll this after engagement_launch and report each phase change. " +
-        "When the snapshot names a speaker, that is the fleet seat whose recorded execution the snapshot reports — attribute the narration to that seat.",
+    name: 'engagement_status',
+    description: 'Progress snapshot for one engagement, shaped for narrating in chat: status, current phase, event count, findings so far, ' +
+        'whether it is live, and the reason when it blocked or halted. Poll this after engagement_launch and report each phase change. ' +
+        'When the snapshot names a speaker, that is the fleet seat whose recorded execution the snapshot reports — attribute the narration to that seat.',
     inputSchema: ID_ONLY(),
     run: async (store, a) => {
-        const id = String(a["id"] ?? "");
+        const id = String(a['id'] ?? '');
         const c = capture();
         handleDetail(store, c.res, id);
         const out = c.result();
         if (out.status !== 200)
             return out;
         const b = out.body;
-        if (b["state"] == null) {
+        if (b['state'] == null) {
             // Still starting, or died before writing state: the in-memory record
             // is all there is, and its error field is the reason.
-            const status = typeof b["status"] === "string" ? b["status"] : "starting";
-            const error = typeof b["error"] === "string" ? b["error"] : undefined;
+            const status = typeof b['status'] === 'string' ? b['status'] : 'starting';
+            const error = typeof b['error'] === 'string' ? b['error'] : undefined;
             return {
                 status: 200,
                 body: {
                     id,
                     status,
-                    phase: "starting",
-                    live: b["live"] === true,
-                    target: b["target"] ?? null,
+                    phase: 'starting',
+                    live: b['live'] === true,
+                    target: b['target'] ?? null,
                     findings: 0,
                     eventCount: 0,
                     ...(error ? { error } : {}),
@@ -248,7 +214,7 @@ const statusTool = {
                 },
             };
         }
-        const s = b["state"];
+        const s = b['state'];
         const findings = Array.isArray(s.findings) ? s.findings.length : 0;
         // Speaker stamps (ui/speaker.ts): the seat that executed most
         // recently, from the tail of the event log's loop-stamped records,
@@ -265,14 +231,14 @@ const statusTool = {
         // actually looks, and point at the repair tool.
         const missingDeliverables = s.deliverableFailed === true && stateDir ? verifyDeliverables(stateDir).missing : [];
         const deliverableNote = missingDeliverables.length > 0
-            ? ` Deliverable set INCOMPLETE — missing: ${missingDeliverables.join(", ")}. Call engagement_regenerate_report to re-fire report generation.`
-            : "";
-        const summary = s.status === "complete"
+            ? ` Deliverable set INCOMPLETE — missing: ${missingDeliverables.join(', ')}. Call engagement_regenerate_report to re-fire report generation.`
+            : '';
+        const summary = s.status === 'complete'
             ? missingDeliverables.length > 0
                 ? `Engagement ${id} ended: ${findings} findings over ${s.eventCount} events.${deliverableNote}`
                 : `Engagement ${id} is complete: ${findings} findings over ${s.eventCount} events. Call engagement_report to deliver the report.`
-            : s.status === "halted" || s.status === "blocked"
-                ? `Engagement ${id} ${s.status}${s.blockedReason ? `: ${s.blockedReason}` : ""}. ${findings} findings recorded.${deliverableNote}${s.deliverableFailed === true ? "" : " Call engagement_report to deliver the report."}`
+            : s.status === 'halted' || s.status === 'blocked'
+                ? `Engagement ${id} ${s.status}${s.blockedReason ? `: ${s.blockedReason}` : ''}. ${findings} findings recorded.${deliverableNote}${s.deliverableFailed === true ? '' : ' Call engagement_report to deliver the report.'}`
                 : `Engagement ${id} is ${s.status} — phase: ${s.phase}, ${s.eventCount} events, ${findings} findings so far.`;
         return {
             status: 200,
@@ -280,7 +246,7 @@ const statusTool = {
                 id,
                 status: s.status,
                 phase: s.phase,
-                live: b["live"] === true,
+                live: b['live'] === true,
                 verified: s.verified === true,
                 target: s.target,
                 findings,
@@ -293,7 +259,7 @@ const statusTool = {
                 ...(missingDeliverables.length > 0
                     ? { deliverableFailed: true, missingDeliverables }
                     : {}),
-                artifacts: b["artifacts"],
+                artifacts: b['artifacts'],
                 summary,
             },
         };

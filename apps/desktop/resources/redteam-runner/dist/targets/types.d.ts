@@ -13,7 +13,7 @@ export type TargetId = "secscan" | "seclayer" | "webapp" | "windows" | "linux";
  * vendor's own surfaces plus the two host families. The v0.35.0 `webapp`
  * family (WA-*, a generic client web application) is deliberately NOT in this
  * default set: it is selected explicitly with --targets webapp (or the
- * start_engagement `targets` argument), because against secscan.us/seclayer.app
+ * start_engagement `targets` argument), because against the bundled web targets
  * the generic webapp battery would duplicate the SS-* / SL-* work.
  */
 export declare const FULL_BATTERY_TARGETS: TargetId[];
@@ -56,11 +56,12 @@ export declare const NEEDS_KERBEROS_TICKET = "kerberos ticket material";
 export declare const NEEDS_HUMAN_OPERATOR = "human operator";
 export declare const NEEDS_PRIVILEGED_CLIENT = "privileged test client";
 /**
- * v0.11.0 prerequisite: the operator's Metasploit RPC daemon
- * (REDTEAM_MSFRPC_USER/PASS). CVE exploit-validation items execute when
- * msfrpcd is reachable; otherwise they report under Honest limits.
+ * v0.11.0 prerequisite: the Metasploit Framework installed on this host
+ * (msfconsole on PATH or REDTEAM_MSFCONSOLE_BIN). CVE exploit-validation
+ * items execute when the local framework is present; otherwise they
+ * report under Honest limits.
  */
-export declare const NEEDS_MSFRPCD = "msfrpcd";
+export declare const NEEDS_MSFCONSOLE = "local Metasploit framework (msfconsole)";
 /**
  * v0.21.0 prerequisite: the operator's Nuclei binary + template checkout
  * (REDTEAM_NUCLEI_BIN or nuclei on PATH). Template-bridge items execute

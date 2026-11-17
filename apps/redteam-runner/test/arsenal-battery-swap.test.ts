@@ -32,8 +32,7 @@ import {
   buildAndSwapArsenalIndex,
   openArsenalServingStore,
   readArsenalIndexMeta,
-  type ArsenalBuildData,
-} from '../src/arsenal/index-store.js'
+  type ArsenalBuildData } from '../src/arsenal/index-store.js'
 import { runArsenalRefresh, type ArsenalBuildOutcome, type GitRunner } from '../src/arsenal/refresh.js'
 import { resolveArsenalConfig } from '../src/arsenal/config.js'
 
@@ -53,8 +52,7 @@ function makeData(patch: Partial<ArsenalBuildData> = {}): ArsenalBuildData {
         topic: 'Wordlists',
         fetchedAt: '2026-10-31T00:00:00.000Z',
         entryCount: 3,
-        fetchError: null,
-      },
+        fetchError: null },
       {
         slug: 'awesome-osint',
         name: 'Awesome OSINT',
@@ -63,9 +61,7 @@ function makeData(patch: Partial<ArsenalBuildData> = {}): ArsenalBuildData {
         topic: 'OSINT',
         fetchedAt: null,
         entryCount: 0,
-        fetchError: null,
-      },
-    ],
+        fetchError: null } ],
     entries: [
       {
         name: 'JWT Wordlist',
@@ -74,8 +70,7 @@ function makeData(patch: Partial<ArsenalBuildData> = {}): ArsenalBuildData {
         collectionSlug: 'seclists',
         tags: ['topic:wordlists'],
         targets: ['WA'],
-        battery: ['F-10'],
-      },
+        battery: ['F-10'] },
       {
         name: 'Password Collection',
         url: 'https://example.test/seclists/passwords',
@@ -83,8 +78,7 @@ function makeData(patch: Partial<ArsenalBuildData> = {}): ArsenalBuildData {
         collectionSlug: 'seclists',
         tags: ['topic:wordlists'],
         targets: ['WA'],
-        battery: [],
-      },
+        battery: [] },
       {
         name: 'Fuzzing Strings',
         url: 'https://example.test/seclists/fuzzing',
@@ -92,14 +86,11 @@ function makeData(patch: Partial<ArsenalBuildData> = {}): ArsenalBuildData {
         collectionSlug: 'seclists',
         tags: ['topic:wordlists'],
         targets: ['WA'],
-        battery: [],
-      },
-    ],
+        battery: [] } ],
     unparsedCount: 0,
     dupeCount: 0,
     prioritySlugs: ['seclists'],
-    ...patch,
-  }
+    ...patch }
 }
 
 function tempDb(): { dir: string; dbPath: string } {
@@ -160,8 +151,7 @@ describe('§6.1.7 swap integrity — store level (spec T6)', () => {
       // mid-insert — the build dies with rows already written to the tmp DB.
       dupe.entries = [
         ...dupe.entries,
-        { ...dupe.entries[0]!, name: 'JWT Wordlist Again' },
-      ]
+        { ...dupe.entries[0]!, name: 'JWT Wordlist Again' } ]
       assert.throws(() => buildAndSwapArsenalIndex(dbPath, dupe), 'the duplicate-URL build must throw')
       assert.equal(sha256(dbPath), before, 'the serving DB file must be byte-identical after a mid-build failure')
       assertStillServing(dbPath, 1)
@@ -248,9 +238,7 @@ describe('§6.1.7 swap integrity — refresh level (kill mid-refresh)', () => {
           git: fakeGit(config.sourceRepo),
           buildIndex: async () => {
             throw new Error('kill mid-refresh (battery injection)')
-          },
-        },
-      })
+          } } })
       assert.equal(report.ok, false)
       assert.equal(report.exitCode, 1)
       assert.equal(report.stage, 'build')
@@ -282,12 +270,10 @@ describe('§6.1.7 swap integrity — refresh level (kill mid-refresh)', () => {
         unparsedCount: 0,
         dupeCount: 0,
         priority: [{ slug: 'seclists', entryCount: 0 }],
-        failureReasons: ['[arsenal] index validation failed: priority collection "seclists" has 0 entries'],
-      }
+        failureReasons: ['[arsenal] index validation failed: priority collection "seclists" has 0 entries'] }
       const report = await runArsenalRefresh({
         config,
-        deps: { git: fakeGit(config.sourceRepo), buildIndex: async () => outcome },
-      })
+        deps: { git: fakeGit(config.sourceRepo), buildIndex: async () => outcome } })
       assert.equal(report.ok, false)
       assert.equal(report.exitCode, 1)
       assert.ok(
@@ -324,11 +310,8 @@ describe('§6.1.7 swap integrity — refresh level (kill mid-refresh)', () => {
               unparsedCount: 0,
               dupeCount: 0,
               priority: [{ slug: 'seclists', entryCount: 3 }],
-              failureReasons: [],
-            } satisfies ArsenalBuildOutcome
-          },
-        },
-      })
+              failureReasons: [] } satisfies ArsenalBuildOutcome
+          } } })
       assert.equal(report.ok, true)
       assert.equal(report.exitCode, 0)
       assert.equal(report.build?.generation, 2)

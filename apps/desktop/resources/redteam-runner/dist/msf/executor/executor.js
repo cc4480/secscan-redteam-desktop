@@ -1,17 +1,18 @@
 /**
- * MsfExecutor — the runner's Metasploit bridge, behind the safety core.
+ * MsfExecutor — the runner's Metasploit arm, behind the safety core.
  * (Module doc comment preserved on the msf/executor.ts barrel.)
  *
  * Preflight order (mirrors host-exec/executor.ts):
- *   1. ROE scope check (exact hostname match, fail closed, before any packet)
+ *   1. ROE scope check (exact hostname match, fail closed, before any
+ *      local process is spawned)
  *   2. module/payload policy (dos + destructive modules refused; generic
  *      single-command payloads run the runner-built canary marker, which
  *      additionally passes the destructive denylist; Meterpreter payloads
  *      open a session — see 6)
- *   4. credential resolution (REDTEAM_MSFRPC_* env/Secure Vault only, fail
- *      fast with setup instructions)
- *   5. execution with timeout + abort signal; the console is destroyed on
- *      abort (the call signal is what stops a running module)
+ *   4. framework availability (the local msfconsole resolves and executes,
+ *      fail fast with setup instructions)
+ *   5. execution with timeout + abort signal; the console process is
+ *      killed on abort (the call signal is what stops a running module)
  *   6. session hygiene: a generic-payload validation run must not leave
  *      sessions behind — any session that wasn't there before is stopped
  *      immediately. A Meterpreter-payload run is the one exception (W8):
@@ -20,17 +21,20 @@
  *      stays open under a runner-issued handle
  *   7. redaction of every secret from every string that leaves
  *
- * The request function is injectable so tests run against a fake msfrpcd.
+ * The process spawner is injectable so tests run against a fake msfconsole.
  */
 import { capOutput, checkDestructive, redactSecrets, validateHostTarget } from '../../host-exec/common.js';
-import { MsfAuthError } from '../client.js';
+import { MsfAuthError } from '../local-client.js';
 import { buildMarkerCommand, checkMsfModule, checkMsfPayload, isMsfSessionPayload, } from '../policy.js';
 import { MsfSessionManager } from '../sessions.js';
-import { filterAndRank, suggestModules } from '../suggest.js';
 import { authedClient } from './auth.js';
 import { closeSession as closeMsfSession, finishSessionRun, sessionCommand as runSessionCommand, } from './session-ops.js';
 import { credentialDump as runCredentialDump } from './credential-dump.js';
-export const MSF_TIMEOUT_MS = 120_000; // exploits get longer than 30s host-exec
+import { MSF_TIMEOUT_MS } from './executor-types.js';
+import { msfSearch, msfSuggest } from './executor-query.js';
+// The public shapes live in executor-types.ts (file-budget split); re-exported
+// here so the msf barrel and every importer keep the same surface.
+export { MSF_TIMEOUT_MS } from './executor-types.js';
 export class MsfExecutor {
     deps;
     /** TEST MODE: policy checks bypassed (see MsfDeps.testMode). */
@@ -38,7 +42,7 @@ export class MsfExecutor {
     /** Live Meterpreter sessions opened by validated runs on this executor (W8). */
     sessions = new MsfSessionManager();
     constructor(deps = {}) {
-        this.deps = { request: deps.request, env: deps.env ?? process.env, endpoint: deps.endpoint };
+        this.deps = { spawn: deps.spawn, env: deps.env ?? process.env, testMode: deps.testMode };
         this.testMode = deps.testMode === true;
     }
     refusedResult(host, refused, secrets = []) {
@@ -61,89 +65,19 @@ export class MsfExecutor {
     /**
      * Search the module database (recon-safe: no module runs).
      * `query` uses msf search syntax; when omitted, `cve`/`service` build it.
+     * The body lives in executor-query.ts (file-budget split).
      */
     async search(args) {
-        const started = Date.now();
-        const pre = this.preflight(args.host, args.scopeHosts);
-        if ('refused' in pre)
-            return this.refusedResult(args.host, pre.refused);
-        const input = { service: args.service, cve: args.cve, platform: args.platform };
-        try {
-            const { client, secrets } = await authedClient(this.deps, MSF_TIMEOUT_MS, args.signal);
-            const modules = args.query
-                ? filterAndRank(await client.searchModules(args.query))
-                : await suggestModules(client, input);
-            const runnable = modules.filter(m => !m.dropped);
-            const lines = runnable
-                .slice(0, 15)
-                .map(m => `${m.fullname} [rank:${m.rank || 'n/a'}] — ${(m.description || '').slice(0, 140)}`);
-            const dropped = modules.filter(m => m.dropped).length;
-            return {
-                ok: true,
-                transport: 'msf',
-                host: args.host,
-                summary: redactSecrets(`msf search vs ${args.host}: ${runnable.length} runnable module(s)` +
-                    (dropped > 0 ? `, ${dropped} refused by policy` : ''), secrets),
-                output: redactSecrets(capOutput(lines.join('\n') || '(no modules matched)'), secrets),
-                ms: Date.now() - started,
-            };
-        }
-        catch (err) {
-            return {
-                ok: false,
-                transport: 'msf',
-                host: args.host,
-                summary: `msf search failed: ${err.message}`,
-                output: '',
-                ms: Date.now() - started,
-            };
-        }
+        return msfSearch(this, args);
     }
     /**
      * Recon → module mapping: detected service/version → ranked candidate
      * modules. The candidates go to the COORDINATOR for approval — this tool
      * never fires an exploit. That approval is the recon→exploit sign-off
-     * the coordinator already owns.
+     * the coordinator already owns. The body lives in executor-query.ts.
      */
     async suggest(args) {
-        const started = Date.now();
-        const pre = this.preflight(args.host, args.scopeHosts);
-        if ('refused' in pre)
-            return this.refusedResult(args.host, pre.refused);
-        try {
-            const { client, secrets } = await authedClient(this.deps, MSF_TIMEOUT_MS, args.signal);
-            const ranked = await suggestModules(client, {
-                service: args.service,
-                version: args.version,
-                cve: args.cve,
-                platform: args.platform,
-            });
-            const runnable = ranked.filter(m => !m.dropped);
-            const lines = runnable.map(m => `${m.fullname} [rank:${m.rank || 'n/a'}] — ${(m.description || '').slice(0, 140)}`);
-            const dropped = ranked.filter(m => m.dropped);
-            const droppedLines = dropped.map(m => `${m.fullname} — REFUSED: ${m.dropped}`);
-            return {
-                ok: true,
-                transport: 'msf',
-                host: args.host,
-                summary: redactSecrets(`msf suggest vs ${args.host} (service=${args.service ?? '?'}, version=${args.version ?? '?'}): ` +
-                    `${runnable.length} candidate(s) for coordinator approval` +
-                    (dropped.length > 0 ? `, ${dropped.length} refused by policy` : ''), secrets),
-                output: redactSecrets(capOutput([...lines, ...(droppedLines.length > 0 ? ['', '--- refused by policy ---', ...droppedLines] : [])].join('\n') ||
-                    '(no candidate modules)'), secrets),
-                ms: Date.now() - started,
-            };
-        }
-        catch (err) {
-            return {
-                ok: false,
-                transport: 'msf',
-                host: args.host,
-                summary: `msf suggest failed: ${err.message}`,
-                output: '',
-                ms: Date.now() - started,
-            };
-        }
+        return msfSuggest(this, args);
     }
     /**
      * Run ONE module. With a generic cmd payload, the only payload action is
@@ -159,7 +93,7 @@ export class MsfExecutor {
         const pre = this.preflight(args.host, args.scopeHosts);
         if ('refused' in pre)
             return this.refusedResult(args.host, pre.refused);
-        // Policy first — before credentials, before any packet to msfrpcd.
+        // Policy first — before any local process is spawned.
         // TEST MODE: module/payload policy and the canary destructive check
         // are bypassed (structural module validation inside checkMsfModule
         // still applies); dispatch/msf.ts logs the would-be denials.

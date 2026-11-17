@@ -16,6 +16,7 @@ import { handleEscalate, handleReverify, handleWatchProfiles, handleWatchTrigger
 import { engagementDir } from "./store.js";
 import { ENGAGEMENT_TOOLS } from "./engagement-tools.js";
 import { LOCAL_TOOLS } from "./local-tools.js";
+import { VERIFY_TOOLS } from "./verify-tools.js";
 import { readEvents } from "../events.js";
 /** Stand in for ServerResponse. Handlers only ever call writeHead and end. */
 export function capture() {
@@ -258,6 +259,6 @@ const COCKPIT_TOOLS = [
  * console chat and the desktop host's chat — both fed by mcp-endpoint.ts —
  * see the same registry.
  */
-export const TOOLS = [...COCKPIT_TOOLS, ...ENGAGEMENT_TOOLS, ...LOCAL_TOOLS];
+export const TOOLS = [...COCKPIT_TOOLS, ...ENGAGEMENT_TOOLS, ...LOCAL_TOOLS, ...VERIFY_TOOLS];
 export const TOOLS_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
 //# sourceMappingURL=mcp-tools.js.map

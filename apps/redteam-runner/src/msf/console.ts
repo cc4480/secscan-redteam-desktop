@@ -14,9 +14,9 @@
  *  - The Windows entry point is a `.bat`, and Node cannot spawn one directly
  *    (`spawn EINVAL`); it has to go through `cmd.exe /c`.
  *
- * Consequently this transport is a fallback for a host with no `msfrpcd`, not a
- * free replacement: the RPC daemon answers in milliseconds because it pays the
- * boot once, and this pays it per command.
+ * Consequently this one-shot native console transport pays a console boot per
+ * command, rather than amortizing startup across calls as a long-lived process
+ * would. It remains useful as a simple native fallback path.
  */
 
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'

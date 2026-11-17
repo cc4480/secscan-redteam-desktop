@@ -8,7 +8,8 @@
  */
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { findProfile, sweepReach } from '../src/nmap/policy.js'
+import { findProfile } from '../src/nmap/policy.js'
+import { sweepReach } from '../src/nmap/sweep-coverage.js'
 
 describe('sweepReach', () => {
   it('reports the observed full-scan case as partial', () => {

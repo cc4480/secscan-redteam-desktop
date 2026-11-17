@@ -34,22 +34,19 @@ import {
   parseAgentAbusePath,
   resolveAgentSocketPath,
   SSH_AGENT_AUDIT_SOCKET_CHECK,
-  SSH_AGENT_AUDIT_ABUSE_PATH,
-} from "../src/host-exec/index.js";
+  SSH_AGENT_AUDIT_ABUSE_PATH } from "../src/host-exec/index.js";
 import type {
   SshTransport,
   SshExecArgs,
   WinrmProbeRequestImpl,
   NfsTransport,
   NfsDialFn,
-  NfsConnection,
-} from "../src/host-exec/index.js";
+  NfsConnection } from "../src/host-exec/index.js";
 
 const FAKE_ENV: NodeJS.ProcessEnv = {
   REDTEAM_SSH_USER: "testuser",
   REDTEAM_SSH_PASSWORD: "s3cr3t-pw-FOR-TESTS",
-  REDTEAM_SSH_AGENT_SOCKET: "/tmp/fake-agent.sock",
-};
+  REDTEAM_SSH_AGENT_SOCKET: "/tmp/fake-agent.sock" };
 const SECRET = "s3cr3t-pw-FOR-TESTS";
 const SCOPE = ["10.9.0.12"];
 
@@ -69,14 +66,12 @@ function fakeSsh(
       if (behavior.hang) {
         await new Promise<void>((_, reject) => {
           args.signal?.addEventListener("abort", () => reject(new Error("[ssh] aborted by kill switch")), {
-            once: true,
-          });
+            once: true });
         });
       }
       return { stdout: behavior.output ?? "", stderr: "", code: 0, ms: 5 };
     },
-    async close() {},
-  };
+    async close() {} };
   return { t, seen };
 }
 
@@ -88,9 +83,7 @@ const fake401: WinrmProbeRequestImpl = async (_req) => ({
   statusCode: 401,
   headers: {
     "www-authenticate": ["Negotiate", "NTLM"],
-    server: "Microsoft-HTTPAPI/2.0",
-  },
-});
+    server: "Microsoft-HTTPAPI/2.0" } });
 
 describe("winrm listener probe", () => {
   it("parses the 401 challenge into auth schemes and the server header", async () => {
@@ -102,8 +95,7 @@ describe("winrm listener probe", () => {
       useTls: false,
       authSchemes: ["Negotiate", "NTLM"],
       serverHeader: "Microsoft-HTTPAPI/2.0",
-      note: "401 Unauthorized — WinRM listener present, advertising auth: Negotiate, NTLM",
-    });
+      note: "401 Unauthorized — WinRM listener present, advertising auth: Negotiate, NTLM" });
     assert.equal(results[1]!.port, 5986);
     assert.equal(results[1]!.useTls, true);
     assert.equal(results[1]!.reachable, true);
@@ -123,8 +115,7 @@ describe("winrm listener probe", () => {
   it("splits comma-joined WWW-Authenticate values and dedupes", () => {
     assert.deepEqual(parseWwwAuthenticate({ "www-authenticate": "Negotiate, NTLM, Negotiate" }), [
       "Negotiate",
-      "NTLM",
-    ]);
+      "NTLM" ]);
     assert.deepEqual(parseWwwAuthenticate({ "www-authenticate": "Basic realm=\"winrm\"" }), ["Basic"]);
     assert.deepEqual(parseWwwAuthenticate({}), []);
   });
@@ -183,8 +174,7 @@ describe("winrm listener probe", () => {
         port,
         useTls: false,
         timeoutMs: 5000,
-        signal: ctrl.signal,
-      });
+        signal: ctrl.signal });
       ctrl.abort();
       await assert.rejects(p, /abort/i);
     } finally {
@@ -225,8 +215,7 @@ describe("HostExecutor.winrmProbe", () => {
       host: "10.9.0.12",
       scopeHosts: SCOPE,
       ports: Array.from({ length: 17 }, (_, i) => 5000 + i),
-      requestImpl: fake401,
-    });
+      requestImpl: fake401 });
     assert.equal(r.ok, false);
     assert.ok(r.refused?.includes("more than 16 ports"));
   });
@@ -306,8 +295,7 @@ function scriptedRpcServer(dispatch: (call: RpcCall) => Buffer): Promise<{ serve
 
 const SCRIPTED_EXPORTS = [
   { dirpath: "/data", groups: ["10.9.0.0/24", "10.9.0.13"] },
-  { dirpath: "/home", groups: [] },
-];
+  { dirpath: "/home", groups: [] } ];
 
 function encodeExportList(exports: { dirpath: string; groups: string[] }[]): Buffer {
   const parts: Buffer[] = [];
@@ -378,8 +366,7 @@ describe("nfs export enumeration (wire protocol on loopback)", () => {
       const exports = await t.enumerateExports({ host: "127.0.0.1", timeoutMs: 2000 });
       assert.deepEqual(exports, [
         { export: "/data", groups: ["10.9.0.0/24", "10.9.0.13"] },
-        { export: "/home", groups: [] },
-      ]);
+        { export: "/home", groups: [] } ]);
       assert.ok(pmSeen.includes(3), "asked portmapper for mount v3");
       assert.ok(mountSeen.some((c) => c.vers === 3 && c.proc === 5), "called EXPORT v3");
     } finally {
@@ -437,8 +424,7 @@ describe("nfs export enumeration (wire protocol on loopback)", () => {
       readRecord() {
         return new Promise<Buffer>(() => undefined); // never resolves
       },
-      close() {},
-    };
+      close() {} };
     const dial: NfsDialFn = async () => hangingConn;
     const t = createNfsTransport(dial);
     // portmapper GETPORT itself hangs on readRecord → round-trip timeout
@@ -457,12 +443,10 @@ describe("nfs export enumeration (wire protocol on loopback)", () => {
         readRecord() {
           return new Promise<Buffer>((_, reject) => {
             signal?.addEventListener("abort", () => reject(new Error("[nfs] aborted by kill switch")), {
-              once: true,
-            });
+              once: true });
           });
         },
-        close() {},
-      };
+        close() {} };
       return hanging;
     };
     const t = createNfsTransport(dial);
@@ -536,8 +520,7 @@ describe("HostExecutor.nfsEnum", () => {
         calls++;
         return exports;
       },
-      async close() {},
-    };
+      async close() {} };
     return { t, calls };
   }
 
@@ -555,8 +538,7 @@ describe("HostExecutor.nfsEnum", () => {
   it("needs no credentials and reports the export list", async () => {
     const { t } = fakeNfs([
       { export: "/data", groups: ["10.9.0.0/24"] },
-      { export: "/home", groups: [] },
-    ]);
+      { export: "/home", groups: [] } ]);
     const ex = new HostExecutor({ nfs: () => t, env: {} });
     const r = await ex.nfsEnum({ host: "10.9.0.12", scopeHosts: SCOPE });
     assert.equal(r.ok, true);
@@ -571,8 +553,7 @@ describe("HostExecutor.nfsEnum", () => {
       async enumerateExports() {
         throw new Error("portmapper unreachable");
       },
-      async close() {},
-    };
+      async close() {} };
     const ex = new HostExecutor({ nfs: () => t, env: FAKE_ENV });
     const r = await ex.nfsEnum({ host: "10.9.0.12", scopeHosts: SCOPE });
     assert.equal(r.ok, false);
@@ -586,8 +567,7 @@ describe("HostExecutor.nfsEnum", () => {
         await new Promise(() => undefined); // never resolves, ignores signal
         throw new Error("unreachable");
       },
-      async close() {},
-    };
+      async close() {} };
     const ex = new HostExecutor({ nfs: () => t, env: FAKE_ENV });
     const r = await ex.nfsEnum({ host: "10.9.0.12", scopeHosts: SCOPE, timeoutMs: 50 });
     assert.equal(r.ok, false);
@@ -603,22 +583,19 @@ const SOCKET_CHECK_PRESENT = [
   "SOCK=/tmp/ssh-abc/agent.123",
   "SOCK_PRESENT",
   "srwxr-xr-x 1 testuser testuser 0 Oct  3 00:00 /tmp/ssh-abc/agent.123",
-  "owner=testuser group=testuser mode=700",
-].join("\n");
+  "owner=testuser group=testuser mode=700" ].join("\n");
 
 const SOCKET_CHECK_ABSENT = ["SOCK=", "SOCK_ABSENT"].join("\n");
 
 const ABUSE_PATH_REACHABLE = [
   "uid=1000(testuser) gid=1000(testuser) groups=1000(testuser),27(sudo)",
   "srwx------ 1 testuser testuser 0 Oct  3 00:00 /tmp/ssh-abc/agent.123",
-  "testuser testuser 700",
-].join("\n");
+  "testuser testuser 700" ].join("\n");
 
 const ABUSE_PATH_NOT_REACHABLE = [
   "uid=1001(other) gid=1001(other) groups=1001(other)",
   "srwx------ 1 testuser testuser 0 Oct  3 00:00 /tmp/ssh-abc/agent.123",
-  "testuser testuser 700",
-].join("\n");
+  "testuser testuser 700" ].join("\n");
 
 describe("ssh agent-forwarding audit", () => {
   it("fixed audit commands pass the destructive denylist", () => {
@@ -737,8 +714,7 @@ describe("agent-audit output parsing (pure functions)", () => {
     const out = [
       "uid=1000(testuser) gid=1000(testuser) groups=1000(testuser),50(staff)",
       "srwxrwx--- 1 root staff 0 Oct  3 00:00 /tmp/ssh-abc/agent.123",
-      "root staff 770",
-    ].join("\n");
+      "root staff 770" ].join("\n");
     const p = parseAgentAbusePath(out);
     assert.match(p.summary, /REACHABLE/);
     assert.match(p.summary, /group \(staff\)/);

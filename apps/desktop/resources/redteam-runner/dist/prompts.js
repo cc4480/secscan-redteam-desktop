@@ -14,6 +14,7 @@
  *    mandatory before any active testing. Non-destructive always. Web targets
  *    only — no phishing, no social engineering, no physical.
  */
+export { isCompactLocalProvider } from "./prompts/shared.js";
 export { coordinatorPrompt } from "./prompts/coordinator.js";
 export { reconPrompt } from "./prompts/recon.js";
 export { exploiterPrompt } from "./prompts/exploiter.js";

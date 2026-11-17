@@ -34,8 +34,7 @@ describe('wordlist resolution', () => {
   it('never embeds an operator-specific path and prefers explicit → env → bundle', () => {
     const candidates = wordlistCandidates('/explicit/list.txt', {
       REDTEAM_WORDLIST: '/env/list.txt',
-      REDTEAM_TOOLS_DIR: '/tools',
-    } as NodeJS.ProcessEnv)
+      REDTEAM_TOOLS_DIR: '/tools' } as NodeJS.ProcessEnv)
     assert.equal(candidates[0], '/explicit/list.txt')
     assert.equal(candidates[1], '/env/list.txt')
     assert.ok(candidates.some(c => c.includes('assets') && c.endsWith('common.txt')))
@@ -101,8 +100,7 @@ describe('nmap privilege handling', () => {
       "Couldn't open a raw socket. Error: Npcap is not installed",
       'You requested a scan type which requires root privileges',
       'socket creation failed: Operation not permitted',
-      'Access is denied.',
-    ]) {
+      'Access is denied.' ]) {
       assert.equal(isNmapPrivilegeFailure(stderr), true, stderr)
     }
     assert.equal(isNmapPrivilegeFailure('Host seems down'), false)
@@ -125,37 +123,15 @@ describe('readiness report', () => {
     _resetNmapProbeCache()
     const report = await readinessReport({ REDTEAM_NMAP_BIN: '/no/such/nmap' } as NodeJS.ProcessEnv)
     const ids = report.items.map(i => i.id)
-    for (const id of ['nmap', 'wordlist', 'msfconsole', 'secscan_token', 'deepseek_key']) {
+    for (const id of ['nmap', 'wordlist', 'msfconsole', 'deepseek_key']) {
       assert.ok(ids.includes(id), `missing readiness item ${id}`)
     }
     assert.equal(report.ok, false, 'an environment without tokens cannot be ready')
     const missingRequired = report.items.filter(i => i.required && i.state !== 'ready').map(i => i.id)
     assert.ok(missingRequired.includes('nmap'))
-    // The SecScan token is not a start requirement in-house: verification
-    // comes from the engagement record unless the service opt-in is set.
-    assert.ok(!missingRequired.includes('secscan_token'))
     assert.ok(missingRequired.includes('deepseek_key'))
     assert.match(formatReadiness(report), /readiness:/)
     assert.match(report.summary, /required missing/)
-  })
-
-  it('treats the Meta key as the model-key requirement, and the SecScan token as required only under the service opt-in', async () => {
-    _resetNmapProbeCache()
-    const metaOnly = await readinessReport({
-      REDTEAM_NMAP_BIN: '/no/such/nmap',
-      MODEL_API_KEY: 'test',
-    } as NodeJS.ProcessEnv)
-    assert.equal(metaOnly.items.find(i => i.id === 'deepseek_key')?.state, 'ready')
-    assert.equal(metaOnly.items.find(i => i.id === 'secscan_token')?.required, false)
-
-    const optIn = await readinessReport({
-      REDTEAM_NMAP_BIN: '/no/such/nmap',
-      MODEL_API_KEY: 'test',
-      REDTEAM_VERIFY_VIA_SERVICE: '1',
-    } as NodeJS.ProcessEnv)
-    const token = optIn.items.find(i => i.id === 'secscan_token')
-    assert.equal(token?.required, true)
-    assert.equal(token?.state, 'missing')
   })
 
   it('carries no Seclayer key item — the suites are native and keyless', async () => {
@@ -171,8 +147,7 @@ describe('readiness report', () => {
     _resetMsfProbeCache()
     const missing = await readinessReport({
       REDTEAM_NMAP_BIN: '/no/such/nmap',
-      REDTEAM_MSFCONSOLE_BIN: '/no/such/msfconsole',
-    } as NodeJS.ProcessEnv)
+      REDTEAM_MSFCONSOLE_BIN: '/no/such/msfconsole' } as NodeJS.ProcessEnv)
     const missingItem = missing.items.find(i => i.id === 'msfconsole')
     assert.equal(missingItem?.state, 'missing')
     assert.equal(missingItem?.required, false)
@@ -183,8 +158,7 @@ describe('readiness report', () => {
     // install: the probe executes the binary, it does not parse its output.
     const present = await readinessReport({
       REDTEAM_NMAP_BIN: '/no/such/nmap',
-      REDTEAM_MSFCONSOLE_BIN: process.execPath,
-    } as NodeJS.ProcessEnv)
+      REDTEAM_MSFCONSOLE_BIN: process.execPath } as NodeJS.ProcessEnv)
     assert.equal(present.items.find(i => i.id === 'msfconsole')?.state, 'ready')
     _resetMsfProbeCache()
   })
@@ -263,12 +237,7 @@ describe('readiness report — llm_credential_pool (Q-POOLPERSIST)', () => {
               dead: false,
               benchedModels: [
                 { model: 'muse-spark-1.3', untilMs: NOW + 12 * 60_000 },
-                { model: 'muse-wonder-1.0', untilMs: null },
-              ],
-            },
-          ],
-        },
-      ],
+                { model: 'muse-wonder-1.0', untilMs: null } ] } ] } ],
       NOW,
     )
     assert.equal(item?.id, 'llm_credential_pool')
@@ -294,11 +263,7 @@ describe('readiness report — llm_credential_pool (Q-POOLPERSIST)', () => {
               deadAtMs,
               deadStatus: 401,
               deadCode: 'invalid_api_key',
-              benchedModels: [],
-            },
-          ],
-        },
-      ],
+              benchedModels: [] } ] } ],
       NOW,
     )
     assert.equal(item?.id, 'llm_credential_pool')
@@ -314,10 +279,7 @@ describe('readiness report — llm_credential_pool (Q-POOLPERSIST)', () => {
         {
           providerId: 'meta',
           entries: [
-            { keyId: 0, fingerprint: 'ab12cd34', dead: false, benchedModels: [{ model: 'm', untilMs: NOW - 1 }] },
-          ],
-        },
-      ],
+            { keyId: 0, fingerprint: 'ab12cd34', dead: false, benchedModels: [{ model: 'm', untilMs: NOW - 1 }] } ] } ],
       NOW,
     )
     assert.equal(item, undefined)
@@ -344,8 +306,7 @@ describe('readiness report — arsenal_index (ARS-8)', () => {
           topic: 'Lists',
           fetchedAt: '2026-10-31T00:00:00.000Z',
           entryCount: 2,
-          fetchError: null,
-        },
+          fetchError: null },
         {
           slug: 'web-hacking',
           name: 'Web Hacking',
@@ -354,9 +315,7 @@ describe('readiness report — arsenal_index (ARS-8)', () => {
           topic: 'Web',
           fetchedAt: null,
           entryCount: 1,
-          fetchError: null,
-        },
-      ],
+          fetchError: null } ],
       entries: [
         {
           name: 'Common Passwords',
@@ -365,8 +324,7 @@ describe('readiness report — arsenal_index (ARS-8)', () => {
           collectionSlug: 'seclists',
           tags: ['password'],
           targets: ['WA'],
-          battery: [],
-        },
+          battery: [] },
         {
           name: 'DNS Subdomains',
           url: 'https://example.test/seclists/dns-subdomains',
@@ -374,8 +332,7 @@ describe('readiness report — arsenal_index (ARS-8)', () => {
           collectionSlug: 'seclists',
           tags: [],
           targets: [],
-          battery: [],
-        },
+          battery: [] },
         {
           name: 'JWT Tool',
           url: 'https://example.test/web-hacking/jwt-tool',
@@ -383,14 +340,11 @@ describe('readiness report — arsenal_index (ARS-8)', () => {
           collectionSlug: 'web-hacking',
           tags: ['jwt'],
           targets: ['WA'],
-          battery: ['F-10'],
-        },
-      ],
+          battery: ['F-10'] } ],
       unparsedCount: 1,
       dupeCount: 2,
       prioritySlugs: ['seclists'],
-      ...over,
-    }
+      ...over }
   }
 
   it('a fresh home (no generation built) reads missing with the §7.1 fix text verbatim', () => {

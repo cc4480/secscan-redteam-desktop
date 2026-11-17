@@ -20,7 +20,8 @@ import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { LlmError } from '@deepseek-ai/dsh-llm';
-import { LLAMA_FULL_OFFLOAD_LAYERS, LocalLlamaAdapter, llamaServerArgs, readLlamaRegistry, readLlamaStoreSettings, readLocalServerState, resolveGpuOffload, startLlamaServer, stopLlamaServer, } from '../src/index.js';
+import { spawn } from 'node:child_process';
+import { LLAMA_FULL_OFFLOAD_LAYERS, LocalLlamaAdapter, llamaServerArgs, readLlamaRegistry, readLlamaStoreSettings, readLocalServerState, resolveGpuOffload, startLlamaServer, stopLlamaServer, writeLocalServerState, } from '../src/index.js';
 /** Registry id of the fixture store's first model. */
 const MODEL_ONE_ID = 'model-one-id';
 /** GGUF file name of the fixture store's first model. */
@@ -720,5 +721,155 @@ describe('llama restore F3 (previousPids recovery + serialized starts)', () => {
         await waitForDeath(livePid);
         assert.equal(processExists(livePid), false);
         assert.equal(readLocalServerState(directory)?.status, 'stopped');
+    });
+});
+describe('llama restore F3 (recorded pid draining)', () => {
+    const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
+    /**
+     * @param pid - the process id to test.
+     * @returns whether a process with that pid currently exists.
+     */
+    function pidAlive(pid) {
+        try {
+            process.kill(pid, 0);
+            return true;
+        }
+        catch {
+            return false;
+        }
+    }
+    async function waitForDeath(pid, timeoutMs = 10_000) {
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() < deadline) {
+            if (!pidAlive(pid))
+                return;
+            await sleep(25);
+        }
+    }
+    /**
+     * Spawn a long-lived dummy process whose pid stays recorded in state.
+     * @returns the child pid.
+     */
+    function spawnDummy() {
+        const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+            detached: true,
+            stdio: 'ignore',
+        });
+        child.unref();
+        assert.ok(child.pid !== undefined && child.pid > 0);
+        return child.pid;
+    }
+    it('switch with stale previousPids drains them before serving the replacement', async () => {
+        const directory = await createStore();
+        const binary = await writeStubLlamaServer(directory);
+        const stale = spawnDummy();
+        const deps = { directory, fetchImpl: fetch, binary, readyTimeoutMs: 15_000, probeTimeoutMs: 500 };
+        try {
+            await startLlamaServer(deps, { id: MODEL_ONE_ID, path: join(directory, MODEL_ONE_FILE) });
+            const runningOne = readLocalServerState(directory);
+            assert.equal(runningOne?.status, 'running');
+            assert.ok(runningOne?.pid !== undefined);
+            assert.equal(pidAlive(stale), true);
+            // Inject a stale recorded previous pid onto the live running record.
+            writeLocalServerState(directory, {
+                status: 'running',
+                baseUrl: runningOne.baseUrl,
+                modelId: MODEL_ONE_ID,
+                pid: runningOne.pid,
+                previousPids: [stale],
+            });
+            // Switching to another model must stop the owned server and drain
+            // every recorded pid, including stale previousPids.
+            await startLlamaServer(deps, { id: MODEL_TWO_ID, path: join(directory, MODEL_TWO_FILE) });
+            await waitForDeath(stale);
+            assert.equal(pidAlive(stale), false);
+            const runningTwo = readLocalServerState(directory);
+            assert.equal(runningTwo?.status, 'running');
+            assert.equal(runningTwo?.modelId, MODEL_TWO_ID);
+            assert.equal(runningTwo?.previousPids, undefined);
+            await stopLlamaServer(deps);
+        }
+        finally {
+            if (pidAlive(stale)) {
+                try {
+                    process.kill(stale, 'SIGKILL');
+                }
+                catch { /* best effort */ }
+            }
+        }
+    });
+    it('wedged-server replacement drains recorded previous pids', async () => {
+        const directory = await createStore();
+        const binary = await writeStubLlamaServer(directory);
+        const wedged = spawnDummy();
+        const stalePrevious = spawnDummy();
+        const deps = { directory, fetchImpl: fetch, binary, readyTimeoutMs: 15_000, probeTimeoutMs: 200 };
+        try {
+            const deadPort = await (async () => {
+                const server = createServer();
+                await new Promise((resolveListen) => server.listen(0, '127.0.0.1', resolveListen));
+                const port = server.address().port;
+                await new Promise((resolveClose) => server.close(() => resolveClose()));
+                return port;
+            })();
+            // A running record whose endpoint does not answer but whose pid is
+            // alive is wedged; previousPids are recorded orphans from earlier.
+            writeLocalServerState(directory, {
+                status: 'running',
+                baseUrl: `http://127.0.0.1:${deadPort}/v1`,
+                modelId: MODEL_ONE_ID,
+                pid: wedged,
+                previousPids: [stalePrevious],
+            });
+            assert.equal(pidAlive(wedged), true);
+            assert.equal(pidAlive(stalePrevious), true);
+            await startLlamaServer(deps, { id: MODEL_TWO_ID, path: join(directory, MODEL_TWO_FILE) });
+            await waitForDeath(wedged);
+            await waitForDeath(stalePrevious);
+            assert.equal(pidAlive(wedged), false);
+            assert.equal(pidAlive(stalePrevious), false);
+            const running = readLocalServerState(directory);
+            assert.equal(running?.status, 'running');
+            assert.equal(running?.modelId, MODEL_TWO_ID);
+            assert.equal(running?.previousPids, undefined);
+            await stopLlamaServer(deps);
+        }
+        finally {
+            for (const pid of [wedged, stalePrevious]) {
+                if (pidAlive(pid)) {
+                    try {
+                        process.kill(pid, 'SIGKILL');
+                    }
+                    catch { /* best effort */ }
+                }
+            }
+        }
+    });
+    it('failed start drains recorded orphan pids and does not leave them in state', async () => {
+        const directory = await createStore();
+        const stale = spawnDummy();
+        try {
+            // A non-starting record with orphan previousPids: a replacement
+            // start that fails before spawning must still drain them.
+            writeLocalServerState(directory, {
+                status: 'error',
+                modelId: MODEL_ONE_ID,
+                previousPids: [stale],
+            });
+            assert.equal(pidAlive(stale), true);
+            await assert.rejects(startLlamaServer({ directory, fetchImpl: fetch, binary: join(directory, 'missing-llama-server'), probeTimeoutMs: 200 }, { id: MODEL_TWO_ID, path: join(directory, MODEL_TWO_FILE) }), /llama-server binary not found/);
+            await waitForDeath(stale);
+            assert.equal(pidAlive(stale), false);
+            const state = readLocalServerState(directory);
+            assert.equal(state?.previousPids, undefined);
+        }
+        finally {
+            if (pidAlive(stale)) {
+                try {
+                    process.kill(stale, 'SIGKILL');
+                }
+                catch { /* best effort */ }
+            }
+        }
     });
 });

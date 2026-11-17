@@ -31,9 +31,7 @@ function fakeCtx() {
     events: {
       append: (e: { action: string; result: string }) => {
         appended.push({ action: e.action, result: e.result })
-      },
-    },
-  } as unknown as Ctx
+      } } } as unknown as Ctx
   return { ctx, appended }
 }
 
@@ -117,8 +115,7 @@ describe('reflection answer parsing', () => {
   it('keeps a structured verdict and steering', () => {
     assert.deepEqual(parseReflection(JSON_ANSWER), {
       verdict: 'change_approach',
-      steering: 'Stop guessing paths; fingerprint the stack first.',
-    })
+      steering: 'Stop guessing paths; fingerprint the stack first.' })
   })
 
   it('carries unstructured text verbatim as steering', () => {
@@ -133,8 +130,7 @@ describe('reflector config resolution', () => {
     SECSCAN_MCP_TOKEN: 'test-token',
     DEEPSEEK_API_KEY: 'test-key',
     REDTEAM_OPERATOR: 'test-operator',
-    REDTEAM_ENV: 'staging',
-  } as unknown as NodeJS.ProcessEnv
+    REDTEAM_ENV: 'staging' } as unknown as NodeJS.ProcessEnv
 
   it('defaults to 3', () => {
     assert.equal(resolveConfig(ENV_PIN, {}).reflectorCap, 3)
@@ -177,8 +173,7 @@ function loopCtx(dir: string, completeForRole: CompleteFn): Ctx {
       mode: 'red',
       objective: 'test',
       target: 'shop.example.test',
-      roe: { blackoutWindows: [], scope: ['shop.example.test'] },
-    },
+      roe: { blackoutWindows: [], scope: ['shop.example.test'] } },
     deps: { completeForRole },
     events: new EventLog(dir, 'eng-reflector', { target: 'shop.example.test', mode: 'red', objective: 'test' }),
     hostKill: { aborted: false, controllers: new Set<AbortController>() },
@@ -195,8 +190,7 @@ function loopCtx(dir: string, completeForRole: CompleteFn): Ctx {
     coverage: new Set(),
     targetCoverage: new Map(),
     itemLedger: new Map(),
-    opsecCooldown: new Set<string>(),
-  } as unknown as Ctx
+    opsecCooldown: new Set<string>() } as unknown as Ctx
 }
 
 function readEvents(dir: string): EngagementEvent[] {
@@ -213,8 +207,7 @@ function deniedBatch(n: number) {
   return {
     text: '',
     toolCalls: Array.from({ length: n }, (_, i) => ({ id: `c-${Date.now()}-${i}-${Math.random()}`, name: 'no_such_tool', arguments: {} })),
-    usage: USAGE,
-  }
+    usage: USAGE }
 }
 
 function messageTexts(messages: unknown): string[] {

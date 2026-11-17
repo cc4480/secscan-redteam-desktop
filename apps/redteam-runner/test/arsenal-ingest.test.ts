@@ -22,12 +22,10 @@ import {
   parseHtmlIndexEntries,
   parseLevel1,
   parseLinkedList,
-  resolveItemEntry,
-} from '../src/arsenal/ingest.js'
+  resolveItemEntry } from '../src/arsenal/ingest.js'
 import {
   buildAndSwapArsenalIndex,
-  readArsenalIndexMeta,
-} from '../src/arsenal/index-store.js'
+  readArsenalIndexMeta } from '../src/arsenal/index-store.js'
 
 const FIXTURES = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -49,60 +47,51 @@ describe('T1-L1: Level 1 fixture census', () => {
         name: 'Web Hacking',
         url: 'https://github.com/arsenal-fixture/web-hacking',
         description: 'Web application hacking resources and techniques.',
-        topic: 'Web Hacking',
-      },
+        topic: 'Web Hacking' },
       {
         slug: 'api-security',
         name: 'API Security',
         url: 'https://github.com/arsenal-fixture/api-security',
         description: 'API security testing references and checklists.',
-        topic: 'Web Hacking',
-      },
+        topic: 'Web Hacking' },
       {
         slug: 'payloadsallthethings',
         name: 'PayloadsAllTheThings',
         url: 'https://github.com/swisskyrepo/PayloadsAllTheThings',
         description: 'Payloads and bypass techniques for web vulnerabilities.',
-        topic: 'Web Hacking',
-      },
+        topic: 'Web Hacking' },
       {
         slug: 'seclists',
         name: 'SecLists',
         url: 'https://github.com/danielmiessler/SecLists',
         description:
           "The security tester's companion: usernames, passwords, URLs, fuzzing strings.",
-        topic: 'Wordlists',
-      },
+        topic: 'Wordlists' },
       {
         slug: 'gtfobins',
         name: 'GTFOBins',
         url: 'https://github.com/GTFOBins/GTFOBins.github.io',
         description:
           'Unix binaries that can be used to bypass local security restrictions.',
-        topic: 'Privilege Escalation',
-      },
+        topic: 'Privilege Escalation' },
       {
         slug: 'red-teaming-toolkit',
         name: 'Red Teaming Toolkit',
         url: 'https://github.com/arsenal-fixture/red-teaming-toolkit',
         description: '',
-        topic: 'Privilege Escalation',
-      },
+        topic: 'Privilege Escalation' },
       {
         slug: 'bug-bounty-reference',
         name: 'Bug Bounty Reference',
         url: 'https://github.com/arsenal-fixture/bug-bounty-reference',
         description: 'References and notes for bug bounty hunting.',
-        topic: 'Bug Bounty',
-      },
+        topic: 'Bug Bounty' },
       {
         slug: 'loose-reference',
         name: 'Loose Reference',
         url: 'https://example.test/loose-reference',
         description: 'mentioned in prose bullet text.',
-        topic: 'Bug Bounty',
-      },
-    ])
+        topic: 'Bug Bounty' } ])
   })
 
   it('counts reconcile: 13 items = 8 rows + 1 dupe + 3 unparsed + 1 urlless', () => {
@@ -128,8 +117,7 @@ describe('T1-L1: Level 1 fixture census', () => {
       'red-teaming-toolkit',
       'web-hacking',
       'api-security',
-      'bug-bounty-reference',
-    ]) {
+      'bug-bounty-reference' ]) {
       assert.ok(slugs.has(slug), `priority slug missing: ${slug}`)
     }
   })
@@ -172,8 +160,7 @@ describe('T2: URL normalization and dedupe', () => {
       [
         '- [First Name](https://example.test/dup) - first description',
         '- [Second Name](https://EXAMPLE.test/dup/) - second description',
-        '- [Third Name](https://example.test/dup.git) - third description',
-      ].join('\n'),
+        '- [Third Name](https://example.test/dup.git) - third description' ].join('\n'),
     )
     assert.equal(parsed.entries.length, 1)
     assert.equal(parsed.entries[0].name, 'First Name')
@@ -221,9 +208,7 @@ describe('ladder edge semantics', () => {
         name: 'PayloadSmith',
         url: 'https://example.test/p',
         description:
-          'payload generation; see [the formats page](https://example.test/p/formats) for details',
-      },
-    })
+          'payload generation; see [the formats page](https://example.test/p/formats) for details' } })
   })
 
   it('keeps FTS-looking text in a description as literal data', () => {
@@ -295,8 +280,7 @@ const API_CHECKLIST_DOC = [
   '- [Rate Limiting](https://example.test/api/rate-limiting) - Throttle requests per client.',
   '- [JWT Validation](https://example.test/api/jwt-validation) - Verify token signatures on every request.',
   '- [Input Validation](https://example.test/api/input-validation) - Validate all inputs server-side.',
-  '- A checklist item with no link at all',
-].join('\n')
+  '- A checklist item with no link at all' ].join('\n')
 
 function fixtureFetchText(overrides?: Map<string, string | Error>) {
   const byMarker: [string, string][] = [
@@ -309,8 +293,7 @@ function fixtureFetchText(overrides?: Map<string, string | Error>) {
     // The census row (not the map row) supplies the fetch URL (spec §4.1),
     // and the fixture census points at arsenal-fixture/* — match on the repo
     // segment alone.
-    ['/bug-bounty-reference/', fixture('bug-bounty-reference.md')],
-  ]
+    ['/bug-bounty-reference/', fixture('bug-bounty-reference.md')] ]
   return async (url: string) => {
     for (const [marker, override] of overrides ?? []) {
       if (url.includes(marker)) {
@@ -337,8 +320,7 @@ function buildFixtureCache(maxEntriesPerCollection = 20000) {
     cacheDir,
     sourceRepo: 'https://github.com/hack-with-github/awesome-hacking',
     refreshIntervalHours: 0,
-    maxEntriesPerCollection,
-  }
+    maxEntriesPerCollection }
   return { root, cacheDir, config }
 }
 
@@ -361,8 +343,7 @@ describe('buildArsenalData (Step 6 generation assembly)', () => {
       'red-teaming-toolkit': 5,
       'awesome-web-hacking': 8,
       'api-security-checklist': 3,
-      'bug-bounty-reference': 2,
-    }
+      'bug-bounty-reference': 2 }
     for (const [slug, count] of Object.entries(expectedEntries)) {
       const row = bySlug.get(slug)
       assert.ok(row, `priority row missing: ${slug}`)
@@ -425,8 +406,7 @@ describe('buildArsenalData (Step 6 generation assembly)', () => {
       {
         fetchText: fixtureFetchText(
           new Map([['/danielmiessler/SecLists/', new Error('destination denied: loopback')]]),
-        ),
-      },
+        ) },
     )
     const row = data.collections.find(c => c.slug === 'seclists')
     assert.ok(row)
@@ -444,8 +424,7 @@ describe('buildArsenalData (Step 6 generation assembly)', () => {
       {
         fetchText: fixtureFetchText(
           new Map([['/GTFOBins/', '# A page with no list items at all']]),
-        ),
-      },
+        ) },
     )
     const row = data.collections.find(c => c.slug === 'gtfobins')
     assert.ok(row)
@@ -463,10 +442,8 @@ describe('buildArsenalData (Step 6 generation assembly)', () => {
         fetchText: fixtureFetchText(
           new Map<string, string | Error>([
             ['/danielmiessler/SecLists/', `# SecLists stub\n${shared}`],
-            ['/swisskyrepo/PayloadsAllTheThings/', `# Payloads stub\n${shared}`],
-          ]),
-        ),
-      },
+            ['/swisskyrepo/PayloadsAllTheThings/', `# Payloads stub\n${shared}`] ]),
+        ) },
     )
     const hits = data.entries.filter(e => e.url === 'https://example.test/shared')
     assert.equal(hits.length, 1)
@@ -506,8 +483,7 @@ describe('parseHtmlIndexEntries (coordinator-ruled GTFOBins HTML-index rung)', (
     '<td><ul><li><a href="/gtfobins/7z/#file-read">File read</a></li></ul></td></tr>',
     '<tr><th><a href="/gtfobins/aa-exec/" class="bin-name">aa-exec</a></th></tr>',
     '<tr><th><a href="/gtfobins/7z/" class="bin-name">7z</a></th></tr>',
-    '</tbody></table></body></html>',
-  ].join('\n')
+    '</tbody></table></body></html>' ].join('\n')
 
   it('extracts bin-name anchors as entries, resolving hrefs against the index URL', () => {
     const parsed = parseHtmlIndexEntries(GTFO_INDEX_HTML, 'https://gtfobins.github.io')
@@ -515,8 +491,7 @@ describe('parseHtmlIndexEntries (coordinator-ruled GTFOBins HTML-index rung)', (
       parsed.entries.map(e => [e.name, e.url]),
       [
         ['7z', 'https://gtfobins.github.io/gtfobins/7z'],
-        ['aa-exec', 'https://gtfobins.github.io/gtfobins/aa-exec'],
-      ],
+        ['aa-exec', 'https://gtfobins.github.io/gtfobins/aa-exec'] ],
     )
     // Function sub-links are not items; the duplicate bin-name is a dupe.
     assert.equal(parsed.itemCount, 3)
@@ -531,8 +506,7 @@ describe('parseHtmlIndexEntries (coordinator-ruled GTFOBins HTML-index rung)', (
       {
         fetchText: fixtureFetchText(
           new Map([['/GTFOBins/', GTFO_INDEX_HTML]]),
-        ),
-      },
+        ) },
     )
     const row = data.collections.find(c => c.slug === 'gtfobins')
     assert.ok(row)
@@ -555,8 +529,7 @@ describe('table rung (production census format)', () => {
     '[Beta Tools](https://github.com/example/beta-tools) | Second curated list',
     '[Site Index](https://beta.example.io) | A project site, not a repo',
     '',
-    '- [Bullet Entry](https://github.com/example/bullet-entry) - A list item still parses',
-  ].join('\n')
+    '- [Bullet Entry](https://github.com/example/bullet-entry) - A list item still parses' ].join('\n')
 
   it('parseLevel1 reads table rows as collections with heading topics', () => {
     const census = parseLevel1(TABLE_DOC)
@@ -566,8 +539,7 @@ describe('table rung (production census format)', () => {
         ['alpha-list', 'Awesome Repositories'],
         ['beta-tools', 'Awesome Repositories'],
         ['site-index', 'Awesome Repositories'],
-        ['bullet-entry', 'Awesome Repositories'],
-      ],
+        ['bullet-entry', 'Awesome Repositories'] ],
     )
     assert.equal(census.collections[0].description, 'First curated list')
     assert.equal(census.itemCount, 4)
@@ -589,8 +561,7 @@ describe('table rung (production census format)', () => {
     '|-----|-----------|----|',
     '|RustyScan|The modern port scanner|https://github.com/example/rustyscan|',
     '|Amassive|Attack surface mapping|https://github.com/example/amassive|',
-    '|NoLink|No URL cell in this row|-|',
-  ].join('\n')
+    '|NoLink|No URL cell in this row|-|' ].join('\n')
 
   it('reads pipe-table rows with a bare-URL cell as entries', () => {
     const parsed = parseLinkedList(PIPE_DOC)
@@ -598,8 +569,7 @@ describe('table rung (production census format)', () => {
       parsed.entries.map(e => [e.name, e.url, e.description]),
       [
         ['RustyScan', 'https://github.com/example/rustyscan', 'The modern port scanner'],
-        ['Amassive', 'https://github.com/example/amassive', 'Attack surface mapping'],
-      ],
+        ['Amassive', 'https://github.com/example/amassive', 'Attack surface mapping'] ],
     )
     assert.equal(parsed.itemCount, 2)
   })

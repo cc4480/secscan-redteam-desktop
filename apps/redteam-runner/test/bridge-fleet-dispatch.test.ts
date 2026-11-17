@@ -40,8 +40,7 @@ const REGISTRY_OPS = [
   "shell_pwsh", "speak", "system_info", "task_checkpoint", "task_create", "task_status",
   "tcp_check", "tls_info", "type_text", "uia_click", "uia_find", "uia_set_text",
   "web_fetch", "web_search", "write_file", "submit_job", "job_status", "job_result",
-  "job_cancel",
-] as const;
+  "job_cancel" ] as const;
 
 /** The cdp_* family: wire names copied exactly from AlterEgo's seams
  * definitions (~/workspace/alterego pc-agent/seams/definitions/browser.py
@@ -50,8 +49,7 @@ const REGISTRY_OPS = [
  * a bridge offers, so all 77 must route — proven below. */
 const CDP_OPS = [
   "cdp_launch", "cdp_connect", "cdp_targets", "cdp_navigate", "cdp_snapshot",
-  "cdp_click", "cdp_type", "cdp_evaluate", "cdp_readback", "cdp_close",
-] as const;
+  "cdp_click", "cdp_type", "cdp_evaluate", "cdp_readback", "cdp_close" ] as const;
 
 /** The full registry once the bridge serves the CDP family: 67 + 10 = 77. */
 const REGISTRY_OPS_77 = [...REGISTRY_OPS, ...CDP_OPS] as const;
@@ -79,8 +77,7 @@ function fakeClient(opts?: { available?: boolean; callError?: Error; ops?: reado
       calls.push({ name, args });
       if (opts?.callError) throw opts.callError;
       return `result of ${name}`;
-    },
-  };
+    } };
 }
 
 const call = (name: string, args: Record<string, unknown> = {}): ToolCallRequest =>
@@ -91,8 +88,7 @@ function handlerCtx(): Ctx {
   return {
     input: { target: "https://shop.example.test", mode: "red", objective: "test", roe: { scope: ["shop.example.test"] } },
     events: { dir: "/tmp/bridge-fleet-dispatch-no-dir", append: () => {} },
-    deps: {},
-  } as unknown as Ctx;
+    deps: {} } as unknown as Ctx;
 }
 
 /** A LOCAL-host engagement context — the same calls must work here too (the gate is availability only). */
@@ -100,8 +96,7 @@ function handlerCtxLocal(): Ctx {
   return {
     input: { target: "operator-pc", mode: "red", objective: "test", localHost: true, roe: { scope: ["operator-pc"] } },
     events: { dir: "/tmp/bridge-fleet-dispatch-no-dir", append: () => {} },
-    deps: {},
-  } as unknown as Ctx;
+    deps: {} } as unknown as Ctx;
 }
 
 describe("bridge handler — availability re-check and full routing", () => {
@@ -176,8 +171,7 @@ describe("bridge handler — availability re-check and full routing", () => {
       async call(name: string, args: Record<string, unknown>) {
         rawCalls.push({ name, args });
         return { content: [{ type: "text", text: `raw result of ${name}` }], text: `raw result of ${name}` };
-      },
-    };
+      } };
     const wrapped = wrapBridgeClient(raw);
     const listed = await wrapped.listTools();
     assert.deepEqual(listed.map((t) => t.name), [...REGISTRY_OPS], "no name is filtered out of the listing");
@@ -205,16 +199,14 @@ function dispatchCtx(client: BridgeClientLike): Ctx {
       limiter: { acquire: async () => {} },
       autoHalt: { isHalted: () => false, haltReason: () => undefined, recordOutcome: () => undefined },
       killSwitchAborts: 0,
-      rpsPerHost: 5,
-    },
+      rpsPerHost: 5 },
     itemLedger: new Map(),
     opsecCooldown: new Set<string>(),
     coverage: new Set<string>(),
     targetCoverage: new Map(),
     probesUsed: 0,
     consecutive5xx: 0,
-    deps: { bridgeClient: client },
-  } as unknown as Ctx;
+    deps: { bridgeClient: client } } as unknown as Ctx;
 }
 
 describe("bridge dispatch through dispatchTool", () => {
@@ -289,8 +281,7 @@ describe("bridge handler — the CDP family (77-tool registry)", () => {
       },
       async call(name: string, _args: Record<string, unknown>) {
         return { content: [{ type: "text", text: `raw result of ${name}` }], text: `raw result of ${name}` };
-      },
-    };
+      } };
     const wrapped = wrapBridgeClient(raw);
     const listed = await wrapped.listTools();
     assert.deepEqual(listed.map((t) => t.name), [...REGISTRY_OPS_77], "all 77 names pass through — cdp_* included, nothing filtered");
@@ -319,8 +310,7 @@ function loopCtx(dir: string, completeForRole: CompleteFn, client: BridgeClientL
       mode: "red",
       objective: "test",
       target: "https://shop.example.test",
-      roe: { blackoutWindows: [], scope: ["shop.example.test"] },
-    },
+      roe: { blackoutWindows: [], scope: ["shop.example.test"] } },
     deps: { completeForRole, bridgeClient: client },
     events: new EventLog(dir, "eng-bridge-fleet", { target: "shop.example.test", mode: "red", objective: "test" }),
     hostKill: { aborted: false, controllers: new Set<AbortController>() },
@@ -328,8 +318,7 @@ function loopCtx(dir: string, completeForRole: CompleteFn, client: BridgeClientL
       killSwitchAborts: 0,
       limiter: { acquire: async () => {} },
       autoHalt: { isHalted: () => false, haltReason: () => undefined, recordOutcome: () => undefined },
-      rpsPerHost: 5,
-    },
+      rpsPerHost: 5 },
     tier: { current: 2, declared: 2, chainSteps: new Map<string, number>() },
     hosts: ["shop.example.test"],
     domain: "shop.example.test",
@@ -343,8 +332,7 @@ function loopCtx(dir: string, completeForRole: CompleteFn, client: BridgeClientL
     targetCoverage: new Map(),
     itemLedger: new Map(),
     opsecCooldown: new Set<string>(),
-    prober: { probe: async () => ({ status: 200, ms: 1, bodySnippet: "ok" }) },
-  } as unknown as Ctx;
+    prober: { probe: async () => ({ status: 200, ms: 1, bodySnippet: "ok" }) } } as unknown as Ctx;
 }
 
 function readEvents(dir: string): EngagementEvent[] {

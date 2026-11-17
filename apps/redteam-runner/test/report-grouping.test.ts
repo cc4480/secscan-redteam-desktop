@@ -18,8 +18,7 @@ const row = (key: string, disposition: string, reason?: string): VerdictRow => (
   key,
   disposition,
   name: "item",
-  reason,
-});
+  reason });
 
 function family(prefix: string, target: string, n: number, reason: string): VerdictRow[] {
   return Array.from({ length: n }, (_, i) => row(`${target}:${prefix}-${String(i + 1).padStart(3, "0")}`, "na", reason));
@@ -37,8 +36,7 @@ describe("grouping the not-applicable verdicts", () => {
     const g = groupNotApplicable([
       ...family("SS", "secscan", 120, "secscan.us is not in scope"),
       ...family("WS", "windows", 108, "no Windows host in scope"),
-      ...family("LX", "linux", 110, "no Linux host in scope"),
-    ]);
+      ...family("LX", "linux", 110, "no Linux host in scope") ]);
     assert.equal(g.length, 3, "three families, three lines");
   });
 
@@ -47,8 +45,7 @@ describe("grouping the not-applicable verdicts", () => {
     // say different things must not be merged into one line that says one of them.
     const g = groupNotApplicable([
       ...family("SS", "secscan", 10, "secscan.us is not in scope"),
-      ...family("SS", "secscan", 5, "duplicate declaration"),
-    ]);
+      ...family("SS", "secscan", 5, "duplicate declaration") ]);
     assert.equal(g.length, 2);
     assert.deepEqual(g.map((x) => x.ids.length).sort((a, b) => b - a), [10, 5]);
   });
@@ -56,8 +53,7 @@ describe("grouping the not-applicable verdicts", () => {
   it("puts the largest group first", () => {
     const g = groupNotApplicable([
       ...family("WS", "windows", 2, "small"),
-      ...family("SS", "secscan", 50, "large"),
-    ]);
+      ...family("SS", "secscan", 50, "large") ]);
     assert.equal(g[0]!.ids.length, 50, "the family that dominated the ledger reads first");
   });
 
@@ -66,8 +62,7 @@ describe("grouping the not-applicable verdicts", () => {
       row("seclayer:SL-001", "executed-clean"),
       row("seclayer:SL-002", "killed"),
       row("seclayer:SL-003", "blocked", "needs a second account"),
-      row("seclayer:SL-004", "na", "not in scope"),
-    ]);
+      row("seclayer:SL-004", "na", "not in scope") ]);
     assert.equal(g.length, 1);
     assert.equal(g[0]!.ids.length, 1);
   });
@@ -83,8 +78,7 @@ describe("rendering the groups", () => {
     const g = groupNotApplicable([
       ...family("SS", "secscan", 120, "secscan.us is not in scope"),
       ...family("WS", "windows", 108, "no Windows host in scope"),
-      ...family("LX", "linux", 110, "no Linux host in scope"),
-    ]);
+      ...family("LX", "linux", 110, "no Linux host in scope") ]);
     const lines = renderNotApplicable(g).split("\n").filter((l) => l.startsWith("- "));
     assert.equal(lines.length, 3, "338 items render as 3 lines");
   });

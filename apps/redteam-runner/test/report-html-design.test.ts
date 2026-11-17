@@ -33,8 +33,7 @@ const meta: ReportMeta = {
   startedAt: "2026-10-28T09:00:00.000Z",
   generatedAt: "2026-10-28T10:00:00.000Z",
   findings: { critical: 1, high: 1, medium: 1, low: 1, info: 0 },
-  battery: { total: 10, confirmed: 3, executedClean: 4, killed: 2, blocked: 1, na: 0, pending: 0 },
-};
+  battery: { total: 10, confirmed: 3, executedClean: 4, killed: 2, blocked: 1, na: 0, pending: 0 } };
 
 function bundle(over: Partial<PocBundle>): PocBundle {
   return {
@@ -57,17 +56,14 @@ function bundle(over: Partial<PocBundle>): PocBundle {
         result: "200 OK — body contains REDTEAM-MARKER-abc123",
         validation: "marker-echo",
         marker: "REDTEAM-MARKER-abc123",
-        replay: null,
-      },
-    ],
+        replay: null } ],
     markerSent: "REDTEAM-MARKER-abc123",
     markerObserved: "REDTEAM-MARKER-abc123",
     validationTier: "execution",
     proves: "The marker was executed and echoed by the target.",
     doesNotProve: "It does not prove data beyond the canary was reachable.",
     reverifyCommand: "node reverify.mjs --finding F-1",
-    ...over,
-  };
+    ...over };
 }
 
 const findings: Finding[] = [
@@ -75,13 +71,11 @@ const findings: Finding[] = [
   { id: "F-2", severity: "high", title: "Verbose errors disclose stack <script>alert(1)</script>", attackIds: [], evidence: "The error page prints a full stack trace.", fix: "Return generic errors.", retest: "Trigger the error; expect a generic page.", status: "confirmed", accountableOperator: "Carlos" },
   { id: "F-3", severity: "medium", title: "Missing rate limiting on login", attackIds: ["T1110"], evidence: "20 rapid attempts accepted.", fix: "Add rate limiting.", retest: "Repeat the burst; expect throttling.", status: "confirmed", accountableOperator: "Carlos" },
   { id: "F-4", severity: "low", title: "Cookie without Secure flag", attackIds: [], evidence: "Session cookie lacks Secure.", fix: "Set Secure.", retest: "Inspect Set-Cookie.", status: "deferred", accountableOperator: "Carlos" },
-  { id: "F-5", severity: "info", title: "SQL injection in search", attackIds: ["T1190"], evidence: "Tested and excluded.", fix: "", retest: "", status: "killed", accountableOperator: "Carlos" },
-];
+  { id: "F-5", severity: "info", title: "SQL injection in search", attackIds: ["T1190"], evidence: "Tested and excluded.", fix: "", retest: "", status: "killed", accountableOperator: "Carlos" } ];
 
 const bundles = new Map<string, PocBundle>([
   ["F-1", bundle({})],
-  ["F-2", bundle({ findingId: "F-2", validationTier: "observation", markerSent: undefined, markerObserved: undefined, proves: "The stack trace was observed in the response.", reverifyCommand: "node reverify.mjs --finding F-2" })],
-]);
+  ["F-2", bundle({ findingId: "F-2", validationTier: "observation", markerSent: undefined, markerObserved: undefined, proves: "The stack trace was observed in the response.", reverifyCommand: "node reverify.mjs --finding F-2" })] ]);
 
 function input(over: Partial<EngagementReportInput> = {}): EngagementReportInput {
   return {
@@ -95,30 +89,25 @@ function input(over: Partial<EngagementReportInput> = {}): EngagementReportInput
     noBundleReasons: new Map([["F-3", "finding F-3: no correlated tool execution in the audit log — no bundle"]]),
     negativeProof: [
       { hypothesis: "SQL injection in search", killingObservation: "Parameterised query confirmed.", decisiveEvents: [] },
-      { hypothesis: "Open redirect on logout", killingObservation: "Redirect target is allow-listed.", attackId: "T1204", decisiveEvents: [{ seq: 3, ts: meta.startedAt, tool: "http_probe", result: "302 to /home" }] },
-    ],
+      { hypothesis: "Open redirect on logout", killingObservation: "Redirect target is allow-listed.", attackId: "T1204", decisiveEvents: [{ seq: 3, ts: meta.startedAt, tool: "http_probe", result: "302 to /home" }] } ],
     findingMeta: new Map([["F-1", { category: "validation", owasp: "WSTG-ATHZ-04" }]]),
     coverage: {
       fullBattery: true,
       cells: [
         { target: "webapp", category: "validation", state: "done" },
         { target: "webapp", category: "logic", state: "blocked" },
-        { target: "webapp", category: "functionality", state: "missing" },
-      ],
+        { target: "webapp", category: "functionality", state: "missing" } ],
       totals: { total: 10, confirmed: 3, executedClean: 4, killed: 2, blocked: 1, na: 0, pending: 0 },
       probesUsed: 42,
       planOnly: ["webapp:WS-064 [needs: kerberos ticket material]"],
-      notCovered: ["webapp:functionality"],
-    },
+      notCovered: ["webapp:functionality"] },
     activity: {
       eventCount: 128,
       rows: [{ action: "http_probe", count: 40, attackIds: ["T1190"], firstSeq: 2, lastSeq: 90 }],
       totalActions: 1,
       decisions: [{ action: "sign_off", seq: 120 }],
-      danglingCauses: [],
-    },
-    ...over,
-  };
+      danglingCauses: [] },
+    ...over };
 }
 
 const html = renderEngagementReportHtml(input());
@@ -162,8 +151,7 @@ describe("unified report — sections in the design order", () => {
     "Ruled out — 2",
     "Complete Fix Prompt",
     "Tool Activity",
-    "Artifacts:",
-  ];
+    "Artifacts:" ];
   it("renders every section, in order", () => {
     let last = -1;
     for (const m of marks) {

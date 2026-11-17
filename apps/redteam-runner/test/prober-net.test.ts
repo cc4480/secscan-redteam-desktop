@@ -15,8 +15,7 @@ import {
   makePinnedLookup,
   resolveCheckedAddresses,
   type DnsAddress,
-  type DnsResolver,
-} from '../src/prober-net.js'
+  type DnsResolver } from '../src/prober-net.js'
 
 function fakeResolver(map: Record<string, string[]>): DnsResolver {
   return async (hostname: string) => {
@@ -166,8 +165,7 @@ describe('WebProber DNS pinning (loopback server + fake resolver)', () => {
     'victim.test': ['127.0.0.1'],
     'meta.test': ['169.254.169.254'],
     'metadata.test': ['169.254.169.254'],
-    'example.com': ['93.184.216.34'],
-  })
+    'example.com': ['93.184.216.34'] })
   const sandbox = () =>
     new WebProber({ scopeHosts: ['sandbox.test', 'victim.test', 'meta.test'], allowPrivateHosts: true, resolver, minDelayMs: 0, timeoutMs: 5000 })
 

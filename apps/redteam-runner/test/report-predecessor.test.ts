@@ -18,8 +18,7 @@ import {
   joinLiveLabels,
   normalizeTargetKey,
   recordReportMeta,
-  resolvePredecessor,
-} from "../src/report/predecessor.js";
+  resolvePredecessor } from "../src/report/predecessor.js";
 import { reportPhase } from "../src/report/phase.js";
 import { EventLog } from "../src/events.js";
 import { type Ctx, type LiveFinding } from "../src/context.js";
@@ -52,8 +51,7 @@ function writeEngagement(root: string, id: string, o: FixtureOpts): string {
       findings: o.findings ?? [],
       eventCount: 1,
       startedAt: o.startedAt,
-      updatedAt: o.startedAt,
-    }),
+      updatedAt: o.startedAt }),
   );
   if (o.artifacts !== false) {
     writeFileSync(join(dir, "report.md"), o.dryRun ? "# Engagement report (dry-run)\n" : "# Engagement report\n");
@@ -75,15 +73,13 @@ function fakeCtx(dir: string, id: string, target: string, startedAt: string, dry
   return {
     input: { target },
     config: { dryRunAgents: dryRun },
-    events: { dir, engagementId: id, snapshot: { startedAt } },
-  } as unknown as Ctx;
+    events: { dir, engagementId: id, snapshot: { startedAt } } } as unknown as Ctx;
 }
 
 function finding(over: Partial<Finding>): Finding {
   return {
     id: "F-1", severity: "low", title: "t", attackIds: [], evidence: "", fix: "", retest: "", status: "confirmed",
-    ...over,
-  };
+    ...over };
 }
 
 const T = "https://secscan.us";
@@ -149,10 +145,8 @@ describe("predecessor resolution (§1.2)", () => {
       findings: [
         finding({ id: "F-1", title: "proven one" }),
         finding({ id: "F-2", title: "killed one", status: "killed" }),
-        finding({ id: "F-3", title: "deferred one", status: "deferred" }),
-      ],
-      pocExec: ["F-1"],
-    });
+        finding({ id: "F-3", title: "deferred one", status: "deferred" }) ],
+      pocExec: ["F-1"] });
     const cur = writeEngagement(root, "eng-cur", { target: T, startedAt: "2026-10-20T00:00:00.000Z" });
     const base = resolvePredecessor(fakeCtx(cur, "eng-cur", T, "2026-10-20T00:00:00.000Z"));
     assert.deepEqual(
@@ -184,8 +178,7 @@ describe("arm runs + live-label join", () => {
       ev("seclayer_dast", "seclayer_dast/dom-xss vs https://x — 1 finding"),
       ev("secscan_exec"),
       ev("http_probe"),
-      ev("seclayer_dast", "no label in this result"),
-    ]);
+      ev("seclayer_dast", "no label in this result") ]);
     assert.deepEqual(arms.map((a) => a.name).sort(), ["bola", "dom_xss", "secscan-engine"]);
     assert.ok(arms.every((a) => a.state === "ran"));
   });
@@ -203,8 +196,7 @@ describe("arm runs + live-label join", () => {
   it("joins by normalized title + attackId, then by unique title", () => {
     const live: LiveFinding[] = [
       { severity: "critical", title: "Cross-Tenant Access.", attackId: "T1190", evidence: "", vulnClass: "bola-idor" },
-      { severity: "low", title: "Loose header", attackId: "T0000", evidence: "", vulnClass: "Injection Defense" },
-    ];
+      { severity: "low", title: "Loose header", attackId: "T0000", evidence: "", vulnClass: "Injection Defense" } ];
     const joined = joinLiveLabels(
       [finding({ id: "F-1", title: "cross-tenant access", attackIds: ["t1190"] }), finding({ id: "F-2", title: "Loose header", attackIds: [] })],
       live,
@@ -222,9 +214,7 @@ describe("recordReportMeta — halt honesty (eng-2026-11-02-or12 defect 2)", () 
       events: {
         dir,
         engagementId: "eng-test-meta",
-        snapshot: { startedAt: "2026-11-02T22:53:00.000Z" },
-      },
-    } as unknown as Ctx;
+        snapshot: { startedAt: "2026-11-02T22:53:00.000Z" } } } as unknown as Ctx;
   }
 
   it("a null posture writes NO score/grade — no fabricated A/100", () => {
@@ -249,8 +239,7 @@ describe("recordReportMeta — halt honesty (eng-2026-11-02-or12 defect 2)", () 
         {
           version: 1, engagementId: "eng-test-meta", target: "http://127.0.0.1:8080",
           startedAt: "2026-11-02T22:53:00.000Z", dryRun: false,
-          score: 82, grade: "B",
-        },
+          score: 82, grade: "B" },
         null, 2,
       );
     assert.equal(raw, expected);
@@ -261,8 +250,7 @@ describe("recordReportMeta — halt honesty (eng-2026-11-02-or12 defect 2)", () 
     const events = new EventLog(dir, "eng-test-halt", {
       target: "http://127.0.0.1:8080",
       mode: "red",
-      objective: "halt-path meta honesty",
-    });
+      objective: "halt-path meta honesty" });
     const ctx = {
       input: { mode: "red", target: "http://127.0.0.1:8080", fullBattery: false, operatorName: "test" },
       config: { dryRunAgents: false },
@@ -280,8 +268,7 @@ describe("recordReportMeta — halt honesty (eng-2026-11-02-or12 defect 2)", () 
       verificationProof: "test attestation",
       plan: undefined,
       operationNarrative: undefined,
-      nuclei: { templateExecutions: 0, templatesRun: 0, findings: 0 },
-    } as unknown as Ctx;
+      nuclei: { templateExecutions: 0, templatesRun: 0, findings: 0 } } as unknown as Ctx;
     try {
       await reportPhase(ctx, "brief", "summary", { haltedReason: "test halt: attested target unreachable" });
     } catch {

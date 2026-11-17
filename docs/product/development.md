@@ -28,7 +28,7 @@ website/            the VitePress documentation projection
 | `harness-plugin` | The fleet's harness face: the authorization gate hook, the engagement doctrine prompt section (services inventory, second-opinion rules, the SOUL layer's seat), the role definitions in `agents/` (`coordinator`, `recon`, `exploiter`, `architect`, `reporter`, `_shared-base`), and the redteam profile |
 | `llm-router` | Provider registry (Meta Model API primary), per-role seat policy, charter composition, and the resilience wrapper |
 | `desktop-bundle` | The Cordis bundle patch that composes the product into a profile: the three MCP rows, the harness plugin, and the agent-team rows with the fleet bounds |
-| `auth-gate` | The verification decision library behind the gate hook: server-authoritative domain checks against the SecScan service |
+| `auth-gate` | The local verification decision library behind the gate hook: DNS-challenge checks and verified-domain storage |
 | `foundry-gate` | The Foundry's gate package and its frozen starter snapshot: candidate evaluation for the Gold Loop |
 | `scripts` | Redteam build utilities (including the runner dist-hash/stamp tooling) |
 

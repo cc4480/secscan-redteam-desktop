@@ -10,8 +10,7 @@ import { MemoryError } from "../src/memory/errors.js";
 import {
   assembleMemoryPack,
   decayFactor,
-  type MemoryRecallStore,
-} from "../src/memory/recall.js";
+  type MemoryRecallStore } from "../src/memory/recall.js";
 import { unitViewSourceHash } from "../src/memory/views.js";
 import { deriveMemoryScope } from "../src/memory/scope.js";
 import type { MemoryUnit, RecallReceipt } from "../src/memory/types.js";
@@ -57,8 +56,7 @@ function makeUnit(overrides: Partial<MemoryUnit> & { unitId: string }): MemoryUn
       scopeKey: "target-example-test-ab12",
       hosts: ["target.example.test"],
       stack: [],
-      originEngagementIds: ["eng-0"],
-    },
+      originEngagementIds: ["eng-0"] },
     provenance: {
       sourceClass: "trajectory",
       sourceEngagementId: "eng-0",
@@ -66,8 +64,7 @@ function makeUnit(overrides: Partial<MemoryUnit> & { unitId: string }): MemoryUn
       derivedFromUnitIds: [],
       extractor: { name: "trajectory-projector", version: "1", inputHash: "00" },
       createdAt: NOW_ISO,
-      createdBy: "runner",
-    },
+      createdBy: "runner" },
     proof: { state: "unproven", receipts: [] },
     trust: { tier: "single-source", baseScore: 0.45, derivedAt: NOW_ISO, derivation: ["SINGLE_SOURCE"] },
     corroboration: { independentCount: 1, sourceKeys: ["trajectory:eng-0"] },
@@ -81,12 +78,10 @@ function makeUnit(overrides: Partial<MemoryUnit> & { unitId: string }): MemoryUn
       sourceHash: "hash-1",
       generatedAt: NOW_ISO,
       generator: "deterministic-v1",
-      stale: false,
-    },
+      stale: false },
     retrieval: { retrievalCount: 0 },
     hash: "hash-1",
-    ...overrides,
-  };
+    ...overrides };
   // Default fixtures carry healthy views: bind sourceHash to the record
   // the way the real store does. Caller-supplied views stay as given
   // (the stale-view tests depend on their bogus sourceHash).
@@ -98,8 +93,7 @@ const scope = deriveMemoryScope({
   engagementId: "eng-9",
   hosts: ["target.example.test"],
   verifiedAt: NOW_ISO,
-  verificationProof: "operator attestation",
-});
+  verificationProof: "operator attestation" });
 
 describe("memory recall (brief §7.1)", () => {
   it("empty store yields an explicit NO_ELIGIBLE_UNITS pack and a receipt", () => {
@@ -108,8 +102,7 @@ describe("memory recall (brief §7.1)", () => {
       phase: "start",
       query: "anything",
       engagementId: "eng-9",
-      now: NOW,
-    });
+      now: NOW });
     assert.equal(pack.emptyReason, "NO_ELIGIBLE_UNITS");
     assert.match(pack.text, /no eligible prior memory/i);
     assert.match(pack.text, /reason NO_ELIGIBLE_UNITS/);
@@ -127,8 +120,7 @@ describe("memory recall (brief §7.1)", () => {
           query: "q",
           engagementId: "eng-9",
           budget: 99,
-          now: NOW,
-        }),
+          now: NOW }),
       (err: unknown) =>
         err instanceof MemoryError && err.code === "SCHEMA_INVALID" && /REDTEAM_MEMORY_BUDGET/.test(err.message),
     );
@@ -145,14 +137,11 @@ describe("memory recall (brief §7.1)", () => {
         derivedFromUnitIds: [],
         extractor: { name: "trajectory-projector", version: "1", inputHash: "00" },
         createdAt: "2026-04-14T13:00:00.000Z", // 200 days before NOW
-        createdBy: "runner",
-      },
-      corroboration: { independentCount: 1, sourceKeys: ["trajectory:eng-old"] },
-    });
+        createdBy: "runner" },
+      corroboration: { independentCount: 1, sourceKeys: ["trajectory:eng-old"] } });
     const fresh = makeUnit({
       unitId: "mem_new",
-      claim: "gateway retries lesson confirmed again in october exercises",
-    });
+      claim: "gateway retries lesson confirmed again in october exercises" });
     // The factor itself: 2^(-200/90) ≈ 0.2143 for base 0.45 (< 0.7, >= 0.3).
     const factor = decayFactor(old, NOW);
     assert.ok(Math.abs(factor - Math.pow(2, -200 / 90)) < 1e-9, `factor ${factor}`);
@@ -163,8 +152,7 @@ describe("memory recall (brief §7.1)", () => {
       phase: "exploit",
       query: "gateway retries lesson",
       engagementId: "eng-9",
-      now: NOW,
-    });
+      now: NOW });
     assert.deepEqual(
       pack.survivors.map((s) => s.unitId),
       ["mem_new", "mem_old"],
@@ -182,10 +170,8 @@ describe("memory recall (brief §7.1)", () => {
         derivedFromUnitIds: [],
         extractor: { name: "registry-projector", version: "1", inputHash: "00" },
         createdAt: "2025-01-01T00:00:00.000Z",
-        createdBy: "runner",
-      },
-      trust: { tier: "proven", baseScore: 1, derivedAt: NOW_ISO, derivation: ["CELL_PROVEN"] },
-    });
+        createdBy: "runner" },
+      trust: { tier: "proven", baseScore: 1, derivedAt: NOW_ISO, derivation: ["CELL_PROVEN"] } });
     assert.equal(decayFactor(proven, NOW), 1);
     const strongLesson = makeUnit({
       unitId: "mem_strong",
@@ -197,25 +183,21 @@ describe("memory recall (brief §7.1)", () => {
         derivedFromUnitIds: [],
         extractor: { name: "trajectory-projector", version: "1", inputHash: "00" },
         createdAt: "2025-01-01T00:00:00.000Z",
-        createdBy: "runner",
-      },
-    });
+        createdBy: "runner" } });
     assert.equal(decayFactor(strongLesson, NOW), 1); // baseScore >= 0.7 exemption
   });
 
   it("a stale view that cannot be refreshed excludes the candidate (VIEW_STALE)", () => {
     const stale = makeUnit({ unitId: "mem_stale", views: {
       l0: "stale", l1: "stale", sourceHash: "other-hash", generatedAt: NOW_ISO,
-      generator: "deterministic-v1", stale: true,
-    } });
+      generator: "deterministic-v1", stale: true } });
     const store = new FakeStore([stale]);
     store.viewResult = { refreshed: [], failed: ["mem_stale"], staleDirs: [], units: [] };
     const pack = assembleMemoryPack(store, scope, {
       phase: "start",
       query: "generic lesson",
       engagementId: "eng-9",
-      now: NOW,
-    });
+      now: NOW });
     assert.deepEqual(pack.survivors, []);
     assert.match(pack.text, /reason VIEW_STALE/);
     assert.deepEqual(store.receipts[0]!.viewStaleExcluded, ["mem_stale"]);
@@ -224,8 +206,7 @@ describe("memory recall (brief §7.1)", () => {
   it("a refreshed stale view rejoins the pool and is receipted", () => {
     const stale = makeUnit({ unitId: "mem_fixed", views: {
       l0: "old l0", l1: "old l1", sourceHash: "other-hash", generatedAt: NOW_ISO,
-      generator: "deterministic-v1", stale: true,
-    } });
+      generator: "deterministic-v1", stale: true } });
     const refreshed = makeUnit({ unitId: "mem_fixed" });
     const store = new FakeStore([stale]);
     store.viewResult = { refreshed: ["mem_fixed"], failed: [], staleDirs: [], units: [refreshed] };
@@ -233,8 +214,7 @@ describe("memory recall (brief §7.1)", () => {
       phase: "start",
       query: "generic lesson",
       engagementId: "eng-9",
-      now: NOW,
-    });
+      now: NOW });
     assert.deepEqual(pack.survivors.map((s) => s.unitId), ["mem_fixed"]);
     assert.deepEqual(store.receipts[0]!.viewsRefreshed, ["mem_fixed"]);
   });

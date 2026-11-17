@@ -20,7 +20,7 @@ import { createAssistantMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SESSION_FORMAT_VERSION, Session, SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import MessageFeedbackService from '@deepseek-ai/dsh-message-feedback'
 import JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import OpenTelemetrySessionBackend, { Config, DEFAULT_TELEMETRY_MODE, SessionTelemetryMode } from '../src/index.ts'
+import OpenTelemetrySessionBackend, { Config, DEFAULT_TELEMETRY_EXPORTER_URL, DEFAULT_TELEMETRY_MODE, SessionTelemetryMode } from '../src/index.ts'
 
 interface Capture {
   headers: import('node:http').IncomingHttpHeaders
@@ -472,16 +472,17 @@ describe('OpenTelemetrySessionBackend wire', () => {
     const defaultCtx = new Context()
     await defaultCtx.plugin(SessionStore)
     const defaulted = await defaultCtx.plugin(OpenTelemetrySessionBackend, { exporter: { url } })
-    expect(defaultCtx.sessionTelemetry.sharing).toBe('feedback-only')
+    expect(defaultCtx.sessionTelemetry.sharing).toBe('disabled')
     await defaulted.dispose()
 
     // No record was emitted by any mode, so nothing reached the collector.
     expect(captures).toEqual([])
   })
 
-  it('defaults direct construction to feedback-only delivery', async () => {
+  it('defaults direct construction to disabled delivery', async () => {
     const { url, captures } = await mockCollector()
     const ctx = new Context()
+    const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
     try {
       await ctx.plugin(SessionStore)
       new OpenTelemetrySessionBackend(ctx, {
@@ -493,14 +494,26 @@ describe('OpenTelemetrySessionBackend wire', () => {
       session.append('turn/start', { turn: 1 })
       expect(captures).toEqual([])
       recordFeedback(session, { text: 'explicit report' })
-      const submitted = session.snapshotEvents().map(event => event.type)
-      await expect.poll(() => eventTypes(captures)).toEqual(submitted)
-      session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
       await ctx.sessionTelemetry.shutdown()
-      expect(eventTypes(captures)).toEqual(submitted)
+      expect(captures).toEqual([])
+      expect(warn).toHaveBeenCalledWith(
+        'OpenTelemetry session upload is DISABLED; this feedback is not uploaded through OpenTelemetry',
+      )
     } finally {
       await ctx.fiber.dispose()
     }
+  })
+
+  it('uses the default local exporter URL for uploading modes when omitted', async () => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(SessionStore)
+      await ctx.plugin(OpenTelemetrySessionBackend, { mode: SessionTelemetryMode.FEEDBACK_ONLY })
+      expect(ctx.sessionTelemetry.sharing).toBe('feedback-only')
+    } finally {
+      await ctx.fiber.dispose()
+    }
+    expect(DEFAULT_TELEMETRY_EXPORTER_URL).toBe('http://127.0.0.1:4318/v1/logs')
   })
 })
 
@@ -755,14 +768,11 @@ describe('OpenTelemetrySessionBackend config fails loud', () => {
     expectTypeOf<SessionTelemetryMode.FEEDBACK_ONLY>().toExtend<SessionTelemetryMode>()
     expect(Object.values(SessionTelemetryMode)).toEqual(['FEEDBACK_ONLY', 'DISABLED'])
     expect(() => Config({ mode: 'FULL' } as unknown as Config)).toThrow()
-    expect(DEFAULT_TELEMETRY_MODE).toBe(SessionTelemetryMode.FEEDBACK_ONLY)
+    expect(DEFAULT_TELEMETRY_MODE).toBe(SessionTelemetryMode.DISABLED)
     expect(Config({}).mode).toBe(DEFAULT_TELEMETRY_MODE)
   })
 
   it.each([
-    [{}, /exporter\.url is required/],
-    [{ mode: SessionTelemetryMode.FEEDBACK_ONLY }, /exporter\.url is required/],
-    [{ mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url: '' } }, /exporter\.url is required/],
     [{ mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url: 'not a url' } }, /not a valid URL/],
     [{ mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url: 'ftp://collector' } }, /must be http\(s\)/],
     [{ mode: 'INVALID' }, /INVALID/],
@@ -777,6 +787,20 @@ describe('OpenTelemetrySessionBackend config fails loud', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await expect(ctx.plugin(OpenTelemetrySessionBackend, config as Config)).rejects.toThrow(message)
+  })
+
+  it('defaults disabled mode and default local exporter URL for uploading modes', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    const fiber = await ctx.plugin(OpenTelemetrySessionBackend, {} as Config)
+    expect(ctx.sessionTelemetry.sharing).toBe('disabled')
+    await fiber.dispose()
+
+    const uploadCtx = new Context()
+    await uploadCtx.plugin(SessionStore)
+    const uploadFiber = await uploadCtx.plugin(OpenTelemetrySessionBackend, { mode: SessionTelemetryMode.FEEDBACK_ONLY } as Config)
+    expect(uploadCtx.sessionTelemetry.sharing).toBe('feedback-only')
+    await uploadFiber.dispose()
   })
 
   it.each(['INVALID', 'FULL'])('rejects direct mode %s before reading transport config', async (mode) => {

@@ -26,8 +26,7 @@ import {
   XTOOL_DENIED_FLAGS,
   findProfile,
   checkXToolFlags,
-  buildXToolArgv,
-} from "../src/xtool/registry.js";
+  buildXToolArgv } from "../src/xtool/registry.js";
 import { parseFfufJsonl, parseGobusterText, runXTool } from "../src/xtool/executor.js";
 import { toolMinTier } from "../src/accountability/tiers.js";
 import { XTOOL_DEFS, XTOOL_DEFS_BY_NAME } from "../src/tools/xtool.js";
@@ -107,16 +106,14 @@ describe("argv construction", () => {
   it("john identify takes NO target (it lists formats and reads no file)", () => {
     const argv = buildXToolArgv(john, {
       bin: "john.exe", target: "/tmp/hashes.txt",
-      profile: findProfile(john, "identify")!, timeoutS: 60,
-    });
+      profile: findProfile(john, "identify")!, timeoutS: 60 });
     assert.deepEqual(argv, ["john.exe", "--list=formats"]);
   });
 
   it("john wordlist passes --wordlist=<path> AND the hash file", () => {
     const argv = buildXToolArgv(john, {
       bin: "john.exe", target: "h.txt", wordlist: "w.txt",
-      profile: findProfile(john, "wordlist")!, timeoutS: 60,
-    });
+      profile: findProfile(john, "wordlist")!, timeoutS: 60 });
     assert.deepEqual(argv, ["john.exe", "--wordlist=w.txt", "h.txt"]);
     assert.ok(!argv.includes("--"), "no stray end-of-options marker");
   });
@@ -124,16 +121,14 @@ describe("argv construction", () => {
   it("john show passes the hash file positionally", () => {
     const argv = buildXToolArgv(john, {
       bin: "john.exe", target: "h.txt",
-      profile: findProfile(john, "show")!, timeoutS: 60,
-    });
+      profile: findProfile(john, "show")!, timeoutS: 60 });
     assert.deepEqual(argv, ["john.exe", "--show", "h.txt"]);
   });
 
   it("ffuf gets -w <wordlist> and -u <target> as separate argv elements", () => {
     const argv = buildXToolArgv(ffuf, {
       bin: "ffuf.exe", target: "https://h/FUZZ", wordlist: "w.txt",
-      profile: findProfile(ffuf, "dirs")!, timeoutS: 60,
-    });
+      profile: findProfile(ffuf, "dirs")!, timeoutS: 60 });
     assert.equal(argv[0], "ffuf.exe");
     assert.equal(argv[argv.indexOf("-w") + 1], "w.txt");
     assert.equal(argv[argv.indexOf("-u") + 1], "https://h/FUZZ");
@@ -142,8 +137,7 @@ describe("argv construction", () => {
   it("sqlmap puts the target after -u and never a bare --", () => {
     const argv = buildXToolArgv(sqlmap, {
       bin: "sqlmap", target: "https://h/?id=1",
-      profile: findProfile(sqlmap, "detect")!, timeoutS: 60,
-    });
+      profile: findProfile(sqlmap, "detect")!, timeoutS: 60 });
     assert.equal(argv[argv.indexOf("-u") + 1], "https://h/?id=1");
     assert.ok(!argv.includes("--"), "sqlmap rejects a bare --");
   });
@@ -151,8 +145,7 @@ describe("argv construction", () => {
   it("sqlmap launches through the platform Python (python3 off Windows)", () => {
     const argv = buildXToolArgv(sqlmap, {
       bin: "sqlmap", target: "https://h/?id=1",
-      profile: findProfile(sqlmap, "detect")!, timeoutS: 60,
-    });
+      profile: findProfile(sqlmap, "detect")!, timeoutS: 60 });
     assert.equal(argv[0], process.platform === "win32" ? "python" : "python3");
     assert.equal(argv[1], "sqlmap.py");
   });
@@ -160,8 +153,7 @@ describe("argv construction", () => {
   it("a target beginning with '-' cannot be read as a flag", () => {
     const argv = buildXToolArgv(ffuf, {
       bin: "ffuf.exe", target: "--os-shell", wordlist: "w.txt",
-      profile: findProfile(ffuf, "dirs")!, timeoutS: 60,
-    });
+      profile: findProfile(ffuf, "dirs")!, timeoutS: 60 });
     assert.equal(argv[argv.indexOf("-u") + 1], "--os-shell");
     assert.equal(argv.filter((a) => a === "--os-shell").length, 1, "appears once, as the target value");
   });

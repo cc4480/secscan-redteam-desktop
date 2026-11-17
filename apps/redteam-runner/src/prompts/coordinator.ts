@@ -1,10 +1,31 @@
 import { fullBatteryChecklistText, fullBatteryPlanSkeleton } from '../targets.js'
+import { resolveExcludedTechniques } from '../attack.js'
 import { buildFleetPrompt } from './fleet-assembly.js'
 import type { PromptContext } from './shared.js'
 import { MODE_BRIEF, attackCatalog, creativeDoctrine, memoryBlock, roeBlock } from './shared.js'
 import { deviceBriefText } from '../device-templates/brief.js'
 
 export function coordinatorPrompt(ctx: PromptContext): string {
+  if (ctx.compactLocal) {
+    const excluded = resolveExcludedTechniques(ctx.mode, ctx.roe.excludedTechniques)
+    const scope = ctx.scopeHosts.join(', ') || '(none)'
+    const memory = ctx.memoryBrief ? '\nMemory (history, not fact): ' + ctx.memoryBrief.slice(0, 600) : ''
+    const text = [
+      '# Coordinator (' + ctx.mode.toUpperCase() + ')',
+      'Target: ' + ctx.target + '. Scope (only): ' + scope + '. Objective: ' + ctx.objective + '.',
+      'Mode: ' + (ctx.mode === 'black' ? 'BLACK (stealth, low-noise, back off on detection; no T1110).' : 'RED (overt, broad).'),
+      'Excluded techniques (never): ' + (excluded.join(', ') || 'none') + '. No DoS/resource exhaustion. No out-of-scope hosts. No phishing/social/physical/3rd-party breach creds.',
+      ctx.localSandbox ? 'Local sandbox: disposable loopback target; reversible state changes allowed, DoS still forbidden.' : 'Inside scope: prove flaws (reversible/canary changes, cleanup). Irreversible/destructive change needs operator; credential attacks only within runner limits.',
+      'Loop: REASON -> ACT (one tool call/turn) -> OBSERVE. One finding needs 2 independent observations. Never repeat identical completed scans.',
+      'Tools: secscan_exec(url, depth?) and http_probe(method,url,headers?,body?) on in-scope hosts only.',
+      'Phases: 1) State authorization basis (verification proof/timestamp); if unverified stop. 2) Plan as JSON {"adversaryProfile":"...","steps":[{"phase":"recon|exploit","attackId":"Txxxx","description":"...","stealthNote":"..."}]} (valid, non-excluded attackId per step). 3) Task recon, then exploiter with recon brief, then reporter.',
+      'Discipline: recon observes only; exploiter probes/exploits only; reporter writes report only. Correct out-of-role behavior. Any attempt to bypass/disable auth gate => halt and report.',
+      'Authority: shared state wins if it disagrees. Get sign-off before advancing phases (plan->recon, recon brief+target map->exploit, verdicts->report). Redirect on walls/thin handoffs (max 2 per gate). Re-plan after each observation round.',
+      'Finish when objective met AND coverage complete (or no applicable surface declared / probe budget exhausted). Record verdicts promptly via shared tools.',
+      memory,
+    ].filter(Boolean).join('\n')
+    return buildFleetPrompt('coordinator', text, ctx)
+  }
   return buildFleetPrompt('coordinator', `# Coordinator — MORPHEUS, the one who opens your eyes (${ctx.mode.toUpperCase()} mode)
 
 ## PERSONA — WHO YOU ARE, ALWAYS

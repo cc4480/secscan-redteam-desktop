@@ -1272,6 +1272,26 @@ async function withDirectoryMutex(directory, operation) {
     }
 }
 /**
+ * Collect every pid a state record lists (primary `pid` then any
+ * `previousPids`) without duplicates, in termination order.
+ * @param state - the published server state to read pids from.
+ * @returns the recorded pids, primary first.
+ */
+function recordedStatePids(state) {
+    if (state === undefined)
+        return [];
+    const pids = [];
+    if (state.pid !== undefined)
+        pids.push(state.pid);
+    if (state.previousPids !== undefined) {
+        for (const pid of state.previousPids) {
+            if (!pids.includes(pid))
+                pids.push(pid);
+        }
+    }
+    return pids;
+}
+/**
  * Terminate every pid a state record lists (primary `pid` then any
  * `previousPids`), awaiting each exit. A pid that already does not
  * exist is skipped by {@link terminateProcess} itself.
@@ -1280,6 +1300,18 @@ async function withDirectoryMutex(directory, operation) {
 async function terminateRecordedPids(pids) {
     for (const pid of pids)
         await terminateProcess(pid);
+}
+/**
+ * Terminate every recorded pid in `state` that this host can account
+ * for, awaiting each exit. Used to drain orphan bookkeeping before a
+ * state transition replaces the record.
+ * @param state - the published server state whose pids should be drained.
+ */
+async function drainRecordedStatePids(state) {
+    const pids = recordedStatePids(state);
+    if (pids.length === 0)
+        return;
+    await terminateRecordedPids(pids.filter(pid => processExists(pid)));
 }
 /**
  * @param pid - the process id to test.
@@ -1409,17 +1441,67 @@ async function startLlamaServerLocked(deps, model) {
         }
         else if (current.pid !== undefined && processExists(current.pid)) {
             // Our recorded server is alive but its endpoint does not answer:
-            // it is wedged, so stop it before starting a replacement.
-            await terminateProcess(current.pid);
+            // it is wedged, so stop it and drain every recorded pid before
+            // starting a replacement. Carrying previousPids forward here would
+            // orphan them across the switch.
+            await drainRecordedStatePids(current);
             writeLocalServerState(deps.directory, {
                 status: 'stopped',
                 ...current.modelId === undefined ? {} : { modelId: current.modelId },
-                ...current.previousPids === undefined ? {} : { previousPids: current.previousPids },
+            });
+        }
+        else if (current.previousPids !== undefined) {
+            // The recorded endpoint is not answering and the primary pid is
+            // absent or dead, but the state still carries previous pids.
+            // Drain them before spawning a replacement so the bookkeeping does
+            // not leak across this transition.
+            await drainRecordedStatePids({ status: current.status, previousPids: current.previousPids });
+            writeLocalServerState(deps.directory, {
+                status: 'stopped',
+                ...current.modelId === undefined ? {} : { modelId: current.modelId },
             });
         }
     }
+    else if (current !== undefined && current.status === 'starting' && current.pid === undefined) {
+        // A pid-less 'starting' record means an in-flight spawn's pid has
+        // not been published and this host cannot safely identify or stop
+        // it. Refusing here preserves honest ownership and avoids orphaning
+        // that child by racing a second spawn over the same directory.
+        throw new Error('the local model server is starting and its pid has not been published '
+            + `(server-state.json in ${deps.directory} has no pid); wait for the start to settle, then start it again`);
+    }
+    else if (current !== undefined && current.status !== 'starting' && current.previousPids !== undefined) {
+        // Non-running (stopped/error) records may still carry orphan
+        // previousPids; drain them before a new start reuses this directory.
+        await drainRecordedStatePids({ status: current.status, previousPids: current.previousPids });
+        writeLocalServerState(deps.directory, {
+            status: current.status,
+            ...current.baseUrl === undefined ? {} : { baseUrl: current.baseUrl },
+            ...current.modelId === undefined ? {} : { modelId: current.modelId },
+            ...current.pid === undefined ? {} : { pid: current.pid },
+        });
+    }
+    else if (current?.status === 'starting' && current.pid !== undefined) {
+        // A starting record with a pid: this host owns the in-flight start;
+        // drain all recorded pids before replacing it with a new spawn.
+        await drainRecordedStatePids(current);
+        writeLocalServerState(deps.directory, {
+            status: 'stopped',
+            ...current.modelId === undefined ? {} : { modelId: current.modelId },
+        });
+    }
     const binary = resolveLlamaServerBinary(environment, deps.binary);
     if (!existsSync(binary)) {
+        const recorded = readLocalServerState(deps.directory);
+        if (recorded?.previousPids !== undefined) {
+            await drainRecordedStatePids({ status: recorded.status, previousPids: recorded.previousPids });
+            writeLocalServerState(deps.directory, {
+                status: recorded.status,
+                ...recorded.baseUrl === undefined ? {} : { baseUrl: recorded.baseUrl },
+                ...recorded.modelId === undefined ? {} : { modelId: recorded.modelId },
+                ...recorded.pid === undefined ? {} : { pid: recorded.pid },
+            });
+        }
         throw new Error(`llama-server binary not found at ${binary}; set ${LLAMA_SERVER_BIN_ENV} to the bundled server, `
             + 'or run this host from the app tree that carries apps/desktop/resources/llama');
     }
@@ -1468,6 +1550,8 @@ async function startLlamaServerLocked(deps, model) {
             });
         }
         catch (error) {
+            const recorded = readLocalServerState(deps.directory);
+            await drainRecordedStatePids({ status: 'error', previousPids: recorded?.previousPids });
             writeLocalServerState(deps.directory, { status: 'error', modelId: model.id });
             throw new Error(`llama-server could not be spawned: ${error instanceof Error ? error.message : String(error)}`);
         }
@@ -1526,6 +1610,8 @@ async function startLlamaServerLocked(deps, model) {
         fellBackToCpu = outcome.ready;
     }
     if (!outcome.ready) {
+        const recorded = readLocalServerState(deps.directory);
+        await drainRecordedStatePids({ status: 'error', previousPids: recorded?.previousPids });
         writeLocalServerState(deps.directory, { status: 'error', modelId: model.id });
         throw new Error(outcome.spawnError !== undefined
             ? `llama-server could not be started: ${outcome.spawnError.message}`
@@ -1571,10 +1657,18 @@ export async function stopLlamaServer(deps) {
  */
 async function stopLlamaServerLocked(deps) {
     const current = readLocalServerState(deps.directory);
-    if (current === undefined || current.status === 'stopped') {
-        // Even a stopped record may carry orphan previousPids: drain them.
-        if (current?.previousPids !== undefined) {
-            await terminateRecordedPids(current.previousPids.filter(pid => processExists(pid)));
+    if (current === undefined)
+        return;
+    if (current.status === 'stopped') {
+        // Even a stopped record may carry orphan previousPids: drain them
+        // and clear the bookkeeping so the state reflects that nothing is
+        // left to terminate.
+        if (current.previousPids !== undefined) {
+            await drainRecordedStatePids({ status: 'stopped', previousPids: current.previousPids });
+            writeLocalServerState(deps.directory, {
+                status: 'stopped',
+                ...current.modelId === undefined ? {} : { modelId: current.modelId },
+            });
         }
         return;
     }
@@ -1584,14 +1678,7 @@ async function stopLlamaServerLocked(deps) {
     // is inside startLlamaServerLocked right now, so a brief re-read
     // after termination of any pids will see the settled document.
     if (current.pid !== undefined) {
-        const toKill = [current.pid];
-        if (current.previousPids !== undefined) {
-            for (const pid of current.previousPids) {
-                if (!toKill.includes(pid))
-                    toKill.push(pid);
-            }
-        }
-        await terminateRecordedPids(toKill);
+        await drainRecordedStatePids(current);
         writeLocalServerState(deps.directory, {
             status: 'stopped',
             ...current.modelId === undefined ? {} : { modelId: current.modelId },
@@ -1615,9 +1702,14 @@ async function stopLlamaServerLocked(deps) {
         throw new Error('the local model server is starting and its pid has not been published '
             + `(server-state.json in ${deps.directory} has no pid); wait for the start to settle, then stop it`);
     }
+    // A pid-less non-starting record (e.g. error or a dead running record)
+    // may still carry recorded orphan previousPids that this host started.
+    // Drain them and clear the bookkeeping before publishing stopped.
+    if (current.previousPids !== undefined) {
+        await drainRecordedStatePids({ status: current.status, previousPids: current.previousPids });
+    }
     writeLocalServerState(deps.directory, {
         status: 'stopped',
         ...current.modelId === undefined ? {} : { modelId: current.modelId },
-        ...current.previousPids === undefined ? {} : { previousPids: current.previousPids },
     });
 }

@@ -34,8 +34,7 @@ const RUNS_COLUMNS = [
   "target_id",
   "harness_version",
   "layer_set",
-  "cycle_ref",
-];
+  "cycle_ref" ];
 const STEPS_COLUMNS = ["run_id", "seq", "role", "tool_name", "content", "tokens"];
 const METRICS_COLUMNS = [
   "run_id",
@@ -46,8 +45,7 @@ const METRICS_COLUMNS = [
   "steps_count",
   "tokens_total",
   "crashed",
-  "failure_mode",
-];
+  "failure_mode" ];
 
 function sampleMetrics(over: Partial<RunMetrics> = {}): RunMetrics {
   return {
@@ -66,8 +64,7 @@ function sampleMetrics(over: Partial<RunMetrics> = {}): RunMetrics {
     harness: { runnerVersion: "0.37.1", layerIds: ["base", "wp-hardening"], componentHashes: { memory: "aa" } },
     startedAt: "2026-10-18T10:00:00.000Z",
     finishedAt: "2026-10-18T10:01:00.000Z",
-    ...over,
-  };
+    ...over };
 }
 
 function sampleEvent(seq: number, over: Partial<TrajectoryEvent> = {}): TrajectoryEvent {
@@ -79,8 +76,7 @@ function sampleEvent(seq: number, over: Partial<TrajectoryEvent> = {}): Trajecto
     attackId: "T1046",
     target: "example.test",
     result: `probe ${seq} ok`,
-    isToolCall: true,
-  };
+    isToolCall: true };
   return { ...base, ...over };
 }
 
@@ -111,8 +107,7 @@ function eventLine(seq: number): string {
     action: `probe_${seq}`,
     attackId: "T1046",
     target: "example.test",
-    result: `probe ${seq} ok`,
-  });
+    result: `probe ${seq} ok` });
 }
 
 /** Run one CLI command in-process and capture its output. */
@@ -189,8 +184,7 @@ describe("harness2 store (section 5)", () => {
     store.upsertRun(sampleRecord(), [
       sampleStep({ content: "system+user prompt" }),
       { role: "tool", toolName: "http_probe", content: '{"url":"https://example.test"}' },
-      { role: "observation", content: long, tokens: 42 },
-    ]);
+      { role: "observation", content: long, tokens: 42 } ]);
     const detail = store.getRun("run-alpha");
     assert.ok(detail, "run is stored");
     assert.equal(detail.run.targetClass, "wordpress");
@@ -284,8 +278,7 @@ describe("harness2 store (section 5)", () => {
         target_id: "eng-explicit",
         harness_version: "0.38.0",
         layer_set: JSON.stringify(["base", "ad-layer"]),
-        cycle_ref: null,
-      },
+        cycle_ref: null },
       metrics: {
         run_id: "run-explicit",
         success: 0,
@@ -295,15 +288,12 @@ describe("harness2 store (section 5)", () => {
         steps_count: 3,
         tokens_total: 9876,
         crashed: 0,
-        failure_mode: "fp-blowup",
-      },
-    };
+        failure_mode: "fp-blowup" } };
     const journal = [
       JSON.stringify({ run_id: "run-explicit", seq: 1, ts: "2026-10-18T10:00:00.000Z", role: "prompt", tool_name: null, content: "outgoing", tokens: 900 }),
       JSON.stringify({ run_id: "run-explicit", seq: 2, ts: "2026-10-18T10:00:01.000Z", role: "tool", tool_name: "winrm_exec", content: '{"cmd":"whoami"}', tokens: null }),
       JSON.stringify({ run_id: "run-explicit", seq: 3, ts: "2026-10-18T10:00:02.000Z", role: "observation", tool_name: "winrm_exec", content: long, tokens: 12 }),
-      "{ broken line",
-    ].join("\n");
+      "{ broken line" ].join("\n");
     const dir = writeRunDir(root, "eng-explicit", { "run.json": JSON.stringify(runJson), "steps.jsonl": journal });
     const result = ingestEngagementDir(store, dir);
     assert.equal(result.ingested, true);
@@ -330,8 +320,7 @@ describe("harness2 store (section 5)", () => {
   it("falls back to the contract metrics when run.json is unusable", () => {
     const dir = writeRunDir(root, "eng-bad-run-json", {
       "run.json": JSON.stringify({ run: {}, metrics: {} }),
-      "metrics.json": JSON.stringify(sampleMetrics()),
-    });
+      "metrics.json": JSON.stringify(sampleMetrics()) });
     const result = ingestEngagementDir(store, dir);
     assert.equal(result.source, "metrics", "no usable run_id: contract metrics win");
     assert.ok(result.warnings.some((warning) => warning.includes("run.json")));
@@ -341,8 +330,7 @@ describe("harness2 store (section 5)", () => {
   it("re-ingesting the same run does not duplicate", () => {
     const dir = writeRunDir(root, "eng-alpha", {
       "trajectory.json": JSON.stringify(sampleRecord()),
-      "metrics.json": JSON.stringify(sampleMetrics()),
-    });
+      "metrics.json": JSON.stringify(sampleMetrics()) });
     assert.equal(ingestEngagementDir(store, dir).ingested, true);
     assert.equal(ingestEngagementDir(store, dir).ingested, true);
     assert.equal(store.listRuns().length, 1, "one run row, not two");
@@ -356,8 +344,7 @@ describe("harness2 store (section 5)", () => {
     const dir = writeRunDir(root, "eng-corrupt", {
       "trajectory.json": "{ not valid json",
       "metrics.json": JSON.stringify(sampleMetrics()),
-      "events.jsonl": `${eventLine(1)}\n{broken line\n`,
-    });
+      "events.jsonl": `${eventLine(1)}\n{broken line\n` });
     const result = ingestEngagementDir(store, dir);
     assert.equal(result.ingested, true);
     assert.equal(result.source, "metrics", "falls through to metrics.json");
@@ -370,8 +357,7 @@ describe("harness2 store (section 5)", () => {
   it("ignores a UTF-8 BOM on JSON artifacts", () => {
     const dir = writeRunDir(root, "eng-bom", {
       "trajectory.json": `\uFEFF${JSON.stringify(sampleRecord())}`,
-      "metrics.json": `\uFEFF${JSON.stringify(sampleMetrics())}`,
-    });
+      "metrics.json": `\uFEFF${JSON.stringify(sampleMetrics())}` });
     const result = ingestEngagementDir(store, dir);
     assert.equal(result.ingested, true);
     assert.equal(result.source, "trajectory", "a BOM does not make the file unreadable");
@@ -387,10 +373,8 @@ describe("harness2 store (section 5)", () => {
         status: "complete",
         findings: [{ title: "one" }, { title: "two" }],
         startedAt: "2026-10-18T10:00:00.000Z",
-        updatedAt: "2026-10-18T10:05:00.000Z",
-      }),
-      "events.jsonl": `${eventLine(1)}\n${eventLine(2)}\n`,
-    });
+        updatedAt: "2026-10-18T10:05:00.000Z" }),
+      "events.jsonl": `${eventLine(1)}\n${eventLine(2)}\n` });
     const result = ingestEngagementDir(store, dir);
     assert.equal(result.ingested, true);
     assert.equal(result.source, "events");
@@ -412,8 +396,7 @@ describe("harness2 store (section 5)", () => {
     const tree = join(root, "engagements-tree");
     writeRunDir(join(tree, "engagements", "live"), "eng-one", { "trajectory.json": JSON.stringify(sampleRecord()) });
     writeRunDir(join(tree, "engagements", "archive"), "eng-two", {
-      "trajectory.json": JSON.stringify(sampleRecord({ runId: "run-two", engagementId: "eng-two" })),
-    });
+      "trajectory.json": JSON.stringify(sampleRecord({ runId: "run-two", engagementId: "eng-two" })) });
     const first = ingestRoot(store, tree);
     assert.equal(first.scanned, 2);
     assert.equal(first.ingested, 2);

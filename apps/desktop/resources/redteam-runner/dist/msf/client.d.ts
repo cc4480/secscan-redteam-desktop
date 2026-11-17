@@ -32,7 +32,19 @@ export interface ConsoleRunResult {
     /** True when the abort signal fired and we destroyed the console. */
     aborted: boolean;
 }
-export declare class MsfClient {
+/**
+ * The module-search surface, satisfied by both transports.
+ *
+ * The RPC client answers it from `msfrpcd`; the console client answers it from a
+ * one-shot `msfconsole -x`. Callers that only list modules - the search and suggest
+ * paths - depend on this rather than on `MsfClient`, so they work on a host where
+ * no `msfrpcd` is running.
+ */
+export interface ModuleSearchSource {
+    /** List the modules matching a console or RPC search expression. */
+    searchModules(query: string): Promise<MsfModule[]>;
+}
+export declare class MsfClient implements ModuleSearchSource {
     private readonly request;
     private token;
     constructor(request: MsfRequestFn);

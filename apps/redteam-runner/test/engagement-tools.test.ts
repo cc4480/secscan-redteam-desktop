@@ -46,8 +46,7 @@ async function rpc(base: string, token: string, method: string, params?: Record<
   const res = await fetch(`${base}/mcp`, {
     method: 'POST',
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, ...(params ? { params } : {}) }),
-  })
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, ...(params ? { params } : {}) }) })
   return (await res.json()) as Record<string, unknown>
 }
 
@@ -68,12 +67,10 @@ function cannedState(id: string, status: string, withReport: boolean, extra: Rec
       verificationProof: 'Operator-attested ownership: the desktop user attests on the engagement record',
       findings: [
         { id: 'F-1', severity: 'high', title: 'SQLi in search', attackIds: ['T1190'], status: 'confirmed', tier: 1, target: 'example.com' },
-        { id: 'F-2', severity: 'low', title: 'Verbose banner', attackIds: [], status: 'confirmed', tier: 0, target: 'example.com' },
-      ],
+        { id: 'F-2', severity: 'low', title: 'Verbose banner', attackIds: [], status: 'confirmed', tier: 0, target: 'example.com' } ],
       eventCount: 42,
       startedAt: '2026-10-28T10:00:00Z',
-      updatedAt: '2026-10-28T10:05:00Z',
-    }),
+      updatedAt: '2026-10-28T10:05:00Z' }),
   )
   if (withReport) writeFileSync(join(dir, 'report.md'), '# Engagement report\n\nGrade: A\n')
   return dir
@@ -227,8 +224,7 @@ describe('engagement_status', () => {
       startedAt: '2026-10-28T10:00:00Z',
       target: 'https://example.com',
       mode: 'red',
-      error: 'No model provider key is configured. Set MODEL_API_KEY (Meta) or DEEPSEEK_API_KEY.',
-    })
+      error: 'No model provider key is configured. Set MODEL_API_KEY (Meta) or DEEPSEEK_API_KEY.' })
     const out = await tool('engagement_status').run(store, { id: 'eng-2026-10-28-bbbb' })
     assert.equal(out.status, 200)
     const b = out.body as Record<string, unknown>
@@ -275,8 +271,7 @@ describe('engagement_report', () => {
   it('carries the Scribe signoff on a ready signed report (S6-H2a)', async () => {
     cannedState('eng-2026-10-28-sgnd', 'complete', true, {
       artifactSignoff: { by: 'scribe', at: '2026-10-28T10:06:00Z', cycles: 2 },
-      artifactUnsigned: null,
-    })
+      artifactUnsigned: null })
     const out = await tool('engagement_report').run(store, { id: 'eng-2026-10-28-sgnd' })
     assert.equal(out.status, 200)
     const b = out.body as Record<string, unknown>
@@ -291,12 +286,9 @@ describe('engagement_report', () => {
         reason: 'defects',
         defects: [
           { file: 'report.html', class: 'craft', detail: 'Grade cell empty', fix: 'Render the grade' },
-          { file: 'report.md', class: 'completeness', detail: 'Missing fix section', fix: 'Add the section' },
-        ],
+          { file: 'report.md', class: 'completeness', detail: 'Missing fix section', fix: 'Add the section' } ],
         cycles: 3,
-        at: '2026-10-28T10:06:00Z',
-      },
-    })
+        at: '2026-10-28T10:06:00Z' } })
     const out = await tool('engagement_report').run(store, { id: 'eng-2026-10-28-unsg' })
     assert.equal(out.status, 200)
     const b = out.body as Record<string, unknown>
@@ -347,8 +339,7 @@ describe('speaker stamps', () => {
     cannedEvents('eng-2026-10-28-spe1', [
       { seq: 1, phase: 'plan', actor: 'coordinator', action: 'reasoning' },
       { seq: 2, phase: 'exploit', actor: 'exploiter', action: 'reasoning' },
-      { seq: 3, phase: 'exploit', actor: 'runner', action: 'tool_repair' },
-    ])
+      { seq: 3, phase: 'exploit', actor: 'runner', action: 'tool_repair' } ])
     const out = await tool('engagement_status').run(store, { id: 'eng-2026-10-28-spe1' })
     assert.equal(out.status, 200)
     const b = out.body as Record<string, unknown>
@@ -368,17 +359,14 @@ describe('speaker stamps', () => {
     cannedState(id, 'complete', true)
     cannedEvents(id, [
       { seq: 1, phase: 'exploit', actor: 'exploiter', action: 'reasoning' },
-      { seq: 2, phase: 'report', actor: 'reporter', action: 'reasoning' },
-    ])
+      { seq: 2, phase: 'report', actor: 'reporter', action: 'reasoning' } ])
     writeFileSync(
       join(tmp, id, 'report.json'),
       JSON.stringify({
         findings: [
           { id: 'F-1', producer: 'exploiter' },
           { id: 'F-2', producer: 'runner' },
-          { id: 'F-3' },
-        ],
-      }),
+          { id: 'F-3' } ] }),
     )
     const out = await tool('engagement_report').run(store, { id })
     assert.equal(out.status, 200)
@@ -399,8 +387,7 @@ describe('speaker stamps', () => {
   it('rides the stamp as structuredContent over /mcp, and only when stamped', async () => {
     cannedState('eng-2026-10-28-spe5', 'running', false)
     cannedEvents('eng-2026-10-28-spe5', [
-      { seq: 1, phase: 'recon', actor: 'recon', action: 'reasoning' },
-    ])
+      { seq: 1, phase: 'recon', actor: 'recon', action: 'reasoning' } ])
     cannedState('eng-2026-10-28-spe6', 'running', false)
     const srv = await startUiServer({ port: 0, engagementsDir: tmp })
     try {
@@ -461,15 +448,12 @@ describe("desktop creation path — a chat launch on the operator's own machine"
         mode: 'red',
         objective: built.body.objective,
         operatorName: built.body.operatorName,
-        roe: { scope: built.body.scope, outOfScope: [] as string[] },
-      },
-      config: { testMode: false, verifyViaService: false, mcpEndpoint: '', mcpToken: '', localSandbox: false },
+        roe: { scope: built.body.scope, outOfScope: [] as string[] } },
+      config: { testMode: false, localSandbox: false },
       deps: {},
       events: {
         append: () => undefined,
-        updateState: () => undefined,
-      },
-    } as unknown as Ctx
+        updateState: () => undefined } } as unknown as Ctx
 
     const verdict = await authorizePhase(ctx)
     assert.equal(verdict.allowed, true)

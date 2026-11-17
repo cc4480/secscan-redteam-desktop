@@ -1,8 +1,7 @@
-- insert:
-    - id: demo-mcp
-      name: '@deepseek-ai/dsh-mcp-client'
-      config:
-        serverName: demo
-        transport: streamable-http
-        url: http://127.0.0.1:3000/mcp
-        failOnStartupError: true
+# Configuration-only bundle starting point. Add plugin rows under `insert`.
+# Example (replace with your installed plugin and config):
+# - insert:
+#     - id: my-plugin
+#       name: '@example/installed-plugin'
+#       config: {}
+- insert: []

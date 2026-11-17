@@ -40,9 +40,7 @@ const FINDINGS = [
   {
     id: "F-1", severity: "high", title: "Fixture flaw", attackIds: ["T1190"],
     evidence: "fixture evidence", fix: "Apply the fixture patch.", retest: "Re-probe the fixture.",
-    status: "confirmed", accountableOperator: "Carlos",
-  },
-];
+    status: "confirmed", accountableOperator: "Carlos" } ];
 
 const REPORT_MD =
   "# Engagement report\n\nFixture narrative prose.\n\n" +
@@ -56,8 +54,7 @@ const UNSIGNED: ArtifactUnsigned = {
   reason: "defects",
   defects: [{ file: "report.md", class: "accuracy", detail: "Fixture defect of record.", fix: "Re-render the fixture counts." }],
   cycles: 2,
-  at: "2026-11-01T09:30:00.000Z",
-};
+  at: "2026-11-01T09:30:00.000Z" };
 
 function recordedModel(id: string, over: { status?: string } = {}): ReportModel {
   const halted = over.status === "halted";
@@ -77,8 +74,7 @@ function recordedModel(id: string, over: { status?: string } = {}): ReportModel 
     findingCount: 1,
     batteryTotals: { total: 3, confirmed: 1, executedClean: 2, killed: 0, blocked: 0, na: 0, pending: 0 },
     coverageCells: [],
-    findings: FINDINGS as ReportModel["findings"],
-  };
+    findings: FINDINGS as ReportModel["findings"] };
 }
 
 /** A recorded engagement whose state AND report.json both carry the
@@ -109,8 +105,7 @@ function stampedEngagement(
       updatedAt: "2026-11-01T09:00:00.000Z",
       deliverableFailed: true,
       deliverables: { "report.md": join(dir, "report.md") },
-      ...stamp,
-    }),
+      ...stamp }),
   );
   writeFileSync(join(dir, "report.md"), REPORT_MD);
   writeFileSync(
@@ -125,8 +120,7 @@ function stampedEngagement(
       target: "https://example.com", operator: "Carlos", generatedAt: "2026-11-01T09:00:00.000Z",
       steps: [], validationTier: "observation",
       proves: "The fixture flaw responded as recorded.", doesNotProve: "No impact beyond the fixture.",
-      reverifyCommand: "curl https://example.com",
-    }),
+      reverifyCommand: "curl https://example.com" }),
   );
   return dir;
 }

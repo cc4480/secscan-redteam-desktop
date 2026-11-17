@@ -19,8 +19,7 @@ import { join } from "node:path";
 import { unzipSync } from "fflate";
 import {
   PACKAGE_DELIVERABLES, REPORT_PACKAGE_NAME,
-  buildReportPackage, collectPackageEntries, emitReportPackage,
-} from "../src/report/package.js";
+  buildReportPackage, collectPackageEntries, emitReportPackage } from "../src/report/package.js";
 import { REPORT_CONTRACT } from "../src/workflows/protocol.js";
 import { type Ctx } from "../src/context.js";
 
@@ -34,8 +33,7 @@ const ARTIFACT_BYTES: Record<string, Buffer> = {
   // whatever its bytes are.
   "report.docx": Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x06, 0x00, 0xde, 0xad, 0xbe, 0xef]),
   "poc/F-1.json": Buffer.from(JSON.stringify({ findingId: "F-1", validationTier: "execution" }, null, 2)),
-  "poc/F-2.json": Buffer.from(JSON.stringify({ findingId: "F-2", validationTier: "static" }, null, 2)),
-};
+  "poc/F-2.json": Buffer.from(JSON.stringify({ findingId: "F-2", validationTier: "static" }, null, 2)) };
 
 const EXPECTED_ENTRIES = [
   "report.html",
@@ -45,8 +43,7 @@ const EXPECTED_ENTRIES = [
   "findings.csv",
   "report.docx",
   "poc/F-1.json",
-  "poc/F-2.json",
-];
+  "poc/F-2.json" ];
 
 /** Write the six deliverables + two poc bundles (+ one non-JSON file
  * the package must NOT pick up) into a fresh engagement directory. */
@@ -63,8 +60,7 @@ function seedEngagementDir(order: string[] = Object.keys(ARTIFACT_BYTES)): strin
 
 function fakeCtx(dir: string, appended: { action?: string; result?: string }[]): Ctx {
   return {
-    events: { dir, engagementId: "eng-1", append: (e: { action?: string; result?: string }) => appended.push(e) },
-  } as unknown as Ctx;
+    events: { dir, engagementId: "eng-1", append: (e: { action?: string; result?: string }) => appended.push(e) } } as unknown as Ctx;
 }
 
 describe("report package (Q-RP-5)", () => {

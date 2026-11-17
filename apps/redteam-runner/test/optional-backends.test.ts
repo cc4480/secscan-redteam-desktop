@@ -30,8 +30,7 @@ function fakeFetch(reply: (body: unknown) => unknown): { fetchImpl: never; calls
       ok: true,
       status: request.method === "notifications/initialized" ? 202 : 200,
       headers: { get: (name: string) => (name.toLowerCase() === "mcp-session-id" ? sessionId : null) },
-      text: async () => (parsed === undefined ? "" : `event: message\ndata: ${JSON.stringify(parsed)}\n`),
-    };
+      text: async () => (parsed === undefined ? "" : `event: message\ndata: ${JSON.stringify(parsed)}\n`) };
   };
   return { fetchImpl: fetchImpl as never, calls };
 }
@@ -82,8 +81,7 @@ describe("browser/CDP driver contract", () => {
       send: async (method) => {
         if (method !== "Runtime.evaluate") return {};
         return { result: { value: JSON.stringify({ url: "https://t/", title: "T", text: "hello" }) } };
-      },
-    });
+      } });
     assert.deepEqual(await driver.snapshot(), { url: "https://t/", title: "T", text: "hello" });
   });
 

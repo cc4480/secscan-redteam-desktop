@@ -123,8 +123,10 @@ const WINDOWS = {
             id: 'WIN-01',
             title: 'Host and service discovery',
             owner: 'recon',
-            tools: ['nmap_exec', 'bridge_tcp_check', 'winrm_probe'],
-            collect: ['open ports + versions', 'OS family/version', 'SMB signing', 'WinRM auth schemes', 'RDP NLA'],
+            // http_probe is discovery, not exploitation: a Windows host commonly runs a
+            // web surface, and no other WIN step admits an HTTP tool at all.
+            tools: ['nmap_exec', 'bridge_tcp_check', 'winrm_probe', 'http_probe'],
+            collect: ['open ports + versions', 'OS family/version', 'SMB signing', 'WinRM auth schemes', 'RDP NLA', 'web banner, headers, TLS and admin-surface presence'],
             done: 'Services and posture are on the target map; host role is stated.',
             evidence: 'nmap XML-derived port/service list + probe output',
         },

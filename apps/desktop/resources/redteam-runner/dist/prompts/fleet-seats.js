@@ -8,11 +8,9 @@ export const SOUL_BY_ROLE = {
     publisher: 'scribe',
 };
 /**
- * Layer-2 skill bodies attached per seat, keyed by TARGET FAMILY in
- * `target-protocol.ts` — a Windows engagement binds AD/SMB/WinRM skills, an
- * Android engagement binds mobile analysis, a webapp binds web tooling. This
- * map is the DEFAULT (webapp/flat) set: it also seeds the asset loader, which
- * must read every family's bodies (see fleet-assembly.ts).
+ * Layer-2 skill bodies attached per seat: the skills whose tool families
+ * the seat's phase actually drives (tools/compose.ts phase sets). Every
+ * other skill stays Layer-1 (index only) until it triggers.
  */
 export const SKILLS_BY_ROLE = {
     coordinator: ['redteam-ops-coordination'],

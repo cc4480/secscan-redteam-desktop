@@ -46,8 +46,7 @@ function matterInput(over: Partial<MatterInput> = {}): MatterInput {
     fullBattery: true,
     batteryTargets: [
       { id: "secscan", items: 41 },
-      { id: "seclayer", items: 56 },
-    ],
+      { id: "seclayer", items: 56 } ],
     categoriesProbed: ["logic", "functionality", "validation"],
     planPhases: ["plan", "recon", "exploit", "report"],
     probesUsed: 36,
@@ -60,11 +59,9 @@ function matterInput(over: Partial<MatterInput> = {}): MatterInput {
     executedClean: 16,
     cleanAreas: [
       { target: "secscan", category: "logic", items: 6 },
-      { target: "secscan", category: "validation", items: 10 },
-    ],
+      { target: "secscan", category: "validation", items: 10 } ],
     ruledOut: ["Weak session fixation", "Reflected XSS in search"],
-    ...over,
-  };
+    ...over };
 }
 
 describe("report matter — scope & authorisation rows carry exactly the record", () => {
@@ -90,8 +87,7 @@ describe("report matter — scope & authorisation rows carry exactly the record"
         excludedTechniques: [],
         stopConditions: [],
         testWindow: undefined,
-        deconflictionContact: undefined,
-      }),
+        deconflictionContact: undefined }),
     );
     assert.deepEqual(m.scopeRows.map((r) => r.label), ["Target", "In scope"]);
   });
@@ -170,8 +166,7 @@ describe("report matter — limitations from the coverage record", () => {
       matterInput({ totals: { ...TOTALS, blocked: 0, pending: 0, na: 0 }, notCovered: [], planOnly: [], blockedCells: [] }),
     );
     assert.deepEqual(m.limitationLines, [
-      "Nothing in the coverage record was blocked, left uncovered, or left pending at report time.",
-    ]);
+      "Nothing in the coverage record was blocked, left uncovered, or left pending at report time." ]);
   });
 });
 
@@ -183,8 +178,7 @@ describe("report matter — strengths trace 1:1 to the evidence", () => {
     assert.match(m.strengths.summary, /^16 battery check\(s\) executed and returned no finding · 2 hypothesis\(es\) were tested and ruled out\./);
     assert.deepEqual(m.strengths.areaLines, [
       "secscan · logic: 6 check(s) ran and produced no finding",
-      "secscan · validation: 10 check(s) ran and produced no finding",
-    ]);
+      "secscan · validation: 10 check(s) ran and produced no finding" ]);
     const areaSum = input.cleanAreas.reduce((n, a) => n + a.items, 0);
     assert.equal(areaSum, input.executedClean, "fixture invariant: area counts sum to the executed-clean total");
   });
@@ -203,8 +197,7 @@ describe("report matter — strengths trace 1:1 to the evidence", () => {
 });
 
 const FINDINGS: Finding[] = [
-  { id: "F-1", severity: "critical", title: "Cross-tenant object access (BOLA)", attackIds: ["T1190"], evidence: "Object of another tenant returned.", fix: "Enforce per-object authorization.", retest: "Repeat with the second identity.", status: "confirmed", accountableOperator: "Carlos" },
-];
+  { id: "F-1", severity: "critical", title: "Cross-tenant object access (BOLA)", attackIds: ["T1190"], evidence: "Object of another tenant returned.", fix: "Enforce per-object authorization.", retest: "Repeat with the second identity.", status: "confirmed", accountableOperator: "Carlos" } ];
 
 function renderInput(over: Partial<EngagementReportInput> = {}): EngagementReportInput {
   return {
@@ -221,8 +214,7 @@ function renderInput(over: Partial<EngagementReportInput> = {}): EngagementRepor
       objective: "Assess the public surface",
       startedAt: "2026-10-28T09:00:00.000Z",
       generatedAt: "2026-10-28T10:00:00.000Z",
-      findings: { critical: 1, high: 0, medium: 0, low: 0, info: 0 },
-    },
+      findings: { critical: 1, high: 0, medium: 0, low: 0, info: 0 } },
     title: "Penetration Test Report",
     narrativeMd: "The team mapped the surface.",
     posture: gradeFindings(FINDINGS),
@@ -238,12 +230,10 @@ function renderInput(over: Partial<EngagementReportInput> = {}): EngagementRepor
       totals: TOTALS,
       probesUsed: 36,
       planOnly: [],
-      notCovered: ["credential_chain"],
-    },
+      notCovered: ["credential_chain"] },
     activity: { eventCount: 3, rows: [], totalActions: 2, decisions: [], danglingCauses: [] },
     matter: buildReportMatter(matterInput()),
-    ...over,
-  };
+    ...over };
 }
 
 describe("report matter — rendering", () => {
@@ -311,8 +301,7 @@ describe("report matter — wire assembly", () => {
         fullBattery: false,
         localHost: false,
         environment: "staging",
-        roe: { scope: ["example.com"], outOfScope: ["cdn.example.com"], excludedTechniques: null, stopConditions: [] },
-      },
+        roe: { scope: ["example.com"], outOfScope: ["cdn.example.com"], excludedTechniques: null, stopConditions: [] } },
       config: { dryRunAgents: false },
       coverage: new Set(["validation"]),
       targetCoverage: new Map(),
@@ -320,8 +309,7 @@ describe("report matter — wire assembly", () => {
         ["secscan:SS-001", ledgerEntry("secscan:SS-001", "secscan", "SS-001", "validation", "executed-clean")],
         ["secscan:SS-002", ledgerEntry("secscan:SS-002", "secscan", "SS-002", "validation", "executed-clean")],
         ["secscan:SS-003", ledgerEntry("secscan:SS-003", "secscan", "SS-003", "logic", "executed-clean")],
-        ["secscan:SS-004", ledgerEntry("secscan:SS-004", "secscan", "SS-004", "logic", "confirmed")],
-      ]),
+        ["secscan:SS-004", ledgerEntry("secscan:SS-004", "secscan", "SS-004", "logic", "confirmed")] ]),
       probesUsed: 7,
       plan: {
         mode: "red",
@@ -330,13 +318,10 @@ describe("report matter — wire assembly", () => {
         steps: [
           { phase: "recon", description: "map" },
           { phase: "exploit", description: "test" },
-          { phase: "recon", description: "map more" },
-        ],
-      },
+          { phase: "recon", description: "map more" } ] },
       verifiedAt: "2026-10-28T08:55:00.000Z",
       verificationProof: "DNS TXT token verified",
-      events: { dir: "/nonexistent-rp78-wire-dir", engagementId: "eng-wire" },
-    } as unknown as Ctx;
+      events: { dir: "/nonexistent-rp78-wire-dir", engagementId: "eng-wire" } } as unknown as Ctx;
     const meta: ReportMeta = {
       engagementId: "eng-wire",
       target: "example.com",
@@ -348,13 +333,11 @@ describe("report matter — wire assembly", () => {
       verified: true,
       objective: "Assess",
       startedAt: "2026-10-28T09:00:00.000Z",
-      generatedAt: "2026-10-28T10:00:00.000Z",
-    };
+      generatedAt: "2026-10-28T10:00:00.000Z" };
     const killed: Finding = {
       id: "F-9", severity: "medium", title: "Weak session fixation", attackIds: [],
       evidence: "Session id rotated on login.", fix: "None required.", retest: "Log in twice.",
-      status: "killed", accountableOperator: "Carlos",
-    };
+      status: "killed", accountableOperator: "Carlos" };
     const deps: WireDeps = {
       ctx,
       meta,
@@ -366,14 +349,11 @@ describe("report matter — wire assembly", () => {
         noBundleReasons: new Map(),
         negative: [
           { hypothesis: " weak session fixation ", killingObservation: "rotated", decisiveEvents: [] },
-          { hypothesis: "Reflected XSS in search", killingObservation: "encoded", decisiveEvents: [] },
-        ],
-      },
+          { hypothesis: "Reflected XSS in search", killingObservation: "encoded", decisiveEvents: [] } ] },
       cells: [],
       totals: { total: 4, confirmed: 1, executedClean: 3, killed: 0, blocked: 0, na: 0, pending: 0 },
       planOnly: [],
-      events: [],
-    };
+      events: [] };
     const input = buildEngagementReportInput(deps);
     assert.ok(input.matter);
     const m = input.matter;
@@ -391,8 +371,7 @@ describe("report matter — wire assembly", () => {
     assert.match(m.strengths.summary, /^3 battery check\(s\) executed and returned no finding · 2 hypothesis\(es\) were tested and ruled out\./);
     assert.deepEqual(m.strengths.areaLines, [
       "secscan · logic: 1 check(s) ran and produced no finding",
-      "secscan · validation: 2 check(s) ran and produced no finding",
-    ]);
+      "secscan · validation: 2 check(s) ran and produced no finding" ]);
     assert.equal(input.coverage.totals.executedClean, 3);
   });
 });

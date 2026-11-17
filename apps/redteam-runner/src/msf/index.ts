@@ -21,7 +21,7 @@
 export { MsfExecutor, MSF_TIMEOUT_MS } from "./executor.js";
 export type { MsfDeps, MsfResult } from "./executor.js";
 export { LocalMsfClient, MsfAuthError, parseMsfSearchOutput, MSF_CONSOLE_QUIET_MS, _resetMsfRuntimeForTests } from "./local-client.js";
-export type { MsfModule, ConsoleRunResult, MsfConsoleProcess, MsfSpawnFn } from "./local-client.js";
+export type { MsfModule, ModuleSearchSource, ConsoleRunResult, MsfConsoleProcess, MsfSpawnFn } from "./local-client.js";
 export { msfBinaryPresent, resolveMsfConsoleCommand, _resetMsfProbeCache } from "./prereq.js";
 export {
   checkMsfPayload,

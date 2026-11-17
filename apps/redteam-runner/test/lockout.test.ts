@@ -19,8 +19,7 @@ import {
   classifyCredentialAttempt,
   DEFAULT_LOCKOUT_CONFIG,
   LOCKOUT_LEDGER_CAP,
-  type CredentialClassification,
-} from '../src/safety/lockout.js'
+  type CredentialClassification } from '../src/safety/lockout.js'
 import { HOST_TOOLS } from '../src/tools/host.js'
 
 const H = 'dc01.lab'
@@ -325,8 +324,7 @@ describe('classifyCredentialAttempt — Class A table + exemptions (spec §7.6)'
       winrm_exec: 'winrm',
       // Build-time verify (spec §4): rdp_shadow_prep opens an authenticated
       // WinRM session with the test credential — classified by its transport.
-      rdp_shadow_prep: 'winrm',
-    }
+      rdp_shadow_prep: 'winrm' }
     for (const [name, protocolClass] of Object.entries(table)) {
       const c = cls(name)
       assert.equal(c.kind, 'class-a', name)
@@ -355,8 +353,7 @@ describe('classifyCredentialAttempt — Class A table + exemptions (spec §7.6)'
       'pc_run',
       'record_finding', // bookkeeping
       'record_killed',
-      'record_item_verdict',
-    ]
+      'record_item_verdict' ]
     for (const name of exempt) {
       assert.equal(cls(name).kind, 'none', name)
     }
@@ -383,8 +380,7 @@ describe('classifyCredentialAttempt — Class A table + exemptions (spec §7.6)'
       ad_enum: { kind: 'class-a', protocolClass: 'ldap' },
       krb_ptt: { kind: 'event-only', protocolClass: 'kerberos-events' },
       ssh_agent_audit: { kind: 'class-a', protocolClass: 'ssh' },
-      nfs_enum: { kind: 'none' },
-    }
+      nfs_enum: { kind: 'none' } }
     assert.equal(HOST_TOOLS.length, Object.keys(expected).length, 'HOST_TOOLS grew or shrank — re-pin this table')
     for (const tool of HOST_TOOLS) {
       const want = expected[tool.name]
@@ -412,8 +408,7 @@ describe('classifyCredentialAttempt — Class B shapes (spec §7.7)', () => {
       ['scanner/ssh/ssh_login', 'ssh'],
       ['scanner/smb/smb_login', 'smb'],
       ['scanner/http/http_login', 'web'],
-      ['scanner/winrm/winrm_login', 'winrm'],
-    ]
+      ['scanner/winrm/winrm_login', 'winrm'] ]
     for (const [module, protocolClass] of cases) {
       const c = cls('msf_exec', { action: 'run', moduleType: 'auxiliary', module, host: H })
       assert.equal(c.kind, 'class-b', module)
@@ -428,8 +423,7 @@ describe('classifyCredentialAttempt — Class B shapes (spec §7.7)', () => {
         moduleType: 'auxiliary',
         module: 'auxiliary/gather/hashdump',
         options: { [key]: '/tmp/words.txt' },
-        host: H,
-      })
+        host: H })
       assert.equal(c.kind, 'class-b', key)
     }
   })
@@ -486,8 +480,7 @@ describe('classifyAuthOutcome — the §5.3 signal table (spec §7.8)', () => {
       'ssh dc01.lab failed: Permission denied (password)',
       'winrm open failed: HTTP 401',
       'rdp NLA validation dc01.lab: credential NOT valid',
-      'authentication failed: invalid credentials',
-    ]
+      'authentication failed: invalid credentials' ]
     for (const text of failures) {
       assert.equal(classifyAuthOutcome(text, false), 'failed-validation', text)
     }

@@ -61,8 +61,7 @@ function authorizeCtx(
   const events = new EventLog(dir, "eng-verified-scope", {
     target: opts.domain,
     mode: "red",
-    objective: "verified-scope persistence proof",
-  });
+    objective: "verified-scope persistence proof" });
   return {
     domain: opts.domain,
     hosts: opts.hosts,
@@ -70,12 +69,10 @@ function authorizeCtx(
       mode: "red",
       objective: "verified-scope persistence proof",
       operatorName: "Test Operator",
-      roe: { scope: opts.scope, outOfScope: opts.outOfScope ?? [] },
-    },
-    config: { testMode: opts.testMode ?? false, verifyViaService: false, mcpEndpoint: "", mcpToken: "", localSandbox: false },
+      roe: { scope: opts.scope, outOfScope: opts.outOfScope ?? [] } },
+    config: { testMode: opts.testMode ?? false, localSandbox: false },
     deps: {},
-    events,
-  } as unknown as Ctx;
+    events } as unknown as Ctx;
 }
 
 describe("S3-H6 — authorize persists the attested scope into state.json", () => {
@@ -103,8 +100,7 @@ describe("S3-H6 — authorize persists the attested scope into state.json", () =
       testMode: true,
       scope: ["example.com", "192.168.1.10"],
       hosts: ["example.com", "192.168.1.10"],
-      domain: "example.com",
-    });
+      domain: "example.com" });
 
     const verdict = await authorizePhase(ctx);
     assert.equal(verdict.allowed, true);
@@ -128,8 +124,7 @@ describe("S3-H6 — a guard rebuilt from the persisted record", () => {
     assert.ok(persisted);
     const rebuilt = scopeGuardFor({
       verifiedScope: persisted.verifiedScope,
-      input: { roe: { scope: ["Cho-zen1"], outOfScope: [] } },
-    });
+      input: { roe: { scope: ["Cho-zen1"], outOfScope: [] } } });
     assert.equal(rebuilt.checkHost("cho-zen1").allowed, true, "the attested bare host is allowed from the persisted record");
     assert.notEqual(rebuilt.describe(), "allow: empty · deny: empty");
 
@@ -150,8 +145,7 @@ describe("S3-H6 — a guard rebuilt from the persisted record", () => {
     assert.ok(persisted);
     const rebuilt = scopeGuardFor({
       verifiedScope: persisted.verifiedScope,
-      input: { roe: { scope: ["Cho-zen1"], outOfScope: ["Cho-zen1"] } },
-    });
+      input: { roe: { scope: ["Cho-zen1"], outOfScope: ["Cho-zen1"] } } });
     const verdict = rebuilt.checkHost("cho-zen1");
     assert.equal(verdict.allowed, false, "the deny entry wins over the persisted allow");
     assert.equal(verdict.kind, "deny");
@@ -178,8 +172,7 @@ describe("S3-H6 — persistence widens nothing for pre-fix records", () => {
         findings: [],
         eventCount: 3,
         startedAt: "2026-11-02T00:00:00.000Z",
-        updatedAt: "2026-11-02T00:00:00.000Z",
-      }),
+        updatedAt: "2026-11-02T00:00:00.000Z" }),
     );
 
     const state = readState(dir);
@@ -188,8 +181,7 @@ describe("S3-H6 — persistence widens nothing for pre-fix records", () => {
 
     const guard = scopeGuardFor({
       verifiedScope: state.verifiedScope,
-      input: { roe: { scope: ["Cho-zen1"], outOfScope: [] } },
-    });
+      input: { roe: { scope: ["Cho-zen1"], outOfScope: [] } } });
     assert.equal(guard.checkHost("cho-zen1").allowed, false, "old behavior preserved: bare hostname denied without a stamp");
     assert.equal(guard.describe(), "allow: empty · deny: empty");
   });

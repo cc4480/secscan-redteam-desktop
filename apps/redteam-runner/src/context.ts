@@ -29,6 +29,7 @@ import { type PolicyRules } from './policy/rules.js'
 import { type ScopeGuard } from './safety/scope-guard.js'
 import { type HookRegistry } from './hooks/index.js'
 import { type SignOffTransition } from './phases/exploit-one.js'
+import { type ProtocolState } from './protocol/state.js'
 
 export interface RunnerDeps {
   verify?: (domain: string, cfg: { endpoint: string; token: string }) => Promise<boolean>
@@ -38,7 +39,7 @@ export interface RunnerDeps {
   prober?: ProberLike
   /** Injectable for tests (default: real HostExecutor with real transports). */
   hostExecutor?: HostExecutor
-  /** Injectable for tests (default: real MsfExecutor against the operator's msfrpcd). */
+  /** Injectable for tests (default: real MsfExecutor against the local native msfconsole). */
   msfExecutor?: MsfExecutor
   /** Injectable for tests (default: real NucleiExecutor against the operator's nuclei binary). */
   nucleiExecutor?: NucleiExecutor
@@ -160,6 +161,12 @@ export interface Ctx {
   verifiedAt?: string
   verificationProof?: string
   plan: OperationPlan | null
+  /**
+   * Dispatch-time protocol state (A1): the engagement's bound target protocol
+   * and its current step. Absent when no protocol is bound — the dispatch
+   * protocol gate then has no opinion, so an unbound run is never blocked.
+   */
+  protocol?: ProtocolState
   opsecCooldown: Set<string> // method+path keys abandoned after a detection signal
   consecutive5xx: number
   /**

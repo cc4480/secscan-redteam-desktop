@@ -28,8 +28,7 @@ function vuln(overrides: Partial<ScanVulnerability> = {}): ScanVulnerability {
     description: "The CSP header is absent.",
     evidence: "GET / → no content-security-policy response header",
     solution: "Add a CSP header.",
-    ...overrides,
-  };
+    ...overrides };
 }
 
 /**
@@ -46,8 +45,7 @@ function fakeCtx(verificationProof?: string): Ctx {
     targetCoverage: new Map(),
     probesUsed: 0,
     liveFindings: [],
-    events: { engagementId: "secscan-seam-test", updateState: () => {}, append: () => {} },
-  } as unknown as Ctx;
+    events: { engagementId: "secscan-seam-test", updateState: () => {}, append: () => {} } } as unknown as Ctx;
 }
 
 const CALL = { name: "secscan_exec" } as never;

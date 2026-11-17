@@ -57,8 +57,7 @@ import {
   writeProposalPackage,
   type BuildProposalPackageInput,
   type EditorReply,
-  type ProposalPackageDocument,
-} from "../src/harness2/package.js";
+  type ProposalPackageDocument } from "../src/harness2/package.js";
 
 const COMMIT = "c6ac3aed";
 const PACKAGE_DATE = "2026-10-18";
@@ -89,8 +88,7 @@ const REPO_FILES: readonly (readonly [string, string])[] = [
   ["apps/redteam-runner/src/gate.ts", "SECRET_GATE\n"],
   ["apps/redteam-runner/src/accountability/x.ts", "SECRET_ACCOUNTABILITY\n"],
   ["packages/redteam/auth-gate/src/index.ts", "SECRET_AUTH_GATE\n"],
-  ["packages/redteam/harness-plugin/src/auth-gate.ts", "SECRET_AUTH_GATE2\n"],
-];
+  ["packages/redteam/harness-plugin/src/auth-gate.ts", "SECRET_AUTH_GATE2\n"] ];
 
 const EXPERIENCE_TEXT = [
   "# EXPERIENCE - wordpress",
@@ -106,15 +104,13 @@ const EXPERIENCE_TEXT = [
   "- reason: cached pages hid the injected payload",
   "- measured effect: exploits 0 -> 2 over 2 runs",
   "- tokens spent: 800",
-  "",
-].join("\n");
+  "" ].join("\n");
 
 const LONG_STEP_CONTENT = [
   "STEP LOG: full prompt text for run-pos-a",
   "You are the coordinator. Target class: wordpress. Mode: REPAIR.",
   "Observations: robots.txt allowed /wp-admin; the login form has no rate limit on the second POST.",
-  "Do not truncate anything: this line exists to prove the package carries the complete step text.",
-].join("\n");
+  "Do not truncate anything: this line exists to prove the package carries the complete step text." ].join("\n");
 
 function writeAt(base: string, files: readonly (readonly [string, string])[]): void {
   for (const [path, body] of files) {
@@ -128,8 +124,7 @@ function defaultSteps(runId: string): StepInput[] {
   return [
     { role: "prompt", content: `plan for ${runId}` },
     { role: "tool", toolName: "http_probe", content: `GET / target ${runId}` },
-    { role: "observation", content: `200 OK for ${runId}` },
-  ];
+    { role: "observation", content: `200 OK for ${runId}` } ];
 }
 
 interface SeedRun {
@@ -167,8 +162,7 @@ function seed(over: SeedRun): void {
     stepsCount: stepRows.length,
     tokensTotal: over.tokens ?? 1200,
     crashed: outcome === "aborted",
-    failureMode: over.failureMode ?? (outcome === "failure" ? "missed-vuln" : "none"),
-  };
+    failureMode: over.failureMode ?? (outcome === "failure" ? "missed-vuln" : "none") };
   store.upsertRows(bundle, stepRows);
 }
 
@@ -190,8 +184,7 @@ function build(over: Partial<BuildProposalPackageInput> = {}): ProposalPackageDo
     repoRoot: repo,
     experienceDir: join(root, "experience"),
     now: "2026-10-18T12:00:00.000Z",
-    ...over,
-  });
+    ...over });
 }
 
 function replyText(over: { component?: string; proposal?: string; rationale?: string; effect?: string; evidence?: readonly string[]; files?: readonly (readonly [string, string])[] } = {}): string {
@@ -210,8 +203,7 @@ function replyText(over: { component?: string; proposal?: string; rationale?: st
     over.effect ?? "vulnsFound: +1 or more; steps: no increase",
     "@@END-EXPECTED-EFFECT@@",
     ...evidence.flatMap((entry) => ["@@SUPPORTING-EVIDENCE@@", entry, "@@END-SUPPORTING-EVIDENCE@@"]),
-    ...files.flatMap(([path, content]) => [`@@FILE ${path}@@`, content, "@@END-FILE@@"]),
-  ].join("\n");
+    ...files.flatMap(([path, content]) => [`@@FILE ${path}@@`, content, "@@END-FILE@@"]) ].join("\n");
 }
 
 beforeEach(() => {
@@ -541,9 +533,7 @@ describe("section 10 editor reply parser", () => {
       evidence: ["pair 1: run-pos-a vs run-neg-a", "pair 2: run-pos-b vs run-neg-b"],
       files: [
         ["apps/redteam-runner/src/tools.ts", "export const TOOLS = 'new';\n"],
-        ["apps/redteam-runner/src/prompts.ts", "export const BASE_PROMPT = 'tuned';\n"],
-      ],
-    });
+        ["apps/redteam-runner/src/prompts.ts", "export const BASE_PROMPT = 'tuned';\n"] ] });
     const reply: EditorReply = parseEditorReply(text);
     assert.match(reply.proposal, /- insert:/);
     assert.equal(reply.component, "tool-guidance");
@@ -583,8 +573,7 @@ describe("section 10 editor reply parser", () => {
       ["src/policy", replyText({ proposal: "# edit apps/redteam-runner/src/policy/scope.ts" })],
       ["auth-gate", replyText({ files: [["packages/redteam/auth-gate/src/index.ts", "x"]] })],
       ["src/safety", replyText({ files: [["APPS\\REDTEAM-RUNNER\\SRC\\SAFETY\\kill.ts", "x"]] })],
-      ["guardrails", replyText({ proposal: "# component: guardrails\n- insert: []" })],
-    ];
+      ["guardrails", replyText({ proposal: "# component: guardrails\n- insert: []" })] ];
     for (const [label, text] of cases) {
       assert.throws(
         () => parseEditorReply(text),

@@ -46,6 +46,7 @@ export const JOHN_VARIANTS = [
  */
 const TOOLS = {
     nmap: { envBin: "REDTEAM_NMAP_BIN", directory: false, bundled: "nmap", exeNames: ["nmap"] },
+    msfconsole: { envBin: "REDTEAM_MSFCONSOLE_BIN", directory: false, bundled: "msfconsole", exeNames: ["msfconsole"] },
     nuclei: { envBin: "REDTEAM_NUCLEI_BIN", directory: false, bundled: "nuclei", exeNames: ["nuclei"] },
     ffuf: { envBin: "REDTEAM_FFUF_BIN", directory: false, bundled: "ffuf", exeNames: ["ffuf"] },
     gobuster: { envBin: "REDTEAM_GOBUSTER_BIN", directory: false, bundled: "gobuster", exeNames: ["gobuster"] },
@@ -89,7 +90,7 @@ const CHILD_SYSTEM_ENV = new Set(["PATH", "PATHEXT", "SYSTEMROOT", "WINDIR", "CO
 /** REDTEAM_* vars that only NAME tool locations: the tool table's bin/dir
  *  vars plus the payload dir, nping, the wordlist and the nuclei templates.
  *  Every other REDTEAM_* var is runner-only — several carry credential
- *  material (SSH/SMB/MSFRPC passwords, Kerberos caches) and none may leak
+ *  material (SSH/SMB passwords, Kerberos caches) and none may leak
  *  into a child. Credential-shaped names (*_API_KEY / *_TOKEN / any other
  *  secret) are excluded by construction: only the names above can pass. */
 const CHILD_TOOL_ENV = new Set([

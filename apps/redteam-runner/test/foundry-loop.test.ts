@@ -25,8 +25,7 @@ import {
   listCases,
   loadRegistry,
   registerCase,
-  type FoundryCase,
-} from '../src/foundry/store.js'
+  type FoundryCase } from '../src/foundry/store.js'
 import type { FoundryLocation } from '../src/foundry/locate.js'
 import { startUiServer } from '../src/ui/server.js'
 
@@ -47,8 +46,7 @@ function seedCase(store: string, engagementId: string, payloadClass = 'tautology
     methodMix: [],
     payloadClass,
     proofType: 'cell-proven',
-    techFingerprints: ['wordpress'],
-  }
+    techFingerprints: ['wordpress'] }
   const contentHash = caseContentHash(pattern)
   const foundryCase: FoundryCase = {
     id: caseIdFor(engagementId, contentHash),
@@ -68,8 +66,7 @@ function seedCase(store: string, engagementId: string, payloadClass = 'tautology
     sourceEngagementId: engagementId,
     lineage: null,
     createdAt: '2026-10-25T00:00:00.000Z',
-    contentHash,
-  }
+    contentHash }
   registerCase(store, foundryCase)
   return foundryCase
 }
@@ -79,8 +76,7 @@ const NO_LOCATION: FoundryLocation = {
   snapshotVia: null,
   snapshotCandidates: [],
   gateCliPath: null,
-  gatePackageRoots: [],
-}
+  gatePackageRoots: [] }
 
 describe('fitness port', () => {
   it('scores with renormalization and never invents panel components', () => {
@@ -118,8 +114,7 @@ describe('case mutation controls', () => {
       payloadClass: outcome.value.payloadClass,
       tier: 'BRONZE',
       lineage: { seedCaseId: seed.id, operator: 'marker-rotate', cycle: 1 },
-      contentHash: caseContentHash(outcome.value),
-    }
+      contentHash: caseContentHash(outcome.value) }
     const validation = validateCaseMutant(mutant, [seed], () => mutant)
     assert.equal(validation.pass, true)
   })
@@ -171,16 +166,14 @@ describe('gold loop cycle', () => {
         "const results = [{ slug, loop_tier: 'SILVER', assigned_tier: 1, panel: { vector: [0,1,1,1], pass_rate: 0.75, observed_tier: 1 }, score: { fitness: 0.59, gate_pass: true }, error: null }];",
         "if (out) writeFileSync(out, JSON.stringify({ snapshot: 'store', results }));",
         'console.log(`${slug.padEnd(28)} [0,1,1,1] pass 0.75 tier 1 vs T1 F 0.5900 gate PASS`);',
-        '',
-      ].join('\n'),
+        '' ].join('\n'),
     )
     const location: FoundryLocation = {
       snapshotDir: REPO_SNAPSHOT,
       snapshotVia: 'test-fixture',
       snapshotCandidates: [],
       gateCliPath: cli,
-      gatePackageRoots: [],
-    }
+      gatePackageRoots: [] }
     const summary = await runLoopCycle(store, { location })
     assert.equal(summary.error, null)
     const bundleOutcome = summary.bundleMutants.find(b => b.seedSlug === 'sqli-product-search')
@@ -257,8 +250,7 @@ describe('foundry API route', () => {
       sourceEngagementId: null,
       createdAt: '2026-10-26T00:00:00.000Z',
       contentHash: 'a'.repeat(64),
-      lineage: { seedSlug: 'sqli-product-search', operator: 'rename-param', cycle: 1 },
-    })
+      lineage: { seedSlug: 'sqli-product-search', operator: 'rename-param', cycle: 1 } })
     writeFileSync(join(store, 'registry.json'), JSON.stringify(registry, null, 2) + '\n')
     writeFileSync(
       join(root, 'fake-gate-cli.mjs'),
@@ -266,8 +258,7 @@ describe('foundry API route', () => {
         "console.log('sqli-product-search          OK 711ab85eb421');",
         "console.log('xss-reflected-search         OK b0814f36e5aa');",
         "console.log('verified 2/2 bundles OK');",
-        '',
-      ].join('\n'),
+        '' ].join('\n'),
     )
 
     const previousSnapshot = process.env['REDTEAM_FOUNDRY_SNAPSHOT']
@@ -305,8 +296,7 @@ describe('foundry API route', () => {
       const verifyRes = await fetch(`http://127.0.0.1:${srv.port}/api/foundry/verify`, {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
-        body: '{}',
-      })
+        body: '{}' })
       assert.equal(verifyRes.status, 200)
       const verifyBody = (await verifyRes.json()) as {
         ok: boolean

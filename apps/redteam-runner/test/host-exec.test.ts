@@ -21,8 +21,7 @@ import {
   checkDestructive,
   validateHostTarget,
   redactSecrets,
-  destructiveDenyList,
-} from "../src/host-exec/index.js";
+  destructiveDenyList } from "../src/host-exec/index.js";
 import type { SshTransport, SshExecResult } from "../src/host-exec/index.js";
 import type { SmbTransport } from "../src/host-exec/index.js";
 import type { WinrmTransport } from "../src/host-exec/index.js";
@@ -37,8 +36,7 @@ const FAKE_ENV: NodeJS.ProcessEnv = {
   REDTEAM_SMB_PASSWORD: "s3cr3t-pw-FOR-TESTS",
   REDTEAM_SMB_DOMAIN: "TEST",
   REDTEAM_WINRM_USER: "testuser",
-  REDTEAM_WINRM_PASSWORD: "s3cr3t-pw-FOR-TESTS",
-};
+  REDTEAM_WINRM_PASSWORD: "s3cr3t-pw-FOR-TESTS" };
 
 const SECRET = "s3cr3t-pw-FOR-TESTS";
 
@@ -60,8 +58,7 @@ function fakeSsh(behavior: { output?: string; hang?: boolean; fail?: string } = 
       }
       return { stdout: behavior.output ?? "Linux testhost 6.8.0", stderr: "", code: 0, ms: 5 };
     },
-    async close() {},
-  };
+    async close() {} };
   return { t, calls };
 }
 
@@ -73,8 +70,7 @@ function fakeSmb(): { t: SmbTransport; calls: string[] } {
       if (args.signal?.aborted) throw new Error("[smb] aborted by kill switch");
       return [
         { share: "C$", accessible: false, note: "session/share denied" },
-        { share: "IPC$", accessible: true, note: "tree connect accepted" },
-      ];
+        { share: "IPC$", accessible: true, note: "tree connect accepted" } ];
     },
     async listDir(_args, share, path) {
       calls.push(`listDir:${share}:${path}`);
@@ -83,8 +79,7 @@ function fakeSmb(): { t: SmbTransport; calls: string[] } {
     async stat() {
       return { exists: true, isDirectory: false, size: 10 };
     },
-    async close() {},
-  };
+    async close() {} };
   return { t, calls };
 }
 
@@ -96,8 +91,7 @@ function fakeWinrm(output = "Microsoft Windows [Version 10.0]"): { t: WinrmTrans
       if (args.signal?.aborted) throw new Error("[winrm] aborted by kill switch before exec");
       return { stdout: output, stderr: "", code: 0, ms: 5 };
     },
-    async close() {},
-  };
+    async close() {} };
   return { t, calls };
 }
 
@@ -136,8 +130,7 @@ describe("checkDestructive", () => {
     "vssadmin delete shadows /all",
     "wbadmin delete catalog -quiet",
     "bcdedit /set recoveryenabled no",
-    "cipher /w:C:",
-  ];
+    "cipher /w:C:" ];
   for (const cmd of bad) {
     it(`refuses: ${cmd.slice(0, 40)}`, () => {
       const hit = checkDestructive(cmd);
@@ -201,8 +194,7 @@ describe("HostExecutor safety", () => {
       async exec() {
         throw new Error(`auth failed for testuser with ${SECRET} on 10.9.0.12`);
       },
-      async close() {},
-    };
+      async close() {} };
     const ex = new HostExecutor({ ssh: () => evil, env: FAKE_ENV });
     const r = await ex.sshExec({ host: "10.9.0.12", command: `echo ${SECRET}`, scopeHosts: ["10.9.0.12"] });
     for (const s of [r.summary, r.output, r.refused ?? ""]) {
@@ -230,8 +222,7 @@ describe("HostExecutor safety", () => {
         await new Promise<SshExecResult>(() => undefined); // never resolves, ignores signal
         throw new Error("unreachable");
       },
-      async close() {},
-    };
+      async close() {} };
     const ex = new HostExecutor({ ssh: () => hanging, env: FAKE_ENV });
     const r = await ex.sshExec({ host: "10.9.0.12", command: "sleep 999", scopeHosts: ["10.9.0.12"], timeoutMs: 50 });
     assert.equal(r.ok, false);
@@ -299,8 +290,7 @@ describe("host tools in the engagement loop", () => {
         sshCalls.push(args.command);
         return { stdout: "Linux testhost", stderr: "", code: 0, ms: 5 };
       },
-      async close() {},
-    };
+      async close() {} };
   }
 
   const textOnly = (text: string): ChatResult => ({ text, toolCalls: [], provider: "fake", model: "fake" });
@@ -309,8 +299,7 @@ describe("host tools in the engagement loop", () => {
     const toolCall = (name: string, args: Record<string, unknown>): ToolCallRequest => ({
       id: `call-${name}`,
       name,
-      arguments: args,
-    });
+      arguments: args });
     return async (role: AgentRole, messages: ChatMessage[], _opts: { tools?: { name: string }[] }): Promise<ChatResult> => {
       const has = (s: string) => messages.some((m) => m.content.includes(s));
       if (role === "coordinator") {
@@ -348,12 +337,9 @@ describe("host tools in the engagement loop", () => {
                 category: "validation",
                 targetProfile: "linux",
                 attackId: "T1018",
-                hypothesis: "LX-006 os fingerprint",
-              }),
-            ],
+                hypothesis: "LX-006 os fingerprint" }) ],
             provider: "fake",
-            model: "fake",
-          };
+            model: "fake" };
         }
         return textOnly("TRIED: ssh uname / OBSERVED: denied-or-output / VERDICT: killed - done");
       }
@@ -366,20 +352,16 @@ describe("host tools in the engagement loop", () => {
       target: "10.9.0.12",
       mode: "red",
       objective: "host-exec integration test",
-      roe: { scope: ["10.9.0.12"] },
-    };
+      roe: { scope: ["10.9.0.12"] } };
     const executor = new HostExecutor({ ssh: fakeSshFactory, env: FAKE_ENV });
     const res = await runEngagement(input, {
-      mcpToken: "test",
       deepseekApiKey: "test",
       qwenApiKey: "test",
       engagementsDir: dir,
       deps: {
         verify: async () => true,
         completeForRole: scriptedLlm(outOfScope) as never,
-        hostExecutor: executor,
-      },
-    });
+        hostExecutor: executor } });
     const events = readFileSync(join(dir, res.engagementId, "events.jsonl"), "utf8")
       .split("\n")
       .filter(Boolean)
@@ -418,15 +400,12 @@ describe("host tools in the engagement loop", () => {
       target: "10.9.0.12",
       mode: "red",
       objective: "tool-list check",
-      roe: { scope: ["10.9.0.12"] },
-    };
+      roe: { scope: ["10.9.0.12"] } };
     await runEngagement(input, {
-      mcpToken: "test",
       deepseekApiKey: "test",
       qwenApiKey: "test",
       engagementsDir: dir,
-      deps: { verify: async () => true, completeForRole: llm as never },
-    });
+      deps: { verify: async () => true, completeForRole: llm as never } });
     for (const t of ["ssh_exec", "smb_exec", "winrm_exec"]) {
       assert.ok(sawTools.includes(t), `agent tool list includes ${t}`);
     }

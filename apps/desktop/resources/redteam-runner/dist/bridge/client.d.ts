@@ -29,4 +29,11 @@ export interface BridgeClientOptions extends BridgeConfigOverrides {
  * @param options - config overrides and seams.
  * @returns the client.
  */
+/**
+ * A failure that proves the request never reached the tool, so retrying is safe.
+ * A consent denial, an auth rejection, a timeout, or a reply that failed to parse
+ * AFTER the server executed are all unsafe to retry: the bridge already did the
+ * work, or it deliberately refused it.
+ */
+export declare function isStaleSessionFailure(err: unknown): boolean;
 export declare function createBridgeClient(options?: BridgeClientOptions): BridgeClient;

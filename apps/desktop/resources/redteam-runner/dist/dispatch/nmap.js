@@ -21,8 +21,9 @@ import { BATTERY_CATEGORIES } from "../battery.js";
 import { isTargetId } from "../targets.js";
 import { techniqueAllowed } from "../gate.js";
 import { sleep } from "../util.js";
+import { toolTimeoutResult } from "./timeout.js";
 import { noteCategoryCoverage, strListArg } from "./prelude.js";
-import { findProfile, NMAP_PROFILES, NMAP_SETUP_INSTRUCTIONS } from "../nmap/index.js";
+import { findProfile, NMAP_PROFILES, NMAP_SETUP_INSTRUCTIONS, resolveNmapTimeoutS } from "../nmap/index.js";
 import { resolveExternalBinary } from "../toolchain.js";
 import { validateHostTarget } from "../host-exec/common.js";
 function strArg(args, key) {
@@ -129,6 +130,17 @@ export async function handleNmapTools(ctx, _role, _phase, call, args, _seam, dis
             skipPing: args["skipPing"] === true,
             signal: ctrl.signal,
         });
+        if (res.timedOut) {
+            // Typed TOOL_TIMEOUT result (dispatch-layer budget semantics), analogous
+            // to nuclei_exec: executor timeout is classified, never surfaced as
+            // plain FAILED text. Partial output rides after the canonical text.
+            const t = toolTimeoutResult({
+                toolName: "nmap_exec",
+                timeoutMs: resolveNmapTimeoutS() * 1000,
+                target: host,
+            });
+            return { ...t, result: res.message ? `${t.result} Partial results below.\n${res.message}` : t.result, attackId };
+        }
         if (!res.ok)
             return { result: `FAILED: ${res.message}`, attackId, target: host };
         // Evidence, not impressions: ports as structured lines an agent can cite.

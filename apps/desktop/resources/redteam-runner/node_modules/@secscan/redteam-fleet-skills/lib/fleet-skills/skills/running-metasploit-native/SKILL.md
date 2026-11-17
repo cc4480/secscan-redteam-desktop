@@ -1,10 +1,10 @@
 ---
 name: running-metasploit-native
-description: 'Run Metasploit-grade exploitation using native tools and fleet technique skills only. Use only when a confirmed finding exists from nmap, nuclei, SecScan, or SecLayer and the coordinator orders exploitation against verified engagement scope.'
+description: 'Drive the Metasploit bridge (msf_exec) for recon-safe module search/suggest and exploitation/post-exploitation actions against in-scope hosts. Use only when a confirmed finding exists or the coordinator orders an MSF action in verified engagement scope.'
 domain: cybersecurity
 subdomain: exploitation
-tags: [metasploit, native, exploitation, windows, linux, mobile]
-version: '1.0'
+tags: [metasploit, native, exploitation, windows, linux]
+version: '1.1'
 author: secscan
 license: Apache-2.0
 nist_csf: [DE.CM, RS.AN, PR.IP]
@@ -13,34 +13,32 @@ mitre_attack: [T1190, T1210, T1059, T1068]
 # Running Metasploit Native
 
 ## When to Use
-Use only after a confirmed finding exists and the coordinator orders exploitation on verified engagement scope.
-**Do not use** for initial recon, vulnerability scanning, unconfirmed findings, or against any target outside verified engagement scope. Do not use any external Metasploit MCP server or msfrpcd.
+Use when the coordinator orders a Metasploit action on a verified in-scope host, or when a confirmed finding needs MSF-backed validation/exploitation in scope.
+**Do not use** for out-of-scope targets or to fabricate results from unconfirmed findings. Do not assume or require `msfrpcd`/RPC or external Metasploit MCP servers; this is the local MSF bridge.
 
 ## Procedure
 1. Apply standing rules:
-   - Standalone: exploitation capability is inside the app using native tools and fleet technique skills. No external Metasploit MCP server or msfrpcd is ever a prerequisite. Absence of SecScan/SecLayer/Metasploit connectivity changes nothing.
-   - Scope: verified engagement scope only; zero packets outside it. "Local machine" means the host the app runs on, resolved by default; never ask which machine. A URL target routes to the web-facing scanners in kind.
-   - Chaining: nmap services feed nuclei templates and SecScan checks; confirmed findings feed exploitation skills; everything feeds the HTML report with its source label.
-   - Discipline: report only what tool output proved. "no evidence / not run" is a valid result. Never upgrade an unconfirmed claim to a finding. Every finding carries evidence: command, output excerpt, timestamp.
-2. Require a confirmed finding:
-   - Set `FINDING_ID` to the confirmed finding from nmap, nuclei, SecScan, or SecLayer.
-   - Confirm the finding grade is `confirmed`. If not, stop and record `not-run` with reason: unconfirmed finding is not eligible for exploitation.
-3. Select exploit technique from confirmed finding:
-   - Query the fleet technique skills for a native technique matching the service, product, version, or CVE in the finding.
-   - For Windows targets: select Windows native exploitation techniques. For Linux targets: select Linux native exploitation techniques. For mobile targets: select mobile-specific techniques only for a mobile target.
-   - Do not select a technique that targets a different service or product.
-   - Set `SELECTED_TECHNIQUE` to the matching technique skill name.
-4. Execute native exploitation:
-   - Call `native.metasploit.exploit(finding_id=FINDING_ID, technique=SELECTED_TECHNIQUE)`.
-   - The native runner uses in-app tools and the selected fleet technique skill. It does not connect to any external Metasploit MCP server or msfrpcd.
-5. Handle sessions and evidence:
-   - Call `native.metasploit.session.list` to confirm a session or proof of code execution.
-   - If no session or proof is returned, record `no-evidence` and do not report success.
-   - Call `native.metasploit.session.cleanup` at completion or if the operation is aborted.
-6. Report:
-   - Write only successful, evidence-backed exploitation results to the HTML report under source label `metasploit-native`.
-   - Include command, full output excerpt, timestamp, finding id, technique, session id, and success or failure.
-   - If exploitation fails or is not run, report that as a valid result; do not create a finding.
-7. Chain:
-   - Confirmed nmap, nuclei, SecScan, and SecLayer findings are the only inputs to this skill.
-   - All exploitation output feeds the final HTML report under `metasploit-native`.
+   - Standalone/native: `msf_exec` drives a local Metasploit Framework install via `msfconsole` on the host (or `REDTEAM_MSFCONSOLE_BIN`), not `msfrpcd`/RPC. No external security-tool MCP servers are required for this tool (runner/AlterEgo hops are separate exceptions elsewhere).
+   - Scope: in-scope hosts only (runner-enforced), zero packets/actions outside verified engagement scope. "Local machine" means the host the app runs on, resolved by default; never ask which machine.
+   - Policy/discipline: report only what tool output proved. "no evidence / not run" is a valid result. Never upgrade an unconfirmed claim to a finding. Every action carries evidence: command/call, output excerpt, timestamp, and relevant IDs/handles.
+2. Common call fields:
+   - `action` (required): `search`, `suggest`, `run`, `session_command`, `credential_dump`, or `session_close`.
+   - `host` (required): in-scope hostname/IP/CIDR as applicable.
+   - `category` (required): `logic`, `functionality`, or `validation`.
+   - `attackId`, `cve`, `targetProfile` (`windows` or `linux` — never inferred), `hypothesis`: include when known/required by context.
+   - Include `batteryItem` and `variantIndex` when applicable.
+3. Choose the action:
+   - `search` (recon-safe): query the module database. Provide `query` as needed.
+   - `suggest` (recon-safe, never fires): provide `service` and/or `version` (and `platform` if useful) to get ranked candidate modules for coordinator approval.
+   - `run` (exploit phase only, after coordinator sign-off): run one exploit/auxiliary module. Provide `module` (and `moduleType` `exploit`/`auxiliary` as appropriate), `options` as string map, and `payload` only when using supported payloads. With a generic payload the runner-built canary marker is the payload action; with a supported Meterpreter session payload the session may open as mechanical follow-through and return a runner-issued `sessionHandle` if proven.
+   - `session_command`: run one command through an open session using `sessionHandle` and `command`. Every command and full response is logged by the runner.
+   - `credential_dump`: gather credential material through an open session using `sessionHandle` and `dumpKind` (`hashdump`, `smart_hashdump`, `cachedump`, `lsa_secrets`, `credential_collector`, `gpp`, `chrome`, `firefox`, `ssh_creds`, `linux_hashdump`, `kiwi`). Raw output is sealed to engagement evidence storage; the result carries counts/types and evidence reference only.
+   - `session_close`: stop the session and forget the handle using `sessionHandle`.
+4. Execute and interpret safely:
+   - Use `run`/session actions only on eligible, coordinator-approved, in-scope targets with a confirmed basis when exploitation is being performed.
+   - Sessions exist only from a validated `run` that opened them; there is no free-standing session open. A handle is bound to the host it was exploited on.
+   - Record action, module/payload/options (as relevant), session handle, output excerpts, and timestamps. If no session/proof is returned or an action is refused/not run, record `no-evidence` or `not-run` with reason.
+5. Report and chain:
+   - Attribute results to Metasploit/MSF bridge output as produced by the runner/app reporting pipeline.
+   - Confirmed nmap, nuclei, SecScan, and SecLayer findings can be inputs to MSF validation/exploitation when ordered.
+   - Do not report success without evidence-backed output/proof. Close sessions when done or aborted.

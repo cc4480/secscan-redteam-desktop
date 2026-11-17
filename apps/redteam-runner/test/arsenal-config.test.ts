@@ -13,8 +13,7 @@ import {
   DEFAULT_ARSENAL_MAX_ENTRIES_PER_COLLECTION,
   DEFAULT_ARSENAL_REFRESH_INTERVAL_HOURS,
   DEFAULT_ARSENAL_SOURCE_REPO,
-  resolveArsenalConfig,
-} from '../src/arsenal/config.js'
+  resolveArsenalConfig } from '../src/arsenal/config.js'
 
 describe('arsenal config — defaults and derivation', () => {
   it('derives the db path from the engagements dir (desktop shape)', () => {

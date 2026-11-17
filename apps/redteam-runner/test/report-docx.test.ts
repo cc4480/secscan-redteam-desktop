@@ -34,15 +34,13 @@ const meta: ReportMeta = {
   startedAt: '2026-10-28T09:00:00.000Z',
   generatedAt: '2026-10-28T10:00:00.000Z',
   findings: { critical: 1, high: 0, medium: 0, low: 2, info: 1 },
-  battery: { total: 22, confirmed: 1, executedClean: 16, killed: 1, blocked: 4, na: 0, pending: 0 },
-}
+  battery: { total: 22, confirmed: 1, executedClean: 16, killed: 1, blocked: 4, na: 0, pending: 0 } }
 
 const findings: Finding[] = [
   { id: 'F-1', severity: 'critical', title: 'Cross-tenant object access (BOLA)', attackIds: ['T1190'], evidence: 'Object of another tenant returned without an ownership check.', fix: 'Enforce per-object authorization on every API read.', retest: 'Repeat with the second identity; expect 403.', status: 'confirmed', accountableOperator: 'Carlos' },
   { id: 'F-2', severity: 'low', title: 'Missing Content Security Policy header', attackIds: [], evidence: 'No CSP header on the app responses.', fix: 'Add a Content-Security-Policy header.', retest: 'Fetch the app root; expect the header.', status: 'confirmed', accountableOperator: 'Carlos' },
   { id: 'F-3', severity: 'info', title: 'robots.txt discloses hidden paths', attackIds: [], evidence: 'Disallow entries name internal paths.', fix: 'Remove internal paths from robots.txt.', retest: 'Fetch robots.txt; expect no internal paths.', status: 'confirmed', accountableOperator: 'Carlos' },
-  { id: 'F-4', severity: 'low', title: 'Session cookie lifetime too long', attackIds: [], evidence: 'Flagged, awaiting verification.', fix: 'Verify first.', retest: 'n/a', status: 'deferred', accountableOperator: 'Carlos' },
-]
+  { id: 'F-4', severity: 'low', title: 'Session cookie lifetime too long', attackIds: [], evidence: 'Flagged, awaiting verification.', fix: 'Verify first.', retest: 'n/a', status: 'deferred', accountableOperator: 'Carlos' } ]
 
 const bundle: PocBundle = {
   version: 1,
@@ -59,8 +57,7 @@ const bundle: PocBundle = {
   validationTier: 'execution',
   proves: 'The marker was executed and echoed by the target.',
   doesNotProve: 'It does not prove data beyond the canary was reachable.',
-  reverifyCommand: 'node reverify.mjs --finding F-1',
-}
+  reverifyCommand: 'node reverify.mjs --finding F-1' }
 
 const detailInput: DetailInput = {
   target: meta.target,
@@ -74,18 +71,15 @@ const detailInput: DetailInput = {
     { id: 'F-1', title: findings[0]!.title, severity: 'critical', tier: 'proven', attackIds: ['T1190'], sourceLabel: 'bola-idor', signals: [], fix: findings[0]!.fix },
     { id: 'F-2', title: findings[1]!.title, severity: 'low', tier: 'confirmed', attackIds: [], sourceLabel: 'Injection Defense', signals: ['WSTG-CONF-12', 'CWE-79'], fix: findings[1]!.fix },
     { id: 'F-3', title: findings[2]!.title, severity: 'info', tier: 'confirmed', attackIds: [], sourceLabel: 'Information Disclosure', signals: [], fix: findings[2]!.fix },
-    { id: 'F-4', title: findings[3]!.title, severity: 'low', tier: 'deferred', attackIds: [], sourceLabel: 'weak-session', signals: [], fix: findings[3]!.fix },
-  ],
+    { id: 'F-4', title: findings[3]!.title, severity: 'low', tier: 'deferred', attackIds: [], sourceLabel: 'weak-session', signals: [], fix: findings[3]!.fix } ],
   coverage: {
     totals: { total: 22, confirmed: 1, executedClean: 16, killed: 1, blocked: 4, na: 0, pending: 0 },
     probesUsed: 36,
     fullBattery: true,
     notCovered: ['credential_chain', 'stored_xss', 'llm'],
     planOnly: [],
-    arms: [],
-  },
-  surface: { tlsGrade: 'A', servedVia: 'Cloudflare', technologies: ['Cloudflare'] },
-}
+    arms: [] },
+  surface: { tlsGrade: 'A', servedVia: 'Cloudflare', technologies: ['Cloudflare'] } }
 
 function input(over: Partial<EngagementReportInput> = {}): EngagementReportInput {
   return {
@@ -100,8 +94,7 @@ function input(over: Partial<EngagementReportInput> = {}): EngagementReportInput
     negativeProof: [],
     findingMeta: new Map([
       ['F-1', { category: 'validation', owasp: 'WSTG-ATHZ-04', cwe: 'CWE-639', cvss: 9.8 }],
-      ['F-2', { cwe: 'CWE-79', cvss: 3.7 }],
-    ]),
+      ['F-2', { cwe: 'CWE-79', cvss: 3.7 }] ]),
     detail: buildReportDetail(detailInput),
     coverage: {
       fullBattery: true,
@@ -109,11 +102,9 @@ function input(over: Partial<EngagementReportInput> = {}): EngagementReportInput
       totals: detailInput.coverage.totals,
       probesUsed: 36,
       planOnly: [],
-      notCovered: ['credential_chain', 'stored_xss', 'llm'],
-    },
+      notCovered: ['credential_chain', 'stored_xss', 'llm'] },
     activity: { eventCount: 0, rows: [], totalActions: 0, decisions: [], danglingCauses: [] },
-    ...over,
-  }
+    ...over }
 }
 
 /** Minimal XML well-formedness check: balanced tags, one root. */
@@ -158,8 +149,7 @@ describe('report docx (Q-RP-2)', () => {
   it('unzips to the OOXML part set with a valid document.xml', () => {
     for (const name of [
       '[Content_Types].xml', '_rels/.rels', 'word/document.xml',
-      'word/styles.xml', 'word/_rels/document.xml.rels',
-    ]) {
+      'word/styles.xml', 'word/_rels/document.xml.rels' ]) {
       assert.ok(parts[name], `part ${name} present`)
     }
     assert.match(parts['word/document.xml']!, /^<\?xml version="1\.0"/)

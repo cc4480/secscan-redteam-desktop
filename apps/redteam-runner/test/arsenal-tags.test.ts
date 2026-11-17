@@ -15,19 +15,16 @@ import {
   TARGET_PREFIX_VALUES,
   deriveEntryFacets,
   deriveFacets,
-  type InheritedFacets,
-} from "../src/arsenal/tag-rules.js";
+  type InheritedFacets } from "../src/arsenal/tag-rules.js";
 import {
   COLLECTIONS_MAP,
   PRIORITY_COLLECTION_SLUGS,
   PRIORITY_COLLECTIONS,
   collectionBySlug,
-  inheritedFacetsForCollection,
-} from "../src/arsenal/collections-map.js";
+  inheritedFacetsForCollection } from "../src/arsenal/collections-map.js";
 import {
   arsenalSlugFor,
-  normalizeArsenalUrl,
-} from "../src/arsenal/ingest.js";
+  normalizeArsenalUrl } from "../src/arsenal/ingest.js";
 
 describe("tag rules — spec T3 positives", () => {
   it("jwt → F-10 (plus its category), case-insensitively", () => {
@@ -84,8 +81,7 @@ describe("tag rules — negatives and edge cases", () => {
       "How to cook rice properly",
       "tools",
       "",
-      "   ",
-    ]) {
+      "   " ]) {
       assert.deepEqual(deriveFacets(text), { tags: [], targets: [], battery: [] }, JSON.stringify(text));
     }
   });
@@ -133,16 +129,14 @@ describe("inheritance — rules only ADD (spec T3)", () => {
     topics: ["osint"],
     collectionSlug: "awesome-osint",
     targets: ["LX"],
-    battery: ["logic"],
-  };
+    battery: ["logic"] };
 
   it("inherited facets survive when no rule fires", () => {
     const facets = deriveEntryFacets({ name: "A plain guide", description: "" }, inherited);
     assert.deepEqual(facets, {
       tags: ["collection:awesome-osint", "topic:osint"],
       targets: ["LX"],
-      battery: ["logic"],
-    });
+      battery: ["logic"] });
   });
 
   it("rule facets union with inherited ones; nothing is removed", () => {
@@ -165,8 +159,7 @@ describe("inheritance — rules only ADD (spec T3)", () => {
       topics: Object.freeze(["wordlists"]),
       collectionSlug: "seclists",
       targets: Object.freeze(["WA"]),
-      battery: Object.freeze(["validation"]),
-    };
+      battery: Object.freeze(["validation"]) };
     const facets = deriveEntryFacets({ name: "wordlist", description: null }, frozen);
     assert.ok(facets.tags.includes("topic:wordlists"));
     assert.ok(facets.tags.includes("wordlist"));
@@ -177,8 +170,7 @@ describe("inheritance — rules only ADD (spec T3)", () => {
     assert.deepEqual(deriveEntryFacets({ name: "rice", description: "cooking" }), {
       tags: [],
       targets: [],
-      battery: [],
-    });
+      battery: [] });
   });
 });
 
@@ -217,8 +209,7 @@ describe("collections map — pinned census fidelity", () => {
       "red-teaming-toolkit",
       "awesome-web-hacking",
       "api-security-checklist",
-      "bug-bounty-reference",
-    ]);
+      "bug-bounty-reference" ]);
     assert.equal(PRIORITY_COLLECTIONS.length, 7);
     assert.equal(COLLECTIONS_MAP.filter((row) => row.level2).length, 7);
     for (const row of PRIORITY_COLLECTIONS) assert.equal(row.level2, true, row.slug);
@@ -229,26 +220,20 @@ describe("collections map — pinned census fidelity", () => {
       seclists: { name: "SecLists", url: "https://github.com/danielmiessler/SecLists" },
       payloadsallthethings: {
         name: "PayloadsAllTheThings",
-        url: "https://github.com/swisskyrepo/PayloadsAllTheThings",
-      },
+        url: "https://github.com/swisskyrepo/PayloadsAllTheThings" },
       gtfobins: { name: "GTFOBins", url: "https://gtfobins.github.io" },
       "red-teaming-toolkit": {
         name: "Red Teaming Toolkit",
-        url: "https://github.com/infosecn1nja/Red-Teaming-Toolkit",
-      },
+        url: "https://github.com/infosecn1nja/Red-Teaming-Toolkit" },
       "awesome-web-hacking": {
         name: "Web Hacking",
-        url: "https://github.com/infoslack/awesome-web-hacking",
-      },
+        url: "https://github.com/infoslack/awesome-web-hacking" },
       "api-security-checklist": {
         name: "API Security Checklist",
-        url: "https://github.com/shieldfy/API-Security-Checklist",
-      },
+        url: "https://github.com/shieldfy/API-Security-Checklist" },
       "bug-bounty-reference": {
         name: "Bug Bounty Reference",
-        url: "https://github.com/ngalongc/bug-bounty-reference",
-      },
-    };
+        url: "https://github.com/ngalongc/bug-bounty-reference" } };
     for (const [slug, want] of Object.entries(expected)) {
       const row = collectionBySlug(slug);
       assert.ok(row !== undefined, slug);

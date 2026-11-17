@@ -19,8 +19,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
   buildLocalEngagementInput,
-  parseCommand,
-} from "../src/workflows/commands.js";
+  parseCommand } from "../src/workflows/commands.js";
 import { buildCommandEngagementInput } from "../src/cli/command.js";
 import { runEngagement } from "../src/phases.js";
 import { readEvents } from "../src/events.js";
@@ -84,14 +83,12 @@ describe("runEngagement honours the phases field", () => {
   });
 
   const opts = () => ({
-    mcpToken: "test",
     deepseekApiKey: "test",
     qwenApiKey: "test",
     engagementsDir: dir,
     registryPath: join(dir, "registry.json"),
     dryRunAgents: true,
-    deps: { verify: yesVerify },
-  });
+    deps: { verify: yesVerify } });
 
   it("a recon+report command completes WITHOUT entering the exploit phase, at its own tier", async () => {
     const parsed = parseCommand("/nmap secscan.us");
@@ -167,8 +164,7 @@ describe("chat launch carries the sibling command", () => {
       objective: "run /nmap",
       command: "nmap",
       tier: 1,
-      targets: ["webapp"],
-    });
+      targets: ["webapp"] });
     assert.ok("body" in built);
     if (!("body" in built)) return;
     assert.equal(built.body.tier, 1);

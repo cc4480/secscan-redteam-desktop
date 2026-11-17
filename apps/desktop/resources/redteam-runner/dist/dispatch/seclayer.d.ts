@@ -53,7 +53,11 @@ export interface RawSeclayerFinding {
  * verbatim: module severity, the probe's own test name as the title,
  * its demonstrated receipt as the evidence. */
 export declare function seclayerFindingToLive(f: RawSeclayerFinding, attackId: string | undefined, vulnClass: string): LiveFinding;
-/** Record a batch of module findings on the proven path and summarize. */
-export declare function recordSeclayerFindings(ctx: Ctx, tool: string, url: string, raw: RawSeclayerFinding[], pre: SeclayerPrelude, vulnClass: string, producer?: ActorRole): DispatchResult;
+/** Record a batch of module findings on the proven path and summarize.
+ * When `notRun` lists blind/OOB-dependent classes that could not execute
+ * (e.g. remote target, loopback-only collaborator unavailable), the result
+ * is reported as partially/fully unverifiable — never as clean coverage for
+ * those classes. */
+export declare function recordSeclayerFindings(ctx: Ctx, tool: string, url: string, raw: RawSeclayerFinding[], pre: SeclayerPrelude, vulnClass: string, producer?: ActorRole, notRun?: string[]): DispatchResult;
 export declare function bolaIdentitiesFromArgs(args: Record<string, unknown>): [BolaIdentity, BolaIdentity] | undefined;
 export declare function handleSeclayerTools(ctx: Ctx, _role: ActorRole, _phase: EngagementPhase, call: ToolCallRequest, args: Record<string, unknown>): Promise<DispatchResult | null>;

@@ -16,14 +16,19 @@
  * authority they add is exactly "prove ownership", never "assert ownership".
  */
 
-import { LocalDomainVerifier } from '@secscan/redteam-auth-gate'
+import { LocalDomainVerifier, defaultVerificationStoreFile, VerificationStore } from '@secscan/redteam-auth-gate'
 import type { Captured, ToolDef } from './mcp-tools.js'
 
 const str = (d: string): Record<string, unknown> => ({ type: 'string', description: d })
 
 /** One verifier per call, so the store path is read from the environment each time. */
 function verifier(): LocalDomainVerifier {
-  return new LocalDomainVerifier()
+  return LocalDomainVerifier.create()
+}
+
+/** The verified-domain store, for the read-only list tool. */
+function store(): VerificationStore {
+  return new VerificationStore(defaultVerificationStoreFile())
 }
 
 function failure(err: unknown): Captured {
@@ -52,7 +57,7 @@ export const VERIFY_TOOLS: ToolDef[] = [
     },
     run: async (_store, a) => {
       try {
-        return { status: 200, body: { ok: true, challenge: await verifier().start(String(a['domain'])) } }
+        return { status: 200, body: { ok: true, challenge: await verifier().startVerification(String(a['domain'])) } }
       } catch (err) {
         return failure(err)
       }
@@ -71,8 +76,8 @@ export const VERIFY_TOOLS: ToolDef[] = [
     },
     run: async (_store, a) => {
       try {
-        const result = await verifier().check(String(a['domain']))
-        return { status: result.verified ? 200 : 400, body: { ok: result.verified, result } }
+        const verified = await verifier().checkVerification(String(a['domain']))
+        return { status: verified ? 200 : 400, body: { ok: verified, verified } }
       } catch (err) {
         return failure(err)
       }
@@ -84,8 +89,9 @@ export const VERIFY_TOOLS: ToolDef[] = [
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     run: async () => {
       try {
-        const v = verifier()
-        return { status: 200, body: { ok: true, store: v.path, domains: await v.listVerified() } }
+        const s = store()
+        const doc = await s.load()
+        return { status: 200, body: { ok: true, store: s.path, domains: Object.keys(doc.verified) } }
       } catch (err) {
         return failure(err)
       }

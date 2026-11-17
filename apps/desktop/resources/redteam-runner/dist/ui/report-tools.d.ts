@@ -1,4 +1,4 @@
-import { type ToolDef } from "./mcp-tools.js";
+import { type ToolDef } from './mcp-tools.js';
 /** engagement_report — the finished report, for delivery in the thread. */
 export declare const reportTool: ToolDef;
 /** Recorded ends regeneration may run on are TERMINAL_STATUSES (shared

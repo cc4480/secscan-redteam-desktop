@@ -30,8 +30,7 @@ describe('deadCredentialHaltReason (FIX-DEADKEY)', () => {
       deadCredentialHaltReason(
         metaSnap([
           { keyId: 0, fingerprint: 'ab12cd34', dead: true, deadReason: 'auth_dead', benchedModels: [] },
-          { keyId: 1, fingerprint: '9f3c77aa', dead: false, benchedModels: [] },
-        ]),
+          { keyId: 1, fingerprint: '9f3c77aa', dead: false, benchedModels: [] } ]),
         'meta',
       ),
       undefined,
@@ -50,9 +49,7 @@ describe('deadCredentialHaltReason (FIX-DEADKEY)', () => {
           deadAtMs: DEAD_AT,
           deadStatus: 401,
           deadCode: 'invalid_api_key',
-          benchedModels: [],
-        },
-      ]),
+          benchedModels: [] } ]),
       'meta',
     )
     assert.ok(reason)
@@ -80,9 +77,7 @@ describe('deadCredentialHaltReason (FIX-DEADKEY)', () => {
           dead: true,
           deadReason: 'billing',
           deadStatus: 402,
-          benchedModels: [],
-        }],
-      }],
+          benchedModels: [] }] }],
       'anthropic',
     )
     assert.ok(reason)

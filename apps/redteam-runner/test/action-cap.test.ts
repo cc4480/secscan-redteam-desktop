@@ -31,8 +31,7 @@ const ENV_PIN = {
   SECSCAN_MCP_TOKEN: 'test-token',
   DEEPSEEK_API_KEY: 'test-key',
   REDTEAM_OPERATOR: 'test-operator',
-  REDTEAM_ENV: 'staging',
-} as unknown as NodeJS.ProcessEnv
+  REDTEAM_ENV: 'staging' } as unknown as NodeJS.ProcessEnv
 
 describe('agent-action cap', () => {
   it('defaults to 100 when nothing is supplied', () => {

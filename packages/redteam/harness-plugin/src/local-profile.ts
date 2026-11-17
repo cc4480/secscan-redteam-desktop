@@ -71,6 +71,20 @@ export function isTightWindow(contextWindow: number | undefined): boolean {
 }
 
 /**
+ * The smallest window that hosts the full assembled profile plus the full
+ * tool set: the shipped Local Models default (32,768 tokens). Windows at or
+ * above this size keep every schema; smaller non-tight windows drop the
+ * deferred tools instead.
+ * @param contextWindow - the routed window, when known.
+ * @returns true when the window is at or above the full-profile floor.
+ */
+const FULL_PROFILE_MIN_WINDOW = 32_768
+
+export function isFullWindow(contextWindow: number | undefined): boolean {
+  return contextWindow !== undefined && contextWindow >= FULL_PROFILE_MIN_WINDOW
+}
+
+/**
  * The tool names the tight window keeps.
  * @returns the allowlist the assembly filters against.
  */
@@ -189,13 +203,19 @@ export function localProfileText(contextWindow?: number): string | undefined {
     const path = join(directory, TIGHT_PROFILE_FILE)
     if (existsSync(path)) return readFileCached(path)
   }
-  // The lean brief is the local default: a fresh local session opens on the
-  // ~1,600-token brief instead of the ~9,255-token assembled profile, whose
-  // prefill dominated the first turn on CPU-served local models. The full
-  // profile remains the fallback when no lean file is installed.
+  // Tight windows cannot host the assembled profile; large windows can, so
+  // select tight → lean → full by context window when the window is known.
+  // Unknown windows prefer lean to avoid the full profile's prefill cost.
   const leanPath = join(directory, LEAN_PROFILE_FILE)
-  if (existsSync(leanPath)) return readFileCached(leanPath)
-  return readProfile(directory)
+  const lean = existsSync(leanPath) ? readFileCached(leanPath) : undefined
+  if (isFullWindow(contextWindow)) {
+    try {
+      return readProfile(directory)
+    } catch {
+      return lean
+    }
+  }
+  return lean ?? readProfile(directory)
 }
 
 /**

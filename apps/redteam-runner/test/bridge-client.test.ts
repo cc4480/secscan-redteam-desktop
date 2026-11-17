@@ -28,12 +28,10 @@ const FIXTURE_TOOLS = [
   "shell_pwsh",
   "delete_file",
   "type_text",
-  "power",
-].map((name) => ({
+  "power" ].map((name) => ({
   name,
   description: `stub ${name}`,
-  inputSchema: { type: "object", properties: {} },
-}));
+  inputSchema: { type: "object", properties: {} } }));
 
 interface SeenRequest {
   method: string;
@@ -69,8 +67,7 @@ before(async () => {
       seen.push({
         method: parsed.method ?? "",
         authorization: req.headers.authorization,
-        sessionId: req.headers["mcp-session-id"] as string | undefined,
-      });
+        sessionId: req.headers["mcp-session-id"] as string | undefined });
       if (req.headers.authorization !== `Bearer ${FIXTURE_TOKEN}`) {
         res.writeHead(401, { "content-type": "application/json" });
         res.end(JSON.stringify({ error: "unauthorized" }));
@@ -99,8 +96,7 @@ before(async () => {
           res.writeHead(200, { "content-type": "application/json" });
           res.end(rpcReply(parsed.id, {
             isError: true,
-            content: [{ type: "text", text: "denied by local approval (or timed out)" }],
-          }));
+            content: [{ type: "text", text: "denied by local approval (or timed out)" }] }));
           return;
         }
         if (name === "screenshot") {
@@ -133,8 +129,7 @@ function client(overrides: { url?: string; tokenFile?: string } = {}): BridgeCli
   return createBridgeClient({
     url: overrides.url ?? baseUrl,
     tokenFile: overrides.tokenFile ?? tokenFile,
-    env: {},
-  });
+    env: {} });
 }
 
 describe("bridge client — full exposure", () => {

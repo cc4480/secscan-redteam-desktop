@@ -22,8 +22,7 @@ import {
   ResearchError,
   type ResearchSearchHit,
   type ResearchSearchOptions,
-  type SearchProvider,
-} from "../src/research/provider.js";
+  type SearchProvider } from "../src/research/provider.js";
 import { buildBingSearchUrl, freshnessForSince, parseBingResults, unwrapBingHref } from "../src/research/bing.js";
 import { classifyResearchHost, extractQueryHosts } from "../src/research/scope.js";
 import { spillToolResult, readSpill } from "../src/tool-spill.js";
@@ -51,19 +50,16 @@ const HIT_NEW: ResearchSearchHit = {
   url: "https://nvd.nist.gov/vuln/detail/CVE-2024-3400",
   snippet: "A command injection vulnerability in Palo Alto Networks PAN-OS software.",
   publishedDate: "2026-10-12",
-  source: "nvd.nist.gov",
-};
+  source: "nvd.nist.gov" };
 const HIT_OLD: ResearchSearchHit = {
   title: "Old write-up",
   url: "https://blog.example.net/old-post",
   snippet: "An early analysis.",
-  publishedDate: "2025-03-01",
-};
+  publishedDate: "2025-03-01" };
 const HIT_UNDATED: ResearchSearchHit = {
   title: "Vendor advisory",
   url: "https://vendor.example.org/advisory",
-  snippet: "The vendor advisory text.",
-};
+  snippet: "The vendor advisory text." };
 
 // ---------------------------------------------------------------------------
 // Context
@@ -87,22 +83,19 @@ function researchCtx(provider: SearchProvider, opts?: { scope?: string[]; outOfS
       dir: mkdtempSync(join(tmpdir(), "research-test-")),
       engagementId: "eng-research-test",
       append: (e: AppendedEvent) => appended.push(e),
-      updateState: () => undefined,
-    },
+      updateState: () => undefined },
     tier: { current: 0, declared: 0, chainSteps: new Map<string, number>() },
     safety: {
       limiter: new TargetRateLimiter({ rpsPerHost: 1000, burst: 1000 }, () => 0),
       lockout: new CredentialAttemptGuard(),
-      rpsPerHost: 5,
-    },
+      rpsPerHost: 5 },
     itemLedger: new Map(),
     opsecCooldown: new Set<string>(),
     coverage: new Set<string>(),
     targetCoverage: new Map(),
     probesUsed: 0,
     consecutive5xx: 0,
-    actions: 0,
-  } as unknown as Ctx;
+    actions: 0 } as unknown as Ctx;
   return { ctx, appended };
 }
 
@@ -203,8 +196,7 @@ describe("research_fetch — dispatch", () => {
     "<h1>PAN-OS Advisory</h1>",
     "<p>A command injection vulnerability exists in the GlobalProtect feature.</p>",
     "<p>Affected versions are listed below.</p>",
-    "</article></body></html>",
-  ].join("");
+    "</article></body></html>" ].join("");
   const BIG = `<html><body>${`<p>${"evidence sentence ".repeat(60)}</p>`.repeat(140)}</body></html>`;
 
   before(async () => {
@@ -299,8 +291,7 @@ describe("research tools — catalog", () => {
 describe("research scope law", () => {
   const ctxOf = (scope: string[], outOfScope: string[] = [], verifiedScope?: string[]) => ({
     input: { roe: { scope, outOfScope } },
-    ...(verifiedScope ? { verifiedScope } : {}),
-  });
+    ...(verifiedScope ? { verifiedScope } : {}) });
 
   it("classifies unrelated hosts as general and record hosts by the guard", () => {
     const ctx = ctxOf(["app.example.com"], ["secret.example.com"]);
@@ -366,8 +357,7 @@ describe("bing provider — parsing", () => {
     `<div class="b_caption"><p>Analysis of the exploitation in the wild.</p></div></li>`,
     `<li class="b_algo"><h2><a href="${wrap("https://nvd.nist.gov/vuln/detail/CVE-2024-3400")}" target="_blank">Duplicate of the first result</a></h2>`,
     `<div class="b_caption"><p>Duplicate.</p></div></li>`,
-    `</ol>`,
-  ].join("");
+    `</ol>` ].join("");
 
   it("unwraps redirect URLs, dedupes, and reads printed dates", () => {
     const hits = parseBingResults(FIXTURE_HTML, 10);
@@ -418,8 +408,7 @@ describe("bing provider — parsing", () => {
 
 describe("research scope law — local-literal deny entries (F-1)", () => {
   const ctxOf = (scope: string[], outOfScope: string[] = []) => ({
-    input: { roe: { scope, outOfScope } },
-  });
+    input: { roe: { scope, outOfScope } } });
 
   it("denies every local literal the deny list names", () => {
     for (const literal of ["localhost", "127.0.0.1", "::1", "0.0.0.0"]) {
@@ -484,8 +473,7 @@ describe("research tools — F-1 local-literal deny at dispatch", () => {
     const provider = new FixtureProvider([]);
     const { ctx, appended } = researchCtx(provider, {
       scope: ["app.example.com"],
-      outOfScope: ["127.0.0.1"],
-    });
+      outOfScope: ["127.0.0.1"] });
     const beforeHits = hits;
     const r = await dispatchTool(ctx, "recon", "recon", call("research_fetch", { url: `${base}/page` }));
     assert.equal(r.ok, false);
@@ -558,8 +546,7 @@ describe("research tools — F-1 local-literal deny at dispatch", () => {
     for (const q of [
       "localhost port forwarding guide",
       "::1 port forwarding guide",
-      "http://[::1]:8080/admin setup guide",
-    ]) {
+      "http://[::1]:8080/admin setup guide" ]) {
       const provider = new FixtureProvider([HIT_NEW]);
       const { ctx } = researchCtx(provider, { outOfScope: ["10.9.9.9"] });
       const r = await dispatchTool(ctx, "recon", "recon", call("research_search", { query: q }));
@@ -572,8 +559,7 @@ describe("research tools — F-1 local-literal deny at dispatch", () => {
     const provider = new FixtureProvider([]);
     const { ctx } = researchCtx(provider, {
       scope: ["app.example.com"],
-      outOfScope: ["10.9.9.9"],
-    });
+      outOfScope: ["10.9.9.9"] });
     const beforeHits = hits;
     const r = await dispatchTool(ctx, "recon", "recon", call("research_fetch", { url: `${base}/page` }));
     assert.equal(r.ok, true);

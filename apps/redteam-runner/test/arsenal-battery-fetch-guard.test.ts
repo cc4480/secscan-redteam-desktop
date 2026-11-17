@@ -97,8 +97,7 @@ function makeTransport(handler: (req: TransportRequest, callIndex: number) => Tr
       status: reply.status,
       contentType: reply.contentType,
       location: reply.location,
-      body: bodyStream(reply.bodyText),
-    }
+      body: bodyStream(reply.bodyText) }
   }
   return { transport, calls }
 }
@@ -145,8 +144,7 @@ describe('§6.1.6 fetch-guard denial matrix (spec T4)', () => {
   for (const [label, ip] of [
     ['loopback 127.0.0.1', '127.0.0.1'],
     ['private 10.x', '10.1.2.3'],
-    ['cloud metadata 169.254.169.254', '169.254.169.254'],
-  ] as Array<[string, string]>) {
+    ['cloud metadata 169.254.169.254', '169.254.169.254'] ] as Array<[string, string]>) {
     it(`denies a host resolving to ${label}`, async () => {
       const { resolve } = resolverFromMap({ 'example.test': [ip] })
       const { transport, calls } = makeTransport(() => okReply('never'))
@@ -168,8 +166,7 @@ describe('§6.1.6 fetch-guard denial matrix (spec T4)', () => {
     const { resolve } = resolverFromMap({
       'a.example.test': [PUBLIC_IP],
       'b.example.test': [PUBLIC_IP_2],
-      'c.example.test': ['10.0.0.5'],
-    })
+      'c.example.test': ['10.0.0.5'] })
     const { transport, calls } = makeTransport((req) => {
       if (req.url.includes('a.example.test')) return redirectReply('https://b.example.test/mid')
       if (req.url.includes('b.example.test')) return redirectReply('https://c.example.test/final')

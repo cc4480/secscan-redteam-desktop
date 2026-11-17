@@ -31,8 +31,7 @@ function ev(partial: Partial<EngagementEvent> & { action: string; result: string
     phase: 'exploit',
     actor: 'exploiter',
     target: 'target.example',
-    ...partial,
-  } as EngagementEvent
+    ...partial } as EngagementEvent
 }
 
 function confirmedFinding(over: Partial<Finding> = {}): Finding {
@@ -45,8 +44,7 @@ function confirmedFinding(over: Partial<Finding> = {}): Finding {
     fix: 'patch',
     retest: 're-run',
     status: 'confirmed',
-    ...over,
-  }
+    ...over }
 }
 
 /** Marker echo recorded under a DRIFTED attackId (T1059), not the finding's T1190. */
@@ -56,8 +54,7 @@ const DRIFT_MARKER_EVENT = ev({
   attackId: 'T1059',
   result:
     'msf exploit/windows/smb/ms17_010_eternalblue vs target.example: MARKER ECHOED — command execution validated. ' +
-    '[CVE-2017-0144] Output: REDTEAM-MARKER-drift1',
-})
+    '[CVE-2017-0144] Output: REDTEAM-MARKER-drift1' })
 
 /** The same marker echo under the finding's own attackId — the strict path. */
 const STRICT_MARKER_EVENT = ev({ ...DRIFT_MARKER_EVENT, attackId: 'T1190' })
@@ -67,8 +64,7 @@ const OBS_EVENT = ev({
   seq: 3,
   action: 'ad_enum',
   attackId: 'T1553',
-  result: 'ad target.example: 1 certificate template(s) with ESC1 flags (CT_FLAG_ENROLLEE_SUPPLIES_SUBJECT)',
-})
+  result: 'ad target.example: 1 certificate template(s) with ESC1 flags (CT_FLAG_ENROLLEE_SUPPLIES_SUBJECT)' })
 
 function runSection(events: EngagementEvent[], findings: Finding[]) {
   const dir = mkdtempSync(join(tmpdir(), 'proven-cell-'))
@@ -77,8 +73,7 @@ function runSection(events: EngagementEvent[], findings: Finding[]) {
   const ctx = {
     events: { dir, engagementId: 'eng-1', append: (e: unknown) => appended.push(e) },
     input: { target: 'target.example', operatorName: 'op' },
-    killedLive: [],
-  } as unknown as Ctx
+    killedLive: [] } as unknown as Ctx
   const pocBundleMap = new Map<string, PocBundle>()
   const section = buildProofSection(ctx, findings, pocBundleMap)
   return { section, pocBundleMap, dir }
@@ -139,15 +134,13 @@ function liveFinding(over: Partial<LiveFinding> = {}): LiveFinding {
     title: 'Reflected XSS in search',
     attackId: 'T1059',
     evidence: 'marker reflected unencoded',
-    ...over,
-  }
+    ...over }
 }
 
 const PROVEN_LIVE = liveFinding({
   cellState: 'proven',
   provenClaim: { expectedMarker: 'REDTEAM-MARKER-cell1', targetUrl: 'https://target.example/search' },
-  cellDetail: 'Challenger critique + verification signed, negative control passed.',
-})
+  cellDetail: 'Challenger critique + verification signed, negative control passed.' })
 
 describe('§3 report join (report/phase.ts applyCellVerdicts)', () => {
   it('a both-keys match stamps all three fields', () => {
@@ -183,8 +176,7 @@ describe('§3 report join (report/phase.ts applyCellVerdicts)', () => {
     const detected = liveFinding({
       cellState: 'detected',
       provenClaim: { expectedMarker: 'M-det', targetUrl: 'https://target.example/search' },
-      cellDetail: 'Control also reflected — falsified.',
-    })
+      cellDetail: 'Control also reflected — falsified.' })
     const f = confirmedFinding({ title: 'Reflected XSS in search', attackIds: ['T1059'] })
     applyCellVerdicts([f], [detected, PROVEN_LIVE])
     assert.equal(f.cellState, 'proven')
@@ -248,8 +240,7 @@ function pocBundle(over: Partial<PocBundle> = {}): PocBundle {
     proves: 'The marker was executed and echoed by the target.',
     doesNotProve: 'It does not prove data beyond the canary was reachable.',
     reverifyCommand: 'node reverify.mjs --finding F-1',
-    ...over,
-  } as PocBundle
+    ...over } as PocBundle
 }
 
 const CELL_PROVEN_FINDING = confirmedFinding({
@@ -257,8 +248,7 @@ const CELL_PROVEN_FINDING = confirmedFinding({
   attackIds: ['T1059'],
   cellState: 'proven',
   provenClaim: { expectedMarker: 'REDTEAM-MARKER-cell1', targetUrl: 'https://target.example/search' },
-  cellDetail: 'Challenger critique + verification signed, negative control passed.',
-})
+  cellDetail: 'Challenger critique + verification signed, negative control passed.' })
 
 describe('§4 tierOf (report/html/cards.ts)', () => {
   it('cellState proven + no bundle → proven', () => {
@@ -296,8 +286,7 @@ describe('§4 finding cards — the Cell Receipt', () => {
   it('a detected finding keeps its honest no-bundle line and no Cell Receipt', () => {
     const card = findingCard({
       finding: confirmedFinding({ cellState: 'detected' }),
-      noBundleReason: 'no correlated tool execution',
-    })
+      noBundleReason: 'no correlated tool execution' })
     assert.match(card, /class="card confirmed"/)
     assert.match(card, /No replayable bundle/)
     assert.doesNotMatch(card, /Cell Receipt/)
@@ -306,8 +295,7 @@ describe('§4 finding cards — the Cell Receipt', () => {
   it('observation bundle + cell stamp → bundle block AND Cell Receipt appended', () => {
     const card = findingCard({
       finding: CELL_PROVEN_FINDING,
-      bundle: pocBundle({ validationTier: 'observation' }),
-    })
+      bundle: pocBundle({ validationTier: 'observation' }) })
     assert.match(card, /Observation Receipt/)
     assert.match(card, /Cell Receipt — Proven Live/)
   })
@@ -315,8 +303,7 @@ describe('§4 finding cards — the Cell Receipt', () => {
   it('execution bundle + cell stamp → bundle block alone, no Cell Receipt', () => {
     const card = findingCard({
       finding: CELL_PROVEN_FINDING,
-      bundle: pocBundle({ validationTier: 'execution' }),
-    })
+      bundle: pocBundle({ validationTier: 'execution' }) })
     assert.match(card, /Exploit Receipt — Proven Live/)
     assert.doesNotMatch(card, /Cell Receipt/)
   })
@@ -325,8 +312,7 @@ describe('§4 finding cards — the Cell Receipt', () => {
     const evil = confirmedFinding({
       cellState: 'proven',
       provenClaim: { expectedMarker: '<script>alert(1)</script>', targetUrl: 'https://target.example/x' },
-      cellDetail: 'detail',
-    })
+      cellDetail: 'detail' })
     const block = cellReceiptBlock(evil)
     assert.doesNotMatch(block, /<script>alert\(1\)<\/script>/)
     assert.match(block, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/)
@@ -349,8 +335,7 @@ describe('§4 rendered report — a cell-proven web finding lands in the Proven 
     startedAt: '2026-10-31T09:00:00.000Z',
     generatedAt: '2026-10-31T10:00:00.000Z',
     findings: { critical: 0, high: 1, medium: 0, low: 0, info: 0 },
-    battery: { total: 1, confirmed: 1, executedClean: 0, killed: 0, blocked: 0, na: 0, pending: 0 },
-  }
+    battery: { total: 1, confirmed: 1, executedClean: 0, killed: 0, blocked: 0, na: 0, pending: 0 } }
 
   it('accuracy line counts it proven; the card shows the Cell Receipt; no no-bundle line', () => {
     const findings = [CELL_PROVEN_FINDING]
@@ -371,10 +356,8 @@ describe('§4 rendered report — a cell-proven web finding lands in the Proven 
         totals: { total: 1, confirmed: 1, executedClean: 0, killed: 0, blocked: 0, na: 0, pending: 0 },
         probesUsed: 3,
         planOnly: [],
-        notCovered: [],
-      },
-      activity: { eventCount: 3, rows: [], totalActions: 0, decisions: [], danglingCauses: [] },
-    }
+        notCovered: [] },
+      activity: { eventCount: 3, rows: [], totalActions: 0, decisions: [], danglingCauses: [] } }
     const html = renderEngagementReportHtml(input)
     assert.match(html, /1 proven/)
     assert.match(html, /Cell Receipt — Proven Live/)
@@ -387,14 +370,12 @@ describe('H3 normal-path reconciliation (mergeReporterFindings)', () => {
     title: 'SQL injection in login',
     attackId: 'T1190',
     severity: 'critical',
-    evidence: 'runner-side evidence A',
-  })
+    evidence: 'runner-side evidence A' })
   const liveB = liveFinding({
     title: 'Reflected XSS in search',
     attackId: 'T1059',
     severity: 'high',
-    evidence: 'runner-side evidence B',
-  })
+    evidence: 'runner-side evidence B' })
 
   it('a live finding the reporter omits still reaches the record, with runner-side evidence', () => {
     const reporter = [
@@ -404,9 +385,7 @@ describe('H3 normal-path reconciliation (mergeReporterFindings)', () => {
         attackIds: ['T1190'],
         evidence: 'reporter prose A',
         fix: 'parameterize the query',
-        retest: 'replay the payload',
-      }),
-    ]
+        retest: 'replay the payload' }) ]
     const dropped: Finding[] = []
     const out = mergeReporterFindings([liveA, liveB], reporter, (f) => dropped.push(f))
     assert.equal(out.length, 2, 'both live findings reach the record — the omission deletes nothing')
@@ -442,9 +421,7 @@ describe('H3 normal-path reconciliation (mergeReporterFindings)', () => {
         attackIds: ['t1190'],
         evidence: 'reporter prose',
         fix: 'fix prose',
-        retest: 'retest prose',
-      }),
-    ]
+        retest: 'retest prose' }) ]
     const out = mergeReporterFindings([liveA, liveB], reporter)
     assert.equal(out[0]!.evidence, 'reporter prose', 'the prose joined by attackId despite the renumbering')
     assert.equal(out[0]!.title, 'SQL injection in login', 'the live title stands — peer/cell joins key on it')
@@ -460,12 +437,10 @@ describe('H3 normal-path reconciliation (mergeReporterFindings)', () => {
 
   it('the cell verdict rides the merged record from the live finding, not the reporter text', () => {
     const out = mergeReporterFindings([PROVEN_LIVE], [
-      confirmedFinding({ id: 'F-1', title: 'Reflected XSS in search', attackIds: ['T1059'] }),
-    ])
+      confirmedFinding({ id: 'F-1', title: 'Reflected XSS in search', attackIds: ['T1059'] }) ])
     assert.equal(out[0]!.cellState, 'proven')
     assert.deepEqual(out[0]!.provenClaim, {
       expectedMarker: 'REDTEAM-MARKER-cell1',
-      targetUrl: 'https://target.example/search',
-    })
+      targetUrl: 'https://target.example/search' })
   })
 })

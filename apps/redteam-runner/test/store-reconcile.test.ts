@@ -41,8 +41,7 @@ const base = (over: Record<string, unknown>): Record<string, unknown> => ({
   eventCount: 1,
   startedAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
-  ...over,
-});
+  ...over });
 
 function find(id: string) {
   return new UiStore(dir).list().find((r) => r.id === id);
@@ -72,8 +71,7 @@ describe("orphaned engagement reconciliation", () => {
     writeEngagement("eng-live", base({
       engagementId: "eng-live",
       ownerPid: process.pid,
-      updatedAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-    }));
+      updatedAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString() }));
     const row = find("eng-live");
     assert.ok(row);
     assert.equal(row.status, "running", "a live owner keeps its status regardless of age");
@@ -83,8 +81,7 @@ describe("orphaned engagement reconciliation", () => {
   it("treats a pre-ownerPid record as orphaned once it is long stale", () => {
     writeEngagement("eng-legacy-stale", base({
       engagementId: "eng-legacy-stale",
-      updatedAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-    }));
+      updatedAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString() }));
     const row = find("eng-legacy-stale");
     assert.ok(row);
     assert.equal(row.status, "halted");

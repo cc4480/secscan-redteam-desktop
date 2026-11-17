@@ -11,8 +11,7 @@ import {
   DEVICE_ORDER,
   DEVICE_TEMPLATES,
   TOOL_CATALOGUE,
-  type DeviceId,
-} from '../src/device-templates/catalog.js'
+  type DeviceId } from '../src/device-templates/catalog.js'
 import { validateDeviceTemplates } from '../src/device-templates/validate.js'
 
 describe('device templates — completeness', () => {
@@ -103,9 +102,7 @@ describe('device templates — host tools are scoped to host devices', () => {
         ...DEVICE_TEMPLATES.windows,
         // drop every windows-only tool
         tools: DEVICE_TEMPLATES.windows.tools.filter(t => !windowsOnly.includes(t)),
-        phases: ['recon', 'exploit'] as const,
-      },
-    }
+        phases: ['recon', 'exploit'] as const } }
     const violations = validateDeviceTemplates(broken)
     assert.ok(violations.some(v => v.rule === 'orphan-tool' && v.detail.includes('winrm_exec')))
     assert.ok(violations.some(v => v.rule === 'phase-missing'))

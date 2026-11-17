@@ -36,9 +36,7 @@ it('keeps one shared resource consumer beside the fork MCP clients', () => {
   // This fork deliberately composes two MCP clients alongside that single
   // shared resource consumer: mcp-redteam-runner (the local engagement
   // console) and mcp-alterego (the operator's PC bridge) — the two
-  // documented DE-MCP exceptions. The SecScan and Seclayer client rows are
-  // gone: both scanners run natively inside the app now, so no row composes
-  // for them. Upstream shipped none.
+  // documented DE-MCP exceptions. Upstream shipped none.
   expect(rows.filter(row => row.name === '@deepseek-ai/dsh-mcp-client').map(row => row.id)).toEqual([
     'mcp-redteam-runner',
     'mcp-alterego',

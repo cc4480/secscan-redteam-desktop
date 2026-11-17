@@ -20,14 +20,12 @@ import {
   ResilienceError,
   classifyError,
   providerErrorFromResponse,
-  type ChatMessage,
-} from '@secscan/redteam-llm-router'
+  type ChatMessage } from '@secscan/redteam-llm-router'
 import { SummaryCache, summaryKey } from '../src/compaction/summary-cache.js'
 import {
   compactMessages,
   estimateChars,
-  SUMMARY_MARKER,
-} from '../src/compaction/compact.js'
+  SUMMARY_MARKER } from '../src/compaction/compact.js'
 import { agentLoop } from '../src/agents.js'
 import { EventLog, readEvents } from '../src/events.js'
 import { readSteps } from '../src/harness2/steps.js'
@@ -48,8 +46,7 @@ function extractiveSummarizer(counter: { calls: number }) {
 function history(pairs: number, fillerChars = 2_000): ChatMessage[] {
   const messages: ChatMessage[] = [
     { role: 'system', content: 'SYSTEM' },
-    { role: 'user', content: 'OBJECTIVE: pentest FACT: target is shop.example.test' },
-  ]
+    { role: 'user', content: 'OBJECTIVE: pentest FACT: target is shop.example.test' } ]
   for (let i = 0; i < pairs; i++) {
     messages.push({ role: 'assistant', content: `turn ${i} reasoning ${'x'.repeat(fillerChars)}\nFACT: finding F-${i} status confirmed` })
     messages.push({ role: 'user', content: `observation ${i} ${'y'.repeat(fillerChars)}` })
@@ -89,8 +86,7 @@ describe('compactMessages', () => {
     const before = estimateChars(messages)
     const result = await compactMessages(messages, extractiveSummarizer(counter), {
       budgetChars: 20_000,
-      preserveLast: 4,
-    })
+      preserveLast: 4 })
     assert.ok(result)
     assert.ok(result.afterChars < before)
     assert.equal(messages[0]?.content, 'SYSTEM')
@@ -122,8 +118,7 @@ describe('benchmark — planted-fact recall through compaction', () => {
     for (let i = 0; i < 12; i++) facts.push(`finding F-${i} status confirmed`)
     const result = await compactMessages(messages, extractiveSummarizer(counter), {
       budgetChars: 15_000,
-      preserveLast: 2,
-    })
+      preserveLast: 2 })
     assert.ok(result)
     const chain = messages.map(m => m.content).join('\n')
     for (const fact of facts) {
@@ -170,11 +165,9 @@ describe('agentLoop compaction seam', () => {
       deps: { completeForRole },
       events: new EventLog(dir, 'eng-compact', { target: 'shop.example.test', mode: 'red', objective: 'test' }),
       hostKill: { aborted: false, controllers: new Set<AbortController>() },
-      safety: { killSwitchAborts: 0 },
-    } as unknown as Ctx
+      safety: { killSwitchAborts: 0 } } as unknown as Ctx
     await agentLoop(ctx, 'recon', 'recon' as EngagementPhase, 'SYS', 'OBJ', [], 6, {
-      onIdle: () => 'keep going',
-    })
+      onIdle: () => 'keep going' })
     assert.ok(summarizerCalls >= 1, 'summarizer ran at least once')
     const prompts = readSteps(dir).filter(r => r.role === 'prompt')
     assert.ok(
@@ -214,24 +207,20 @@ describe('compactMessages — tool-call pairing invariant (Q-HALT Item 3)', () =
     const calls = Array.from({ length: count }, (_, i) => ({
       id: `${label}-call-${i}`,
       name: 'probe',
-      arguments: { target: `${label}-${i}` },
-    }))
+      arguments: { target: `${label}-${i}` } }))
     return [
       { role: 'assistant', content: `${label} CALL ${'q'.repeat(fillerChars)}\nFACT: ${label} opened ${count} call(s)`, toolCalls: calls },
       ...calls.map((c, i) => ({
         role: 'tool' as const,
         content: `${label} RESULT ${i}`,
-        toolCallId: c.id,
-      })),
-    ]
+        toolCallId: c.id })) ]
   }
 
   /** Head + three plain filler pairs, then one tool group at the very end. */
   function groupAtEnd(resultCount: number): ChatMessage[] {
     const messages: ChatMessage[] = [
       { role: 'system', content: 'SYSTEM' },
-      { role: 'user', content: 'OBJECTIVE' },
-    ]
+      { role: 'user', content: 'OBJECTIVE' } ]
     for (let i = 0; i < 3; i++) {
       messages.push({ role: 'assistant', content: `mid ${i} reasoning ${'x'.repeat(1_500)}\nFACT: mid-${i} observed` })
       messages.push({ role: 'user', content: `mid ${i} observation ${'y'.repeat(1_500)}` })
@@ -248,8 +237,7 @@ describe('compactMessages — tool-call pairing invariant (Q-HALT Item 3)', () =
       // AFTER the call-carrying assistant, orphaning its results in the tail.
       const result = await compactMessages(messages, extractiveSummarizer(counter), {
         budgetChars: 4_000,
-        preserveLast: resultCount,
-      })
+        preserveLast: resultCount })
       assert.ok(result)
       assert.equal(result.compactedCount, 6, 'only the three filler pairs were summarized')
       assertPairing(messages)
@@ -268,8 +256,7 @@ describe('compactMessages — tool-call pairing invariant (Q-HALT Item 3)', () =
     const counter = { calls: 0 }
     const messages: ChatMessage[] = [
       { role: 'system', content: 'SYSTEM' },
-      { role: 'user', content: 'OBJECTIVE' },
-    ]
+      { role: 'user', content: 'OBJECTIVE' } ]
     for (let i = 0; i < 2; i++) {
       messages.push({ role: 'assistant', content: `mid ${i} reasoning ${'x'.repeat(1_500)}\nFACT: mid-${i} observed` })
       messages.push({ role: 'user', content: `mid ${i} observation ${'y'.repeat(1_500)}` })
@@ -284,8 +271,7 @@ describe('compactMessages — tool-call pairing invariant (Q-HALT Item 3)', () =
     // back to GROUP's assistant so only the filler pairs are summarized.
     const result = await compactMessages(messages, extractiveSummarizer(counter), {
       budgetChars: 4_000,
-      preserveLast: 6,
-    })
+      preserveLast: 6 })
     assert.ok(result)
     assert.equal(result.compactedCount, 4, 'only the two filler pairs were summarized')
     assertPairing(messages)
@@ -309,12 +295,10 @@ describe('compactMessages — tool-call pairing invariant (Q-HALT Item 3)', () =
       { role: 'user', content: 'OBJECTIVE' },
       ...toolGroup('GROUP', 3, 1_800),
       ...toolGroup('NEXT', 1, 1_800),
-      ...toolGroup('LAST', 1, 1_800),
-    ]
+      ...toolGroup('LAST', 1, 1_800) ]
     const result = await compactMessages(messages, extractiveSummarizer(counter), {
       budgetChars: 4_000,
-      preserveLast: 6,
-    })
+      preserveLast: 6 })
     assert.ok(result === null || result.compactedCount === 0, 'no message was compacted away')
     assert.equal(counter.calls, 0, 'the summarizer was never invoked')
     assertPairing(messages)
@@ -326,8 +310,7 @@ describe('compactMessages — tool-call pairing invariant (Q-HALT Item 3)', () =
     const summarize = extractiveSummarizer(counter)
     const messages: ChatMessage[] = [
       { role: 'system', content: 'SYSTEM' },
-      { role: 'user', content: 'OBJECTIVE' },
-    ]
+      { role: 'user', content: 'OBJECTIVE' } ]
     for (const label of ['W1', 'W2', 'W3', 'W4']) messages.push(...toolGroup(label, 2, 1_800))
     // Wave 1: the naive boundary (preserveLast 2) lands after W4's call.
     const wave1 = await compactMessages(messages, summarize, { budgetChars: 5_000, preserveLast: 2 })
@@ -351,8 +334,7 @@ describe('compactMessages — tool-call pairing invariant (Q-HALT Item 3)', () =
     const lengthBefore = messages.length
     const result = await compactMessages(messages, extractiveSummarizer(counter), {
       budgetChars: 5_000,
-      preserveLast: 4,
-    })
+      preserveLast: 4 })
     assert.ok(result)
     // Pre-fix arithmetic on the same fixture: one pass over [head, len - preserveLast).
     assert.equal(result.compactedCount, lengthBefore - 4 - 2)
@@ -365,8 +347,7 @@ describe('compactMessages — tool-call pairing invariant (Q-HALT Item 3)', () =
     const messages: ChatMessage[] = [
       { role: 'system', content: 'SYSTEM' },
       { role: 'user', content: 'OBJECTIVE' },
-      { role: 'tool', content: 'orphaned result', toolCallId: 'ghost' },
-    ]
+      { role: 'tool', content: 'orphaned result', toolCallId: 'ghost' } ]
     for (let i = 0; i < 4; i++) {
       messages.push({ role: 'assistant', content: `later ${i} ${'x'.repeat(1_500)}\nFACT: later-${i}` })
       messages.push({ role: 'user', content: `later ${i} obs ${'y'.repeat(1_500)}` })
@@ -374,8 +355,7 @@ describe('compactMessages — tool-call pairing invariant (Q-HALT Item 3)', () =
     const before = JSON.parse(JSON.stringify(messages)) as ChatMessage[]
     const result = await compactMessages(messages, extractiveSummarizer(counter), {
       budgetChars: 4_000,
-      preserveLast: 2,
-    })
+      preserveLast: 2 })
     assert.equal(result, null)
     assert.equal(counter.calls, 0, 'the summarizer was never invoked')
     assert.deepEqual(messages, before, 'history untouched')
@@ -404,8 +384,7 @@ describe('agentLoop llm_error cause surfacing (Q-HALT Item 1)', () => {
         deps: { completeForRole },
         events: new EventLog(dir2, 'eng-llm-error', { target: 'shop.example.test', mode: 'red', objective: 'test' }),
         hostKill: { aborted: false, controllers: new Set<AbortController>() },
-        safety: { killSwitchAborts: 0 },
-      } as unknown as Ctx
+        safety: { killSwitchAborts: 0 } } as unknown as Ctx
       // Q-NOHALT: a provider failure is an infrastructure limitation, not a
       // reason to discard the engagement. The loop records the failure, marks
       // the fleet down so no other seat burns calls, and CLOSES — it does not

@@ -15,8 +15,7 @@ import {
   resolveItemKey,
   serializeLedger,
   setDisposition,
-  prerequisiteMet,
-} from "../src/coverage/items.js";
+  prerequisiteMet } from "../src/coverage/items.js";
 import { TARGET_PROFILES, FULL_BATTERY_TARGETS, BATTERY_ITEM_COUNTS, TOTAL_BATTERY_ITEMS } from "../src/targets/index.js";
 import { _resetMsfProbeCache } from "../src/msf/prereq.js";
 
@@ -26,8 +25,7 @@ const PREREQ_ENV = [
   "REDTEAM_KRB_CCACHE_B64",
   "REDTEAM_KRB_CCACHE_PATH",
   "REDTEAM_KRB_KIRBI_B64",
-  "REDTEAM_NFS_TEST_CLIENT",
-];
+  "REDTEAM_NFS_TEST_CLIENT" ];
 let savedEnv: Record<string, string | undefined>;
 beforeEach(() => {
   savedEnv = {};

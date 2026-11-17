@@ -13,8 +13,7 @@ import {
   duplicateRefusal,
   nearKey,
   recordCallOutcome,
-  toolCallKey,
-} from '../src/dispatch/duplicate-guard.js'
+  toolCallKey } from '../src/dispatch/duplicate-guard.js'
 import { type Ctx } from '../src/context.js'
 import { type ActorRole, type EngagementPhase } from '../src/types.js'
 import { type ToolCallRequest } from '@secscan/redteam-llm-router'
@@ -29,9 +28,7 @@ function fakeCtx() {
     events: {
       append: (e: { action: string; result: string }) => {
         appended.push({ action: e.action, result: e.result })
-      },
-    },
-  } as unknown as Ctx
+      } } } as unknown as Ctx
   return { ctx, appended }
 }
 

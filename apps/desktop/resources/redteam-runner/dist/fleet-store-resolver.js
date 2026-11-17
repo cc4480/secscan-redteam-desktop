@@ -24,16 +24,26 @@
  * the router's own default. Values are never logged and never included
  * in error strings.
  */
-import { readFileSync, statSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { parseCredentialsDocument, resolveSpec, } from "@deepseek-ai/dsh-credentials-local";
-import { LLM_PROVIDER_ENV } from "@secscan/redteam-llm-router";
+import { readFileSync, statSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { parseCredentialsDocument, resolveSpec, } from '@deepseek-ai/dsh-credentials-local';
+import { fleetProviderFamilyForProvider, LLM_PROVIDER_ENV, readSavedModelSelectionProvider } from '@secscan/redteam-llm-router';
 /** Basename of the desktop's published fleet provider record inside the harness home. */
-const FLEET_PROVIDER_FILENAME = "fleet-provider.json";
+const FLEET_PROVIDER_FILENAME = 'fleet-provider.json';
 /** Schema version of the fleet provider record this build reads. */
 const FLEET_PROVIDER_VERSION = 1;
-/** Provider values the record may name; anything else is not a record the desktop wrote. */
-const FLEET_PROVIDERS = new Set(["meta", "deepseek", "local"]);
+/** Provider values the record may name; anything else is not a record the desktop wrote. Mirrors FLEET_PROVIDER_SELECTIONS in the router's fleet-provider-record.ts. */
+const FLEET_PROVIDERS = new Set([
+    'meta',
+    'deepseek',
+    'local',
+    'qwen',
+    'openai',
+    'anthropic',
+    'xai',
+    'zai',
+    'gemini',
+]);
 /**
  * Create the store-backed fleet resolver over the app credentials store.
  * Both documents are loaded once here: a malformed document fails loud
@@ -46,7 +56,7 @@ const FLEET_PROVIDERS = new Set(["meta", "deepseek", "local"]);
  * @returns the resolver to install via the router's `setFleetConfigResolver`.
  */
 export function createStoreFleetConfigResolver(env = process.env) {
-    const dshHome = env["DSH_HOME"]?.trim();
+    const dshHome = env['DSH_HOME']?.trim();
     const filename = resolveSpec(dshHome ? { dshHome } : {}).filename;
     const recordFilename = join(dirname(filename), FLEET_PROVIDER_FILENAME);
     let cache;
@@ -70,7 +80,7 @@ export function createStoreFleetConfigResolver(env = process.env) {
             return cache.refs;
         }
         try {
-            const doc = parseCredentialsDocument(readFileSync(filename, "utf8"), filename);
+            const doc = parseCredentialsDocument(readFileSync(filename, 'utf8'), filename);
             cache = { mtimeMs: st.mtimeMs, size: st.size, refs: doc.refs };
             lastGood = doc.refs;
         }
@@ -91,15 +101,15 @@ export function createStoreFleetConfigResolver(env = process.env) {
         catch {
             throw new Error(`fleet provider record at ${recordFilename} is not valid JSON`);
         }
-        if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
             throw new Error(`fleet provider record at ${recordFilename} is not a JSON object`);
         }
         const doc = parsed;
-        if (doc["version"] !== FLEET_PROVIDER_VERSION) {
+        if (doc['version'] !== FLEET_PROVIDER_VERSION) {
             throw new Error(`fleet provider record at ${recordFilename} names an unsupported version`);
         }
-        const provider = doc["provider"];
-        if (typeof provider !== "string" || !FLEET_PROVIDERS.has(provider)) {
+        const provider = doc['provider'];
+        if (typeof provider !== 'string' || !FLEET_PROVIDERS.has(provider)) {
             throw new Error(`fleet provider record at ${recordFilename} names an unknown provider`);
         }
         return provider;
@@ -121,7 +131,7 @@ export function createStoreFleetConfigResolver(env = process.env) {
             return recordCache.provider;
         }
         try {
-            const provider = parseRecord(readFileSync(recordFilename, "utf8"));
+            const provider = parseRecord(readFileSync(recordFilename, 'utf8'));
             recordCache = { mtimeMs: st.mtimeMs, size: st.size, provider };
             recordLastGood = provider;
         }
@@ -139,13 +149,25 @@ export function createStoreFleetConfigResolver(env = process.env) {
     return {
         valueFor(name) {
             const fromEnv = env[name];
-            if (fromEnv !== undefined && fromEnv !== "")
+            if (fromEnv !== undefined && fromEnv !== '')
                 return fromEnv;
             const stored = load().get(name);
             if (stored !== undefined)
                 return stored;
-            if (name === LLM_PROVIDER_ENV)
-                return loadRecord();
+            if (name === LLM_PROVIDER_ENV) {
+                // A serving local server is the operator's live action and the
+                // published record is its only witness, so a local record
+                // outranks the saved selection. Any other record value is a
+                // fallback statement the desktop computed without the saved
+                // selection, so the operator's own saved model selection (the
+                // agent-default-model profile entry the model picker writes)
+                // wins over it; with no saved selection the record stands.
+                const published = loadRecord();
+                if (published === 'local')
+                    return published;
+                const selected = fleetProviderFamilyForProvider(readSavedModelSelectionProvider(env));
+                return selected ?? published;
+            }
             return undefined;
         },
     };
