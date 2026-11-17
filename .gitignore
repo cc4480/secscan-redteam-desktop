@@ -88,3 +88,6 @@ desktop-test-logs/
 # permanently dirty and buries real changes in the diff.
 *.log
 app-start*.txt
+
+# Compiled launcher stubs (source is the tracked .vbs)
+launch-*.exe
