@@ -1,0 +1,280 @@
+"""Tests for tools_files + tools_write pure logic (no Windows needed)."""
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import tools_files
+import tools_write
+import tool_wrappers
+from seams.providers.windows import files as _files_impl
+from seams.providers.windows import write as _write_impl
+
+# Patch the provider modules: the tool functions resolve request_approval
+# from their own module globals (they moved from tools_* to the provider).
+_files_impl.request_approval = lambda *a, **k: True
+_write_impl.request_approval = lambda *a, **k: True
+
+
+def test_write_and_overwrite(tmp_path):
+    p = str(tmp_path / "a.txt")
+    r = tools_files.write_file(p, "hello")
+    assert r["bytes_written"] == 5, r
+    assert open(p, encoding="utf-8").read() == "hello"
+    r = tools_files.write_file(p, "hi")
+    assert open(p, encoding="utf-8").read() == "hi"
+    print("PASS write/overwrite")
+
+
+def test_write_creates_parents(tmp_path):
+    p = str(tmp_path / "x" / "y" / "b.txt")
+    tools_files.write_file(p, "deep")
+    assert open(p, encoding="utf-8").read() == "deep"
+    print("PASS write parents")
+
+
+def test_write_rejects_relative():
+    try:
+        tools_files.write_file("relative/path.txt", "x")
+    except ValueError as e:
+        assert "absolute" in str(e), e
+        print("PASS write relative rejected")
+    else:
+        raise AssertionError("should have raised")
+
+
+def test_edit_missing_text(tmp_path):
+    p = str(tmp_path / "d.txt")
+    open(p, "w", encoding="utf-8").write("hello")
+    try:
+        tools_files.edit_file(p, "nope", "x")
+    except ValueError as e:
+        assert "not found" in str(e), e
+        print("PASS edit missing text")
+    else:
+        raise AssertionError("should have raised")
+
+
+def test_delete(tmp_path):
+    p = str(tmp_path / "e.txt")
+    open(p, "w").write("x")
+    r = tools_files.delete_file(p)
+    assert r["deleted"] is True and not os.path.exists(p), r
+    try:
+        tools_files.delete_file(p)
+    except FileNotFoundError:
+        print("PASS delete + missing")
+    else:
+        raise AssertionError("should have raised")
+
+
+def test_delete_rejects_dir(tmp_path):
+    try:
+        tools_files.delete_file(str(tmp_path))
+    except FileNotFoundError as e:
+        assert "not a file" in str(e), e
+        print("PASS delete rejects dir")
+    else:
+        raise AssertionError("should have raised")
+
+
+def test_create_dir(tmp_path):
+    p = str(tmp_path / "n1" / "n2")
+    r = tools_files.create_dir(p)
+    assert r["created"] is True and os.path.isdir(p), r
+    tools_files.create_dir(p)  # idempotent
+    print("PASS create_dir")
+
+
+def test_denied_raises(tmp_path):
+    _files_impl.request_approval = lambda *a, **k: False
+    try:
+        tools_files.write_file(str(tmp_path / "f.txt"), "x")
+    except PermissionError:
+        print("PASS denied raises")
+    else:
+        raise AssertionError("should have raised")
+    finally:
+        _files_impl.request_approval = lambda *a, **k: True
+
+
+def test_wrappers_register_all():
+    names = [f.__name__ for f in tool_wrappers.ALL_TOOLS]
+    assert len(names) == 104, names
+    assert len(set(names)) == 104, "duplicate tool names"
+    for n in ("write_file", "edit_file", "delete_file", "create_dir",
+              "close_window", "hotkey", "mouse_move", "mouse_click",
+              "mouse_scroll", "minimize_window", "maximize_window",
+              "kill_process", "clipboard_set", "clipboard_get",
+              "copy_file", "move_file", "file_info", "paste_text",
+              "memory_recall", "shell_pwsh", "batch",
+              "http_headers", "dns_query", "tls_info", "tcp_check",
+              "active_window", "idle_seconds", "list_processes",
+              "notify", "speak", "set_volume", "power",
+              "cdp_launch", "cdp_connect", "cdp_targets", "cdp_navigate",
+              "cdp_snapshot", "cdp_click", "cdp_type", "cdp_evaluate",
+              "cdp_readback", "cdp_close"):
+        assert n in names, n
+    print("PASS wrappers: 104 tools registered")
+
+
+def test_hotkey_parse():
+    mods, vk = tools_write._parse_hotkey("ctrl+shift+s")
+    assert mods == [0x11, 0x10] and vk == 0x53, (mods, vk)
+    assert tools_write._parse_hotkey("enter") == ([], 0x0D)
+    assert tools_write._parse_hotkey("alt+f4") == ([0x12], 0x73)
+    assert tools_write._parse_hotkey("win+r") == ([0x5B], 0x52)
+    for bad in ("", "ctrl+", "ctrl+bogus", "bogus+x", "+"):
+        try:
+            tools_write._parse_hotkey(bad)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"should have raised: {bad!r}")
+    print("PASS hotkey parse")
+
+
+def test_paste_text_validation():
+    for bad in ("", 123, None, "x" * 100001):
+        try:
+            tools_write.paste_text(bad)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"should have raised for {str(bad)[:20]!r}")
+    print("PASS paste_text validation")
+
+
+def test_pc_tools_validation():
+    import tools_pc as P
+    # validation paths only (windll calls need Windows); approval must not fire
+    for fn, bad in ((P.notify, [("", "m"), ("t", ""), (None, "m")]),
+                    (P.speak, ["", "   ", None, "x" * 501]),
+                    (P.power, ["explode", "", None])):
+        for b in bad:
+            try:
+                fn(*b) if isinstance(b, tuple) else fn(b)
+            except (ValueError, TypeError):
+                pass
+            else:
+                raise AssertionError(f"{fn.__name__} should have raised for {b!r}")
+    assert P._ps_quote("it's") == "it''s"
+    print("PASS pc tools validation")
+
+
+def test_recon_validation():
+    import tools_recon as R
+    for fn, bad in ((R.http_headers, ["ftp://x", "", None]),
+                    (R.tls_info, ["", None]),
+                    (R.tcp_check, [("", [80]), ("h", []), ("h", list(range(60)))]),
+                    (R.dns_query, [("", "A"), ("x", "ZZZ"), (None, "A")])):
+        for b in bad:
+            try:
+                fn(*b) if isinstance(b, tuple) else fn(b)
+            except (ValueError, TypeError):
+                pass
+            else:
+                raise AssertionError(f"{fn.__name__} should have raised for {b!r}")
+    # DNS name decoding + packet parse against a canned response
+    import struct
+    name, off = R._decode_name(b"\x07example\x03com\x00", 0)
+    assert name == "example.com" and off == 13, (name, off)
+    assert R._rdata_text(1, bytes([93, 184, 216, 34]), 0, 4) == "93.184.216.34"
+    assert R._rdata_text(16, b"\x05hello", 0, 6) == "hello"
+    # MX with compression pointer back into the packet (the earlier IndexError)
+    pkt = (b"\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00"
+           b"\x07example\x03com\x00"          # qname at offset 12
+           b"\x00\x0f\x00\x01"
+           b"\xc0\x0c"                        # answer name -> offset 12
+           b"\x00\x0f\x00\x01"
+           b"\x00\x00\x0e\x10\x00\x09"
+           b"\x00\x0a\x04mail\xc0\x0c")       # pref 10, "mail" + ptr -> example.com
+    # parse the canned packet through the answer loop manually
+    data = pkt
+    off = 12
+    while data[off] != 0:
+        off += 1 + data[off]
+    off += 5
+    assert data[off] & 0xC0 == 0xC0
+    atype, _, _, rdlen = struct.unpack(">HHIH", data[off + 2:off + 12])
+    rdata_off = off + 12
+    assert R._rdata_text(atype, data, rdata_off, rdlen) == "10 mail.example.com", \
+        R._rdata_text(atype, data, rdata_off, rdlen)
+    print("PASS recon validation")
+
+
+def test_memory_recall(tmp_path):
+    import tools_memory
+    (tmp_path / "transcripts").mkdir()
+    (tmp_path / "transcripts" / "2026-10-04-main.md").write_text(
+        "# Day log\n\n## paste_text tool\nBuilt paste_text for reliable long text entry via clipboard.\n",
+        encoding="utf-8")
+    (tmp_path / "transcripts" / "2026-10-03-main.md").write_text(
+        "# Day log\n\nDiscussed video rendering pipelines and codecs.\n",
+        encoding="utf-8")
+    os.environ["PC_BRIDGE_MEMORY_DIR"] = str(tmp_path)
+    try:
+        r = tools_memory.memory_recall("paste_text clipboard")
+        assert r["files_matched"] == 1, r
+        assert r["results"][0]["file"].endswith("2026-10-04-main.md"), r
+        assert "paste_text" in r["results"][0]["snippet"], r
+        r = tools_memory.memory_recall("zzzznope")
+        assert r["results"] == [] and r["files_matched"] == 0, r
+        for bad in ("", "a", "!!!"):
+            try:
+                tools_memory.memory_recall(bad)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError(f"should have raised for {bad!r}")
+    finally:
+        del os.environ["PC_BRIDGE_MEMORY_DIR"]
+    print("PASS memory_recall")
+
+
+def test_copy_move_info(tmp_path):
+    src = str(tmp_path / "orig.txt")
+    open(src, "w", encoding="utf-8").write("data123")
+    dst = str(tmp_path / "sub" / "copy.txt")
+    r = tools_files.copy_file(src, dst)
+    assert r["bytes"] == 7 and open(dst, encoding="utf-8").read() == "data123", r
+    mv = str(tmp_path / "moved.txt")
+    r = tools_files.move_file(dst, mv)
+    assert r["moved"] is True and not os.path.exists(dst), r
+    assert open(mv, encoding="utf-8").read() == "data123"
+    info = tools_files.file_info(mv)
+    assert info["is_file"] and info["size"] == 7 and "modified" in info, info
+    dinfo = tools_files.file_info(str(tmp_path))
+    assert dinfo["is_dir"], dinfo
+    try:
+        tools_files.file_info(str(tmp_path / "nope.txt"))
+    except FileNotFoundError:
+        pass
+    else:
+        raise AssertionError("should have raised")
+    print("PASS copy/move/info")
+
+
+if __name__ == "__main__":
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        from pathlib import Path
+        tp = Path(td)
+        test_write_and_overwrite(tp)
+        test_write_creates_parents(tp)
+        test_write_rejects_relative()
+        test_edit_replaces_first(tp)
+        test_edit_missing_text(tp)
+        test_delete(tp)
+        test_delete_rejects_dir(tp)
+        test_create_dir(tp)
+        test_denied_raises(tp)
+        test_copy_move_info(tp)
+        test_memory_recall(tp)
+        test_support_tools(tp)
+        test_recon_validation()
+        test_pc_tools_validation()
+    test_wrappers_register_all()
+    test_hotkey_parse()
+    test_paste_text_validation()
+    print("ALL TOOLS_FILES TESTS PASS")

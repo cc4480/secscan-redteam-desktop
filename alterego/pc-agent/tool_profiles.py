@@ -1,0 +1,230 @@
+"""Machine-readable risk profiles for the 45 bridge tools.
+
+Per the agent action-layer standard: every tool declares its blast radius,
+recoverability, side effects, compensating action, and sensitivity tags so an
+arbitration layer can score trajectories before executing them.
+
+blast_radius: none | session | user_data | system | external
+recoverability: 0-10 (10 = no-op or fully reversible)
+"""
+
+def _p(blast, rec, effects=(), undo=None, tags=()):
+    return {"blast_radius": blast, "recoverability": rec,
+            "side_effects": list(effects), "compensating_action": undo,
+            "sensitivity_tags": list(tags)}
+
+
+PROFILES = {
+    # ---- read-only: no blast, fully recoverable ----
+    "screenshot": _p("none", 10),
+    "desktop_state": _p("none", 10),
+    "wait_for": _p("none", 10),
+    "list_windows": _p("none", 10),
+    "system_info": _p("none", 10),
+    "list_dir": _p("none", 10),
+    "read_file": _p("none", 10, tags=("user_data",)),
+    "search_files": _p("none", 10, tags=("user_data",)),
+    "search_filenames": _p("none", 10, tags=("user_data",)),
+    "read_file_range": _p("none", 10, tags=("user_data",)),
+    "clipboard_get": _p("none", 10, tags=("user_data",)),
+    "memory_recall": _p("none", 10),
+    "uia_find": _p("none", 10),
+    "file_info": _p("none", 10),
+    "task_create": _p("none", 10, ("task record created",)),
+    "task_checkpoint": _p("none", 10, ("checkpoint appended",)),
+    "task_status": _p("none", 10),
+    "arbitrate": _p("none", 10, ("trajectories scored",)),
+    "browser_snapshot": _p("none", 10),
+    "active_window": _p("none", 10),
+    "idle_seconds": _p("none", 10),
+    "list_processes": _p("none", 10),
+    "doctor": _p("none", 10),
+    "query_events": _p("none", 10),
+    "replay_session": _p("none", 10),
+    "search_tools": _p("none", 10),
+    "complete_arg": _p("none", 10),
+    "tool_finder": _p("none", 10),
+    "elicit_input": _p("none", 10, ("elicitation record created",)),
+    "answer_elicitation": _p("none", 10, ("elicitation record answered",)),
+    "list_elicitations": _p("none", 10),
+    "watch_path": _p("none", 10, ("watch registered",)),
+    "unwatch_path": _p("none", 10, ("watch removed",)),
+    "list_watches": _p("none", 10),
+    "poll_changes": _p("none", 10),
+    "dashboard": _p("none", 10),
+    # ---- recon: read-only but touches the network ----
+    "http_headers": _p("external", 10, ("HTTP request to target URL",), tags=("network",)),
+    "dns_query": _p("external", 10, ("DNS query issued",), tags=("network",)),
+    "tls_info": _p("external", 10, ("TLS handshake performed",), tags=("network",)),
+    "tcp_check": _p("external", 10, ("TCP connection attempt",), tags=("network",)),
+    "web_fetch": _p("external", 10, ("HTTP fetch of target URL",), tags=("network",)),
+    "web_search": _p("external", 10, ("web search query issued",), tags=("network",)),
+    # ---- window / input: session scope ----
+    "focus_window": _p("session", 10, ("window z-order changes",), "refocus previous window"),
+    "minimize_window": _p("session", 10, ("window minimized",), "restore window"),
+    "maximize_window": _p("session", 10, ("window maximized",), "restore window"),
+    "close_window": _p("session", 7, ("window closes; unsaved work prompts",),
+                       "reopen app (unsaved work may be lost)"),
+    "mouse_move": _p("none", 10, ("cursor moves",)),
+    "mouse_scroll": _p("session", 10, ("view scrolls",), "scroll back"),
+    "mouse_click": _p("session", 8, ("click lands at coordinates",), "depends on target"),
+    "uia_click": _p("session", 8, ("UIA element activated",), "depends on target"),
+    "uia_set_text": _p("user_data", 6, ("text set into UI element",),
+                     "manually clear the field", ("user_data",)),
+    "hotkey": _p("session", 8, ("key combo sent to focused app",), "depends on combo"),
+    "type_text": _p("user_data", 6, ("text entered into focused app",),
+                    "manually delete typed text", ("user_data",)),
+    "paste_text": _p("user_data", 6, ("text pasted into focused app",),
+                     "manually delete pasted text", ("user_data",)),
+    "clipboard_set": _p("session", 9, ("clipboard content replaced",),
+                        "restore previous clipboard", ("user_data",)),
+    "browser_navigate": _p("session", 9, ("tab navigates",), "navigate back"),
+    "browser_click": _p("session", 7, ("page element activated",), "depends on element"),
+    "browser_fill": _p("session", 7, ("form field filled",), "clear field", ("user_data",)),
+    # ---- Chrome CDP session hand (cdp_*): agent-owned presentation
+    # profile; tiers mirror the browser_* analogs by blast radius ----
+    "cdp_launch": _p("session", 7, ("Chrome process launched on a "
+                                    "presentation profile",),
+                     "close browser"),
+    "cdp_connect": _p("session", 9, ("CDP session attached to a "
+                                     "running browser",), "detach"),
+    "cdp_targets": _p("none", 10),
+    "cdp_navigate": _p("session", 9, ("tab navigates",), "navigate back"),
+    "cdp_snapshot": _p("none", 10),
+    "cdp_click": _p("session", 7, ("page element activated",),
+                    "depends on element"),
+    "cdp_type": _p("session", 7, ("form field filled",), "clear field",
+                   ("user_data",)),
+    "cdp_evaluate": _p("session", 4, ("arbitrary JavaScript in page",),
+                       "depends on script", ("destructive",)),
+    "cdp_readback": _p("none", 10),
+    "cdp_close": _p("session", 8, ("browser closed gracefully",),
+                    "relaunch browser"),
+    "notify": _p("session", 10, ("toast notification shown",), "dismiss notification"),
+    "speak": _p("session", 10, ("text spoken aloud",)),
+    # Capture is not transient like speak: a returned clip cannot be
+    # recalled, so honest recoverability is 3 -> computed tier
+    # always_ask (privacy MF-1). Never profile this "none"/silent.
+    "record_audio": _p("session", 3,
+                       ("microphone audio captured and returned to a "
+                        "remote operator",),
+                       "none — returned audio cannot be recalled",
+                       ("user_data", "media_capture")),
+    "set_volume": _p("session", 10, ("volume changed",), "restore previous volume"),
+    # ---- file writes: user-data scope ----
+    "create_dir": _p("user_data", 9, ("directory created",), "remove directory"),
+    "copy_file": _p("user_data", 9, ("file copied",), "delete the copy", ("user_data",)),
+    "move_file": _p("user_data", 7, ("file moved",), "move it back", ("user_data",)),
+    "write_file": _p("user_data", 5, ("file created or overwritten",),
+                      "restore from backup or delete", ("user_data", "destructive")),
+    "edit_file": _p("user_data", 5, ("file modified",),
+                     "revert the edit", ("user_data",)),
+    "delete_file": _p("user_data", 2, ("file deleted",),
+                      "restore from Recycle Bin", ("user_data", "destructive")),
+    # ---- arbitrary code / process / power: system scope ----
+    "shell_exec": _p("system", 3, ("arbitrary cmd.exe execution",),
+                     "depends on command", ("system", "destructive")),
+    "shell_pwsh": _p("system", 3, ("arbitrary PowerShell execution",),
+                      "depends on script", ("system", "destructive")),
+    "browser_eval": _p("session", 4, ("arbitrary JavaScript in page",),
+                       "depends on script", ("destructive",)),
+    "kill_process": _p("system", 2, ("process terminated; unsaved work lost",),
+                       "restart process (work lost)", ("system", "destructive")),
+    "power": _p("system", 1, ("lock / sleep / restart / shutdown",),
+                "lock: sign back in; sleep: wake; restart/shutdown: reboot",
+                ("system", "destructive")),
+    # ---- batch: inherits the riskiest sub-call ----
+    "batch": _p("system", 3, ("executes multiple tool calls",),
+                "undo each sub-call", ("destructive",)),
+    "server_reload": _p("system", 6, ("server process restarts",),
+                        "supervisor restarts the server automatically"),
+    "supervisor_status": _p("none", 10),
+    "hot_reload": _p("session", 8, ("reload behavior change",),
+                     "hot_reload disable"),
+    "exec_status": _p("none", 10),
+    "exec_cancel": _p("session", 8, ("background job cancelled",),
+                      "re-run the background command"),
+}
+
+
+# ---- Batch 6 (portmanteau slice): each profile derives the most
+# restrictive member tier (mouse routine, keyboard/window/uia ask,
+# file/process/browser/cdp/exec always_ask, clipboard routine). Runtime
+# approval always uses the member's own tier; these profiles feed the
+# risk snapshot and MCP annotations only. ----
+PROFILES.update({
+    "mouse": _p("session", 10, ("cursor moves / clicks / scrolls",),
+                "depends on operation"),
+    "keyboard": _p("user_data", 6, ("text entered / keys sent",),
+                   "manually undo", ("user_data",)),
+    "window": _p("session", 7, ("window state changes",),
+                 "restore window"),
+    "uia": _p("user_data", 6, ("UI element read / activated / set",),
+              "depends on operation", ("user_data",)),
+    "file": _p("user_data", 2, ("file read or written",),
+               "undo the member operation", ("user_data", "destructive")),
+    "process": _p("system", 2, ("process listed or terminated",),
+                  "restart process (work lost)",
+                  ("system", "destructive")),
+    "browser": _p("session", 4, ("page read / navigated / scripted",),
+                  "depends on operation", ("destructive",)),
+    "cdp": _p("session", 4, ("CDP session read / driven",),
+              "depends on operation", ("destructive",)),
+    "clipboard": _p("session", 9, ("clipboard read / replaced",),
+                    "restore previous clipboard", ("user_data",)),
+    "exec": _p("system", 3, ("shell command executed",),
+               "depends on command", ("system", "destructive")),
+})
+
+PROFILES.update({
+    "macro_record": _p("session", 8, ("macro record created",),
+                       "delete the macro"),
+    "macro_list": _p("none", 10),
+    "macro_replay": _p("system", 3, ("executes multiple tool calls",),
+                       "undo each sub-call", ("destructive",)),
+    "macro_delete": _p("session", 8, ("macro record removed",),
+                       "re-record the macro"),
+})
+
+
+def get_profile(tool_name: str) -> dict:
+    """Risk profile for a tool; unknown tools get the most restrictive default."""
+    return PROFILES.get(tool_name, _p("system", 0, ("unknown tool",),
+                                      "manual review required",
+                                      ("system", "destructive", "unknown")))
+
+
+def approval_tier(tool_name: str) -> str:
+    """Suggested approval tier from the risk profile."""
+    p = get_profile(tool_name)
+    if p["blast_radius"] == "none":
+        return "silent"
+    if p["blast_radius"] == "session" and p["recoverability"] >= 8:
+        return "routine"
+    if "destructive" in p["sensitivity_tags"] or p["recoverability"] <= 3:
+        return "always_ask"
+    return "ask"
+
+
+def annotations_for(tool_name: str) -> dict:
+    """MCP ToolAnnotations hints derived from the risk profile.
+
+    read_only: blast radius none/external, fully recoverable, no
+    destructive tag (network reads modify nothing, so they count).
+    destructive: the profile carries the destructive tag.
+    idempotent: fully recoverable AND no side effects listed.
+    open_world: interacts with external entities (network tag or
+    external blast radius).
+    Approval tiers are untouched: these hints only describe the tool."""
+    p = get_profile(tool_name)
+    tags = p["sensitivity_tags"]
+    read_only = (p["blast_radius"] in ("none", "external")
+                 and p["recoverability"] == 10
+                 and "destructive" not in tags)
+    destructive = "destructive" in tags
+    idempotent = p["recoverability"] == 10 and not p["side_effects"]
+    open_world = "network" in tags or p["blast_radius"] == "external"
+    return {"read_only_hint": read_only,
+            "destructive_hint": destructive,
+            "idempotent_hint": idempotent,
+            "open_world_hint": open_world}

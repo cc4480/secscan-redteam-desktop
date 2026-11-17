@@ -1,0 +1,67 @@
+"""Aggregate of all Service Definitions."""
+from seams.definitions.base import ToolDef
+from seams.definitions.read import ALL_READ_DEFS
+from seams.definitions.write import ALL_WRITE_DEFS
+from seams.definitions.files import ALL_FILES_DEFS
+from seams.definitions.pc import ALL_PC_DEFS
+from seams.definitions.browser import ALL_BROWSER_DEFS
+from seams.definitions.recon import ALL_RECON_DEFS
+from seams.definitions.support import ALL_SUPPORT_DEFS
+from seams.definitions.tasks import ALL_TASKS_DEFS
+from seams.definitions.misc import ALL_MISC_DEFS
+from seams.definitions.macros import ALL_MACRO_DEFS
+
+ALL_DEFS = (ALL_READ_DEFS + ALL_WRITE_DEFS + ALL_FILES_DEFS + ALL_PC_DEFS
+            + ALL_BROWSER_DEFS + ALL_RECON_DEFS + ALL_SUPPORT_DEFS
+            + ALL_TASKS_DEFS + ALL_MISC_DEFS + ALL_MACRO_DEFS)
+
+_BY_GROUP = {}
+for _d in ALL_DEFS:
+    _BY_GROUP.setdefault(_d.group, []).append(_d)
+
+_BY_NAME = {d.name: d for d in ALL_DEFS}
+assert len(_BY_NAME) == len(ALL_DEFS), "duplicate tool definition names"
+
+
+def for_group(group: str) -> list:
+    """All definitions in a tool group. KeyError on unknown group."""
+    return list(_BY_GROUP[group])
+
+
+def by_name(name: str):
+    """Definition for a tool name, or None."""
+    return _BY_NAME.get(name)
+
+
+def search_definitions(query="", group="", max_results=10, offset=0):
+    """Keyword search over ALL_DEFS, scored name-first, paginated.
+
+    Terms are ANDed over name + group + doc. A term in the tool name
+    scores 3, plus one per occurrence in the haystack. Empty query
+    lists every tool (by name). Shared by both providers so search
+    results are identical on Windows and mock."""
+    max_results = max(1, min(int(max_results or 10), 50))
+    offset = max(0, int(offset or 0))
+    terms = (query or "").lower().split()
+    scored = []
+    for d in ALL_DEFS:
+        if group and d.group != group:
+            continue
+        name = d.name.lower()
+        hay = f"{name} {d.group} {d.doc}".lower()
+        if terms and not all(t in hay for t in terms):
+            continue
+        score = sum(3 for t in terms if t in name)
+        score += sum(hay.count(t) for t in terms)
+        scored.append((score, d))
+    scored.sort(key=lambda s: (-s[0], s[1].name))
+    total = len(scored)
+    page = scored[offset:offset + max_results]
+    return {"query": query or "", "count": len(page), "total": total,
+            "tools": [{"name": d.name, "group": d.group, "doc": d.doc,
+                       "approval_tier": d.approval_tier,
+                       "args": sorted(d.args)} for _s, d in page]}
+
+
+__all__ = ["ToolDef", "ALL_DEFS", "for_group", "by_name",
+           "search_definitions"]

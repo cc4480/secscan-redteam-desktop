@@ -1,0 +1,541 @@
+"""Windows provider for miscellaneous tools (group: misc).
+
+- memory_recall: keyword search over the on-PC memory archive.
+  Layout under %APPDATA%\\pc-mcp-bridge\\memory\\ (override:
+  PC_BRIDGE_MEMORY_DIR).
+- doctor: bridge health checks with specific fix commands. Each check
+  returns ok/warning/fail/unknown + a fix command. Windows-only checks
+  degrade gracefully on other platforms (warning, not fail). Checks that
+  cannot run without admin report "unknown", never a misleading "fail".
+- arbitrate: re-exported from the top-level arbitrate module (pure
+  risk-scoring logic; no platform coupling).
+
+Bodies moved from tools_memory.py / tools_doctor.py; the doctor gained
+the event_log check and the unknown status in Phase 5.
+"""
+import os
+import re
+import shutil
+import socket
+import subprocess
+import sys
+from pathlib import Path
+
+from arbitrate import arbitrate  # the "arbitrate" tool implementation
+
+# tools_doctor.py lived at pc-agent/ (repo root = parent.parent).
+# This module lives at pc-agent/seams/providers/windows/ — three levels
+# deeper — so climb five to reach the same repo root.
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
+
+
+# ---- memory_recall (from tools_memory.py) ---------------------------------
+
+def _memory_dir() -> Path:
+    override = os.environ.get("PC_BRIDGE_MEMORY_DIR")
+    if override:
+        return Path(override)
+    return Path(os.environ.get("APPDATA", str(Path.home()))) / "pc-mcp-bridge" / "memory"
+
+
+def _score(text: str, terms: list) -> tuple:
+    low = text.lower()
+    term_hits = sum(low.count(t) for t in terms)
+    heading_hits = sum(
+        1 for line in text.splitlines() if line.startswith("#")
+        for t in terms if t in line.lower()
+    )
+    return heading_hits, term_hits
+
+
+def memory_recall(query: str, limit: int = 5) -> dict:
+    """Keyword search over the memory archive. No approval (read-only)."""
+    if not query or not str(query).strip():
+        raise ValueError("query must be a non-empty string")
+    limit = max(1, min(int(limit), 20))
+    terms = [t.lower() for t in re.findall(r"\w+", query) if len(t) > 1]
+    if not terms:
+        raise ValueError("query has no searchable terms")
+    root = _memory_dir()
+    if not root.is_dir():
+        return {"query": query, "results": [],
+                "note": f"memory archive not found at {root}"}
+    files = sorted(root.rglob("*.md"))
+    scored = []
+    for md in files:
+        try:
+            text = md.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        hh, th = _score(text, terms)
+        if th == 0:
+            continue
+        low = text.lower()
+        idx = min(low.find(t) for t in terms if t in low)
+        snippet = text[max(0, idx - 300):idx + 400].strip()
+        scored.append((hh, th, str(md.relative_to(root)), snippet))
+    scored.sort(key=lambda r: (r[0], r[1]), reverse=True)
+    results = [{"file": f, "subject_hits": hh, "term_hits": th, "snippet": s}
+               for hh, th, f, s in scored[:limit]]
+    return {"query": query, "results": results,
+            "files_searched": len(files), "files_matched": len(scored)}
+
+
+# ---- doctor (from tools_doctor.py) ----------------------------------------
+
+MIN_PYTHON = (3, 11)
+MIN_DISK_GB = 1.0
+BRIDGE_PORT = 8765
+
+WIN = os.name == "nt"
+
+
+def _ok(name, message):
+    return {"check": name, "status": "ok", "message": message, "fix": None}
+
+
+def _warn(name, message, fix=None):
+    return {"check": name, "status": "warning", "message": message,
+            "fix": fix}
+
+
+def _fail(name, message, fix=None):
+    return {"check": name, "status": "fail", "message": message, "fix": fix}
+
+
+def _unknown(name, message, fix=None):
+    """Could not run the check (e.g. needs admin) — NOT a failure.
+
+    "unknown" means "could not verify"; "fail" means "checked and it is
+    broken". Reporting fail when we never got an answer is a false
+    alarm (the Defender check used to do exactly that)."""
+    return {"check": name, "status": "unknown", "message": message,
+            "fix": fix}
+
+
+def check_python_version():
+    v = sys.version_info
+    if v >= MIN_PYTHON:
+        return _ok("python_version",
+                   f"Python {v.major}.{v.minor}.{v.micro} "
+                   f"(minimum {MIN_PYTHON[0]}.{MIN_PYTHON[1]})")
+    return _fail("python_version",
+                 f"Python {v.major}.{v.minor} below minimum "
+                 f"{MIN_PYTHON[0]}.{MIN_PYTHON[1]}",
+                 "Install Python 3.11+ from python.org or via "
+                 "winget install Python.Python.3.12")
+
+
+def check_port_listener():
+    """Port 8765 should be held by this server, not a stranger."""
+    try:
+        import psutil
+    except ImportError:
+        return _warn("port_listener", "psutil not installed, cannot verify",
+                     "pip install psutil")
+    holders = []
+    for conn in psutil.net_connections(kind="tcp"):
+        if conn.laddr and conn.laddr.port == BRIDGE_PORT \
+                and conn.status == "LISTEN":
+            try:
+                holders.append(psutil.Process(conn.pid).name())
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                holders.append(f"pid={conn.pid}")
+    if not holders:
+        return _fail("port_listener",
+                     f"nothing listening on {BRIDGE_PORT} — server not running",
+                     "Start the server: python pc-agent\\server.py "
+                     "(from the repo root)")
+    me = os.path.basename(sys.executable)
+    if any(h.lower().startswith(me.lower().split(".")[0]) for h in holders):
+        return _ok("port_listener",
+                   f"port {BRIDGE_PORT} held by {', '.join(holders)}")
+    return _warn("port_listener",
+                 f"port {BRIDGE_PORT} held by unexpected process: "
+                 f"{', '.join(holders)}",
+                 f"netstat -ano | findstr :{BRIDGE_PORT}  then "
+                 "taskkill /PID <pid> /F if it is a stale server")
+
+
+def check_defender_exclusions():
+    """Defender must exclude the bridge dir or it may quarantine tools."""
+    if not WIN:
+        return _warn("defender_exclusions",
+                     "not Windows: Defender check not applicable")
+    repo = REPO_ROOT
+    try:
+        import subprocess
+        out = subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             "(Get-MpPreference).ExclusionPath -join \"`n\""],
+            capture_output=True, text=True, timeout=30)
+    except Exception as e:  # noqa: BLE001 - report, don't crash
+        return _unknown("defender_exclusions",
+                        f"could not query Defender exclusions: {e}",
+                        "Run PowerShell as Administrator and check "
+                        "(Get-MpPreference).ExclusionPath")
+    stderr = (out.stderr or "").lower()
+    if out.returncode != 0 or "denied" in stderr \
+            or "unauthorized" in stderr:
+        # The query itself failed (usually needs an elevated shell) — we
+        # could not verify, so report unknown, not fail. Failing here was
+        # a false alarm: "not excluded" was never actually established.
+        return _unknown(
+            "defender_exclusions",
+            f"could not query Defender exclusions "
+            f"(exit {out.returncode}): {(out.stderr or '').strip()[:200]}",
+            "Run PowerShell as Administrator and check "
+            "(Get-MpPreference).ExclusionPath")
+    excluded = out.stdout.lower()
+    if "must be an administrator" in excluded or "n/a" in excluded:
+        # Non-elevated shell cannot read exclusions at all — the exclusion
+        # may or may not be present. Report unknown, not fail.
+        return _unknown(
+            "defender_exclusions",
+            "could not verify Defender exclusions "
+            "(needs an elevated shell to read)",
+            "Run PowerShell as Administrator and check "
+            "(Get-MpPreference).ExclusionPath")
+    if str(repo).lower() in excluded:
+        return _ok("defender_exclusions",
+                   f"Defender excludes {repo}")
+    return _fail("defender_exclusions",
+                 f"Defender does NOT exclude {repo}",
+                 f'Add-MpPreference -ExclusionPath "{repo}"  '
+                 "(run PowerShell as Administrator)")
+
+
+def check_startup_entry():
+    """The Startup .bat must exist so the server survives reboot."""
+    if not WIN:
+        return _warn("startup_entry",
+                     "not Windows: Startup folder check not applicable")
+    startup = Path(os.environ.get(
+        "APPDATA", os.path.expanduser("~"))) / "Microsoft" / "Windows" \
+        / "Start Menu" / "Programs" / "Startup" / "start-bridge.bat"
+    if not startup.exists():
+        return _fail("startup_entry",
+                     f"missing {startup}",
+                     "Recreate it: cd to the repo and run the setup "
+                     "instructions in README (Startup section)")
+    text = startup.read_text(encoding="utf-8", errors="replace")
+    if "server.py" not in text:
+        return _fail("startup_entry",
+                     f"{startup} exists but does not launch server.py",
+                     "Fix the .bat to run: python pc-agent\\server.py "
+                     "from the repo root")
+    return _ok("startup_entry", f"{startup.name} present and valid")
+
+
+def check_tunnel_config():
+    """Cloudflare tunnel config must exist for the public endpoint."""
+    if not WIN:
+        return _warn("tunnel_config",
+                     "not Windows: cloudflared config check not applicable")
+    cfg = Path(os.path.expanduser("~")) / ".cloudflared" / "config.yml"
+    if not cfg.exists():
+        # Tunnel may be running via token args without a config file
+        # (e.g. manual launch after a fresh install). Check for that
+        # before failing.
+        try:
+            out = subprocess.run(
+                ["tasklist", "/FI", "IMAGENAME eq cloudflared.exe"],
+                capture_output=True, text=True, timeout=10)
+            if "cloudflared.exe" in out.stdout:
+                return _warn(
+                    "tunnel_config",
+                    f"missing {cfg}, but cloudflared.exe is running "
+                    "(likely token-launched, no config file)",
+                    "For persistence across reboots, set up the named "
+                    "tunnel: cloudflared tunnel login, then cloudflared "
+                    "tunnel create pc-bridge, then route pc.secscan.info "
+                    "and install the service")
+        except Exception:
+            pass
+        return _fail("tunnel_config", f"missing {cfg}",
+                     "Re-run: cloudflared tunnel login, then "
+                     "cloudflared tunnel create pc-bridge, then route "
+                     "pc.secscan.info and install the service")
+    text = cfg.read_text(encoding="utf-8", errors="replace")
+    if "8765" not in text:
+        return _warn("tunnel_config",
+                     f"{cfg} exists but does not reference port 8765",
+                     "Check the ingress rules in config.yml point at "
+                     "http://127.0.0.1:8765")
+    return _ok("tunnel_config", f"{cfg.name} present, routes to 8765")
+
+
+def check_disk_space():
+    drive = "C:\\" if WIN else "/"
+    try:
+        free_gb = shutil.disk_usage(drive).free / (1024 ** 3)
+    except OSError as e:
+        return _warn("disk_space", f"could not measure {drive}: {e}")
+    if free_gb >= MIN_DISK_GB:
+        return _ok("disk_space", f"{free_gb:.1f} GB free on {drive}")
+    return _fail("disk_space",
+                 f"only {free_gb:.1f} GB free on {drive} "
+                 f"(minimum {MIN_DISK_GB:.0f} GB)",
+                 "Free disk space: empty Recycle Bin, run Disk Cleanup")
+
+
+def check_event_log():
+    """The event-sourced operation log must be writable and current.
+
+    Implemented in events.py (the module that owns the log); wrapped
+    here so it appears in the doctor's CHECKS list. A doctor run itself
+    appends events, so a stale tail means the pipeline is broken — that
+    is a fail, not a silent gap (design §6.5).
+    """
+    from events import check_event_log as _check
+    return _check()
+
+
+def check_supervisor():
+    """Supervisor should be running so crashes and reloads self-heal."""
+    try:
+        # supervisor lives beside server.py in pc-agent/ and is
+        # imported by plain name; ensure that dir is on sys.path the
+        # way a script launch guarantees (same fix as support.py).
+        _pc_agent = str(Path(__file__).resolve().parents[3])
+        if _pc_agent not in sys.path:
+            sys.path.insert(0, _pc_agent)
+        import supervisor as _sup
+    except ImportError as e:
+        return _unknown("supervisor", f"supervisor module unavailable: {e}",
+                        "Check the pc-agent install on the PC.")
+    try:
+        st = _sup.supervisor_status()
+    except Exception as e:  # noqa: BLE001 - a check must never crash doctor
+        return _unknown("supervisor", f"could not read supervisor status: {e}",
+                        "Check supervisor.json in the bridge data dir.")
+    if not st.get("present"):
+        return _unknown("supervisor",
+                        "no supervisor running: crashes and reloads need a manual restart",
+                        "Start supervised mode: .\\bridge-admin.ps1 supervise")
+    if st.get("storm_breaker"):
+        return _fail("supervisor",
+                     "supervisor storm breaker tripped: too many crashes, server left stopped",
+                     "Inspect server-stdout.log in the bridge data dir, fix the crash, then restart supervised.")
+    if not st.get("running"):
+        return _warn("supervisor",
+                     "supervisor status file is stale: supervisor process not alive",
+                     "Start supervised mode: .\\bridge-admin.ps1 supervise")
+    hb = st.get("heartbeat_age_s")
+    detail = (f"supervisor pid {st.get('supervisor_pid')}, child pid "
+              f"{st.get('child_pid')}, {st.get('restarts', 0)} restarts, "
+              f"{st.get('reloads', 0)} reloads")
+    if hb is not None:
+        detail += f", heartbeat {hb:.0f}s old"
+    return _ok("supervisor", detail)
+
+
+# --- external tool readiness ---------------------------------------
+# The bridge itself is 104 OS primitives and ships no offensive tools.
+# Engagements rely on binaries installed separately; when one is absent
+# the runner degrades coverage silently unless we name it here. Each
+# entry: (binary, why it matters, required?). Never fail the doctor on
+# a missing optional tool -- report it as a warning so the gap is
+# visible without implying the bridge is broken.
+EXTERNAL_TOOLS = [
+    ("nmap", "port and service discovery", True),
+    ("nuclei", "template-driven vulnerability checks", True),
+    ("ffuf", "content and directory discovery", False),
+    ("gobuster", "directory/DNS/vhost discovery", False),
+    ("sqlmap", "SQL injection detection", False),
+    ("nikto", "web server misconfiguration scan", False),
+    ("msfconsole", "exploit validation", False),
+    ("hashcat", "offline hash cracking", False),
+    ("john", "offline hash cracking", False),
+    ("tshark", "packet capture analysis", False),
+]
+
+# Tools that are NOT resolved via PATH. Ghidra runs from GHIDRA_INSTALL_DIR
+# and IDA from its own install dir, so a `which` check reports a false
+# negative for a working install. Each entry: (label, why, required, env
+# var, relative exe path inside that dir).
+EXTERNAL_ENV_TOOLS = [
+    ("ghidra", "native reverse engineering", False,
+     "GHIDRA_INSTALL_DIR", "support\\ghidraRun.bat"),
+]
+
+
+def check_external_tools():
+    """Which external tools an engagement needs are actually installed."""
+    import shutil
+    found, missing_req, missing_opt = [], [], []
+    for binary, why, required in EXTERNAL_TOOLS:
+        path = shutil.which(binary)
+        if path:
+            found.append(binary)
+        elif required:
+            missing_req.append(f"{binary} ({why})")
+        else:
+            missing_opt.append(binary)
+    # Env-var-driven tools: present means the var names a real directory
+    # containing the expected executable.
+    for label, why, required, var, rel in EXTERNAL_ENV_TOOLS:
+        root = os.environ.get(var)
+        exe = Path(root) / rel if root else None
+        if exe is not None and exe.exists():
+            found.append(label)
+        elif required:
+            missing_req.append(f"{label} ({why})")
+        else:
+            missing_opt.append(label)
+    total = len(EXTERNAL_TOOLS) + len(EXTERNAL_ENV_TOOLS)
+    detail = f"{len(found)}/{total} installed"
+    if found:
+        detail += ": " + ", ".join(found)
+    if missing_req:
+        return _warn("external_tools",
+                     detail + "; REQUIRED MISSING: " + ", ".join(missing_req),
+                     "Install the required binaries, or accept reduced "
+                     "coverage and say so in the report.")
+    if missing_opt:
+        return _warn("external_tools",
+                     detail + "; optional missing: " + ", ".join(missing_opt),
+                     "Optional tools: coverage is reduced for their areas. "
+                     "Name any gap in the report.")
+    return _ok("external_tools", detail)
+
+
+CHECKS = [check_python_version, check_port_listener,
+          check_defender_exclusions, check_startup_entry,
+          check_tunnel_config, check_disk_space, check_event_log,
+          check_supervisor, check_external_tools]
+
+
+def doctor() -> dict:
+    """Run all health checks. Returns per-check results plus a summary."""
+    results = []
+    for check in CHECKS:
+        try:
+            results.append(check())
+        except Exception as e:  # noqa: BLE001 - a check must never crash doctor
+            results.append(_fail(check.__name__, f"check crashed: {e}"))
+    counts = {"ok": 0, "warning": 0, "fail": 0, "unknown": 0}
+    for r in results:
+        counts[r["status"]] = counts.get(r["status"], 0) + 1
+    parts = []
+    if counts["fail"]:
+        parts.append(f"{counts['fail']} failed")
+    if counts["warning"]:
+        parts.append(f"{counts['warning']} warnings")
+    if counts["unknown"]:
+        parts.append(f"{counts['unknown']} unknown")
+    summary = "all checks passed" if not parts else ", ".join(parts)
+    return {"checks": results, "summary": summary, "counts": counts}
+
+
+# ---- event-log query tools (design §8; read-only, silent tier) -----------
+# The query engine is platform-independent, so both providers re-export
+# the shared implementation from event_query.py (single source of truth).
+from event_query import query_events, replay_session  # noqa: E402
+
+
+# ---- tool discovery + argument completion (Batch 4) -----------------------
+def search_tools(query="", group="", max_results=10, offset=0):
+    """Keyword search over the tool catalog (metadata only)."""
+    from seams import definitions
+    return definitions.search_definitions(query, group, max_results, offset)
+
+
+_WINDOW_ARGS = {"uia_find", "wait_for"}
+_PATH_ARGS = {"read_file", "list_dir", "read_file_range", "search_files",
+              "search_filenames"}
+
+
+def _match_candidates(candidates, prefix, max_results):
+    pre = (prefix or "").lower()
+    matched = ([c for c in candidates if c.lower().startswith(pre)]
+               if pre else list(candidates))
+    total = len(matched)
+    return matched[:max(1, min(int(max_results or 10), 50))], total
+
+
+def _windows_path_candidates(prefix):
+    from seams.providers.windows.read import _check_path, _user_profile
+    pre = prefix or ""
+    if "/" in pre:
+        dir_part, _name = pre.rsplit("/", 1)
+        base = _check_path(dir_part or ".")
+    else:
+        dir_part = ""
+        base = _user_profile()
+    if not base.is_dir():
+        return []
+    out = []
+    for child in sorted(base.iterdir(), key=lambda c: c.name.lower()):
+        rel = f"{dir_part}/{child.name}" if dir_part else child.name
+        if child.is_dir():
+            rel += "/"
+        out.append(rel)
+    return out
+
+
+def complete_arg(tool, argument, prefix="", max_results=10):
+    """Complete an argument value from live state (fail loud)."""
+    from seams import definitions
+    if definitions.by_name(tool) is None:
+        raise ValueError(f"unknown tool: {tool}")
+    if tool in _WINDOW_ARGS and argument == "window":
+        from seams.providers.windows.read import list_windows
+        candidates = [w.get("title", "") for w in
+                      list_windows().get("windows", []) if w.get("title")]
+    elif tool in _PATH_ARGS and argument == "path":
+        candidates = _windows_path_candidates(prefix)
+    else:
+        raise ValueError(f"no completions for {tool}.{argument}")
+    values, total = _match_candidates(candidates, prefix, max_results)
+    return {"tool": tool, "argument": argument, "prefix": prefix or "",
+            "values": values, "total": total}
+
+
+# ---- elicitation + change subscriptions + dashboard (Batch 5) ------------
+# Shared modules do the work (single source of truth, like event_query);
+# both providers delegate so Windows and mock behave identically.
+def elicit_input(question, options, tool="", argument="", context=""):
+    import elicitations
+    return elicitations.create_elicitation(
+        question, options, tool, argument, context)
+
+
+def answer_elicitation(elicitation_id, choice):
+    import elicitations
+    return elicitations.answer_elicitation(elicitation_id, choice)
+
+
+def list_elicitations(status="", limit=20):
+    import elicitations
+    return elicitations.list_elicitations(status, limit)
+
+
+def watch_path(path):
+    import changes
+    return changes.watch_path(path)
+
+
+def unwatch_path(path):
+    import changes
+    return changes.unwatch_path(path)
+
+
+def list_watches():
+    import changes
+    return changes.list_watches()
+
+
+def poll_changes(since_seq=0, limit=50):
+    import changes
+    return changes.poll_changes(since_seq, limit)
+
+
+def dashboard():
+    from bridge_resources import dashboard_state
+    return dashboard_state()
+
+
+def tool_finder(query="", group="", max_results=10, offset=0):
+    from seams import definitions
+    return definitions.search_definitions(query, group, max_results, offset)
