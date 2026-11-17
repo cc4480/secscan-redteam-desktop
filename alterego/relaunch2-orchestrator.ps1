@@ -1,3 +1,6 @@
+# Fail fast if another bridge already owns the port (see bridge-guard.ps1).
+& (Join-Path $PSScriptRoot './bridge-guard.ps1') -Check
+if ($LASTEXITCODE -eq 1) { exit 1 }
 
 $log = 'C:\Users\Cho-zen\secscan-rebuild-test\alterego\relaunch2.log'
 "orch start $(Get-Date -Format o)" | Out-File $log -Encoding utf8

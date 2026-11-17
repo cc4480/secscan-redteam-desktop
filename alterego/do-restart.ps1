@@ -1,3 +1,6 @@
+# Fail fast if another bridge already owns the port (see bridge-guard.ps1).
+& (Join-Path $PSScriptRoot './bridge-guard.ps1') -Check
+if ($LASTEXITCODE -eq 1) { exit 1 }
 Start-Sleep -Seconds 10
 Get-Process python -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 3

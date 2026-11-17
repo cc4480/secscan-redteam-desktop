@@ -1,3 +1,6 @@
+# Fail fast if another bridge already owns the port (see bridge-guard.ps1).
+& (Join-Path $PSScriptRoot '../bridge-guard.ps1') -Check
+if ($LASTEXITCODE -eq 1) { exit 1 }
 # PCBridge watchdog: keeps the tunnel and server alive.
 # Runs every 5 minutes via the PCBridgeWatchdog scheduled task.
 # Pure ASCII - PowerShell 5.1 safe.

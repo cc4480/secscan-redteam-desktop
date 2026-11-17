@@ -19,9 +19,21 @@ _NAME_RX = re.compile(r"^[a-z0-9_-]{1,32}$")
 
 
 def app_dir() -> Path:
-    """Per-user app dir: %APPDATA%/pc-mcp-bridge (created on demand)."""
-    base = os.environ.get("APPDATA") or str(Path.home())
-    d = Path(base) / APP_DIR_NAME
+    """Per-user app dir, created on demand.
+
+    Defaults to %APPDATA%/pc-mcp-bridge. PC_BRIDGE_DATA_DIR overrides it so
+    an install can keep its code and its runtime state (event log, jobs DB,
+    session tokens) inside one folder instead of splitting them between the
+    repo and APPDATA. An empty or relative value is ignored: the path must be
+    absolute, because a relative data dir would land wherever the server
+    happened to be launched from.
+    """
+    override = os.environ.get("PC_BRIDGE_DATA_DIR", "").strip()
+    if override and os.path.isabs(override):
+        d = Path(override)
+    else:
+        base = os.environ.get("APPDATA") or str(Path.home())
+        d = Path(base) / APP_DIR_NAME
     d.mkdir(parents=True, exist_ok=True)
     return d
 

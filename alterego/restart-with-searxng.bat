@@ -1,4 +1,6 @@
 @echo off
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0bridge-guard.ps1" -Check
+if errorlevel 1 exit /b 1
 timeout /t 8 /nobreak >nul
 taskkill /f /im python.exe >nul 2>&1
 timeout /t 3 /nobreak >nul

@@ -1,3 +1,6 @@
+# Fail fast if another bridge already owns the port (see bridge-guard.ps1).
+& (Join-Path $PSScriptRoot './bridge-guard.ps1') -Check
+if ($LASTEXITCODE -eq 1) { exit 1 }
 $ErrorActionPreference = 'SilentlyContinue'
 $pid8765 = (Get-NetTCPConnection -LocalPort 8765 -State Listen).OwningProcess
 if ($pid8765) { Stop-Process -Id $pid8765 -Force }

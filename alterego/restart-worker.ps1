@@ -1,3 +1,6 @@
+# Fail fast if another bridge already owns the port (see bridge-guard.ps1).
+& (Join-Path $PSScriptRoot './bridge-guard.ps1') -Check
+if ($LASTEXITCODE -eq 1) { exit 1 }
 $log = "C:\Users\Cho-zen\secscan-rebuild-test\alterego\restart2.log"
 "worker start $(Get-Date -Format o)" | Out-File $log -Encoding ascii
 Get-CimInstance Win32_Process -Filter "Name = 'python.exe'" | Where-Object { $_.CommandLine -like "*pc-agent\server.py*" } | ForEach-Object { "killing $($_.ProcessId)" | Out-File $log -Append -Encoding ascii; Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }

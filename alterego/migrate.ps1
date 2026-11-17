@@ -11,7 +11,13 @@
   Old location is NOT deleted -- it stays as a fallback until you have
   confirmed the new one works.
 #>
+# Fail fast if another bridge already owns the port (see bridge-guard.ps1).
+& (Join-Path $PSScriptRoot './bridge-guard.ps1') -Check
+if ($LASTEXITCODE -eq 1) { exit 1 }
 $ErrorActionPreference = 'Stop'
+# The legacy install location this script migrates AWAY from. Set it if yours
+# differs; the script edits its own references before removing the old tree.
+if (-not $env:ALTEREGO_OLD_TREE) { $env:ALTEREGO_OLD_TREE = "$env:USERPROFILE\pc-mcp-bridge" }
 $new = 'C:\Users\Cho-zen\secscan-rebuild-test\alterego'
 $old = 'C:\Users\Cho-zen\pc-mcp-bridge'
 

@@ -1,4 +1,6 @@
 @echo off
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0bridge-guard.ps1" -Check
+if errorlevel 1 exit /b 1
 cd /d "%USERPROFILE%\pc-mcp-bridge"
 set PC_BRIDGE_FULL_ACCESS=1
 set PC_BRIDGE_FULL_ACCESS_CONFIRM=0

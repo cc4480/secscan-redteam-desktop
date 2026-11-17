@@ -112,8 +112,14 @@ function SheenTracker({ frameRef }: { frameRef: React.RefObject<HTMLDivElement |
       if (disposed) return
       if (panelsDirty) refreshPanels()
       const frameRect = frame.getBoundingClientRect()
-      frame.style.setProperty('--mx', `${clientX - frameRect.left}px`)
-      frame.style.setProperty('--my', `${clientY - frameRect.top}px`)
+      const mx = clientX - frameRect.left
+      const my = clientY - frameRect.top
+      frame.style.setProperty('--mx', `${mx}px`)
+      frame.style.setProperty('--my', `${my}px`)
+      const bpx = frameRect.width > 0 ? ((mx / frameRect.width) - 0.5) * 2 : 0
+      const bpy = frameRect.height > 0 ? ((my / frameRect.height) - 0.5) * 2 : 0
+      frame.style.setProperty('--bpx', bpx.toFixed(4))
+      frame.style.setProperty('--bpy', bpy.toFixed(4))
       for (const panel of panels) {
         if (!panel.isConnected) {
           panelsDirty = true
@@ -157,6 +163,8 @@ function SheenTracker({ frameRef }: { frameRef: React.RefObject<HTMLDivElement |
       clearTilt()
       frame.style.setProperty('--mx', '-999px')
       frame.style.setProperty('--my', '-999px')
+      frame.style.setProperty('--bpx', '0')
+      frame.style.setProperty('--bpy', '0')
       for (const panel of panels) {
         panel.style.setProperty('--px', '-999px')
         panel.style.setProperty('--py', '-999px')
@@ -422,6 +430,11 @@ export function AppFrame({
           mounted later (chrome controls, overlays) subtracts its no-drag
           from this band. */}
       {darwin && <div className={css.leadingBand} data-shell-leading-band />}
+      <div className={css.background} aria-hidden="true">
+        <span className={css.orb} data-orb="1" />
+        <span className={css.orb} data-orb="2" />
+        <span className={css.orb} data-orb="3" />
+      </div>
       <ConversationMarker usePanelInfo={usePanelInfo} frameRef={frameRef} />
       <SheenTracker frameRef={frameRef} />
       <DocumentTitle
