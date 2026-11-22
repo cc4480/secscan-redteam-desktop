@@ -149,6 +149,22 @@ export async function authorizePhase(ctx: Ctx): Promise<GateVerdict> {
     })
     return { allowed: true }
   }
+  // Test mode on but fenced out: the log records that ownership is still
+  // enforced and which restraints test mode lifts regardless of the fence.
+  if (ctx.config.testMode) {
+    ctx.events.append({
+      phase: 'authorize',
+      actor: 'runner',
+      action: 'test_mode_ownership_enforced',
+      target: ctx.domain,
+      result:
+        'REDTEAM_TEST_MODE is on, but this engagement includes a public host or domain: ownership verification is still required. ' +
+        'Test mode still lifts these restraints for this run: the ROE test window, production graduation confirmation, ' +
+        'Tier 2 production approval, the production named-operator requirement, the prober private-address rejection for ' +
+        'in-scope hosts, the host-exec and msf destructive-command denylist, msf module/payload policy, per-host rate ' +
+        'limiting, autonomy-tier enforcement, the credential lockout interlock, the variant cap, and always/mode technique exclusions.',
+    })
+  }
   // Verification basis: local in-app DNS TXT challenge store by default.
   // An injected verifier (tests/embedded callers) may supply an explicit
   // attestation path; no external service is consulted.

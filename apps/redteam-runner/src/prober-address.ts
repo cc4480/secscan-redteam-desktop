@@ -28,7 +28,7 @@ function normalizeIp(host: string): string | null {
 const PRIVATE_RANGES_V4 = [
   /^127\./, /^10\./, /^192\.168\./, /^172\.(1[6-9]|2\d|3[01])\./, /^0\.0\.0\.0$/, /^169\.254\./,
 ]
-const PRIVATE_V6 = /^(::1|fc[0-9a-f]{2}:|fd[0-9a-f]{2}:|fe80:)/i
+const PRIVATE_V6 = /^(::1$|fc[0-9a-f]{2}:|fd[0-9a-f]{2}:|fe80:)/i
 
 /** True when `host` is a literal private-range or loopback address/name. */
 export function isPrivateOrLoopbackHost(host: string): boolean {

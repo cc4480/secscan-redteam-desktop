@@ -52,6 +52,7 @@ function authorizeCtx(domain: string, hosts: string[]) {
 }
 
 const testModeEvents = (a: Array<{ action: string }>) => a.filter(e => e.action === 'test_mode_active').length
+const enforcedEvents = (a: Array<{ action: string }>) => a.filter(e => e.action === 'test_mode_ownership_enforced').length
 
 describe('test mode release gate', () => {
   it('does not bypass ownership for a public target with no verification record', async () => {
@@ -60,6 +61,7 @@ describe('test mode release gate', () => {
     const verdict = await authorizePhase(ctx)
     assert.equal(verdict.allowed, false)
     assert.equal(testModeEvents(appended), 0)
+    assert.equal(enforcedEvents(appended), 1)
   })
 
   it('still bypasses for an all-loopback scope and logs test_mode_active', async () => {
@@ -91,6 +93,15 @@ describe('test mode release gate', () => {
     const { ctx, appended } = authorizeCtx('example.com', ['example.com'])
     const verdict = await authorizePhase(ctx)
     assert.equal(verdict.allowed, true)
+    assert.equal(testModeEvents(appended), 0)
+    assert.equal(enforcedEvents(appended), 1)
+  })
+
+  it('does not bypass for an IPv6 address that only begins with ::1', async () => {
+    seedStore([])
+    const { ctx, appended } = authorizeCtx('[::102:304]', ['[::102:304]'])
+    const verdict = await authorizePhase(ctx)
+    assert.equal(verdict.allowed, false)
     assert.equal(testModeEvents(appended), 0)
   })
 })

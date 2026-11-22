@@ -15,8 +15,8 @@
  * network call would surface as a recorded fetch.
  *
  * The verify_domain_list case writes its record through LocalDomainVerifier
- * with a stub `resolveTxt` that answers with the issued token. That stub is the
- * only fake in this file.
+ * with a stub `resolveTxt` that answers with the issued token, then launches
+ * the same domain. That stub is the only fake in this file.
  */
 import { describe, it, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
@@ -170,7 +170,7 @@ describe('M0 acceptance — launch authorization on the real MCP tool path', () 
     assert.deepEqual(fetchCalls, [])
   })
 
-  it('case 3: verify_domain_list lists a record freshly written by LocalDomainVerifier', async () => {
+  it('case 3: verify_domain_list lists a record freshly written by LocalDomainVerifier, and engagement_launch authorizes it', async () => {
     let published = ''
     const verifier = new LocalDomainVerifier({
       storePath: storeFile,
@@ -194,6 +194,12 @@ describe('M0 acceptance — launch authorization on the real MCP tool path', () 
     const after = await tool('verify_domain_list').run(store, {})
     assert.equal(after.status, 200, JSON.stringify(after.body))
     assert.deepEqual(after.body, { ok: true, store: storeFile, domains: ['fresh.example'] })
+
+    const { status, events } = await launchAndSettle('https://fresh.example')
+    assert.equal(status['verified'], true)
+    const authorize = actions(events, 'authorize')
+    assert.ok(authorize.includes('authorization_basis'), `authorize events: ${authorize.join(', ')}`)
+    assertStoppedBeforeAnyModel(events)
   })
 
   it('case 4a: REDTEAM_TEST_MODE=1 does not lift verification for a public target', async () => {

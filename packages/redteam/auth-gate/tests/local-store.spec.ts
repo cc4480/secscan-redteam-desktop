@@ -106,7 +106,7 @@ describe('VerificationStore', () => {
       const doc = emptyStore()
       doc.verified['a.example'] = { token: 't', verifiedAt: '2026-01-01T00:00:00.000Z', method: 'dns-txt' }
       await store.save(doc)
-      expect(statSync(file).mode & 0o777).toBe(0o600)
+      if (process.platform !== 'win32') expect(statSync(file).mode & 0o777).toBe(0o600)
       expect(readFileSync(file, 'utf8').endsWith('\n')).toBe(true)
       expect(await store.load()).toEqual(doc)
       writeFileSync(file, '  \n')

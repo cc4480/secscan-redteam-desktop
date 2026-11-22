@@ -184,7 +184,7 @@ describe('LocalDomainVerifier', () => {
       const v = LocalDomainVerifier.create(file)
       await v.startVerification('example.com')
       await v.startVerification('other.example')
-      expect(statSync(file).mode & 0o777).toBe(0o600)
+      if (process.platform !== 'win32') expect(statSync(file).mode & 0o777).toBe(0o600)
       expect(readdirSync(path.dirname(file)).filter(n => n.endsWith('.tmp'))).toEqual([])
     } finally {
       rmSync(dir, { recursive: true, force: true })

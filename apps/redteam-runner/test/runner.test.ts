@@ -159,6 +159,12 @@ describe('local sandbox mode (explicit opt-in only)', () => {
       assert.ok(!isPrivateOrLoopbackHost(h), h)
     }
   })
+  it('isPrivateOrLoopbackHost treats only the exact ::1 as IPv6 loopback', () => {
+    assert.equal(isPrivateOrLoopbackHost('::1'), true)
+    assert.equal(isPrivateOrLoopbackHost('[::1]'), true)
+    assert.equal(isPrivateOrLoopbackHost('::1234'), false)
+    assert.equal(isPrivateOrLoopbackHost('[::102:304]'), false)
+  })
   it('without allowPrivateHosts, loopback is still rejected (default unchanged)', () => {
     const r = validateProbeTarget('http://localhost:3000/', ['localhost'])
     assert.equal(r.ok, false)
@@ -321,7 +327,7 @@ describe('runEngagement gating (dry-run agents, local verification)', () => {
     assert.ok(!readEvents(engDir).some(e => e.action === 'scribe_gate_outcome'), 'the gate never ran on a blocked close')
   })
 
-  it("completes on an explicit operator attestation path when a verifier hook is injected", async () => {
+  it('completes on an explicit operator attestation path when a verifier hook is injected', async () => {
     const inp = input('red')
     inp.operatorName = 'C. Operator'
     const res = await runEngagement(inp, {

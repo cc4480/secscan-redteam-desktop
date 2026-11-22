@@ -18,8 +18,11 @@
  *    validation without test mode and lets it execute with test mode,
  *    leaving test_mode_bypass receipts and zero recorded failures.
  */
-import { describe, it } from 'node:test'
+import { describe, it, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { resolveConfig } from '../src/phases/config.js'
 import { authorizePhase, TEST_MODE_ATTESTATION } from '../src/phases/authorize.js'
 import { techniqueAllowed } from '../src/gate.js'
@@ -61,6 +64,34 @@ function authorizeCtx(testMode: boolean, domain = 'example.com', hosts = ['examp
   return { ctx, appended }
 }
 
+const storeDirs: string[] = []
+const priorVerifiedDomainsFile = process.env['REDTEAM_VERIFIED_DOMAINS_FILE']
+
+afterEach(() => {
+  if (priorVerifiedDomainsFile === undefined) delete process.env['REDTEAM_VERIFIED_DOMAINS_FILE']
+  else process.env['REDTEAM_VERIFIED_DOMAINS_FILE'] = priorVerifiedDomainsFile
+  while (storeDirs.length > 0) rmSync(storeDirs.pop()!, { recursive: true, force: true })
+})
+
+/**
+ * Seeds a temp verified-domain store with a canonical record for `domain`
+ * and points `REDTEAM_VERIFIED_DOMAINS_FILE` at it, so the authorize path
+ * never reads the developer's real store.
+ */
+function seedVerifiedDomain(domain: string): void {
+  const dir = mkdtempSync(join(tmpdir(), 'test-mode-authorize-'))
+  storeDirs.push(dir)
+  const file = join(dir, 'verified-domains.json')
+  writeFileSync(
+    file,
+    JSON.stringify({
+      version: 1,
+      pending: {},
+      verified: { [domain]: { token: 'fixture-token', verifiedAt: '2026-11-02T00:00:00.000Z', method: 'dns-txt' } } }),
+  )
+  process.env['REDTEAM_VERIFIED_DOMAINS_FILE'] = file
+}
+
 describe('test mode — authorize phase', () => {
   it('passes with the exact self-attestation and a test_mode_active event', async () => {
     const { ctx, appended } = authorizeCtx(true, '127.0.0.1', ['127.0.0.1', '192.168.1.10'])
@@ -69,12 +100,13 @@ describe('test mode — authorize phase', () => {
     assert.equal(ctx.verificationProof, TEST_MODE_ATTESTATION)
     assert.equal(
       TEST_MODE_ATTESTATION,
-      'TEST MODE: operator self-attested — ownership verification bypassed by operator order (REDTEAM_TEST_MODE)',
+      'TEST MODE: operator self-attested - ownership verification bypassed by operator order (REDTEAM_TEST_MODE)',
     )
     assert.equal(appended.filter(e => e.action === 'test_mode_active').length, 1)
   })
 
   it('the SAME private-in-scope ctx is denied without test mode', async () => {
+    seedVerifiedDomain('example.com')
     const { ctx, appended } = authorizeCtx(false)
     const verdict = await authorizePhase(ctx)
     assert.equal(verdict.allowed, false)
