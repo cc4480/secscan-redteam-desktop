@@ -43,16 +43,16 @@ describe('test mode — config resolution', () => {
   })
 })
 
-function authorizeCtx(testMode: boolean) {
+function authorizeCtx(testMode: boolean, domain = 'example.com', hosts = ['example.com', '192.168.1.10']) {
   const appended: Array<{ action: string; result: string }> = []
   const ctx = {
-    domain: 'example.com',
-    hosts: ['example.com', '192.168.1.10'],
+    domain,
+    hosts,
     input: {
       mode: 'red',
       objective: 'test-mode authorize proof',
       operatorName: 'Test Operator',
-      roe: { scope: ['example.com', '192.168.1.10'], outOfScope: [] } },
+      roe: { scope: hosts, outOfScope: [] } },
     config: { testMode, localSandbox: false },
     deps: {},
     events: {
@@ -63,7 +63,7 @@ function authorizeCtx(testMode: boolean) {
 
 describe('test mode — authorize phase', () => {
   it('passes with the exact self-attestation and a test_mode_active event', async () => {
-    const { ctx, appended } = authorizeCtx(true)
+    const { ctx, appended } = authorizeCtx(true, '127.0.0.1', ['127.0.0.1', '192.168.1.10'])
     const verdict = await authorizePhase(ctx)
     assert.equal(verdict.allowed, true)
     assert.equal(ctx.verificationProof, TEST_MODE_ATTESTATION)

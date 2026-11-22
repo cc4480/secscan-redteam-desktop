@@ -119,16 +119,16 @@ describe('S3-H6 — authorize persists the attested scope into state.json', () =
     const dir = tempDir()
     const ctx = authorizeCtx(dir, {
       testMode: true,
-      scope: ['example.com', '192.168.1.10'],
-      hosts: ['example.com', '192.168.1.10'],
-      domain: 'example.com' })
+      scope: ['127.0.0.1', '192.168.1.10'],
+      hosts: ['127.0.0.1', '192.168.1.10'],
+      domain: '127.0.0.1' })
 
     const verdict = await authorizePhase(ctx)
     assert.equal(verdict.allowed, true)
 
     const state = readState(dir)
     assert.ok(state, 'state.json is readable after test-mode authorize')
-    assert.deepEqual(state.verifiedScope, ['example.com', '192.168.1.10'])
+    assert.deepEqual(state.verifiedScope, ['127.0.0.1', '192.168.1.10'])
   })
 })
 
