@@ -12,12 +12,12 @@
  * never `true`.
  */
 
-import { readFile as fsReadFile, writeFile as fsWriteFile, mkdir as fsMkdir } from 'node:fs/promises'
+import { readFile as fsReadFile } from 'node:fs/promises'
 import { resolveTxt } from 'node:dns/promises'
 import { randomBytes } from 'node:crypto'
 import path from 'node:path'
 
-import { coerceStore, defaultVerificationStoreFile, emptyStore, type StoreDoc } from './local-store.js'
+import { coerceStore, defaultVerificationStoreFile, emptyStore, writeFileAtomic, type StoreDoc } from './local-store.js'
 import {
   extractDomain,
   normalizeDomain,
@@ -95,14 +95,16 @@ export function withPending(
  * @param rec - the current record.
  * @param domain - normalized domain.
  * @param now - ISO verification time; defaults to the current time.
- * @returns a new record with the domain verified (method `dns-txt`) and its pending entry removed.
+ * @returns a new record with the domain verified (method `dns-txt`) and its pending entry removed,
+ * or `rec` unchanged when no challenge is pending for the domain.
  */
 export function withVerified(
   rec: VerificationRecord,
   domain: string,
   now: string = new Date().toISOString(),
 ): VerificationRecord {
-  const token = rec.pending[domain]?.token ?? '(unknown)'
+  const token = rec.pending[domain]?.token
+  if (token === undefined) return rec // no pending proof: never create an approval
   const pending = Object.fromEntries(Object.entries(rec.pending).filter(([key]) => key !== domain))
   return { ...rec, pending, verified: { ...rec.verified, [domain]: { token, verifiedAt: now, method: 'dns-txt' } } }
 }
@@ -141,10 +143,8 @@ export class LocalDomainVerifier {
     return new LocalDomainVerifier({
       storePath: resolved,
       readFile: p => fsReadFile(p, 'utf8'),
-      writeFile: (p, data) => fsWriteFile(p, data, 'utf8'),
-      mkdir: async (p) => {
-        await fsMkdir(p, { recursive: true })
-      },
+      writeFile: writeFileAtomic,
+      mkdir: async () => {}, // writeFileAtomic creates the directory at mode 0700
       resolveTxt,
       newToken: () => SERVER_TOKEN_PREFIX + randomBytes(16).toString('hex'),
     })
@@ -218,7 +218,7 @@ export class LocalDomainVerifier {
       return emptyRecord() // no store yet: nothing is verified
     }
     try {
-      return coerceStore(JSON.parse(raw) as unknown)
+      return coerceStore(JSON.parse(raw))
     } catch {
       return emptyRecord() // corrupt store: fail closed, verify nothing
     }

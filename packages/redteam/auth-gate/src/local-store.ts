@@ -30,7 +30,7 @@ export interface PendingRecord {
   createdAt: string
 }
 
-/** A domain that proved ownership, and when. */
+/** A domain that proved ownership, and when. A migrated legacy entry's `verifiedAt` is the read time until the next save. */
 export interface VerifiedRecord {
   token: string
   verifiedAt: string
@@ -114,8 +114,13 @@ export function coerceStore(parsed: unknown): StoreDoc {
     // method is accurate; the timestamp is the migration time, not the original.
     const migratedAt = new Date().toISOString()
     for (const raw of verifiedRoot) {
-      const key = typeof raw === 'string' ? normalizeDomain(raw) : null
-      if (key !== null) doc.verified[key] = { token: LEGACY_TOKEN, verifiedAt: migratedAt, method: 'dns-txt' }
+      if (typeof raw !== 'string') continue
+      const key = normalizeDomain(raw)
+      // Accept only a bare hostname: `x@victim.example` or `victim.example/foo`
+      // would otherwise normalize to a domain the operator never verified.
+      if (key !== null && key === raw.trim().toLowerCase().replace(/\.$/, '')) {
+        doc.verified[key] = { token: LEGACY_TOKEN, verifiedAt: migratedAt, method: 'dns-txt' }
+      }
     }
   }
   for (const [domain, raw] of Object.entries(asRecord(verifiedRoot))) {
@@ -128,6 +133,20 @@ export function coerceStore(parsed: unknown): StoreDoc {
     }
   }
   return doc
+}
+
+/**
+ * Write `data` to `file` atomically: create the directory at mode 0700, write a
+ * temp file at mode 0600, then rename it over `file`. Every store write goes
+ * through here so a torn or world-readable store is never observable.
+ * @param file - absolute path of the destination.
+ * @param data - the full file contents.
+ */
+export async function writeFileAtomic(file: string, data: string): Promise<void> {
+  await mkdir(dirname(file), { recursive: true, mode: 0o700 })
+  const tmp = `${file}.${randomBytes(6).toString('hex')}.tmp`
+  await writeFile(tmp, data, { encoding: 'utf8', mode: 0o600 })
+  await rename(tmp, file)
 }
 
 /** One store file, with atomic writes. */
@@ -169,9 +188,6 @@ export class VerificationStore {
    * @param doc - the store to write.
    */
   async save(doc: StoreDoc): Promise<void> {
-    await mkdir(dirname(this.file), { recursive: true, mode: 0o700 })
-    const tmp = `${this.file}.${randomBytes(6).toString('hex')}.tmp`
-    await writeFile(tmp, `${JSON.stringify(doc, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
-    await rename(tmp, this.file)
+    await writeFileAtomic(this.file, `${JSON.stringify(doc, null, 2)}\n`)
   }
 }

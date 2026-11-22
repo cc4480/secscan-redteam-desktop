@@ -5,7 +5,7 @@
  * behavior is fail-closed: errors and missing proof never verify.
  */
 
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -69,11 +69,10 @@ describe('pure helpers', () => {
     })
   })
 
-  it('withVerified without a pending token records an empty-safe placeholder', () => {
-    const rec = withVerified(emptyRecord(), 'example.com')
-    expect(rec.verified['example.com']?.method).toBe('dns-txt')
-    expect(rec.verified['example.com']?.token).toBe('(unknown)')
-    expect(Number.isNaN(Date.parse(rec.verified['example.com']!.verifiedAt))).toBe(false)
+  it('withVerified without a pending challenge creates no approval', () => {
+    const empty = emptyRecord()
+    expect(withVerified(empty, 'example.com')).toBe(empty)
+    expect(recordIsVerified(withVerified(empty, 'example.com'), 'example.com')).toBe(false)
     expect(withPending(emptyRecord(), 'example.com', 'tok').pending['example.com']?.createdAt).toBeTruthy()
   })
 })
@@ -173,6 +172,20 @@ describe('LocalDomainVerifier', () => {
       const doc = JSON.parse(readFileSync(file, 'utf8'))
       expect(doc.pending['example.com'].token).toBe(token)
       expect(doc.verified).toEqual({})
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('create() writes the store atomically at mode 0600 and leaves no temp residue', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'local-spec-'))
+    try {
+      const file = path.join(dir, 'sub', 'verified-domains.json')
+      const v = LocalDomainVerifier.create(file)
+      await v.startVerification('example.com')
+      await v.startVerification('other.example')
+      expect(statSync(file).mode & 0o777).toBe(0o600)
+      expect(readdirSync(path.dirname(file)).filter(n => n.endsWith('.tmp'))).toEqual([])
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

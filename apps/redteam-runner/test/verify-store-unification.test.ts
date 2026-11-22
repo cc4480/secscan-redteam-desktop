@@ -101,4 +101,29 @@ describe('verification store unification', () => {
     const onDisk = JSON.parse(readFileSync(file, 'utf8')) as { verified: Record<string, { method: string }> }
     assert.equal(onDisk.verified['acme.example']?.method, 'dns-txt')
   })
+
+  it('trailing-dot FQDN target is allowed when the apex is verified', async () => {
+    writeFileSync(file, JSON.stringify({ verified: ['acme.example'], pending: {} }))
+    assert.equal((await checkAuthorization('acme.example.')).allowed, true)
+  })
+
+  it('an inherited property name is not a verified domain', async () => {
+    assert.equal((await checkAuthorization('constructor')).allowed, false)
+  })
+
+  it('a __proto__ key in verified authorizes nothing', async () => {
+    writeFileSync(file, '{"verified":{"__proto__":{"token":"t","verifiedAt":"x"}},"pending":{}}')
+    assert.equal((await checkAuthorization('acme.example')).allowed, false)
+    assert.equal((await checkAuthorization('constructor')).allowed, false)
+  })
+
+  it('a migrated apex does not authorize its subdomain', async () => {
+    writeFileSync(file, JSON.stringify({ verified: ['acme.example'], pending: {} }))
+    assert.equal((await checkAuthorization('api.acme.example')).allowed, false)
+  })
+
+  it('legacy elements that merely normalize to a domain do not authorize it', async () => {
+    writeFileSync(file, JSON.stringify({ verified: ['x@victim.example', 'victim.example/foo'], pending: {} }))
+    assert.equal((await checkAuthorization('victim.example')).allowed, false)
+  })
 })

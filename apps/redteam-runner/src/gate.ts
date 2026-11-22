@@ -11,41 +11,42 @@
  *  5. Test window: the runner refuses to run outside the agreed window.
  */
 
-import { isIP } from "node:net";
+import { isIP } from 'node:net'
 import {
   extractDomain,
+  normalizeDomain,
   defaultVerificationStoreFile,
   VerificationStore,
-} from "@secscan/redteam-auth-gate";
-import { resolveExcludedTechniques } from "./attack.js";
-import { isPrivateOrLoopbackHost } from "./prober.js";
-import type { BlackoutWindow, EngagementMode, RulesOfEngagement } from "./types.js";
+} from '@secscan/redteam-auth-gate'
+import { resolveExcludedTechniques } from './attack.js'
+import { isPrivateOrLoopbackHost } from './prober.js'
+import type { BlackoutWindow, EngagementMode, RulesOfEngagement } from './types.js'
 
 export interface GateVerdict {
-  allowed: boolean;
-  reason?: string;
+  allowed: boolean
+  reason?: string
 }
 
 /** Normalize ROE scope entries (URLs or bare hosts) to lowercase hostnames. */
 export function scopeHosts(roe: RulesOfEngagement): string[] {
-  const hosts: string[] = [];
+  const hosts: string[] = []
   for (const entry of roe.scope) {
     try {
-      hosts.push(extractDomain(entry));
+      hosts.push(extractDomain(entry))
     } catch {
       // Unparseable scope entry - fail closed downstream by matching nothing.
     }
   }
-  return [...new Set(hosts)];
+  return [...new Set(hosts)]
 }
 
 /** True when the URL's hostname is exactly one of the in-scope hosts. */
 export function urlInScope(url: string, hosts: string[]): boolean {
   try {
-    const host = new URL(url).hostname.toLowerCase();
-    return hosts.includes(host);
+    const host = new URL(url).hostname.toLowerCase()
+    return hosts.includes(host)
   } catch {
-    return false;
+    return false
   }
 }
 
@@ -55,34 +56,34 @@ export function urlInScope(url: string, hosts: string[]): boolean {
  * runner's local tz when unset).
  */
 export function inBlackout(now: Date, windows: BlackoutWindow[] | undefined): BlackoutWindow | null {
-  if (!windows || windows.length === 0) return null;
+  if (!windows || windows.length === 0) return null
   for (const w of windows) {
-    const tz = w.tz;
-    const parts = new Intl.DateTimeFormat("en-GB", {
+    const tz = w.tz
+    const parts = new Intl.DateTimeFormat('en-GB', {
       timeZone: tz,
-      hour: "2-digit",
-      minute: "2-digit",
+      hour: '2-digit',
+      minute: '2-digit',
       hour12: false,
     })
       .format(now)
-      .split(":");
-    const cur = Number(parts[0]) * 60 + Number(parts[1]);
-    const [sh, sm] = w.start.split(":").map(Number);
-    const [eh, em] = w.end.split(":").map(Number);
-    if ([sh, sm, eh, em].some((n) => Number.isNaN(n))) continue; // malformed → ignore window, never block on garbage
-    const start = sh * 60 + sm;
-    const end = eh * 60 + em;
-    const inside = start <= end ? cur >= start && cur < end : cur >= start || cur < end;
-    if (inside) return w;
+      .split(':')
+    const cur = Number(parts[0]) * 60 + Number(parts[1])
+    const [sh, sm] = w.start.split(':').map(Number)
+    const [eh, em] = w.end.split(':').map(Number)
+    if ([sh, sm, eh, em].some(n => Number.isNaN(n))) continue // malformed → ignore window, never block on garbage
+    const start = sh * 60 + sm
+    const end = eh * 60 + em
+    const inside = start <= end ? cur >= start && cur < end : cur >= start || cur < end
+    if (inside) return w
   }
-  return null;
+  return null
 }
 
 /** True when `now` is inside the agreed test window (or no window was set). */
 export function inTestWindow(now: Date, roe: RulesOfEngagement): boolean {
-  if (!roe.testWindow) return true;
-  const t = now.getTime();
-  return t >= Date.parse(roe.testWindow.start) && t <= Date.parse(roe.testWindow.end);
+  if (!roe.testWindow) return true
+  const t = now.getTime()
+  return t >= Date.parse(roe.testWindow.start) && t <= Date.parse(roe.testWindow.end)
 }
 
 /** True when the ATT&CK technique may be used in this engagement. */
@@ -92,17 +93,17 @@ export function techniqueAllowed(
   roe: RulesOfEngagement,
   opts?: { testMode?: boolean },
 ): boolean {
-  if (!attackId) return true; // unmapped actions are allowed; the mapping is advisory
+  if (!attackId) return true // unmapped actions are allowed; the mapping is advisory
   // TEST MODE (operator order): only the operator's own ROE exclusions
   // apply - the always-excluded set (T1499) and the mode defaults are
   // bypassed for testing. The bypass is engagement-level and recorded by
   // the authorize phase's test_mode_active event.
   if (opts?.testMode) {
-    const roeOnly = (roe.excludedTechniques ?? []).map((t) => t.toUpperCase());
-    return !roeOnly.includes(attackId.toUpperCase());
+    const roeOnly = (roe.excludedTechniques ?? []).map(t => t.toUpperCase())
+    return !roeOnly.includes(attackId.toUpperCase())
   }
-  const excluded = resolveExcludedTechniques(mode, roe.excludedTechniques);
-  return !excluded.includes(attackId.toUpperCase());
+  const excluded = resolveExcludedTechniques(mode, roe.excludedTechniques)
+  return !excluded.includes(attackId.toUpperCase())
 }
 
 export interface CheckAuthorizationOptions {
@@ -111,23 +112,24 @@ export interface CheckAuthorizationOptions {
    * is accepted as the verification basis without consulting the local DNS
    * challenge store. Use for test/sandbox flows that intentionally bypass DNS.
    */
-  attestedProof?: string;
+  attestedProof?: string
   /**
    * LOCAL SANDBOX MODE ONLY. When true, skips DNS/store ownership proof for a
    * target that itself resolves to a private/loopback host (e.g. localhost,
    * 127.0.0.1, RFC1918). For any non-private domain this flag has no effect.
    */
-  allowLocalSandbox?: boolean;
+  allowLocalSandbox?: boolean
   /** Path to the local verified-domains store. Defaults to the app store. */
-  storeFile?: string;
+  storeFile?: string
 }
 
 async function isLocallyVerified(domain: string, storeFile?: string): Promise<boolean> {
   try {
-    const doc = await new VerificationStore(storeFile ?? defaultVerificationStoreFile()).load();
-    return Object.hasOwn(doc.verified, extractDomain(domain));
+    const doc = await new VerificationStore(storeFile ?? defaultVerificationStoreFile()).load()
+    const key = normalizeDomain(domain)
+    return key !== null && Object.hasOwn(doc.verified, key)
   } catch {
-    return false; // unreadable store: fail closed, never an approval
+    return false // unreadable store: fail closed, never an approval
   }
 }
 
@@ -140,25 +142,25 @@ export async function checkAuthorization(
   domain: string,
   opts: CheckAuthorizationOptions = {},
 ): Promise<GateVerdict> {
-  let target: string;
+  let target: string
   try {
-    target = extractDomain(domain);
+    target = extractDomain(domain)
   } catch {
-    return { allowed: false, reason: `unparseable target: ${domain}` };
+    return { allowed: false, reason: `unparseable target: ${domain}` }
   }
   if (opts.allowLocalSandbox && isPrivateOrLoopbackHost(target)) {
     return {
       allowed: true,
       reason:
         `LOCAL SANDBOX MODE: ${target} is a private/loopback target - ownership ` +
-        `verification was skipped (no DNS TXT proof is possible for a loopback address). ` +
-        `This bypass never applies to a non-private domain.`,
-    };
+        'verification was skipped (no DNS TXT proof is possible for a loopback address). ' +
+        'This bypass never applies to a non-private domain.',
+    }
   }
   if (opts.attestedProof) {
-    return { allowed: true, reason: opts.attestedProof };
+    return { allowed: true, reason: opts.attestedProof }
   }
-  const verified = await isLocallyVerified(target, opts.storeFile);
+  const verified = await isLocallyVerified(target, opts.storeFile)
   if (!verified) {
     return {
       allowed: false,
@@ -166,10 +168,10 @@ export async function checkAuthorization(
         `domain ${target} is not ownership-verified in the local app store. ` +
         `Run verify_domain_start for ${target}, publish the TXT record at ` +
         `_secscan-challenge.${target}, then run verify_domain_check. Both red and black ` +
-        `modes require this proof - covert means covert vs the blue team, never vs the authorization gate.`,
-    };
+        'modes require this proof - covert means covert vs the blue team, never vs the authorization gate.',
+    }
   }
-  return { allowed: true, reason: `${target} is verified in the local app store (DNS TXT challenge).` };
+  return { allowed: true, reason: `${target} is verified in the local app store (DNS TXT challenge).` }
 }
 
 export interface ScopeAuthorizationOptions {
@@ -177,16 +179,16 @@ export interface ScopeAuthorizationOptions {
    * Explicit operator attestation covering declared in-scope hosts. When set,
    * public domains in scope are accepted on that attestation basis.
    */
-  attestedProof?: string;
+  attestedProof?: string
   /**
    * LOCAL SANDBOX MODE ONLY. When true, every host in scope must be
    * private/loopback so a loopback target can never combine with public scope.
    */
-  allowLocalSandbox?: boolean;
+  allowLocalSandbox?: boolean
   /** The engagement target, already verified by {@link checkAuthorization}. */
-  verifiedTarget?: string;
+  verifiedTarget?: string
   /** Path to the local verified-domains store. Defaults to the app store. */
-  storeFile?: string;
+  storeFile?: string
 }
 
 /**
@@ -201,16 +203,16 @@ export async function checkScopeAuthorization(
   hosts: readonly string[],
   opts: ScopeAuthorizationOptions = {},
 ): Promise<GateVerdict> {
-  const unique = [...new Set(hosts.map((h) => h.trim().toLowerCase()).filter((h) => h !== ""))];
+  const unique = [...new Set(hosts.map(h => h.trim().toLowerCase()).filter(h => h !== ''))]
   if (unique.length === 0) {
-    return { allowed: false, reason: "engagement scope is empty: declare at least one in-scope host" };
+    return { allowed: false, reason: 'engagement scope is empty: declare at least one in-scope host' }
   }
-  let target = "";
+  let target = ''
   if (opts.verifiedTarget !== undefined) {
     try {
-      target = extractDomain(opts.verifiedTarget);
+      target = extractDomain(opts.verifiedTarget)
     } catch {
-      target = "";
+      target = ''
     }
   }
   for (const host of unique) {
@@ -220,36 +222,36 @@ export async function checkScopeAuthorization(
           allowed: false,
           reason:
             `LOCAL SANDBOX MODE cannot cover scope host ${host}: sandbox mode skips ownership ` +
-            `verification for a private/loopback target, so every host in scope must be private ` +
+            'verification for a private/loopback target, so every host in scope must be private ' +
             `too. Remove ${host} from scope, or verify it locally and run without local sandbox.`,
-        };
+        }
       }
-      continue;
+      continue
     }
-    if (host === target) continue;
+    if (host === target) continue
     if (isPrivateOrLoopbackHost(host)) {
       return {
         allowed: false,
         reason:
           `scope host ${host} is private/loopback and cannot be ownership-verified. ` +
-          `Private and loopback targets are only reachable in local sandbox mode ` +
-          `(--local-sandbox or REDTEAM_LOCAL_SANDBOX=1), which is an operator decision ` +
-          `and is never implied by the engagement request.`,
-      };
+          'Private and loopback targets are only reachable in local sandbox mode ' +
+          '(--local-sandbox or REDTEAM_LOCAL_SANDBOX=1), which is an operator decision ' +
+          'and is never implied by the engagement request.',
+      }
     }
     // IP-literal scope entry: authorized by ROE/credentials; DNS verification N/A.
-    if (isIP(host) !== 0) continue;
-    if (opts.attestedProof) continue;
-    const verified = await isLocallyVerified(host, opts.storeFile);
+    if (isIP(host) !== 0) continue
+    if (opts.attestedProof) continue
+    const verified = await isLocallyVerified(host, opts.storeFile)
     if (!verified) {
       return {
         allowed: false,
         reason:
           `scope host ${host} is not ownership-verified in the local app store. Every domain in scope ` +
           `must be verified on its own: verify_domain_start for ${host}, publish the TXT record, ` +
-          `then verify_domain_check. Listing a host in scope never substitutes for proving it.`,
-      };
+          'then verify_domain_check. Listing a host in scope never substitutes for proving it.',
+      }
     }
   }
-  return { allowed: true };
+  return { allowed: true }
 }

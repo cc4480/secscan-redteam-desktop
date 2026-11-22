@@ -16,11 +16,31 @@ describe('coerceStore legacy migration', () => {
   it('migrates a legacy verified array into dns-txt records', () => {
     const before = Date.now()
     const doc = coerceStore({ verified: ['Acme.Example', 'https://b.example/x', 42, ''], pending: {} })
-    expect(Object.keys(doc.verified).sort()).toEqual(['acme.example', 'b.example'])
+    expect(Object.keys(doc.verified).sort()).toEqual(['acme.example'])
     const rec = doc.verified['acme.example']!
     expect(rec.token).toBe('(migrated)')
     expect(rec.method).toBe('dns-txt')
     expect(Date.parse(rec.verifiedAt)).toBeGreaterThanOrEqual(before - 1)
+  })
+
+  it('drops legacy elements that only normalize to a domain', () => {
+    const doc = coerceStore({
+      verified: ['x@victim.example', 'victim.example/foo', 'acme.example.', ' Acme2.Example '],
+      pending: {},
+    })
+    expect(Object.keys(doc.verified).sort()).toEqual(['acme.example', 'acme2.example'])
+    expect(doc.verified['victim.example']).toBeUndefined()
+  })
+
+  it('migrated apex does not authorize a subdomain key', () => {
+    const doc = coerceStore({ verified: ['acme.example'], pending: {} })
+    expect(Object.hasOwn(doc.verified, 'api.acme.example')).toBe(false)
+  })
+
+  it('a __proto__ key in verified authorizes nothing', () => {
+    const doc = coerceStore(JSON.parse('{"verified":{"__proto__":{"token":"t","verifiedAt":"x"}},"pending":{}}'))
+    expect(Object.keys(doc.verified)).toEqual([])
+    expect(Object.hasOwn(doc.verified, 'constructor')).toBe(false)
   })
 
   it('keeps well-formed record entries and drops malformed ones', () => {
