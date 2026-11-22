@@ -116,6 +116,7 @@ describe('isHostFamilyProbe', () => {
     expect(isHostFamilyProbe('mcp__secscan__scan_url', { targetProfile: 'windows' })).toBe(false)
     expect(isHostFamilyProbe('mcp__redteam__get_findings', { engagementId: 'eng-1' })).toBe(false)
     expect(isHostFamilyProbe('nmap_exec', { targetProfile: 'windows' })).toBe(false)
+    expect(isHostFamilyProbe('mcp__redteam__secscan_exec', { targetProfile: 'secscan' })).toBe(false)
     expect(isHostFamilyProbe('mcp__redteam__nmap_exec', { targetProfile: 7 })).toBe(false)
   })
 })
@@ -182,5 +183,6 @@ describe('decide on secscan_exec', () => {
       ctx,
     )
     expect(decision.kind).toBe('deny')
+    expect(ctx.calls).toEqual(['acme.example'])
   })
 })

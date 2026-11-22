@@ -21,8 +21,11 @@
  * exceptions" claim. This hook performs no DNS of its own; it consults the
  * injected verdict only.
  *
- * Host-family probes (`mcp__redteam__*`, every one of which takes a required
- * `targetProfile` of secscan, seclayer, windows or linux — see
+ * Scan tools (`secscan_exec`, `scan_url`) are gated under every namespace,
+ * including `mcp__redteam__secscan_exec` with a `targetProfile`.
+ *
+ * Host-family probes (the other `mcp__redteam__*` tools, every one of which takes
+ * a required `targetProfile` of secscan, seclayer, windows or linux — see
  * {@link isHostFamilyProbe}) are deliberately NOT checked here. They are
  * enforced by the engagement engine, which owns host scope, and that is the
  * right split rather than a gap:
@@ -66,7 +69,7 @@ export interface GateContext {
   isVerified: (domain: string) => Promise<boolean>
 }
 
-/** Base tool name, tolerating the harness MCP namespace (mcp__secscan__scan_url). */
+/** Base tool name, tolerating the harness MCP namespace (mcp__secscan__secscan_exec). */
 function baseName(toolName: string): string {
   const parts = toolName.split('__')
   return parts[parts.length - 1] ?? toolName
@@ -96,7 +99,8 @@ const HOST_TARGET_PROFILES: readonly string[] = ['secscan', 'seclayer', 'windows
 
 /**
  * True for an engagement-engine host-family probe: a tool under the engine's
- * `mcp__redteam__` namespace carrying a `targetProfile` of secscan, seclayer,
+ * `mcp__redteam__` namespace, other than a scan tool (see {@link isScanTool}),
+ * carrying a `targetProfile` of secscan, seclayer,
  * windows or linux. Every `mcp__redteam__*` executor tool declares that
  * argument as required, so its presence is what distinguishes a host probe from
  * the engine's engagement-state tools (`get_engagement`, `record_finding`, ...).
@@ -104,7 +108,8 @@ const HOST_TARGET_PROFILES: readonly string[] = ['secscan', 'seclayer', 'windows
  * Exported for the same reason the doctrine names the split: the boundary
  * between "this gate enforces it" and "the engine enforces it" should be
  * readable in code, not inferred. This predicate decides NOTHING — the hook
- * lets these calls through to the engine, which owns host scope.
+ * lets these calls through to the engine, which owns host scope. Scan tools
+ * are never host-family probes: they are gated even under the engine namespace.
  * @param toolName - full tool name as dispatched, namespaced or not.
  * @param args - the call's arguments.
  * @returns whether the call is an engine host-family probe.
@@ -113,6 +118,7 @@ export function isHostFamilyProbe(
   toolName: string,
   args: Record<string, unknown>,
 ): boolean {
+  if (isScanTool(toolName)) return false
   if (mcpNamespace(toolName) !== 'redteam') return false
   const profile = args['targetProfile']
   return typeof profile === 'string' && HOST_TARGET_PROFILES.includes(profile)
