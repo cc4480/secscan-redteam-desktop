@@ -14,7 +14,7 @@
  */
 
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { normalizeDomain } from './verify.js'
@@ -141,12 +141,18 @@ export function coerceStore(parsed: unknown): StoreDoc {
  * through here so a torn or world-readable store is never observable.
  * @param file - absolute path of the destination.
  * @param data - the full file contents.
+ * @throws when the write or rename fails; the temp file is removed first.
  */
 export async function writeFileAtomic(file: string, data: string): Promise<void> {
   await mkdir(dirname(file), { recursive: true, mode: 0o700 })
   const tmp = `${file}.${randomBytes(6).toString('hex')}.tmp`
-  await writeFile(tmp, data, { encoding: 'utf8', mode: 0o600 })
-  await rename(tmp, file)
+  try {
+    await writeFile(tmp, data, { encoding: 'utf8', mode: 0o600 })
+    await rename(tmp, file)
+  } catch (err) {
+    await rm(tmp, { force: true })
+    throw err
+  }
 }
 
 /** One store file, with atomic writes. */

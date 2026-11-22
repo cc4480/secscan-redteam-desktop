@@ -7,10 +7,10 @@
 import { describe, it, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { LocalDomainVerifier, VerificationStore } from '@secscan/redteam-auth-gate'
+import { LocalDomainVerifier, VerificationStore, writeFileAtomic } from '@secscan/redteam-auth-gate'
 import { checkAuthorization } from '../src/gate.js'
 import { VERIFY_TOOLS } from '../src/ui/verify-tools.js'
 
@@ -37,10 +37,8 @@ function verifierPublishing(): LocalDomainVerifier {
   return new LocalDomainVerifier({
     storePath: file,
     readFile: p => readFile(p, 'utf8'),
-    writeFile: (p, data) => writeFile(p, data, 'utf8'),
-    mkdir: async (p) => {
-      await mkdir(p, { recursive: true })
-    },
+    writeFile: writeFileAtomic,
+    mkdir: async () => {}, // writeFileAtomic creates the directory itself
     resolveTxt: async () => published,
     newToken: () => {
       const t = 'secscan-verify-unify'

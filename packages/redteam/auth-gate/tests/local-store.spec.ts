@@ -1,11 +1,12 @@
 /** coerceStore: validation and legacy-array migration of the verified-domain store. */
 
 import { describe, expect, it } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir, homedir } from 'node:os'
 import { join } from 'node:path'
 import {
   VerificationStore,
+  writeFileAtomic,
   coerceStore,
   defaultVerificationStoreFile,
   emptyStore,
@@ -111,6 +112,22 @@ describe('VerificationStore', () => {
       writeFileSync(file, '  \n')
       expect(await store.load()).toEqual(emptyStore())
       await expect(new VerificationStore(dir).load()).rejects.toThrow()
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('writeFileAtomic', () => {
+  it('removes its temp file and rethrows when the rename fails', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'atomic-spec-'))
+    try {
+      // A non-empty directory at the destination makes rename fail for real.
+      const dest = join(dir, 'store.json')
+      mkdirSync(dest)
+      writeFileSync(join(dest, 'keep'), 'x')
+      await expect(writeFileAtomic(dest, 'data')).rejects.toThrow()
+      expect(readdirSync(dir).filter(n => n.endsWith('.tmp'))).toEqual([])
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

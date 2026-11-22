@@ -28,7 +28,11 @@ export function extractDomain(rawUrl: string): string {
   return new URL(u).hostname.toLowerCase()
 }
 
-/** Normalize a candidate domain string: lowercase, trimmed, no trailing dot, hostname only. */
+/**
+ * Normalize a candidate domain string: lowercase, trimmed, no trailing dot, hostname only.
+ * @param raw - the candidate domain or URL.
+ * @returns the lowercase hostname, or null when unparseable.
+ */
 export function normalizeDomain(raw: string): string | null {
   const t = raw.trim().toLowerCase().replace(/\.$/, '')
   if (!t) return null
