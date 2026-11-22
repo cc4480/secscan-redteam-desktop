@@ -3,11 +3,15 @@
  *
  * Policy (fail-closed):
  *   - Non-scan tools (reports, verification workflow, everything else) → allow.
- *   - scan_url WITHOUT an explicit active-testing request → allow (passive recon).
- *   - scan_url WITH an explicit active-testing request → allow ONLY if the
+ *   - A scan tool WITHOUT an explicit active-testing request → allow (passive recon).
+ *   - A scan tool WITH an explicit active-testing request → allow ONLY if the
  *     target domain is in the app's local verified-domain record (injected
  *     `isVerified`, which must itself fail closed).
  *     Otherwise → deny, with the local verification flow as remediation.
+ *   - The scan tools are `secscan_exec` (the real tool; active tier is
+ *     `depth === 'deep'`, target is the `url` argument, read exactly as the
+ *     runner reads them) and `scan_url` (tolerated legacy name; active tier and
+ *     target are inferred from the argument names).
  *
  * The app's local verification record is the SOLE source of truth: the app
  * issues the challenge token itself, checks the `_secscan-challenge` DNS
@@ -74,9 +78,17 @@ function mcpNamespace(toolName: string): string | undefined {
   return parts.length > 2 ? parts[1] : undefined
 }
 
-/** True for the scan-dispatching tool, namespaced or not. */
+const SECSCAN_EXEC = 'secscan_exec'
+
+/**
+ * True for a scan-dispatching tool (`secscan_exec` or the legacy `scan_url`),
+ * namespaced or not.
+ * @param toolName - full tool name as dispatched, namespaced or not.
+ * @returns whether the call needs this gate's active-testing check.
+ */
 export function isScanTool(toolName: string): boolean {
-  return baseName(toolName) === 'scan_url'
+  const name = baseName(toolName)
+  return name === SECSCAN_EXEC || name === 'scan_url'
 }
 
 /** The target families the engagement engine scopes; also the only values `targetProfile` accepts. */
@@ -167,12 +179,18 @@ export async function decide(
 
   const args = event.arguments ?? {}
 
+  // secscan_exec is active only at depth 'deep' and scans only its `url`; the
+  // runner reads exactly those, so the gate must too. Heuristic flag or
+  // alternate-key matching here could approve a domain the runner never scans.
+  const isExec = baseName(event.toolName) === SECSCAN_EXEC
+  const active = isExec ? args['depth'] === 'deep' : wantsActiveTesting(args)
+
   // Passive scans are recon, not attack — always allowed.
-  if (!wantsActiveTesting(args)) {
+  if (!active) {
     return { kind: 'allow' }
   }
 
-  const domain = targetDomain(args)
+  const domain = isExec ? targetDomain({ url: args['url'] }) : targetDomain(args)
   if (!domain) {
     return {
       kind: 'deny',
