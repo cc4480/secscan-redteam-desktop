@@ -1268,7 +1268,7 @@ importers:
         specifier: workspace:*
         version: link:../../interaction/user-questions
       '@secscan/redteam-llm-local':
-        specifier: workspace:*
+        specifier: workspace:~
         version: link:../../redteam/llm-local
       zod:
         specifier: ^4.4.3
@@ -3559,7 +3559,7 @@ importers:
         specifier: workspace:*
         version: link:../../deliverables/workspace-changes
       '@secscan/redteam-console-share':
-        specifier: workspace:*
+        specifier: workspace:~
         version: link:../../redteam/console-share
       '@types/react':
         specifier: ~18.3.1
@@ -4388,7 +4388,7 @@ importers:
         specifier: workspace:*
         version: link:../../core/session
       '@secscan/redteam-console-share':
-        specifier: workspace:*
+        specifier: workspace:~
         version: link:../../redteam/console-share
       '@types/react':
         specifier: ~18.3.1
