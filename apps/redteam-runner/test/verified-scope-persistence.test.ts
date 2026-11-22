@@ -26,27 +26,47 @@
  *    deny-all fallback, and a deny entry still beats the persisted
  *    allow when the guard is rebuilt from state.
  */
-import { describe, it, afterEach } from "node:test";
-import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
-import { EventLog, readState } from "../src/events.js";
-import { authorizePhase } from "../src/phases/authorize.js";
-import { scopeGuardFor } from "../src/safety/scope-guard.js";
-import type { Ctx } from "../src/context.js";
+import { describe, it, afterEach } from 'node:test'
+import assert from 'node:assert/strict'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { EventLog, readState } from '../src/events.js'
+import { authorizePhase } from '../src/phases/authorize.js'
+import { scopeGuardFor } from '../src/safety/scope-guard.js'
+import type { Ctx } from '../src/context.js'
 
-const dirs: string[] = [];
+const dirs: string[] = []
+const priorVerifiedDomainsFile = process.env['REDTEAM_VERIFIED_DOMAINS_FILE']
 
 function tempDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), "verified-scope-persist-"));
-  dirs.push(dir);
-  return dir;
+  const dir = mkdtempSync(join(tmpdir(), 'verified-scope-persist-'))
+  dirs.push(dir)
+  return dir
 }
 
 afterEach(() => {
-  while (dirs.length > 0) rmSync(dirs.pop()!, { recursive: true, force: true });
-});
+  if (priorVerifiedDomainsFile === undefined) delete process.env['REDTEAM_VERIFIED_DOMAINS_FILE']
+  else process.env['REDTEAM_VERIFIED_DOMAINS_FILE'] = priorVerifiedDomainsFile
+  while (dirs.length > 0) rmSync(dirs.pop()!, { recursive: true, force: true })
+})
+
+/**
+ * Seeds the verified-domain store with a canonical record for `domain`
+ * and points `REDTEAM_VERIFIED_DOMAINS_FILE` at it. The fail-closed
+ * ownership gate denies a public domain without a verification record.
+ */
+function seedVerifiedDomain(dir: string, domain: string): void {
+  const file = join(dir, 'verified-domains.json')
+  writeFileSync(
+    file,
+    JSON.stringify({
+      version: 1,
+      pending: {},
+      verified: { [domain]: { token: 'fixture-token', verifiedAt: '2026-11-02T00:00:00.000Z', method: 'dns-txt' } } }),
+  )
+  process.env['REDTEAM_VERIFIED_DOMAINS_FILE'] = file
+}
 
 /**
  * A context over a REAL EventLog in `dir`, shaped like the scope-guard
@@ -58,131 +78,132 @@ function authorizeCtx(
   dir: string,
   opts: { testMode?: boolean; scope: string[]; hosts: string[]; domain: string; outOfScope?: string[] },
 ): Ctx {
-  const events = new EventLog(dir, "eng-verified-scope", {
+  seedVerifiedDomain(dir, opts.domain)
+  const events = new EventLog(dir, 'eng-verified-scope', {
     target: opts.domain,
-    mode: "red",
-    objective: "verified-scope persistence proof" });
+    mode: 'red',
+    objective: 'verified-scope persistence proof' })
   return {
     domain: opts.domain,
     hosts: opts.hosts,
     input: {
-      mode: "red",
-      objective: "verified-scope persistence proof",
-      operatorName: "Test Operator",
+      mode: 'red',
+      objective: 'verified-scope persistence proof',
+      operatorName: 'Test Operator',
       roe: { scope: opts.scope, outOfScope: opts.outOfScope ?? [] } },
     config: { testMode: opts.testMode ?? false, localSandbox: false },
     deps: {},
-    events } as unknown as Ctx;
+    events } as unknown as Ctx
 }
 
-describe("S3-H6 — authorize persists the attested scope into state.json", () => {
-  it("normal path: state.json carries verifiedScope with the attested bare hostname", async () => {
-    const dir = tempDir();
-    const ctx = authorizeCtx(dir, { scope: ["Cho-zen1"], hosts: ["cho-zen1"], domain: "cho-zen1" });
+describe('S3-H6 — authorize persists the attested scope into state.json', () => {
+  it('normal path: state.json carries verifiedScope with the attested bare hostname', async () => {
+    const dir = tempDir()
+    const ctx = authorizeCtx(dir, { scope: ['Cho-zen1'], hosts: ['cho-zen1'], domain: 'cho-zen1' })
 
-    const verdict = await authorizePhase(ctx);
-    assert.equal(verdict.allowed, true);
-    assert.deepEqual(ctx.verifiedScope, ["Cho-zen1"]);
+    const verdict = await authorizePhase(ctx)
+    assert.equal(verdict.allowed, true)
+    assert.deepEqual(ctx.verifiedScope, ['Cho-zen1'])
 
-    const state = readState(dir);
-    assert.ok(state, "state.json is readable after authorize");
-    assert.equal(state.verified, true);
-    assert.deepEqual(state.verifiedScope, ["Cho-zen1"], "the persisted record carries the attested host list");
+    const state = readState(dir)
+    assert.ok(state, 'state.json is readable after authorize')
+    assert.equal(state.verified, true)
+    assert.deepEqual(state.verifiedScope, ['Cho-zen1'], 'the persisted record carries the attested host list')
     assert.ok(
-      readFileSync(join(dir, "state.json"), "utf8").includes('"verifiedScope"'),
-      "the raw state.json mentions verifiedScope (audit probe3 check)",
-    );
-  });
+      readFileSync(join(dir, 'state.json'), 'utf8').includes('"verifiedScope"'),
+      'the raw state.json mentions verifiedScope (audit probe3 check)',
+    )
+  })
 
-  it("test-mode path: the second success-path updateState also persists verifiedScope", async () => {
-    const dir = tempDir();
+  it('test-mode path: the second success-path updateState also persists verifiedScope', async () => {
+    const dir = tempDir()
     const ctx = authorizeCtx(dir, {
       testMode: true,
-      scope: ["example.com", "192.168.1.10"],
-      hosts: ["example.com", "192.168.1.10"],
-      domain: "example.com" });
+      scope: ['example.com', '192.168.1.10'],
+      hosts: ['example.com', '192.168.1.10'],
+      domain: 'example.com' })
 
-    const verdict = await authorizePhase(ctx);
-    assert.equal(verdict.allowed, true);
+    const verdict = await authorizePhase(ctx)
+    assert.equal(verdict.allowed, true)
 
-    const state = readState(dir);
-    assert.ok(state, "state.json is readable after test-mode authorize");
-    assert.deepEqual(state.verifiedScope, ["example.com", "192.168.1.10"]);
-  });
-});
+    const state = readState(dir)
+    assert.ok(state, 'state.json is readable after test-mode authorize')
+    assert.deepEqual(state.verifiedScope, ['example.com', '192.168.1.10'])
+  })
+})
 
-describe("S3-H6 — a guard rebuilt from the persisted record", () => {
-  it("allows the attested bare hostname (probe3: without the stamp this is allow: empty, denied)", async () => {
-    const dir = tempDir();
-    const ctx = authorizeCtx(dir, { scope: ["Cho-zen1"], hosts: ["cho-zen1"], domain: "cho-zen1" });
-    await authorizePhase(ctx);
+describe('S3-H6 — a guard rebuilt from the persisted record', () => {
+  it('allows the attested bare hostname (probe3: without the stamp this is allow: empty, denied)', async () => {
+    const dir = tempDir()
+    const ctx = authorizeCtx(dir, { scope: ['Cho-zen1'], hosts: ['cho-zen1'], domain: 'cho-zen1' })
+    await authorizePhase(ctx)
 
     // Rebuild from the persisted record alone: the stamp is re-seeded
     // from readState(dir), exactly as a record reader must do — the
     // in-memory ctx from the original process is not consulted.
-    const persisted = readState(dir);
-    assert.ok(persisted);
+    const persisted = readState(dir)
+    assert.ok(persisted)
     const rebuilt = scopeGuardFor({
       verifiedScope: persisted.verifiedScope,
-      input: { roe: { scope: ["Cho-zen1"], outOfScope: [] } } });
-    assert.equal(rebuilt.checkHost("cho-zen1").allowed, true, "the attested bare host is allowed from the persisted record");
-    assert.notEqual(rebuilt.describe(), "allow: empty · deny: empty");
+      input: { roe: { scope: ['Cho-zen1'], outOfScope: [] } } })
+    assert.equal(rebuilt.checkHost('cho-zen1').allowed, true, 'the attested bare host is allowed from the persisted record')
+    assert.notEqual(rebuilt.describe(), 'allow: empty · deny: empty')
 
     // Control: the same launch ROE with NO persisted stamp is the
     // audit's deny-all reproduction — the general path drops the bare
     // hostname and the guard allows nothing.
-    const unstamped = scopeGuardFor({ input: { roe: { scope: ["Cho-zen1"], outOfScope: [] } } });
-    assert.equal(unstamped.checkHost("cho-zen1").allowed, false);
-    assert.equal(unstamped.describe(), "allow: empty · deny: empty");
-  });
+    const unstamped = scopeGuardFor({ input: { roe: { scope: ['Cho-zen1'], outOfScope: [] } } })
+    assert.equal(unstamped.checkHost('cho-zen1').allowed, false)
+    assert.equal(unstamped.describe(), 'allow: empty · deny: empty')
+  })
 
-  it("deny still beats allow when the guard is rebuilt from state", async () => {
-    const dir = tempDir();
-    const ctx = authorizeCtx(dir, { scope: ["Cho-zen1"], hosts: ["cho-zen1"], domain: "cho-zen1" });
-    await authorizePhase(ctx);
+  it('deny still beats allow when the guard is rebuilt from state', async () => {
+    const dir = tempDir()
+    const ctx = authorizeCtx(dir, { scope: ['Cho-zen1'], hosts: ['cho-zen1'], domain: 'cho-zen1' })
+    await authorizePhase(ctx)
 
-    const persisted = readState(dir);
-    assert.ok(persisted);
+    const persisted = readState(dir)
+    assert.ok(persisted)
     const rebuilt = scopeGuardFor({
       verifiedScope: persisted.verifiedScope,
-      input: { roe: { scope: ["Cho-zen1"], outOfScope: ["Cho-zen1"] } } });
-    const verdict = rebuilt.checkHost("cho-zen1");
-    assert.equal(verdict.allowed, false, "the deny entry wins over the persisted allow");
-    assert.equal(verdict.kind, "deny");
-  });
-});
+      input: { roe: { scope: ['Cho-zen1'], outOfScope: ['Cho-zen1'] } } })
+    const verdict = rebuilt.checkHost('cho-zen1')
+    assert.equal(verdict.allowed, false, 'the deny entry wins over the persisted allow')
+    assert.equal(verdict.kind, 'deny')
+  })
+})
 
-describe("S3-H6 — persistence widens nothing for pre-fix records", () => {
-  it("a state.json WITHOUT verifiedScope (or12 shape) still yields the old deny-all fallback", () => {
-    const dir = tempDir();
+describe('S3-H6 — persistence widens nothing for pre-fix records', () => {
+  it('a state.json WITHOUT verifiedScope (or12 shape) still yields the old deny-all fallback', () => {
+    const dir = tempDir()
     // The or12 record shape: proof persisted, attested list absent.
     writeFileSync(
-      join(dir, "state.json"),
+      join(dir, 'state.json'),
       JSON.stringify({
-        engagementId: "eng-or12-shape",
-        target: "http://127.0.0.1:8080",
-        mode: "red",
-        objective: "pre-fix record",
-        status: "running",
-        phase: "recon",
+        engagementId: 'eng-or12-shape',
+        target: 'http://127.0.0.1:8080',
+        mode: 'red',
+        objective: 'pre-fix record',
+        status: 'running',
+        phase: 'recon',
         verified: true,
-        verificationTs: "2026-11-02T00:00:00.000Z",
-        verificationProof: "Operator-attested ownership: fixture",
+        verificationTs: '2026-11-02T00:00:00.000Z',
+        verificationProof: 'Operator-attested ownership: fixture',
         plan: null,
         findings: [],
         eventCount: 3,
-        startedAt: "2026-11-02T00:00:00.000Z",
-        updatedAt: "2026-11-02T00:00:00.000Z" }),
-    );
+        startedAt: '2026-11-02T00:00:00.000Z',
+        updatedAt: '2026-11-02T00:00:00.000Z' }),
+    )
 
-    const state = readState(dir);
-    assert.ok(state, "the pre-fix record still parses");
-    assert.equal(state.verifiedScope, undefined, "no attested list is invented for a pre-fix record");
+    const state = readState(dir)
+    assert.ok(state, 'the pre-fix record still parses')
+    assert.equal(state.verifiedScope, undefined, 'no attested list is invented for a pre-fix record')
 
     const guard = scopeGuardFor({
       verifiedScope: state.verifiedScope,
-      input: { roe: { scope: ["Cho-zen1"], outOfScope: [] } } });
-    assert.equal(guard.checkHost("cho-zen1").allowed, false, "old behavior preserved: bare hostname denied without a stamp");
-    assert.equal(guard.describe(), "allow: empty · deny: empty");
-  });
-});
+      input: { roe: { scope: ['Cho-zen1'], outOfScope: [] } } })
+    assert.equal(guard.checkHost('cho-zen1').allowed, false, 'old behavior preserved: bare hostname denied without a stamp')
+    assert.equal(guard.describe(), 'allow: empty · deny: empty')
+  })
+})
