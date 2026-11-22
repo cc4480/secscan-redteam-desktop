@@ -14,7 +14,7 @@
     "@deepseek-ai/dsh-client-ui-sidebar-right": "workspace:*",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
-    "@secscan/redteam-console-share": "workspace:*",
+    "@secscan/redteam-console-share": "workspace:~",
     "@types/react": "~18.3.1",
     "clsx": "^2.0.0",
     "react": "^18.2.0"
