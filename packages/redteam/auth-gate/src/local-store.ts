@@ -21,6 +21,9 @@ import { normalizeDomain } from './verify.js'
 
 const STORE_VERSION = 1
 
+/** Token recorded for a domain migrated from the legacy array store, which kept no tokens. */
+const LEGACY_TOKEN = '(migrated)'
+
 /** A challenge the operator still has to publish, and the token they must publish. */
 export interface PendingRecord {
   token: string
@@ -82,7 +85,10 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 /**
  * Rebuild the store from a parsed file, keeping only well-formed entries. The
- * file is a durable boundary, so it is validated rather than trusted.
+ * file is a durable boundary, so it is validated rather than trusted. A legacy
+ * `verified: string[]` is migrated to records (`token: '(migrated)'`,
+ * `method: 'dns-txt'`, `verifiedAt` set to the migration time); legacy pending
+ * entries (`domain -> token string`) become records created at migration time.
  * @param parsed - the JSON as parsed, of unknown shape.
  * @returns a store holding only entries that survive validation.
  */
@@ -90,13 +96,29 @@ export function coerceStore(parsed: unknown): StoreDoc {
   const root = asRecord(parsed)
   const doc = emptyStore()
   for (const [domain, raw] of Object.entries(asRecord(root['pending']))) {
+    if (typeof raw === 'string') {
+      // Legacy pending entry: the bare challenge token.
+      const legacyKey = normalizeDomain(domain)
+      if (legacyKey !== null && raw !== '') doc.pending[legacyKey] = { token: raw, createdAt: new Date().toISOString() }
+      continue
+    }
     const entry = asRecord(raw)
     const token = typeof entry['token'] === 'string' ? entry['token'] : ''
     const createdAt = typeof entry['createdAt'] === 'string' ? entry['createdAt'] : ''
     const key = normalizeDomain(domain)
     if (key !== null && token !== '' && createdAt !== '') doc.pending[key] = { token, createdAt }
   }
-  for (const [domain, raw] of Object.entries(asRecord(root['verified']))) {
+  const verifiedRoot = root['verified']
+  if (Array.isArray(verifiedRoot)) {
+    // Legacy `verified: string[]`: written only after a DNS TXT match, so the
+    // method is accurate; the timestamp is the migration time, not the original.
+    const migratedAt = new Date().toISOString()
+    for (const raw of verifiedRoot) {
+      const key = typeof raw === 'string' ? normalizeDomain(raw) : null
+      if (key !== null) doc.verified[key] = { token: LEGACY_TOKEN, verifiedAt: migratedAt, method: 'dns-txt' }
+    }
+  }
+  for (const [domain, raw] of Object.entries(asRecord(verifiedRoot))) {
     const entry = asRecord(raw)
     const token = typeof entry['token'] === 'string' ? entry['token'] : ''
     const verifiedAt = typeof entry['verifiedAt'] === 'string' ? entry['verifiedAt'] : ''

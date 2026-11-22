@@ -15,9 +15,8 @@ import { isIP } from "node:net";
 import {
   extractDomain,
   defaultVerificationStoreFile,
-  type StoreDoc,
+  VerificationStore,
 } from "@secscan/redteam-auth-gate";
-import { readFile } from "node:fs/promises";
 import { resolveExcludedTechniques } from "./attack.js";
 import { isPrivateOrLoopbackHost } from "./prober.js";
 import type { BlackoutWindow, EngagementMode, RulesOfEngagement } from "./types.js";
@@ -123,21 +122,12 @@ export interface CheckAuthorizationOptions {
   storeFile?: string;
 }
 
-function normalizeDomainKey(domain: string): string {
-  return domain.trim().toLowerCase().replace(/\.$/, "");
-}
-
 async function isLocallyVerified(domain: string, storeFile?: string): Promise<boolean> {
-  const file = storeFile ?? defaultVerificationStoreFile();
   try {
-    const raw = await readFile(file, "utf8");
-    const parsed = JSON.parse(raw) as Partial<StoreDoc> | null;
-    if (!parsed || typeof parsed !== "object") return false;
-    const verified = (parsed as { verified?: unknown }).verified;
-    if (!verified || typeof verified !== "object") return false;
-    return normalizeDomainKey(domain) in (verified as Record<string, unknown>);
+    const doc = await new VerificationStore(storeFile ?? defaultVerificationStoreFile()).load();
+    return Object.hasOwn(doc.verified, extractDomain(domain));
   } catch {
-    return false;
+    return false; // unreadable store: fail closed, never an approval
   }
 }
 

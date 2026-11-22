@@ -5,6 +5,9 @@
  * behavior is fail-closed: errors and missing proof never verify.
  */
 
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   LocalDomainVerifier,
@@ -142,8 +145,53 @@ describe('LocalDomainVerifier', () => {
     expect(await new LocalDomainVerifier(deps).isVerified('')).toBe(false)
   })
 
-  it('create() builds a verifier on the given store path', async () => {
-    const v = LocalDomainVerifier.create('/nonexistent-dir-secscan/none.json')
-    expect(await v.isVerified('example.com')).toBe(false)
+  it('checkVerification is true for an already-verified domain without a DNS lookup', async () => {
+    const { deps } = fakeDeps([['secscan-verify-testtoken']])
+    const v = new LocalDomainVerifier(deps)
+    await v.startVerification('example.com')
+    expect(await v.checkVerification('example.com')).toBe(true)
+    deps.resolveTxt = async () => {
+      throw new Error('should not be called')
+    }
+    expect(await v.checkVerification('example.com')).toBe(true)
+  })
+
+  it('checkVerification is false for an unstarted or unparseable domain', async () => {
+    const { deps } = fakeDeps([['secscan-verify-testtoken']])
+    const v = new LocalDomainVerifier(deps)
+    expect(await v.checkVerification('example.com')).toBe(false)
+    expect(await v.checkVerification('')).toBe(false)
+  })
+
+  it('create() persists a record-shaped store at the given path with real fs', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'local-spec-'))
+    try {
+      const file = path.join(dir, 'sub', 'verified-domains.json')
+      const v = LocalDomainVerifier.create(file)
+      const { token } = await v.startVerification('Example.com')
+      expect(token).toMatch(/^secscan-verify-[0-9a-f]{32}$/)
+      const doc = JSON.parse(readFileSync(file, 'utf8'))
+      expect(doc.pending['example.com'].token).toBe(token)
+      expect(doc.verified).toEqual({})
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('create() defaults to the REDTEAM_VERIFIED_DOMAINS_FILE path', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'local-spec-'))
+    const saved = process.env['REDTEAM_VERIFIED_DOMAINS_FILE']
+    try {
+      const file = path.join(dir, 'v.json')
+      process.env['REDTEAM_VERIFIED_DOMAINS_FILE'] = file
+      await LocalDomainVerifier.create().startVerification('example.com')
+      expect(JSON.parse(readFileSync(file, 'utf8')).pending['example.com']).toBeTruthy()
+      // Another instance on the same path reads the pending challenge back.
+      expect(await LocalDomainVerifier.create().isVerified('unrelated.example')).toBe(false)
+    } finally {
+      if (saved === undefined) delete process.env['REDTEAM_VERIFIED_DOMAINS_FILE']
+      else process.env['REDTEAM_VERIFIED_DOMAINS_FILE'] = saved
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
