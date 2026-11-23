@@ -88,7 +88,11 @@ export interface Finding {
    * Absent = never adjudicated.
    */
   cellState?: 'proven' | 'detected'
-  /** The adjudicated claim's expected marker + target URL, carried with cellState so the report can render the Cell Receipt. The claim's receipt is NOT carried — it lives in the audit trail. */
+  /**
+   * The adjudicated claim's expected marker + target URL, carried with cellState so the
+   * report can render the Cell Receipt. The claim's receipt is NOT carried — it lives in
+   * the audit trail.
+   */
   provenClaim?: { expectedMarker: string; targetUrl: string }
   /** The cell adjudication's one-line detail, carried with the claim. */
   cellDetail?: string
@@ -159,7 +163,7 @@ export interface RunnerOptions {
 
 export interface ResolvedRunnerConfig {
   deepseekApiKey: string
-  /** Meta Model API key (MODEL_API_KEY / META_API_KEY). The fleet's provider key; the router
+  /** Meta Model API key (MODEL_API_KEY / META_API_KEY), used when REDTEAM_LLM_PROVIDER=meta; the router
    * provider reads it from env at call time - this field records that config resolved it. */
   modelApiKey: string
   /** Alibaba Model Studio key - optional since v0.6 (DeepSeek-only policy); the provider still reads it from env when configured. */

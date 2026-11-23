@@ -22,7 +22,7 @@ function parseEnvPositiveNumber(raw: string | undefined, name: string): number |
 
 export function resolveConfig(env: NodeJS.ProcessEnv, opts: {
   deepseekApiKey?: string
-  /** Meta Model API key. Env MODEL_API_KEY (META_API_KEY fallback). The fleet's provider key. */
+  /** Meta Model API key. Env MODEL_API_KEY (META_API_KEY fallback). Used when REDTEAM_LLM_PROVIDER=meta. */
   modelApiKey?: string
   qwenApiKey?: string
   maxReconTurns?: number
@@ -56,14 +56,29 @@ export function resolveConfig(env: NodeJS.ProcessEnv, opts: {
 } = {}): ResolvedRunnerConfig {
   const deepseekApiKey = opts.deepseekApiKey ?? env['DEEPSEEK_API_KEY']
   const modelApiKey = opts.modelApiKey ?? env['MODEL_API_KEY'] ?? env['META_API_KEY']
-  // A live engagement needs ONE configured model provider: the fleet's
-  // Meta key, a DeepSeek key, or the offline local provider
-  // (REDTEAM_LLM_PROVIDER=local, keyless by design). No external service
-  // gates the start.
-  const localProvider = env['REDTEAM_LLM_PROVIDER']?.trim().toLowerCase() === 'local'
-  if (!modelApiKey && !deepseekApiKey && !localProvider && !opts.dryRunAgents) {
+  // The fleet seats DeepSeek unless REDTEAM_LLM_PROVIDER selects another
+  // family: the DeepSeek seats need DEEPSEEK_API_KEY, the Meta seats need
+  // MODEL_API_KEY, and the offline local provider (REDTEAM_LLM_PROVIDER=local)
+  // needs no key. No external service gates the start.
+  const provider = env['REDTEAM_LLM_PROVIDER']?.trim().toLowerCase() ?? ''
+  const localProvider = provider === 'local'
+  let keyConfigured: boolean
+  if (provider === 'meta') keyConfigured = !!modelApiKey
+  else if (provider === '' || provider === 'deepseek') keyConfigured = !!deepseekApiKey
+  else keyConfigured = !!(modelApiKey || deepseekApiKey)
+  if (!keyConfigured && !localProvider && !opts.dryRunAgents) {
+    if (provider === 'meta') {
+      throw new Error(
+        '[runner] No model provider key is configured. REDTEAM_LLM_PROVIDER=meta needs MODEL_API_KEY (Meta Model API) via the Secure Vault (it lands in the environment).',
+      )
+    }
+    if (provider === '' || provider === 'deepseek') {
+      throw new Error(
+        '[runner] No model provider key is configured. The fleet seats DeepSeek by default: set DEEPSEEK_API_KEY via the Secure Vault (it lands in the environment), or select Meta with REDTEAM_LLM_PROVIDER=meta and MODEL_API_KEY.',
+      )
+    }
     throw new Error(
-      "[runner] No model provider key is configured. Set MODEL_API_KEY (Meta Model API - the fleet's provider) via the Secure Vault (it lands in the environment).",
+      `[runner] No model provider key is configured for REDTEAM_LLM_PROVIDER=${provider}. Set that provider's key via the Secure Vault (it lands in the environment).`,
     )
   }
   // v0.6: no role currently routes to Qwen (see llm-router/src/policy.ts),

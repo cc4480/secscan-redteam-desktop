@@ -1,19 +1,24 @@
 # Models
 
-The fleet thinks through the **Meta Model API**: an OpenAI-compatible Chat Completions endpoint at `https://api.meta.ai/v1`, authenticated with the operator's own key (`MODEL_API_KEY`; `META_API_KEY` is accepted as a fallback name, and `META_BASE_URL` overrides the endpoint). The routing layer is the llm-router package (`packages/redteam/llm-router`): a provider registry, a per-role seat policy, the charter/doctrine prompt composition, and a resilience wrapper around every call.
+The fleet thinks through **DeepSeek**: the DeepSeek API, authenticated with the operator's own key (`DEEPSEEK_API_KEY`). DeepSeek is the default provider for every fleet seat. The Meta Model API remains available as an explicit choice (`REDTEAM_LLM_PROVIDER=meta`, authenticated with `MODEL_API_KEY`). The routing layer is the llm-router package (`packages/redteam/llm-router`): a provider registry, a per-role seat policy, the charter/doctrine prompt composition, and a resilience wrapper around every call.
 
-## The registry and the seats
+## The default seats
 
-The model registry in this tree seats two Meta models:
+With no provider selected, the five fleet roles seat DeepSeek:
 
-| Registry entry | Model | Seat |
+| Role | Model | Reasoning effort |
 |---|---|---|
-| `spark` | `muse-spark-1.3` | **The fleet's engine.** All five roles — coordinator, recon, exploiter, architect, reporter |
-| `wonder` | `muse-wonder-1.0` | The frontier tier: registered for explicit calls, small one-off jobs, and comparison (A/B) lanes; **not seated by default** |
+| coordinator | `deepseek-flash` | default |
+| recon | `deepseek-flash` | low (volume work) |
+| exploiter | `deepseek-v4-pro` | high (the hardest seat) |
+| reporter | `deepseek-flash` | default |
+| architect | `deepseek-flash` | default |
 
-Per-role tuning rides on the seat policy: recon runs at low reasoning effort (volume work), the exploiter at high (the hardest seat), the coordinator, architect, and reporter at the default. Provider selection is by environment — `REDTEAM_LLM_PROVIDER=meta` routes every role to Meta explicitly, and when no provider is selected the Meta seat policy applies as soon as a Meta key is configured. Contributor model variants are never registered as fleet seats: Meta may train on contributor traffic, and an engagement's target data is not training data.
+Per-role tuning rides on the seat policy: recon runs at low reasoning effort (volume work), the exploiter at high (the hardest seat), and the other roles at the default. Provider selection is by environment: `REDTEAM_LLM_PROVIDER=meta` seats the Meta models instead (see below), `REDTEAM_LLM_PROVIDER=local` routes every role to a local OpenAI-compatible endpoint with `REDTEAM_LOCAL_MODEL` naming its model, and each other registered family seats its own table. Contributor model variants are never registered as fleet seats: a provider may train on contributor traffic, and an engagement's target data is not training data.
 
-Muse Spark 1.2 and 1.1 are not in this tree's registry yet — registering them is tracked work (1.2 is evidenced on Meta's public model surface; 1.1's API availability is key-gated and gets settled by a live probe with the operator's key before it is registered). The README's roadmap section carries the current list.
+## Meta seats (explicit selection)
+
+`REDTEAM_LLM_PROVIDER=meta` seats Muse Spark 1.3 on every role. Muse Wonder 1.0 is registered for explicit calls, small one-off jobs, and comparison (A/B) lanes; it is not seated by default. The harness `meta` catalog (`packages/redteam/llm-meta`) lists four Muse models: Muse Spark 1.3, 1.2, and 1.1, and Muse Wonder 1.0.
 
 ## The resilience layer
 
@@ -28,4 +33,4 @@ The wrapper's promise is narrow and kept: a provider 429, a transient 5xx, or on
 
 ## Local models
 
-The desktop app ships a **llama.cpp local-model manager** (the Models page / "Local models" menu): download GGUF models, serve them locally with `llama-server`, and seat them as a local provider. Local models serve two honest purposes — offline work, and engagements whose target data must not leave the machine. They are not the fleet's default brain: the roster's seats are tuned for Muse Spark, and a local seat is an operator's deliberate choice for a specific job, made with its capability limits in view.
+The desktop app ships a **llama.cpp local-model manager** (the Models page / "Local models" menu): download GGUF models, serve them locally with `llama-server`, and seat them as a local provider. Local models serve two honest purposes — offline work, and engagements whose target data must not leave the machine. They are not the fleet's default brain: the default seats are DeepSeek, and a local seat is an operator's deliberate choice for a specific job, made with its capability limits in view.

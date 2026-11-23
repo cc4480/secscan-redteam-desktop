@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/platform-Windows-E11D48" alt="平台：Windows">
 </p>
 
-**SecScan RedTeam** 是一款桌面应用，对您拥有的系统运行自主红队评估。您在聊天中描述一个目标；由五个 AI 智能体组成的舰队——Lead 协调者、侦察、利用、架构师与报告员，全部经 Meta Model API 运行于 Muse Spark——规划评估、探测目标、利用所发现的问题，并在报告之前证明每一项主张。最终报告在同一聊天线程中呈现：锚定字母评级、严重等级分布，以及按 PROVEN → CONFIRMED → DEFERRED → RULED OUT 排序的发现，每项都附带证据与一段可直接粘贴的修复提示。
+**SecScan RedTeam** 是一款桌面应用，对您拥有的系统运行自主红队评估。您在聊天中描述一个目标；由五个 AI 智能体组成的舰队——Lead 协调者、侦察、利用、架构师与报告员，全部运行于 DeepSeek（默认提供商）——规划评估、探测目标、利用所发现的问题，并在报告之前证明每一项主张。最终报告在同一聊天线程中呈现：锚定字母评级、严重等级分布，以及按 PROVEN → CONFIRMED → DEFERRED → RULED OUT 排序的发现，每项都附带证据与一段可直接粘贴的修复提示。
 
 两条规则塑造了本产品的一切行为：
 
@@ -31,7 +31,7 @@
 | 外部引擎 | nmap、nuclei、ffuf、gobuster、sqlmap、nikto 与 John the Ripper 经同一工具链解析，另有 Metasploit RPC 集成与桌面包内置的工具载荷 | [引擎与覆盖](docs/product/engines-and-coverage.md#external-engines) |
 | 锚定评级 | 唯一评分声音：Seclayer 的锚定引擎以 SecScan 之名运行——已确认发现全额扣分，启发式发现被衰减并设上限，一个已确认的严重发现即把评级锚定为 F | [引擎与覆盖](docs/product/engines-and-coverage.md#grading-one-voice) |
 | 已连接服务 | SecScan MCP 服务（扫描、域名验证、监控）与 Seclayer MCP 服务（第二意见扫描器）——各自使用您自己的密钥，存储于应用的加密凭据库 | [MCP 服务](docs/product/mcp-services.md) |
-| 模型 | 每个舰队席位运行 Muse Spark 1.3；Muse Wonder 1.0 供显式的小型调用；一层提供商韧性层（分类故障转移、凭据池、冷却）；一个 llama.cpp 本地模型管理器 | [模型](docs/product/models.md) |
+| 模型 | 每个舰队席位默认运行 DeepSeek（利用席位用 `deepseek-v4-pro`，其余用 `deepseek-flash`）；Meta 的 Muse 模型仅在 `REDTEAM_LLM_PROVIDER=meta` 时启用；一层提供商韧性层（分类故障转移、凭据池、冷却）；一个 llama.cpp 本地模型管理器 | [模型](docs/product/models.md) |
 | Foundry | 真实评估将脱敏案例捕获至应用内存储；候选测试在加入电池之前先运行 Gold Loop（提出 → 证明 → 挑战 → 评分 → 裁决 → 决定） | [概览](docs/product/overview.md#foundry-the-self-improving-loop) |
 | 持续观察 | 观察配置为每个目标保存一条基线，并报告运行之间的配置漂移 | [引擎与覆盖](docs/product/engines-and-coverage.md#continuous-watch) |
 
@@ -43,7 +43,7 @@
 
 首次运行时，欢迎流程会要求一个必需密钥，并提供两个可选密钥：
 
-1. **Meta Model API 密钥**（必需）——舰队的模型。在应用中设置，或在环境中提供 `MODEL_API_KEY`。
+1. **DeepSeek API 密钥**（必需）——舰队的模型。在应用中设置，或在环境中提供 `DEEPSEEK_API_KEY`。
 3. **Seclayer API 密钥**（可选）——将 Seclayer 服务解锁为第二意见。在 Seclayer 控制台 → Developer / API Keys 创建。
 
 您输入的密钥存储于应用的每用户凭据库，以操作系统的密钥链加密（Electron `safeStorage`）；在 Windows 上，该存储按设计拒绝明文。参见 [MCP 服务](docs/product/mcp-services.md)与[配置](docs/product/configuration.md)。
@@ -75,7 +75,7 @@ pnpm run dev:desktop     # 构建，然后启动桌面应用
 - [安全模型](docs/product/security-model.md)——所有权验证、范围强制、证明标准与密钥处理。
 - [引擎与覆盖](docs/product/engines-and-coverage.md)——原生电池、外部引擎、评级与覆盖模型。
 - [MCP 服务](docs/product/mcp-services.md)——SecScan 与 Seclayer 连接：它们解锁什么、密钥从何而来、如何存储。
-- [模型](docs/product/models.md)——Meta Model API 席位、韧性层与本地模型。
+- [模型](docs/product/models.md)——DeepSeek 席位、可选的 Meta 席位、韧性层与本地模型。
 - [配置](docs/product/configuration.md)——环境变量、凭据库、舰队上限与配置覆写。
 - [构建与安装](docs/product/build-and-install.md)——从源码构建与 Windows 安装包流水线。
 - [开发指南](docs/product/development.md)——仓库布局与在本仓库中工作的规矩。

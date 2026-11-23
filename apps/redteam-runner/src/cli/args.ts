@@ -3,27 +3,28 @@
  * text, and buildInput() which turns argv into an EngagementInput.
  */
 
-import type { EngagementInput, EngagementMode, RulesOfEngagement } from "../types.js";
-import { ALL_TARGETS, isTargetId } from "../targets.js";
-import type { TargetId } from "../targets.js";
-import { parseTier } from "../accountability/index.js";
-import type { AutonomyTier } from "../accountability/index.js";
+import type { EngagementInput, EngagementMode, RulesOfEngagement } from '../types.js'
+import { ALL_TARGETS, isTargetId } from '../targets.js'
+import type { TargetId } from '../targets.js'
+import { parseTier } from '../accountability/index.js'
+import type { AutonomyTier } from '../accountability/index.js'
 
 export function arg(flag: string): string | undefined {
-  const i = process.argv.indexOf(flag);
-  return i >= 0 ? process.argv[i + 1] : undefined;
+  const i = process.argv.indexOf(flag)
+  return i >= 0 ? process.argv[i + 1] : undefined
 }
 
 export function argAll(flag: string): string[] {
-  const out: string[] = [];
+  const out: string[] = []
   for (let i = 0; i < process.argv.length; i++) {
-    if (process.argv[i] === flag && process.argv[i + 1]) out.push(process.argv[i + 1]!);
+    const value = process.argv[i + 1]
+    if (process.argv[i] === flag && value) out.push(value)
   }
-  return out;
+  return out
 }
 
 export function flag(name: string): boolean {
-  return process.argv.includes(name);
+  return process.argv.includes(name)
 }
 
 /**
@@ -32,26 +33,26 @@ export function flag(name: string): boolean {
  * REDTEAM_LOG_MAX_ARCHIVES. Fail fast with a clear message on bad values.
  */
 export function parseLogRotationArgs(): { maxLogBytes?: number; maxLogArchives?: number } {
-  const out: { maxLogBytes?: number; maxLogArchives?: number } = {};
-  const bytesRaw = arg("--log-max-bytes");
+  const out: { maxLogBytes?: number; maxLogArchives?: number } = {}
+  const bytesRaw = arg('--log-max-bytes')
   if (bytesRaw !== undefined) {
-    const n = Number(bytesRaw);
+    const n = Number(bytesRaw)
     if (!Number.isInteger(n) || n <= 0) {
-      console.error(`[runner] bad --log-max-bytes ${JSON.stringify(bytesRaw)}; want a positive integer (bytes per log file before rotation)`);
-      process.exit(2);
+      console.error(`[runner] bad --log-max-bytes ${JSON.stringify(bytesRaw)}; want a positive integer (bytes per log file before rotation)`)
+      process.exit(2)
     }
-    out.maxLogBytes = n;
+    out.maxLogBytes = n
   }
-  const archRaw = arg("--log-max-archives");
+  const archRaw = arg('--log-max-archives')
   if (archRaw !== undefined) {
-    const n = Number(archRaw);
+    const n = Number(archRaw)
     if (!Number.isInteger(n) || n <= 0) {
-      console.error(`[runner] bad --log-max-archives ${JSON.stringify(archRaw)}; want a positive integer (archives kept per log file)`);
-      process.exit(2);
+      console.error(`[runner] bad --log-max-archives ${JSON.stringify(archRaw)}; want a positive integer (archives kept per log file)`)
+      process.exit(2)
     }
-    out.maxLogArchives = n;
+    out.maxLogArchives = n
   }
-  return out;
+  return out
 }
 
 export function usage(): never {
@@ -164,7 +165,7 @@ redteam-runner ui [--port 8787] [--listen <addr>] [--engagements-dir <dir>]
     # and prints a warning. Env: REDTEAM_UI_TOKEN (use your own token),
     # REDTEAM_HOME or engagements default like the CLI.
 
-Env: MODEL_API_KEY (the fleet's model key; DEEPSEEK_API_KEY also supported), QWEN_API_KEY (optional since v0.6), REDTEAM_LOCAL_SANDBOX=1, REDTEAM_TEST_MODE=1 (TESTING ONLY — operator order: bypasses the mechanical restraints — ownership verification, tier enforcement, lockout interlock, rate limiting, variant cap, technique exclusions, destructive/DoS denylists — for declared in-scope targets; every bypass is event-logged and the record carries an operator self-attestation, never a fabricated proof. Scope and the out-of-scope deny list stay in force).
+Env: DEEPSEEK_API_KEY (the fleet's default provider key), MODEL_API_KEY (Meta Model API key, with REDTEAM_LLM_PROVIDER=meta), QWEN_API_KEY (optional since v0.6), REDTEAM_LOCAL_SANDBOX=1, REDTEAM_TEST_MODE=1 (TESTING ONLY — operator order: bypasses the mechanical restraints — ownership verification, tier enforcement, lockout interlock, rate limiting, variant cap, technique exclusions, destructive/DoS denylists — for declared in-scope targets; every bypass is event-logged and the record carries an operator self-attestation, never a fabricated proof. Scope and the out-of-scope deny list stay in force).
 Host-exec (v0.9.0, Windows/Linux batteries): REDTEAM_SSH_USER + one of
 REDTEAM_SSH_PASSWORD / REDTEAM_SSH_KEY / REDTEAM_SSH_KEY_PATH;
 REDTEAM_SMB_USER + REDTEAM_SMB_PASSWORD (+ optional REDTEAM_SMB_DOMAIN);
@@ -173,88 +174,89 @@ environment or Secure Vault â€” never in code, never logged.
 Metasploit arm (v0.11.0, CVE exploit validation): the Metasploit Framework
 installed on this host — msfconsole on PATH or REDTEAM_MSFCONSOLE_BIN set
 to its full path. Runs natively as local processes; no daemon, no
-credentials — fail closed otherwise.`);
-  process.exit(2);
+credentials — fail closed otherwise.`)
+  process.exit(2)
 }
 
 export function parseBlackout(s: string): { start: string; end: string; tz?: string } {
-  const m = s.match(/^(\d{2}:\d{2})-(\d{2}:\d{2})(?:\s+(.+))?$/);
+  const m = s.match(/^(\d{2}:\d{2})-(\d{2}:\d{2})(?:\s+(.+))?$/)
   if (!m) {
-    console.error(`[runner] bad --blackout ${JSON.stringify(s)}; want "HH:MM-HH:MM [Timezone]"`);
-    process.exit(2);
+    console.error(`[runner] bad --blackout ${JSON.stringify(s)}; want "HH:MM-HH:MM [Timezone]"`)
+    process.exit(2)
   }
-  return { start: m[1]!, end: m[2]!, tz: m[3] };
+  return { start: m[1], end: m[2], tz: m[3] }
 }
 
 export function buildInput(): EngagementInput {
-  const target = arg("--target");
-  const mode = arg("--mode") as EngagementMode | undefined;
-  const objective = arg("--objective");
-  const scopes = argAll("--scope");
-  if (!target || !mode || !objective || scopes.length === 0) usage();
-  const fullBattery = process.argv.includes("--full-battery") || target === "secscan+seclayer";
-  const excludeArgs = argAll("--exclude");
+  const target = arg('--target')
+  const mode = arg('--mode') as EngagementMode | undefined
+  const objective = arg('--objective')
+  const scopes = argAll('--scope')
+  if (!target || !mode || !objective || scopes.length === 0) usage()
+  const fullBattery = process.argv.includes('--full-battery') || target === 'secscan+seclayer'
+  const excludeArgs = argAll('--exclude')
   // --targets narrows the full-battery subset; the secscan+seclayer shortcut pins web targets.
-  let targets: TargetId[] | undefined;
-  if (target === "secscan+seclayer") {
-    targets = ["secscan", "seclayer"];
-  } else if (arg("--targets")) {
-    const parsed = arg("--targets")!.split(",").map((s) => s.trim().toLowerCase()).filter((s) => s.length > 0);
-    const bad = parsed.filter((s) => !isTargetId(s));
+  let targets: TargetId[] | undefined
+  const targetsArg = arg('--targets')
+  if (target === 'secscan+seclayer') {
+    targets = ['secscan', 'seclayer']
+  } else if (targetsArg) {
+    const parsed = targetsArg.split(',').map(s => s.trim().toLowerCase()).filter(s => s.length > 0)
+    const bad = parsed.filter(s => !isTargetId(s))
     if (bad.length > 0) {
-      console.error(`[runner] bad --targets ${JSON.stringify(bad)}; want comma-separated subset of ${ALL_TARGETS.join(",")}`);
-      process.exit(2);
+      console.error(`[runner] bad --targets ${JSON.stringify(bad)}; want comma-separated subset of ${ALL_TARGETS.join(',')}`)
+      process.exit(2)
     }
-    targets = parsed as TargetId[];
+    targets = parsed as TargetId[]
   }
-  const outOfScope = argAll("--out-of-scope");
+  const outOfScope = argAll('--out-of-scope')
   const roe: RulesOfEngagement = {
     scope: scopes,
     ...(outOfScope.length > 0 ? { outOfScope } : {}),
     excludedTechniques: excludeArgs.length > 0 ? excludeArgs : null,
-    blackoutWindows: argAll("--blackout").map(parseBlackout),
-    stopConditions: argAll("--stop"),
-    deconflictionContact: arg("--contact"),
-    notes: arg("--notes"),
-  };
+    blackoutWindows: argAll('--blackout').map(parseBlackout),
+    stopConditions: argAll('--stop'),
+    deconflictionContact: arg('--contact'),
+    notes: arg('--notes'),
+  }
   // v0.13.0 safety case: stagingâ†’production graduation. --env production
   // requires --confirm-production (or REDTEAM_PROD_CONFIRM=1), enforced
   // mechanically at engagement start.
-  const envArg = arg("--env");
-  let environment: "staging" | "production" | undefined;
+  const envArg = arg('--env')
+  let environment: 'staging' | 'production' | undefined
   if (envArg) {
-    const v = envArg.trim().toLowerCase();
-    if (v !== "staging" && v !== "production" && v !== "prod") {
-      console.error(`[runner] bad --env ${JSON.stringify(envArg)}; want staging|production`);
-      process.exit(2);
+    const v = envArg.trim().toLowerCase()
+    if (v !== 'staging' && v !== 'production' && v !== 'prod') {
+      console.error(`[runner] bad --env ${JSON.stringify(envArg)}; want staging|production`)
+      process.exit(2)
     }
-    environment = v === "staging" ? "staging" : "production";
+    environment = v === 'staging' ? 'staging' : 'production'
   }
   // v0.17.0 accountability: graduated autonomy tiers, mechanically enforced.
-  let tier: AutonomyTier | undefined;
-  const tierArg = arg("--tier");
+  let tier: AutonomyTier | undefined
+  const tierArg = arg('--tier')
   if (tierArg !== undefined) {
     try {
-      tier = parseTier(tierArg);
+      tier = parseTier(tierArg)
     } catch (err) {
-      console.error(`[runner] ${(err as Error).message}`);
-      process.exit(2);
+      console.error(`[runner] ${(err as Error).message}`)
+      process.exit(2)
     }
   }
   return {
-    target: target!,
-    mode: mode!,
-    objective: objective!,
+    target,
+    mode,
+    objective,
     roe,
-    client: arg("--client"),
+    client: arg('--client'),
     fullBattery,
     targets,
     environment,
-    confirmProduction: flag("--confirm-production"),
+    confirmProduction: flag('--confirm-production'),
     tier,
-    confirmTier2Production: flag("--confirm-tier2-production"),
-    operatorName: arg("--operator"),
-  };
+    confirmTier2Production: flag('--confirm-tier2-production'),
+    operatorName: arg('--operator'),
+  }
 }
 
 

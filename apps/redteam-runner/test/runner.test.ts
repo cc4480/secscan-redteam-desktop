@@ -357,17 +357,21 @@ describe('runEngagement gating (dry-run agents, local verification)', () => {
     await assert.rejects(() => runEngagement(inp, baseOpts()), /scope/)
   })
 
-  it('starts with only the Meta key — no SecScan token, no DeepSeek key', () => {
-    const env = { MODEL_API_KEY: 'test' } as NodeJS.ProcessEnv
+  it('starts with only the Meta key when REDTEAM_LLM_PROVIDER=meta selects the Meta seats', () => {
+    const env = { MODEL_API_KEY: 'test', REDTEAM_LLM_PROVIDER: 'meta' } as NodeJS.ProcessEnv
     const cfg = resolveConfig(env, { engagementsDir: dir })
     assert.equal(cfg.modelApiKey, 'test')
   })
 
-  it('fails fast with no model key at all, naming MODEL_API_KEY', () => {
-    assert.throws(() => resolveConfig({} as NodeJS.ProcessEnv, { engagementsDir: dir }), /MODEL_API_KEY/)
+  it('a Meta key alone does not start a run: the fleet seats DeepSeek by default', () => {
+    assert.throws(() => resolveConfig({ MODEL_API_KEY: 'test' } as NodeJS.ProcessEnv, { engagementsDir: dir }), /DEEPSEEK_API_KEY/)
+  })
+
+  it('fails fast with no model key at all, naming DEEPSEEK_API_KEY', () => {
+    assert.throws(() => resolveConfig({} as NodeJS.ProcessEnv, { engagementsDir: dir }), /DEEPSEEK_API_KEY/)
     // An unrelated secret alone starts nothing: it is not a model key.
     const env = { SECSCAN_MCP_TOKEN: 'test' } as NodeJS.ProcessEnv
-    assert.throws(() => resolveConfig(env, { engagementsDir: dir }), /MODEL_API_KEY/)
+    assert.throws(() => resolveConfig(env, { engagementsDir: dir }), /DEEPSEEK_API_KEY/)
   })
 
   it('v0.6: does NOT require a Qwen key - no role currently routes to Qwen (see llm-router/src/policy.ts)', () => {

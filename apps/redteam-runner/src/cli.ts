@@ -9,8 +9,8 @@
  *   redteam-runner watch [--queue <dir>]   # run queued console jobs
  *
  * Fleet credentials resolve per dispatch through the router's fleet
- * configuration resolver: the launching environment first (MODEL_API_KEY
- * — the fleet's Meta key; DEEPSEEK_API_KEY, QWEN_API_KEY likewise), then
+ * configuration resolver: the launching environment first (DEEPSEEK_API_KEY
+ * — the fleet's DeepSeek key; MODEL_API_KEY, QWEN_API_KEY likewise), then
  * the app credentials store ($DSH_HOME/.credentials.yaml — the file the
  * Secure Vault writes), so a key seated in the app reaches the next
  * engagement without a restart. The provider selection follows the same

@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/platform-Windows-E11D48" alt="Platform: Windows">
 </p>
 
-**SecScan RedTeam** is a desktop application that runs autonomous red-team engagements against systems you own. You describe a target in chat; a fleet of five AI agents — a Lead coordinator, recon, exploiter, architect, and reporter, all seated on Muse Spark through the Meta Model API — plans the engagement, probes the target, exploits what it finds, and proves every claim before it is reported. The finished report renders in the same chat thread: an anchored letter grade, a severity breakdown, and findings ordered PROVEN → CONFIRMED → DEFERRED → RULED OUT, each with evidence and a paste-ready fix.
+**SecScan RedTeam** is a desktop application that runs autonomous red-team engagements against systems you own. You describe a target in chat; a fleet of five AI agents — a Lead coordinator, recon, exploiter, architect, and reporter, all seated on DeepSeek — plans the engagement, probes the target, exploits what it finds, and proves every claim before it is reported. The finished report renders in the same chat thread: an anchored letter grade, a severity breakdown, and findings ordered PROVEN → CONFIRMED → DEFERRED → RULED OUT, each with evidence and a paste-ready fix.
 
 Two rules shape everything the product does:
 
@@ -32,7 +32,7 @@ Two rules shape everything the product does:
 | Anchored grading | One scoring voice: Seclayer's anchored engine under the SecScan name — confirmed findings deduct in full, heuristics are damped and capped, one confirmed critical anchors the grade at F | [Engines & coverage](docs/product/engines-and-coverage.md#grading-one-voice) |
 | Connected services | The SecScan MCP service (scans, domain verification, monitors) and the Seclayer MCP service (a second-opinion scanner) — each with your own key, stored in the app's encrypted credential store | [MCP services](docs/product/mcp-services.md) |
 | PC bridge (AlterEgo) | [AlterEgo](https://github.com/cc4480/alterego), a separate open-source MCP bridge to the operator's own Windows PC — the app's fourth MCP connection — exposes the bridge's 109 tools (screen, keyboard, shell, files, browser) on that machine, for engagements and for development | [MCP services](docs/product/mcp-services.md) |
-| Models | Muse Spark 1.3 on every fleet seat; Muse Wonder 1.0 for explicit small calls; a provider-resilience layer (classified failover, credential pool, cooldowns); a llama.cpp local-model manager | [Models](docs/product/models.md) |
+| Models | DeepSeek on every fleet seat (`deepseek-v4-pro` for the exploiter, `deepseek-flash` for the others); Meta's Muse models only when selected with `REDTEAM_LLM_PROVIDER=meta`; a provider-resilience layer (classified failover, credential pool, cooldowns); a llama.cpp local-model manager | [Models](docs/product/models.md) |
 | Foundry | Real engagements capture sanitized cases into an in-app store; candidate tests run the Gold Loop (propose → prove → challenge → score → adjudicate → decide) before joining the battery | [Overview](docs/product/overview.md#foundry-the-self-improving-loop) |
 | Continuous watch | Watch profiles keep a baseline per target and report configuration drift between runs | [Engines & coverage](docs/product/engines-and-coverage.md#continuous-watch) |
 
@@ -44,7 +44,7 @@ A public installer is not published yet: the current build (0.1.7-rc.7) is in fi
 
 On first run, the welcome flow asks for one required key and offers two optional ones:
 
-1. **Meta Model API key** (required) — the fleet's models. Set it in the app, or provide `MODEL_API_KEY` in the environment.
+1. **DeepSeek API key** (required) — the fleet's models. Set it in the app, or provide `DEEPSEEK_API_KEY` in the environment.
 3. **Seclayer API key** (optional) — unlocks the Seclayer service as a second opinion. Create one in the Seclayer dashboard → Developer / API Keys.
 
 Keys you enter are stored in the app's per-user credential store, encrypted with the operating system's keychain (Electron `safeStorage`); on Windows the store refuses plaintext by design. See [MCP services](docs/product/mcp-services.md) and [Configuration](docs/product/configuration.md).
@@ -76,7 +76,7 @@ Product documentation lives in [`docs/product/`](docs/product/README.md):
 - [Security model](docs/product/security-model.md) — ownership verification, scope enforcement, the proof standard, and secrets handling.
 - [Engines & coverage](docs/product/engines-and-coverage.md) — the native battery, external engines, grading, and the coverage model.
 - [MCP services](docs/product/mcp-services.md) — the SecScan and Seclayer connections: what they unlock, where keys come from, how they are stored.
-- [Models](docs/product/models.md) — Meta Model API seats, the resilience layer, and local models.
+- [Models](docs/product/models.md) — DeepSeek seats, Meta as an explicit option, the resilience layer, and local models.
 - [Configuration](docs/product/configuration.md) — environment variables, the credential store, fleet bounds, and profile overrides.
 - [Build & install](docs/product/build-and-install.md) — building from source and the Windows installer pipeline.
 - [Development guide](docs/product/development.md) — repository layout and the house rules for working in this tree.

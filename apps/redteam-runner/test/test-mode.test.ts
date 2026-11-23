@@ -37,7 +37,7 @@ import type { ToolCallRequest } from '@secscan/redteam-llm-router'
 describe('test mode — config resolution', () => {
   it('defaults off, env turns it on, an explicit opt beats the env', () => {
     // resolveConfig fails loud without a model key — a dummy key rides along.
-    const KEY = { MODEL_API_KEY: 'test-key' }
+    const KEY = { DEEPSEEK_API_KEY: 'test-key' }
     assert.equal(resolveConfig({ ...KEY }, {}).testMode, false)
     assert.equal(resolveConfig({ ...KEY, REDTEAM_TEST_MODE: '1' }, {}).testMode, true)
     assert.equal(resolveConfig({ ...KEY, REDTEAM_TEST_MODE: '0' }, {}).testMode, false)

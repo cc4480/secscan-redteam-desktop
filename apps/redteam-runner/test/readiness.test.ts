@@ -134,6 +134,14 @@ describe('readiness report', () => {
     assert.match(report.summary, /required missing/)
   })
 
+  it('the default fleet seats DeepSeek: a Meta key alone leaves the model key missing', async () => {
+    _resetNmapProbeCache()
+    const metaOnly = await readinessReport({ MODEL_API_KEY: 'test' } as NodeJS.ProcessEnv)
+    assert.equal(metaOnly.items.find(i => i.id === 'deepseek_key')?.state, 'missing')
+    const metaSelected = await readinessReport({ MODEL_API_KEY: 'test', REDTEAM_LLM_PROVIDER: 'meta' } as NodeJS.ProcessEnv)
+    assert.equal(metaSelected.items.find(i => i.id === 'deepseek_key')?.state, 'ready')
+  })
+
   it('carries no Seclayer key item — the suites are native and keyless', async () => {
     _resetNmapProbeCache()
     const withKey = await readinessReport({ SECLAYER_API_KEY: 'test-key' } as NodeJS.ProcessEnv)
