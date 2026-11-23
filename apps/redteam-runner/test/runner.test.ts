@@ -335,12 +335,27 @@ describe('runEngagement gating (dry-run agents, local verification)', () => {
       engagementsDir: dir,
       registryPath: join(dir, 'registry.json'),
       dryRunAgents: true,
-      deps: { verify: async () => false } })
+      deps: { verify: async () => true } })
     assert.equal(res.status, 'complete')
     const state = readState(join(dir, res.engagementId))
     assert.equal(state?.verified, true)
     assert.match(state?.verificationProof ?? '', /Operator-attested ownership/)
     assert.match(state?.verificationProof ?? '', /C\. Operator/)
+  })
+
+  it('blocks when an injected verifier does not verify the domain (fail closed)', async () => {
+    const inp = input('red')
+    inp.operatorName = 'C. Operator'
+    const res = await runEngagement(inp, {
+      modelApiKey: 'test',
+      engagementsDir: dir,
+      registryPath: join(dir, 'registry.json'),
+      dryRunAgents: true,
+      deps: { verify: async () => false } })
+    assert.equal(res.status, 'blocked')
+    const state = readState(join(dir, res.engagementId))
+    assert.notEqual(state?.verified, true)
+    assert.match(state?.blockedReason ?? '', /injected verifier did not verify/)
   })
 
   it('refuses to run outside the ROE test window', async () => {

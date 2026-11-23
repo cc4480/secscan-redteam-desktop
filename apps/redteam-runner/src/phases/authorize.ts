@@ -166,8 +166,15 @@ export async function authorizePhase(ctx: Ctx): Promise<GateVerdict> {
     })
   }
   // Verification basis: local in-app DNS TXT challenge store by default.
-  // An injected verifier (tests/embedded callers) may supply an explicit
-  // attestation path; no external service is consulted.
+  // An injected verifier (embedded callers and tests) replaces that store check:
+  // its verdict decides, a false verdict blocks the engagement, and a true one
+  // attests the target and every scope host. No external service is consulted.
+  if (ctx.deps.verify !== undefined && !(await ctx.deps.verify(ctx.domain))) {
+    const reason = `injected verifier did not verify ${ctx.domain}`
+    ctx.events.append({ phase: 'authorize', actor: 'coordinator', action: 'authorization_denied', target: ctx.domain, result: reason })
+    ctx.events.updateState({ status: 'blocked', phase: 'blocked', blockedReason: reason })
+    return { allowed: false, reason }
+  }
   const attestedProof = ctx.deps.verify !== undefined ? operatorAttestation(ctx) : undefined
   const verdict = await checkAuthorization(ctx.domain, {
     allowLocalSandbox: ctx.config.localSandbox,

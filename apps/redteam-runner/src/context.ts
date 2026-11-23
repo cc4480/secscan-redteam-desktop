@@ -32,7 +32,12 @@ import { type SignOffTransition } from './phases/exploit-one.js'
 import { type ProtocolState } from './protocol/state.js'
 
 export interface RunnerDeps {
-  verify?: (domain: string, cfg: { endpoint: string; token: string }) => Promise<boolean>
+  /**
+   * Injected ownership verifier for embedded callers and tests. When set, its
+   * verdict replaces the local DNS store check: false blocks the engagement,
+   * true attests the target and every in-scope host.
+   */
+  verify?: (domain: string) => Promise<boolean>
   completeForRole?: typeof routerCompleteForRole
   /** Injectable for tests (defaults: real McpClient / WebProber). */
   mcp?: McpClient
@@ -62,9 +67,9 @@ export interface RunnerDeps {
   researchProvider?: SearchProvider
 }
 
-import type { KilledLive, LiveFinding, TargetMapEntry } from "./context-types.js"
-export { HaltError } from "./context-types.js"
-export type { KilledLive, LiveFinding, TargetMapEntry } from "./context-types.js"
+import type { KilledLive, LiveFinding, TargetMapEntry } from './context-types.js'
+export { HaltError } from './context-types.js'
+export type { KilledLive, LiveFinding, TargetMapEntry } from './context-types.js'
 /** One entry in the shared target map (recon-written, whole-team-read). */
 
 export interface Ctx {
