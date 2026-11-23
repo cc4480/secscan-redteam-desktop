@@ -44,13 +44,14 @@ describe('wordlist resolution', () => {
     // assert on the source, not on paths the installer produced.
     const src = readFileSync(new URL('../../src/xtool/wordlist.ts', import.meta.url), 'utf8')
     // The defect this guards against is a REAL operator's path baked into the
-    // resolver. Assert on this machine's actual user name, not on a path
-    // shape — the source legitimately documents `C:\Users\<dev>\…` as the
-    // thing it must not assume.
-    assert.ok(
-      !src.includes(userInfo().username),
-      'no operator-specific path may appear in the resolver source',
-    )
+    // resolver. Check this machine's user name inside path shapes: a bare
+    // substring match trips on ordinary words (a username of `root` appears in
+    // the source's prose), while the source documents `C:\Users\<dev>\…` only
+    // as a placeholder.
+    const user = userInfo().username
+    for (const form of [`/home/${user}`, `/Users/${user}`, `\\Users\\${user}`, `C:\\Users\\${user}`]) {
+      assert.ok(!src.includes(form), `no operator-specific path (${form}) may appear in the resolver source`)
+    }
   })
 
   it('resolves the bundled asset that ships with the package', () => {
