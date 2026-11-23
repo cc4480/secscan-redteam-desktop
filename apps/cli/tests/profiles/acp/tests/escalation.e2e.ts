@@ -128,7 +128,8 @@ describe('default sandbox composition keyless smoke (real cordis.yml via the Loa
     expect(init.protocolVersion).toBe(PROTOCOL_VERSION)
     expect(init.agentCapabilities).toEqual({
       mcpCapabilities: { http: true },
-      promptCapabilities: { image: false, audio: false, embeddedContext: false },
+      // Image input is catalog-driven: silent and uncatalogued DeepSeek models resolve image-capable.
+      promptCapabilities: { image: true, audio: false, embeddedContext: false },
       sessionCapabilities: { close: {}, list: {}, resume: {} },
     })
     const { sessionId } = await client.newSession({ cwd: workdir, mcpServers: [] })
