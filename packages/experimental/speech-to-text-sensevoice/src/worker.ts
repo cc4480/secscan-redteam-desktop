@@ -9,5 +9,12 @@ const paths = z.object({ model: z.string().min(1), tokens: z.string().min(1), va
 const config = Object.assign(Config(z.record(z.string(), z.unknown()).parse(raw)), paths)
 const token = z.string().regex(/^[a-f0-9]{64}$/).parse(process.env.DSH_SPEECH_TOKEN)
 delete process.env.DSH_SPEECH_TOKEN
-const { port } = await startRecognitionServer(token, config.maxAudioBytes, createTranscriber(config))
-process.stdout.write(`${JSON.stringify({ port })}\n`)
+async function main(): Promise<void> {
+  const { port } = await startRecognitionServer(token, config.maxAudioBytes, createTranscriber(config))
+  process.stdout.write(`${JSON.stringify({ port })}\n`)
+}
+
+main().catch((err: unknown) => {
+  console.error(err)
+  process.exit(1)
+})

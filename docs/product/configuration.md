@@ -6,10 +6,11 @@ SecScan RedTeam is configured through three channels, in a deliberate order of p
 
 | Variable | Meaning |
 |---|---|
-| `MODEL_API_KEY` | The Meta Model API key. The fleet's seats apply as soon as this is set (or the key is seated in the app). |
+| `DEEPSEEK_API_KEY` | The DeepSeek API key. The fleet's default provider: its seats apply as soon as this is set (or the key is seated in the app). |
+| `MODEL_API_KEY` | The Meta Model API key. Used only when `REDTEAM_LLM_PROVIDER=meta` selects the Meta seats. |
 | `META_API_KEY` | Fallback name for the same key, if `MODEL_API_KEY` is unset. |
 | `META_BASE_URL` | Endpoint override. Default `https://api.meta.ai/v1`. A blank value means "use the default". |
-| `REDTEAM_LLM_PROVIDER` | Explicit provider selection. `meta` routes all five roles to the Meta seat policy. |
+| `REDTEAM_LLM_PROVIDER` | Explicit provider selection. Unset or `deepseek` seats DeepSeek; `meta` routes all five roles to the Meta seat policy; `local` routes them to a local OpenAI-compatible endpoint and needs no key. |
 
 ## Connected services
 

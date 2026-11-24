@@ -9,7 +9,7 @@ This directory is the product documentation for SecScan RedTeam: what the produc
 | [Security model](security-model.md) | Ownership verification, scope enforcement, verification-gated tiers, the proof standard, safety systems, secrets handling |
 | [Engines & coverage](engines-and-coverage.md) | The native SecScan/Seclayer battery, the hypothesis battery, external engines, anchored grading, continuous watch |
 | [MCP services](mcp-services.md) | The standalone execution model, the documented MCP exceptions (runner console, AlterEgo), credentials, and failure shapes |
-| [Models](models.md) | Meta Model API seats, the provider-resilience layer, the llama.cpp local-model manager |
+| [Models](models.md) | DeepSeek seats (default), Meta Model API seats (when selected), the provider-resilience layer, the llama.cpp local-model manager |
 | [Configuration](configuration.md) | Environment variables, the credential store, fleet bounds, profile patch overrides, console settings |
 | [Build & install](build-and-install.md) | Building from source, the vendored tool payload, and the Windows installer CI pipeline |
 | [Development guide](development.md) | Repository layout, the redteam packages, build/test commands, and the house rules |

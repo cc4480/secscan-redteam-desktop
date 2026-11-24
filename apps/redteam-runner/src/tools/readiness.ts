@@ -141,15 +141,25 @@ export async function readinessReport(env: NodeJS.ProcessEnv = process.env): Pro
   })
 
   // --- credentials the engine reads from the environment -------------------
+  // The run gate (phases/config.ts) applies the same rule: DeepSeek is the
+  // default provider, Meta applies only when REDTEAM_LLM_PROVIDER=meta, and
+  // the local provider needs no key.
+  const provider = (env['REDTEAM_LLM_PROVIDER'] ?? '').trim().toLowerCase()
+  const deepseekKey = (env['DEEPSEEK_API_KEY'] ?? '').trim()
+  const metaKey = (env['MODEL_API_KEY'] ?? '').trim() || (env['META_API_KEY'] ?? '').trim()
+  let modelKeyReady: boolean
+  if (provider === 'local') modelKeyReady = true
+  else if (provider === 'meta') modelKeyReady = metaKey !== ''
+  else if (provider === '' || provider === 'deepseek') modelKeyReady = deepseekKey !== ''
+  else modelKeyReady = metaKey !== '' || deepseekKey !== ''
   const secrets: ReadinessItem[] = [
     {
       id: 'deepseek_key',
       label: 'Model provider key (agent loops)',
-      state:
-        (env['MODEL_API_KEY'] ?? '').trim() || (env['META_API_KEY'] ?? '').trim() || (env['DEEPSEEK_API_KEY'] ?? '').trim()
-          ? 'ready'
-          : 'missing',
-      fix: 'Set MODEL_API_KEY (Meta Model API, Secure Vault). No live engagement can run without a model provider key.',
+      state: modelKeyReady ? 'ready' : 'missing',
+      fix: provider === 'meta'
+        ? 'Set MODEL_API_KEY (Meta Model API, Secure Vault). No live engagement can run without a model provider key.'
+        : 'Set DEEPSEEK_API_KEY (DeepSeek API, Secure Vault). The fleet seats DeepSeek by default; no live engagement can run without a model provider key.',
       required: true,
     },
   ]

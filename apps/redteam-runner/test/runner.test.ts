@@ -159,6 +159,12 @@ describe('local sandbox mode (explicit opt-in only)', () => {
       assert.ok(!isPrivateOrLoopbackHost(h), h)
     }
   })
+  it('isPrivateOrLoopbackHost treats only the exact ::1 as IPv6 loopback', () => {
+    assert.equal(isPrivateOrLoopbackHost('::1'), true)
+    assert.equal(isPrivateOrLoopbackHost('[::1]'), true)
+    assert.equal(isPrivateOrLoopbackHost('::1234'), false)
+    assert.equal(isPrivateOrLoopbackHost('[::102:304]'), false)
+  })
   it('without allowPrivateHosts, loopback is still rejected (default unchanged)', () => {
     const r = validateProbeTarget('http://localhost:3000/', ['localhost'])
     assert.equal(r.ok, false)
@@ -321,7 +327,23 @@ describe('runEngagement gating (dry-run agents, local verification)', () => {
     assert.ok(!readEvents(engDir).some(e => e.action === 'scribe_gate_outcome'), 'the gate never ran on a blocked close')
   })
 
-  it("completes on an explicit operator attestation path when a verifier hook is injected", async () => {
+  it('completes on an explicit operator attestation path when a verifier hook is injected', async () => {
+    const inp = input('red')
+    inp.operatorName = 'C. Operator'
+    const res = await runEngagement(inp, {
+      modelApiKey: 'test',
+      engagementsDir: dir,
+      registryPath: join(dir, 'registry.json'),
+      dryRunAgents: true,
+      deps: { verify: async () => true } })
+    assert.equal(res.status, 'complete')
+    const state = readState(join(dir, res.engagementId))
+    assert.equal(state?.verified, true)
+    assert.match(state?.verificationProof ?? '', /Operator-attested ownership/)
+    assert.match(state?.verificationProof ?? '', /C\. Operator/)
+  })
+
+  it('blocks when an injected verifier does not verify the domain (fail closed)', async () => {
     const inp = input('red')
     inp.operatorName = 'C. Operator'
     const res = await runEngagement(inp, {
@@ -330,11 +352,10 @@ describe('runEngagement gating (dry-run agents, local verification)', () => {
       registryPath: join(dir, 'registry.json'),
       dryRunAgents: true,
       deps: { verify: async () => false } })
-    assert.equal(res.status, 'complete')
+    assert.equal(res.status, 'blocked')
     const state = readState(join(dir, res.engagementId))
-    assert.equal(state?.verified, true)
-    assert.match(state?.verificationProof ?? '', /Operator-attested ownership/)
-    assert.match(state?.verificationProof ?? '', /C\. Operator/)
+    assert.notEqual(state?.verified, true)
+    assert.match(state?.blockedReason ?? '', /injected verifier did not verify/)
   })
 
   it('refuses to run outside the ROE test window', async () => {
@@ -351,17 +372,21 @@ describe('runEngagement gating (dry-run agents, local verification)', () => {
     await assert.rejects(() => runEngagement(inp, baseOpts()), /scope/)
   })
 
-  it('starts with only the Meta key — no SecScan token, no DeepSeek key', () => {
-    const env = { MODEL_API_KEY: 'test' } as NodeJS.ProcessEnv
+  it('starts with only the Meta key when REDTEAM_LLM_PROVIDER=meta selects the Meta seats', () => {
+    const env = { MODEL_API_KEY: 'test', REDTEAM_LLM_PROVIDER: 'meta' } as NodeJS.ProcessEnv
     const cfg = resolveConfig(env, { engagementsDir: dir })
     assert.equal(cfg.modelApiKey, 'test')
   })
 
-  it('fails fast with no model key at all, naming MODEL_API_KEY', () => {
-    assert.throws(() => resolveConfig({} as NodeJS.ProcessEnv, { engagementsDir: dir }), /MODEL_API_KEY/)
+  it('a Meta key alone does not start a run: the fleet seats DeepSeek by default', () => {
+    assert.throws(() => resolveConfig({ MODEL_API_KEY: 'test' } as NodeJS.ProcessEnv, { engagementsDir: dir }), /DEEPSEEK_API_KEY/)
+  })
+
+  it('fails fast with no model key at all, naming DEEPSEEK_API_KEY', () => {
+    assert.throws(() => resolveConfig({} as NodeJS.ProcessEnv, { engagementsDir: dir }), /DEEPSEEK_API_KEY/)
     // An unrelated secret alone starts nothing: it is not a model key.
     const env = { SECSCAN_MCP_TOKEN: 'test' } as NodeJS.ProcessEnv
-    assert.throws(() => resolveConfig(env, { engagementsDir: dir }), /MODEL_API_KEY/)
+    assert.throws(() => resolveConfig(env, { engagementsDir: dir }), /DEEPSEEK_API_KEY/)
   })
 
   it('v0.6: does NOT require a Qwen key - no role currently routes to Qwen (see llm-router/src/policy.ts)', () => {

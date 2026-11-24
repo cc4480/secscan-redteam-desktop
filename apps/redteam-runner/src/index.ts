@@ -12,8 +12,9 @@
  * ```
  *
  * Credentials come from the environment (Secure Vault), never from code:
- *   MODEL_API_KEY (Meta Model API — the fleet’s provider key; DEEPSEEK_API_KEY
- *   remains supported), QWEN_API_KEY (optional since v0.6), SECSCAN_MCP_TOKEN +
+ *   DEEPSEEK_API_KEY (the fleet’s default provider key), MODEL_API_KEY (Meta Model
+ *   API, used with REDTEAM_LLM_PROVIDER=meta), QWEN_API_KEY (optional since v0.6),
+ *   SECSCAN_MCP_TOKEN +
  *   SECSCAN_MCP_URL (optional — only the REDTEAM_VERIFY_VIA_SERVICE=1 opt-in reads them).
  *
  * Console bridge: the console's "start engagement" action writes an
@@ -22,20 +23,20 @@
  * <engagementsDir>/<id>/{events.jsonl,state.json,engagement.md,report.md}.
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { join, basename } from "node:path";
-import { readEvents, readState, type LiveState } from "./events.js";
-import { runEngagement, type RunOptions } from "./phases.js";
-import { ALL_TARGETS, isTargetId, type TargetId } from "./targets.js";
-import { parseTier } from "./accountability/index.js";
-import type { EngagementInput } from "./types.js";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { join, basename } from 'node:path'
+import { readEvents, readState, type LiveState } from './events.js'
+import { runEngagement, type RunOptions } from './phases.js'
+import { ALL_TARGETS, isTargetId, type TargetId } from './targets.js'
+import { parseTier } from './accountability/index.js'
+import type { EngagementInput } from './types.js'
 
-export { runEngagement, resolveConfig } from "./phases.js";
-export * from "./workflows/commands.js";
-export * from "./workflows/protocol.js";
-export * from "./memory/index.js";
-export type { RunOptions } from "./phases.js";
-export type { RunnerDeps } from "./context.js";
+export { runEngagement, resolveConfig } from './phases.js'
+export * from './workflows/commands.js'
+export * from './workflows/protocol.js'
+export * from './memory/index.js'
+export type { RunOptions } from './phases.js'
+export type { RunnerDeps } from './context.js'
 export type {
   EngagementEvent,
   EngagementInput,
@@ -49,10 +50,10 @@ export type {
   BlackoutWindow,
   RulesOfEngagement,
   RunnerOptions,
-} from "./types.js";
-export type { LiveState };
-export { readEvents, readState };
-export { TECHNIQUES, lookupTechnique, defaultExcludedForMode, resolveExcludedTechniques, ALWAYS_EXCLUDED } from "./attack.js";
+} from './types.js'
+export type { LiveState }
+export { readEvents, readState }
+export { TECHNIQUES, lookupTechnique, defaultExcludedForMode, resolveExcludedTechniques, ALWAYS_EXCLUDED } from './attack.js'
 export {
   BATTERY,
   BATTERY_CATEGORIES,
@@ -60,12 +61,12 @@ export {
   batteryChecklistText,
   batteryItemsFor,
   lookupBatteryItem,
-} from "./battery.js";
-export type { BatteryCategory, BatteryItem } from "./battery.js";
-export { scopeHosts, urlInScope, inBlackout, inTestWindow, techniqueAllowed, checkAuthorization, checkScopeAuthorization } from "./gate.js";
-export type { CheckAuthorizationOptions } from "./gate.js";
-export { isPrivateOrLoopbackHost, validateProbeTarget } from "./prober.js";
-export type { ValidateProbeTargetOptions } from "./prober.js";
+} from './battery.js'
+export type { BatteryCategory, BatteryItem } from './battery.js'
+export { scopeHosts, urlInScope, inBlackout, inTestWindow, techniqueAllowed, checkAuthorization, checkScopeAuthorization } from './gate.js'
+export type { CheckAuthorizationOptions } from './gate.js'
+export { isPrivateOrLoopbackHost, validateProbeTarget } from './prober.js'
+export type { ValidateProbeTargetOptions } from './prober.js'
 export {
   COMPLIANCE_CONTROLS,
   METHODOLOGY_EXCLUSIONS,
@@ -80,7 +81,7 @@ export {
   renderAttestationLetter,
   renderCompliancePackMarkdown,
   unmappedBatteryTechniques,
-} from "./compliance/index.js";
+} from './compliance/index.js'
 export type {
   AttestationInput,
   ComplianceControl,
@@ -91,7 +92,7 @@ export type {
   RetestEntry,
   RetestObservation,
   TechniqueControlMapping,
-} from "./compliance/index.js";
+} from './compliance/index.js'
 export {
   TargetRateLimiter,
   ScopeGuard,
@@ -112,7 +113,7 @@ export {
   PROTECTIONS_IN_FORCE,
   RESIDUAL_RISKS,
   SAFETY_MANIFEST_VERSION,
-} from "./safety/index.js";
+} from './safety/index.js'
 export type {
   SafetyManifest,
   ManifestInputs,
@@ -122,7 +123,7 @@ export type {
   HostMembership,
   ScopeVerdict,
   ScopeViolation,
-} from "./safety/index.js";
+} from './safety/index.js'
 export {
   loadWatchProfile,
   checkScopeFresh,
@@ -145,7 +146,7 @@ export {
   watchLoop,
   WATCH_PROFILE_VERSION,
   BASELINE_VERSION,
-} from "./continuous/index.js";
+} from './continuous/index.js'
 export type {
   WatchProfile,
   WatchCadence,
@@ -161,35 +162,35 @@ export type {
   WatchCycleOptions,
   WatchCycleStatus,
   WatchCycleResult,
-} from "./continuous/index.js";
+} from './continuous/index.js'
 
 export interface QueueJob {
   /** Path of the job file (for completion bookkeeping). */
-  jobFile: string;
-  input: EngagementInput;
+  jobFile: string
+  input: EngagementInput
 }
 
 /** Where the console drops engagement requests. REDTEAM_HOME-aware. */
 function defaultQueueDir(): string {
-  const home = process.env["REDTEAM_HOME"];
-  return home ? join(home, "engagements", "queue") : join(process.cwd(), "engagements", "queue");
+  const home = process.env['REDTEAM_HOME']
+  return home ? join(home, 'engagements', 'queue') : join(process.cwd(), 'engagements', 'queue')
 }
 
 /** Write a queue job (what the console's start-engagement action does). */
 export function enqueueEngagement(input: EngagementInput, queueDir = defaultQueueDir()): string {
-  mkdirSync(queueDir, { recursive: true });
-  const name = `job-${new Date().toISOString().replace(/[:.]/g, "-")}-${Math.random().toString(36).slice(2, 6)}.json`;
-  const path = join(queueDir, name);
-  writeFileSync(path, JSON.stringify(input, null, 2));
-  return path;
+  mkdirSync(queueDir, { recursive: true })
+  const name = `job-${new Date().toISOString().replace(/[:.]/g, '-')}-${Math.random().toString(36).slice(2, 6)}.json`
+  const path = join(queueDir, name)
+  writeFileSync(path, JSON.stringify(input, null, 2))
+  return path
 }
 
 function listJobs(queueDir: string): string[] {
-  if (!existsSync(queueDir)) return [];
+  if (!existsSync(queueDir)) return []
   return readdirSync(queueDir)
-    .filter((f) => f.endsWith(".json"))
-    .map((f) => join(queueDir, f))
-    .sort();
+    .filter(f => f.endsWith('.json'))
+    .map(f => join(queueDir, f))
+    .sort()
 }
 
 /**
@@ -199,37 +200,37 @@ function listJobs(queueDir: string): string[] {
  * of dying deep inside runEngagement. Throws on the first problem found.
  */
 export function validateQueueInput(raw: unknown): EngagementInput {
-  const b = raw as Record<string, unknown>;
-  if (!b || typeof b !== "object") throw new Error("job is not an object");
-  if (typeof b.target !== "string" || !b.target.trim()) throw new Error("target is required");
-  if (b.mode !== "red" && b.mode !== "black") throw new Error("mode must be red|black");
-  if (typeof b.objective !== "string" || !b.objective.trim()) throw new Error("objective is required");
-  const roe = b.roe as Record<string, unknown> | undefined;
-  const scope = roe?.scope;
-  if (!Array.isArray(scope) || scope.length === 0 || !scope.every((s) => typeof s === "string" && s.trim())) {
-    throw new Error("roe.scope is required (non-empty array of exact hosts)");
+  const b = raw as Record<string, unknown>
+  if (!b || typeof b !== 'object') throw new Error('job is not an object')
+  if (typeof b.target !== 'string' || !b.target.trim()) throw new Error('target is required')
+  if (b.mode !== 'red' && b.mode !== 'black') throw new Error('mode must be red|black')
+  if (typeof b.objective !== 'string' || !b.objective.trim()) throw new Error('objective is required')
+  const roe = b.roe as Record<string, unknown> | undefined
+  const scope = roe?.scope
+  if (!Array.isArray(scope) || scope.length === 0 || !scope.every(s => typeof s === 'string' && s.trim())) {
+    throw new Error('roe.scope is required (non-empty array of exact hosts)')
   }
-  let targets: TargetId[] | undefined;
+  let targets: TargetId[] | undefined
   if (b.targets !== undefined) {
-    if (!Array.isArray(b.targets)) throw new Error("targets must be an array");
-    const bad = (b.targets as unknown[]).filter((t) => typeof t !== "string" || !isTargetId(t));
-    if (bad.length > 0) throw new Error(`bad targets ${JSON.stringify(bad)}; want subset of ${ALL_TARGETS.join(",")}`);
-    targets = b.targets as TargetId[];
+    if (!Array.isArray(b.targets)) throw new Error('targets must be an array')
+    const bad = (b.targets as unknown[]).filter(t => typeof t !== 'string' || !isTargetId(t))
+    if (bad.length > 0) throw new Error(`bad targets ${JSON.stringify(bad)}; want subset of ${ALL_TARGETS.join(',')}`)
+    targets = b.targets as TargetId[]
   }
-  let tier: 0 | 1 | 2 | undefined;
-  if (b.tier !== undefined) tier = parseTier(String(b.tier)) as 0 | 1 | 2;
-  let environment: "staging" | "production" | undefined;
+  let tier: 0 | 1 | 2 | undefined
+  if (b.tier !== undefined) tier = parseTier(String(b.tier)) as 0 | 1 | 2
+  let environment: 'staging' | 'production' | undefined
   if (b.environment !== undefined) {
-    if (b.environment !== "staging" && b.environment !== "production") {
-      throw new Error("environment must be staging|production");
+    if (b.environment !== 'staging' && b.environment !== 'production') {
+      throw new Error('environment must be staging|production')
     }
-    environment = b.environment;
+    environment = b.environment
   }
   // Return the VALIDATED, normalised values rather than the raw object. `tier`
   // is parsed from whatever form arrived in the job JSON (a string "1" is valid
   // input), so discarding the parsed value here would let a string tier reach
   // runEngagement and be compared as a string.
-  return { ...b, targets, tier, environment } as unknown as EngagementInput;
+  return { ...b, targets, tier, environment } as unknown as EngagementInput
 }
 
 /**
@@ -242,35 +243,35 @@ export async function watchQueue(
   pollMs = 10_000,
   signal?: AbortSignal,
 ): Promise<void> {
-  mkdirSync(join(queueDir, "done"), { recursive: true });
+  mkdirSync(join(queueDir, 'done'), { recursive: true })
   for (;;) {
-    if (signal?.aborted) return;
+    if (signal?.aborted) return
     for (const jobFile of listJobs(queueDir)) {
-      if (signal?.aborted) return;
-      let raw: unknown;
+      if (signal?.aborted) return
+      let raw: unknown
       try {
-        raw = JSON.parse(readFileSync(jobFile, "utf8"));
+        raw = JSON.parse(readFileSync(jobFile, 'utf8'))
       } catch {
-        console.error(`[runner] queue: ${basename(jobFile)} is not valid JSON â€” moved to done/`);
-        renameSync(jobFile, join(queueDir, "done", `bad-${Date.now()}.json`));
-        continue;
+        console.error(`[runner] queue: ${basename(jobFile)} is not valid JSON â€” moved to done/`)
+        renameSync(jobFile, join(queueDir, 'done', `bad-${Date.now()}.json`))
+        continue
       }
-      let input: EngagementInput;
+      let input: EngagementInput
       try {
-        input = validateQueueInput(raw);
+        input = validateQueueInput(raw)
       } catch (err) {
-        console.error(`[runner] queue: ${basename(jobFile)} rejected: ${(err as Error).message} â€” moved to done/`);
-        renameSync(jobFile, join(queueDir, "done", `bad-${Date.now()}.json`));
-        continue;
+        console.error(`[runner] queue: ${basename(jobFile)} rejected: ${(err as Error).message} â€” moved to done/`)
+        renameSync(jobFile, join(queueDir, 'done', `bad-${Date.now()}.json`))
+        continue
       }
       try {
-        await runEngagement(input, opts);
+        await runEngagement(input, opts)
       } catch {
         // runEngagement records halt/block internally; never let one job kill the watcher.
       }
-      renameSync(jobFile, join(queueDir, "done", basename(jobFile)));
+      renameSync(jobFile, join(queueDir, 'done', basename(jobFile)))
     }
-    await new Promise((r) => setTimeout(r, pollMs));
+    await new Promise(r => setTimeout(r, pollMs))
   }
 }
 

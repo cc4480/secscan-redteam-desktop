@@ -3,11 +3,15 @@
  *
  * Policy (fail-closed):
  *   - Non-scan tools (reports, verification workflow, everything else) → allow.
- *   - scan_url WITHOUT an explicit active-testing request → allow (passive recon).
- *   - scan_url WITH an explicit active-testing request → allow ONLY if the
+ *   - A scan tool WITHOUT an explicit active-testing request → allow (passive recon).
+ *   - A scan tool WITH an explicit active-testing request → allow ONLY if the
  *     target domain is in the app's local verified-domain record (injected
  *     `isVerified`, which must itself fail closed).
  *     Otherwise → deny, with the local verification flow as remediation.
+ *   - The scan tools are `secscan_exec` (the real tool; active tier is
+ *     `depth === 'deep'`, target is the `url` argument, read exactly as the
+ *     runner reads them) and `scan_url` (tolerated legacy name; active tier and
+ *     target are inferred from the argument names).
  *
  * The app's local verification record is the SOLE source of truth: the app
  * issues the challenge token itself, checks the `_secscan-challenge` DNS
@@ -17,8 +21,11 @@
  * exceptions" claim. This hook performs no DNS of its own; it consults the
  * injected verdict only.
  *
- * Host-family probes (`mcp__redteam__*`, every one of which takes a required
- * `targetProfile` of secscan, seclayer, windows or linux — see
+ * Scan tools (`secscan_exec`, `scan_url`) are gated under every namespace,
+ * including `mcp__redteam__secscan_exec` with a `targetProfile`.
+ *
+ * Host-family probes (the other `mcp__redteam__*` tools, every one of which takes
+ * a required `targetProfile` of secscan, seclayer, windows or linux — see
  * {@link isHostFamilyProbe}) are deliberately NOT checked here. They are
  * enforced by the engagement engine, which owns host scope, and that is the
  * right split rather than a gap:
@@ -62,7 +69,7 @@ export interface GateContext {
   isVerified: (domain: string) => Promise<boolean>
 }
 
-/** Base tool name, tolerating the harness MCP namespace (mcp__secscan__scan_url). */
+/** Base tool name, tolerating the harness MCP namespace (mcp__secscan__secscan_exec). */
 function baseName(toolName: string): string {
   const parts = toolName.split('__')
   return parts[parts.length - 1] ?? toolName
@@ -74,9 +81,17 @@ function mcpNamespace(toolName: string): string | undefined {
   return parts.length > 2 ? parts[1] : undefined
 }
 
-/** True for the scan-dispatching tool, namespaced or not. */
+const SECSCAN_EXEC = 'secscan_exec'
+
+/**
+ * True for a scan-dispatching tool (`secscan_exec` or the legacy `scan_url`),
+ * namespaced or not.
+ * @param toolName - full tool name as dispatched, namespaced or not.
+ * @returns whether the call needs this gate's active-testing check.
+ */
 export function isScanTool(toolName: string): boolean {
-  return baseName(toolName) === 'scan_url'
+  const name = baseName(toolName)
+  return name === SECSCAN_EXEC || name === 'scan_url'
 }
 
 /** The target families the engagement engine scopes; also the only values `targetProfile` accepts. */
@@ -84,7 +99,8 @@ const HOST_TARGET_PROFILES: readonly string[] = ['secscan', 'seclayer', 'windows
 
 /**
  * True for an engagement-engine host-family probe: a tool under the engine's
- * `mcp__redteam__` namespace carrying a `targetProfile` of secscan, seclayer,
+ * `mcp__redteam__` namespace, other than a scan tool (see {@link isScanTool}),
+ * carrying a `targetProfile` of secscan, seclayer,
  * windows or linux. Every `mcp__redteam__*` executor tool declares that
  * argument as required, so its presence is what distinguishes a host probe from
  * the engine's engagement-state tools (`get_engagement`, `record_finding`, ...).
@@ -92,7 +108,8 @@ const HOST_TARGET_PROFILES: readonly string[] = ['secscan', 'seclayer', 'windows
  * Exported for the same reason the doctrine names the split: the boundary
  * between "this gate enforces it" and "the engine enforces it" should be
  * readable in code, not inferred. This predicate decides NOTHING — the hook
- * lets these calls through to the engine, which owns host scope.
+ * lets these calls through to the engine, which owns host scope. Scan tools
+ * are never host-family probes: they are gated even under the engine namespace.
  * @param toolName - full tool name as dispatched, namespaced or not.
  * @param args - the call's arguments.
  * @returns whether the call is an engine host-family probe.
@@ -101,6 +118,7 @@ export function isHostFamilyProbe(
   toolName: string,
   args: Record<string, unknown>,
 ): boolean {
+  if (isScanTool(toolName)) return false
   if (mcpNamespace(toolName) !== 'redteam') return false
   const profile = args['targetProfile']
   return typeof profile === 'string' && HOST_TARGET_PROFILES.includes(profile)
@@ -167,12 +185,18 @@ export async function decide(
 
   const args = event.arguments ?? {}
 
+  // secscan_exec is active only at depth 'deep' and scans only its `url`; the
+  // runner reads exactly those, so the gate must too. Heuristic flag or
+  // alternate-key matching here could approve a domain the runner never scans.
+  const isExec = baseName(event.toolName) === SECSCAN_EXEC
+  const active = isExec ? args['depth'] === 'deep' : wantsActiveTesting(args)
+
   // Passive scans are recon, not attack — always allowed.
-  if (!wantsActiveTesting(args)) {
+  if (!active) {
     return { kind: 'allow' }
   }
 
-  const domain = targetDomain(args)
+  const domain = isExec ? targetDomain({ url: args['url'] }) : targetDomain(args)
   if (!domain) {
     return {
       kind: 'deny',

@@ -16,7 +16,7 @@ import { resolveConfig } from '../src/phases/config.js'
 import { CredentialAttemptGuard, lockoutGuardFor } from '../src/safety/lockout.js'
 
 /** resolveConfig refuses to resolve without a provider key (G8); a dummy key satisfies the gate. */
-const KEY = { modelApiKey: 'test-key-not-a-real-key' }
+const KEY = { deepseekApiKey: 'test-key-not-a-real-key' }
 
 describe('resolveConfig — lockout fields (spec §7 Config)', () => {
   it('defaults: fields stay undefined in config; the guard applies 5 / 25 / 1', () => {

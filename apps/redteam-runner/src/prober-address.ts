@@ -28,12 +28,17 @@ function normalizeIp(host: string): string | null {
 const PRIVATE_RANGES_V4 = [
   /^127\./, /^10\./, /^192\.168\./, /^172\.(1[6-9]|2\d|3[01])\./, /^0\.0\.0\.0$/, /^169\.254\./,
 ]
-const PRIVATE_V6 = /^(::1|fc[0-9a-f]{2}:|fd[0-9a-f]{2}:|fe80:)/i
+const PRIVATE_V6 = /^(::1$|fc[0-9a-f]{2}:|fd[0-9a-f]{2}:|fe80:)/i
 
-/** True when `host` is a literal private-range or loopback address/name. */
+/**
+ * True when `host` is a literal private-range or loopback address, or the exact
+ * name `localhost`. Other `*.localhost` names are not loopback by name: they
+ * are ordinary public names, and a resolved loopback address is refused at
+ * connect time instead.
+ */
 export function isPrivateOrLoopbackHost(host: string): boolean {
   const h = host.trim().toLowerCase().replace(/^\[|\]$/g, '')
-  if (h === 'localhost' || h.endsWith('.localhost')) return true
+  if (h === 'localhost') return true
   const ip = normalizeIp(h)
   if (ip) {
     if (isIP(ip) === 6) return PRIVATE_V6.test(ip)

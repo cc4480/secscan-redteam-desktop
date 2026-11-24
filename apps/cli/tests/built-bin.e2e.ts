@@ -564,7 +564,8 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
       expect(initialized.agentInfo).toMatchObject({ name: 'deepseek-harness-acp' })
       expect(initialized.agentCapabilities).toEqual({
         mcpCapabilities: { http: true },
-        promptCapabilities: { image: false, audio: false, embeddedContext: false },
+        // Image input is catalog-driven: silent and uncatalogued DeepSeek models resolve image-capable.
+        promptCapabilities: { image: true, audio: false, embeddedContext: false },
         sessionCapabilities: { close: {}, list: {}, resume: {} },
       })
       expect('_meta' in initialized).toBe(false)
@@ -684,7 +685,8 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
       }
       expect(manifest.dependencies).toEqual({})
       expect(manifest.dsh.profile).toEqual({
-        bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'],
+        // Mirrors PROFILE_TEMPLATES.web in packages/boot/app-boot/src/profile.ts.
+        bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@secscan/redteam-desktop-bundle'],
       })
       expect(readFileSync(join(dir, 'cordis.patch.yml'), 'utf8')).toContain('[]')
       expect(readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8')).toContain('nodeLinker: hoisted')

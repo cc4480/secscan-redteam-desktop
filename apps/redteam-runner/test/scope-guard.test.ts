@@ -15,268 +15,271 @@
  * reaches a deny-listed host — before any handler or executor runs, and
  * must leave in-scope calls untouched.
  */
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, afterEach } from 'node:test'
+import assert from 'node:assert/strict'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import {
   HostSet,
   ScopeGuard,
   classifyScopeEntry,
   commandUsesNetworkTool,
   extractTargets,
-  scopeGuardFor } from "../src/safety/scope-guard.js";
-import { authorizePhase } from "../src/phases/authorize.js";
-import { dispatchTool } from "../src/dispatch/router.js";
-import type { Ctx } from "../src/context.js";
-import type { ToolCallRequest } from "@secscan/redteam-llm-router";
+  scopeGuardFor } from '../src/safety/scope-guard.js'
+import { authorizePhase } from '../src/phases/authorize.js'
+import { dispatchTool } from '../src/dispatch/router.js'
+import type { Ctx } from '../src/context.js'
+import type { ToolCallRequest } from '@secscan/redteam-llm-router'
 
 // The scope mappings the Python validator's build_scope produces for its
 // fixture programme (Acme Bounty): wildcard *.acme.com becomes its base
 // domain; the iOS app is unplaceable and skipped.
 const ALLOW_MAPPING = {
-  domains: ["acme.com", "api.acme.io"],
-  ips: ["203.0.113.10"],
-  cidrs: ["198.51.100.0/24"] };
-const DENY_MAPPING = { domains: ["status.acme.com", "staging.acme.com"] };
+  domains: ['acme.com', 'api.acme.io'],
+  ips: ['203.0.113.10'],
+  cidrs: ['198.51.100.0/24'] }
+const DENY_MAPPING = { domains: ['status.acme.com', 'staging.acme.com'] }
 
-describe("ported from test_scope_validator.py", () => {
-  it("classifyScopeEntry matches the Python _classify cases", () => {
+describe('ported from test_scope_validator.py', () => {
+  it('classifyScopeEntry matches the Python _classify cases', () => {
     const cases: Record<string, string> = {
-      "*.acme.com": "wildcard",
-      "api.acme.io": "domain",
-      "203.0.113.10": "ip",
-      "198.51.100.0/24": "cidr",
-      "Acme iOS app": "other",
-      "999.1.1.1": "other",
-      "https://x.io/path": "domain",
-      "2001:db8::1": "ip",
-      "fe80::/10": "cidr" };
+      '*.acme.com': 'wildcard',
+      'api.acme.io': 'domain',
+      '203.0.113.10': 'ip',
+      '198.51.100.0/24': 'cidr',
+      'Acme iOS app': 'other',
+      '999.1.1.1': 'other',
+      'https://x.io/path': 'domain',
+      '2001:db8::1': 'ip',
+      'fe80::/10': 'cidr' }
     for (const [asset, want] of Object.entries(cases)) {
-      assert.equal(classifyScopeEntry(asset), want, `classify ${asset}`);
+      assert.equal(classifyScopeEntry(asset), want, `classify ${asset}`)
     }
-  });
+  })
 
-  it("guard: allowed host is in allow list", () => {
-    const allow = HostSet.fromMapping(ALLOW_MAPPING);
-    assert.equal(allow.contains("api.acme.io").member, true);
-  });
+  it('guard: allowed host is in allow list', () => {
+    const allow = HostSet.fromMapping(ALLOW_MAPPING)
+    assert.equal(allow.contains('api.acme.io').member, true)
+  })
 
-  it("guard: deny beats allow for out-of-scope host", () => {
-    const deny = HostSet.fromMapping(DENY_MAPPING);
-    assert.equal(deny.contains("status.acme.com").member, true);
+  it('guard: deny beats allow for out-of-scope host', () => {
+    const deny = HostSet.fromMapping(DENY_MAPPING)
+    assert.equal(deny.contains('status.acme.com').member, true)
     // status.acme.com is also a subdomain of allow-listed acme.com — the
     // guard must still refuse it (deny precedence, exercised end to end).
     const guard = ScopeGuard.fromRoe({
-      scope: ["*.acme.com", "api.acme.io", "203.0.113.10", "198.51.100.0/24"],
-      outOfScope: ["status.acme.com", "*.staging.acme.com"] });
-    const v = guard.checkHost("status.acme.com");
-    assert.equal(v.allowed, false);
-    assert.equal(v.kind, "deny");
-  });
+      scope: ['*.acme.com', 'api.acme.io', '203.0.113.10', '198.51.100.0/24'],
+      outOfScope: ['status.acme.com', '*.staging.acme.com'] })
+    const v = guard.checkHost('status.acme.com')
+    assert.equal(v.allowed, false)
+    assert.equal(v.kind, 'deny')
+  })
 
-  it("guard: wildcard subdomain matched", () => {
-    const allow = HostSet.fromMapping(ALLOW_MAPPING);
-    assert.equal(allow.contains("www.acme.com").member, true);
-  });
+  it('guard: wildcard subdomain matched', () => {
+    const allow = HostSet.fromMapping(ALLOW_MAPPING)
+    assert.equal(allow.contains('www.acme.com').member, true)
+  })
 
-  it("recon-guard semantics: deny matches subdomains of a denied host", () => {
+  it('recon-guard semantics: deny matches subdomains of a denied host', () => {
     // The Python recon guard skips any host the deny set contains,
     // including subdomains — www.status.acme.com must be a member.
-    const deny = HostSet.fromMapping(DENY_MAPPING);
-    assert.equal(deny.contains("www.status.acme.com").member, true);
-    assert.equal(deny.contains("api.acme.io").member, false);
-  });
+    const deny = HostSet.fromMapping(DENY_MAPPING)
+    assert.equal(deny.contains('www.status.acme.com').member, true)
+    assert.equal(deny.contains('api.acme.io').member, false)
+  })
 
-  it("unplaceable assets are reported as skipped, not dropped", () => {
-    const { set, skipped } = HostSet.fromEntries(["*.acme.com", "api.acme.io", "203.0.113.10", "198.51.100.0/24", "Acme iOS app"]);
-    assert.ok(set.domains.has("acme.com"), "wildcard becomes its base domain");
-    assert.deepEqual([...set.ips], ["203.0.113.10"]);
-    assert.equal(set.cidrs.length, 1);
-    assert.deepEqual(skipped, ["Acme iOS app"]);
-  });
-});
+  it('unplaceable assets are reported as skipped, not dropped', () => {
+    const { set, skipped } = HostSet.fromEntries(['*.acme.com', 'api.acme.io', '203.0.113.10', '198.51.100.0/24', 'Acme iOS app'])
+    assert.ok(set.domains.has('acme.com'), 'wildcard becomes its base domain')
+    assert.deepEqual([...set.ips], ['203.0.113.10'])
+    assert.equal(set.cidrs.length, 1)
+    assert.deepEqual(skipped, ['Acme iOS app'])
+  })
+})
 
-describe("HostSet.contains — scope.py membership semantics", () => {
-  const allow = HostSet.fromMapping(ALLOW_MAPPING);
+describe('HostSet.contains — scope.py membership semantics', () => {
+  const allow = HostSet.fromMapping(ALLOW_MAPPING)
 
-  it("empty host is not a member", () => {
-    assert.deepEqual(allow.contains(""), { member: false, reason: "empty" });
-  });
+  it('empty host is not a member', () => {
+    assert.deepEqual(allow.contains(''), { member: false, reason: 'empty' })
+  })
 
-  it("local hosts are never members, even when listed", () => {
-    const s = HostSet.fromMapping({ ips: ["127.0.0.1"], domains: ["localhost"] });
-    for (const h of ["localhost", "127.0.0.1", "::1", "0.0.0.0"]) {
-      assert.deepEqual(s.contains(h), { member: false, reason: "local" }, h);
+  it('local hosts are never members, even when listed', () => {
+    const s = HostSet.fromMapping({ ips: ['127.0.0.1'], domains: ['localhost'] })
+    for (const h of ['localhost', '127.0.0.1', '::1', '0.0.0.0']) {
+      assert.deepEqual(s.contains(h), { member: false, reason: 'local' }, h)
     }
-  });
+  })
 
-  it("IP membership: listed ip, CIDR containment, unlisted ip", () => {
-    assert.deepEqual(allow.contains("203.0.113.10"), { member: true, reason: "listed ip" });
-    assert.deepEqual(allow.contains("198.51.100.42"), { member: true, reason: "in 198.51.100.0/24" });
-    assert.deepEqual(allow.contains("192.0.2.1"), { member: false, reason: "ip not listed" });
-  });
+  it('IP membership: listed ip, CIDR containment, unlisted ip', () => {
+    assert.deepEqual(allow.contains('203.0.113.10'), { member: true, reason: 'listed ip' })
+    assert.deepEqual(allow.contains('198.51.100.42'), { member: true, reason: 'in 198.51.100.0/24' })
+    assert.deepEqual(allow.contains('192.0.2.1'), { member: false, reason: 'ip not listed' })
+  })
 
-  it("hostname membership: exact, subdomain, boundary, case, root dot", () => {
-    assert.equal(allow.contains("api.acme.io").reason, "listed domain");
-    assert.equal(allow.contains("deep.sub.acme.com").member, true);
-    assert.equal(allow.contains("evilacme.com").member, false, "suffix without a dot boundary is not a subdomain");
-    assert.equal(allow.contains("WWW.Acme.COM").member, true, "case-insensitive");
-    assert.equal(allow.contains("www.acme.com.").member, true, "FQDN root dot is the same host");
-    assert.deepEqual(allow.contains("example.org"), { member: false, reason: "host not listed" });
-  });
+  it('hostname membership: exact, subdomain, boundary, case, root dot', () => {
+    assert.equal(allow.contains('api.acme.io').reason, 'listed domain')
+    assert.equal(allow.contains('deep.sub.acme.com').member, true)
+    assert.equal(allow.contains('evilacme.com').member, false, 'suffix without a dot boundary is not a subdomain')
+    assert.equal(allow.contains('WWW.Acme.COM').member, true, 'case-insensitive')
+    assert.equal(allow.contains('www.acme.com.').member, true, 'FQDN root dot is the same host')
+    assert.deepEqual(allow.contains('example.org'), { member: false, reason: 'host not listed' })
+  })
 
-  it("IPv6: CIDR containment and family separation", () => {
-    const { set } = HostSet.fromEntries(["2001:db8::/32", "10.0.0.0/8"]);
-    assert.equal(set.contains("2001:db8::1").member, true);
-    assert.equal(set.contains("2001:db9::1").member, false);
-    assert.equal(set.contains("10.2.3.4").member, true);
-    assert.equal(set.contains("::ffff:10.2.3.4").member, false, "an IPv6 address never matches an IPv4 network");
-  });
+  it('IPv6: CIDR containment and family separation', () => {
+    const { set } = HostSet.fromEntries(['2001:db8::/32', '10.0.0.0/8'])
+    assert.equal(set.contains('2001:db8::1').member, true)
+    assert.equal(set.contains('2001:db9::1').member, false)
+    assert.equal(set.contains('10.2.3.4').member, true)
+    assert.equal(set.contains('::ffff:10.2.3.4').member, false, 'an IPv6 address never matches an IPv4 network')
+  })
 
-  it("fromMapping accepts the Python key spellings and ip-key CIDRs", () => {
+  it('fromMapping accepts the Python key spellings and ip-key CIDRs', () => {
     const s = HostSet.fromMapping({
-      in_scope: ["Example.COM"],
-      hosts: ["10.0.0.0/8", "192.0.2.5", "node.internal"],
-      networks: ["2001:db8::/32"] });
-    assert.equal(s.contains("example.com").member, true);
-    assert.equal(s.contains("node.internal").member, true, "non-IP hosts-key entries normalise to domains");
-    assert.equal(s.contains("10.9.9.9").reason, "in 10.0.0.0/8");
-    assert.equal(s.contains("2001:db8::5").member, true);
-  });
+      in_scope: ['Example.COM'],
+      hosts: ['10.0.0.0/8', '192.0.2.5', 'node.internal'],
+      networks: ['2001:db8::/32'] })
+    assert.equal(s.contains('example.com').member, true)
+    assert.equal(s.contains('node.internal').member, true, 'non-IP hosts-key entries normalise to domains')
+    assert.equal(s.contains('10.9.9.9').reason, 'in 10.0.0.0/8')
+    assert.equal(s.contains('2001:db8::5').member, true)
+  })
 
-  it("fromMapping normalises URL entries under the domain keys", () => {
-    const s = HostSet.fromMapping({ domains: ["https://App.Example.com:8443/x"] });
-    assert.equal(s.contains("app.example.com").member, true);
-  });
-});
+  it('fromMapping normalises URL entries under the domain keys', () => {
+    const s = HostSet.fromMapping({ domains: ['https://App.Example.com:8443/x'] })
+    assert.equal(s.contains('app.example.com').member, true)
+  })
+})
 
-describe("ScopeGuard.checkHost — allow/deny decision", () => {
-  it("no scope declared allows (the Python no-scope-files case)", () => {
-    const g = ScopeGuard.fromRoe({});
-    assert.equal(g.checkHost("anything.example").allowed, true);
-  });
+describe('ScopeGuard.checkHost — allow/deny decision', () => {
+  it('no scope declared allows (the Python no-scope-files case)', () => {
+    const g = ScopeGuard.fromRoe({})
+    assert.equal(g.checkHost('anything.example').allowed, true)
+  })
 
-  it("in-scope forms pass: exact, subdomain, CIDR member, listed IP", () => {
-    const g = ScopeGuard.fromRoe({ scope: ["example.com", "10.0.0.0/24", "203.0.113.10"] });
-    assert.equal(g.checkHost("example.com").allowed, true);
-    assert.equal(g.checkHost("api.example.com").allowed, true);
-    assert.equal(g.checkHost("10.0.0.77").allowed, true);
-    assert.equal(g.checkHost("203.0.113.10").allowed, true);
-  });
+  it('in-scope forms pass: exact, subdomain, CIDR member, listed IP', () => {
+    const g = ScopeGuard.fromRoe({ scope: ['example.com', '10.0.0.0/24', '203.0.113.10'] })
+    assert.equal(g.checkHost('example.com').allowed, true)
+    assert.equal(g.checkHost('api.example.com').allowed, true)
+    assert.equal(g.checkHost('10.0.0.77').allowed, true)
+    assert.equal(g.checkHost('203.0.113.10').allowed, true)
+  })
 
-  it("hosts outside the allow set are refused as out of scope", () => {
-    const g = ScopeGuard.fromRoe({ scope: ["example.com"] });
-    const v = g.checkHost("evil.example");
-    assert.equal(v.allowed, false);
-    assert.equal(v.kind, "allow");
-    assert.match(v.reason, /out of scope/);
-  });
+  it('hosts outside the allow set are refused as out of scope', () => {
+    const g = ScopeGuard.fromRoe({ scope: ['example.com'] })
+    const v = g.checkHost('evil.example')
+    assert.equal(v.allowed, false)
+    assert.equal(v.kind, 'allow')
+    assert.match(v.reason, /out of scope/)
+  })
 
-  it("deny wins over allow for hosts and their subdomains", () => {
-    const g = ScopeGuard.fromRoe({ scope: ["acme.com"], outOfScope: ["status.acme.com"] });
-    assert.equal(g.checkHost("status.acme.com").kind, "deny");
-    assert.equal(g.checkHost("www.status.acme.com").kind, "deny");
-    assert.equal(g.checkHost("api.acme.com").allowed, true);
-  });
+  it('deny wins over allow for hosts and their subdomains', () => {
+    const g = ScopeGuard.fromRoe({ scope: ['acme.com'], outOfScope: ['status.acme.com'] })
+    assert.equal(g.checkHost('status.acme.com').kind, 'deny')
+    assert.equal(g.checkHost('www.status.acme.com').kind, 'deny')
+    assert.equal(g.checkHost('api.acme.com').allowed, true)
+  })
 
-  it("local hosts: allowed only when literally listed in scope", () => {
-    const listed = ScopeGuard.fromRoe({ scope: ["127.0.0.1:19100"] });
-    assert.equal(listed.checkHost("127.0.0.1").allowed, true);
-    const unlisted = ScopeGuard.fromRoe({ scope: ["example.com"], outOfScope: ["localhost"] });
-    const v = unlisted.checkHost("localhost");
-    assert.equal(v.allowed, false, "the deny list cannot block a local host, but an unlisted local host is still out of scope");
-    assert.equal(v.kind, "allow");
-  });
+  it('local hosts: allowed only when literally listed in scope', () => {
+    const listed = ScopeGuard.fromRoe({ scope: ['127.0.0.1:19100'] })
+    assert.equal(listed.checkHost('127.0.0.1').allowed, true)
+    const unlisted = ScopeGuard.fromRoe({ scope: ['example.com'], outOfScope: ['localhost'] })
+    const v = unlisted.checkHost('localhost')
+    assert.equal(v.allowed, false, 'the deny list cannot block a local host, but an unlisted local host is still out of scope')
+    assert.equal(v.kind, 'allow')
+  })
 
-  it("unclassifiable scope entries surface on the guard", () => {
-    const g = ScopeGuard.fromRoe({ scope: ["example.com", "Acme iOS app"] });
-    assert.deepEqual(g.skippedEntries, ["Acme iOS app"]);
-    assert.equal(g.checkHost("example.com").allowed, true);
-  });
-});
+  it('unclassifiable scope entries surface on the guard', () => {
+    const g = ScopeGuard.fromRoe({ scope: ['example.com', 'Acme iOS app'] })
+    assert.deepEqual(g.skippedEntries, ['Acme iOS app'])
+    assert.equal(g.checkHost('example.com').allowed, true)
+  })
+})
 
-describe("command scan — scope.py extraction and check_command", () => {
-  const guard = ScopeGuard.fromRoe({ scope: ["acme.com"], outOfScope: ["status.acme.com", "10.9.9.9"] });
+describe('command scan — scope.py extraction and check_command', () => {
+  const guard = ScopeGuard.fromRoe({ scope: ['acme.com'], outOfScope: ['status.acme.com', '10.9.9.9'] })
 
-  it("commandUsesNetworkTool sees through pipes, assignments and prefixes", () => {
-    assert.equal(commandUsesNetworkTool("cat x | curl https://a.example"), true);
-    assert.equal(commandUsesNetworkTool("FOO=bar nmap example.com"), true);
-    assert.equal(commandUsesNetworkTool("sudo wget http://x.example"), true);
+  it('commandUsesNetworkTool sees through pipes, assignments and prefixes', () => {
+    assert.equal(commandUsesNetworkTool('cat x | curl https://a.example'), true)
+    assert.equal(commandUsesNetworkTool('FOO=bar nmap example.com'), true)
+    assert.equal(commandUsesNetworkTool('sudo wget http://x.example'), true)
     // Pinned blind spot, faithful to the Python source: prefix stripping
     // does not know `timeout` takes a duration argument, so "5" becomes
     // the apparent binary and the tool behind it is not seen.
-    assert.equal(commandUsesNetworkTool("sudo timeout 5 wget http://x.example"), false);
-    assert.equal(commandUsesNetworkTool("echo hello"), false);
-    assert.equal(commandUsesNetworkTool("cat report.json"), false);
-  });
+    assert.equal(commandUsesNetworkTool('sudo timeout 5 wget http://x.example'), false)
+    assert.equal(commandUsesNetworkTool('echo hello'), false)
+    assert.equal(commandUsesNetworkTool('cat report.json'), false)
+  })
 
-  it("extractTargets: URLs, host:port, IPs, flag-embedded URLs", () => {
-    assert.ok(extractTargets("curl https://evil.example/x").includes("evil.example"));
-    assert.ok(extractTargets("nmap example.com:8443").includes("example.com"));
-    assert.ok(extractTargets("ping 192.0.2.8").includes("192.0.2.8"));
-    assert.ok(extractTargets("ffuf --url=https://evil.example/FUZZ").includes("evil.example"));
-  });
+  it('extractTargets: URLs, host:port, IPs, flag-embedded URLs', () => {
+    assert.ok(extractTargets('curl https://evil.example/x').includes('evil.example'))
+    assert.ok(extractTargets('nmap example.com:8443').includes('example.com'))
+    assert.ok(extractTargets('ping 192.0.2.8').includes('192.0.2.8'))
+    assert.ok(extractTargets('ffuf --url=https://evil.example/FUZZ').includes('evil.example'))
+  })
 
-  it("extractTargets: impacket and UNC forms are always targets", () => {
-    const t = extractTargets("secretsdump.py corp.local/j.doe:Passw0rd@dc01.corp.local");
-    assert.ok(t.includes("corp.local"), "the domain half is a target");
-    assert.ok(t.includes("dc01.corp.local"), "the @host half is a target");
-    assert.ok(extractTargets(String.raw`dir \\dc01.corp.local\SYSVOL`).includes("dc01.corp.local"));
-  });
+  it('extractTargets: impacket and UNC forms are always targets', () => {
+    const t = extractTargets('secretsdump.py corp.local/j.doe:Passw0rd@dc01.corp.local')
+    assert.ok(t.includes('corp.local'), 'the domain half is a target')
+    assert.ok(t.includes('dc01.corp.local'), 'the @host half is a target')
+    assert.ok(extractTargets(String.raw`dir \\dc01.corp.local\SYSVOL`).includes('dc01.corp.local'))
+  })
 
-  it("extractTargets: bare hostnames need network context or a real TLD", () => {
-    assert.deepEqual(extractTargets("cat report.json"), [], "a filename is not a host");
-    assert.deepEqual(extractTargets("curl report.json"), ["report.json"], "in network context the same token is a target (Python behavior)");
-    assert.ok(extractTargets("echo evil.com").includes("evil.com"), "a never-a-file-extension TLD counts without a network tool");
-    assert.deepEqual(extractTargets("cat ./report.json"), [], "path-shaped tokens are filenames");
-    assert.deepEqual(extractTargets("ping 1.2.3"), [], "version-shaped tokens are not hosts");
-  });
+  it('extractTargets: bare hostnames need network context or a real TLD', () => {
+    assert.deepEqual(extractTargets('cat report.json'), [], 'a filename is not a host')
+    assert.deepEqual(extractTargets('curl report.json'), ['report.json'], 'in network context the same token is a target (Python behavior)')
+    assert.ok(extractTargets('echo evil.com').includes('evil.com'), 'a never-a-file-extension TLD counts without a network tool')
+    assert.deepEqual(extractTargets('cat ./report.json'), [], 'path-shaped tokens are filenames')
+    assert.deepEqual(extractTargets('ping 1.2.3'), [], 'version-shaped tokens are not hosts')
+  })
 
-  it("checkCommand: deny-listed targets are violations, in-scope are not", () => {
-    const v = guard.checkCommand("curl https://status.acme.com/health");
-    assert.equal(v.length, 1);
-    assert.equal(v[0].target, "status.acme.com");
-    assert.equal(v[0].reason, "listed domain");
-    assert.equal(guard.checkCommand("curl https://www.status.acme.com/")[0].reason, "subdomain of status.acme.com");
-    assert.deepEqual(guard.checkCommand("curl https://api.acme.com/"), []);
-    assert.equal(guard.checkCommand("nmap 10.9.9.9")[0].target, "10.9.9.9");
-  });
+  it('checkCommand: deny-listed targets are violations, in-scope are not', () => {
+    const v = guard.checkCommand('curl https://status.acme.com/health')
+    assert.equal(v.length, 1)
+    assert.equal(v[0].target, 'status.acme.com')
+    assert.equal(v[0].reason, 'listed domain')
+    assert.equal(guard.checkCommand('curl https://www.status.acme.com/')[0].reason, 'subdomain of status.acme.com')
+    assert.deepEqual(guard.checkCommand('curl https://api.acme.com/'), [])
+    assert.equal(guard.checkCommand('nmap 10.9.9.9')[0].target, '10.9.9.9')
+  })
 
-  it("checkCommand: repeated targets deduplicate", () => {
-    assert.equal(guard.checkCommand("curl https://status.acme.com/a https://status.acme.com/b").length, 1);
-  });
+  it('checkCommand: repeated targets deduplicate', () => {
+    assert.equal(guard.checkCommand('curl https://status.acme.com/a https://status.acme.com/b').length, 1)
+  })
 
-  it("checkCommand: dynamic-only target fails closed", () => {
-    const v = guard.checkCommand("curl https://$(cat /tmp/t)/x");
-    assert.equal(v.length, 1);
-    assert.equal(v[0].target, "<command substitution>");
+  it('checkCommand: dynamic-only target fails closed', () => {
+    const v = guard.checkCommand('curl https://$(cat /tmp/t)/x')
+    assert.equal(v.length, 1)
+    assert.equal(v[0].target, '<command substitution>')
     // A literal target alongside the substitution is checked as usual.
-    assert.deepEqual(guard.checkCommand("curl https://api.acme.com/$(whoami)"), []);
-  });
+    assert.deepEqual(guard.checkCommand('curl https://api.acme.com/$(whoami)'), [])
+  })
 
-  it("checkCommand: no deny list declared means no command enforcement", () => {
-    const g = ScopeGuard.fromRoe({ scope: ["acme.com"] });
-    assert.deepEqual(g.checkCommand("curl https://anything.example/"), []);
-    assert.deepEqual(g.checkCommand("curl https://$(cat /tmp/t)/x"), []);
-  });
-});
+  it('checkCommand: no deny list declared means no command enforcement', () => {
+    const g = ScopeGuard.fromRoe({ scope: ['acme.com'] })
+    assert.deepEqual(g.checkCommand('curl https://anything.example/'), [])
+    assert.deepEqual(g.checkCommand('curl https://$(cat /tmp/t)/x'), [])
+  })
+})
 
-describe("dispatch scope gate — the choke point", () => {
+describe('dispatch scope gate — the choke point', () => {
   interface FakeEvents {
-    action: string;
-    result: string;
-    target?: string;
+    action: string
+    result: string
+    target?: string
   }
 
   function fakeCtx(roe: { scope: string[]; outOfScope?: string[] }, opts: { verifiedScope?: string[] } = {}) {
-    const appended: FakeEvents[] = [];
-    const probes: Array<{ url: string }> = [];
-    const sshCommands: string[] = [];
+    const appended: FakeEvents[] = []
+    const probes: Array<{ url: string }> = []
+    const sshCommands: string[] = []
     const ctx = {
-      input: { mode: "red", roe, fullBattery: false },
+      input: { mode: 'red', roe, fullBattery: false },
       ...(opts.verifiedScope ? { verifiedScope: opts.verifiedScope } : {}),
       hosts: roe.scope,
       events: {
-        dir: "/tmp/scope-guard-test-no-such-dir",
+        dir: '/tmp/scope-guard-test-no-such-dir',
         append: (e: FakeEvents) => appended.push(e) },
       hostKill: { aborted: false, controllers: new Set<AbortController>() },
       tier: { current: 2, declared: 2, chainSteps: new Map<string, number>() },
@@ -293,362 +296,388 @@ describe("dispatch scope gate — the choke point", () => {
       consecutive5xx: 0,
       prober: {
         probe: async (req: { url: string }) => {
-          probes.push(req);
-          return { status: 200, ms: 1, bodySnippet: "ok" };
+          probes.push(req)
+          return { status: 200, ms: 1, bodySnippet: 'ok' }
         } },
       hostExecutor: {
         killSwitch: undefined,
         sshExec: async (a: { command: string }) => {
-          sshCommands.push(a.command);
-          return { summary: "ssh ok", output: "Linux", ok: true };
-        } } } as unknown as Ctx;
-    return { ctx, appended, probes, sshCommands };
+          sshCommands.push(a.command)
+          return { summary: 'ssh ok', output: 'Linux', ok: true }
+        } } } as unknown as Ctx
+    return { ctx, appended, probes, sshCommands }
   }
 
   const call = (name: string, args: Record<string, unknown>): ToolCallRequest =>
-    ({ name, arguments: args }) as unknown as ToolCallRequest;
+    ({ name, arguments: args }) as unknown as ToolCallRequest
 
-  it("refuses an out-of-scope http_probe before the prober runs", async () => {
-    const { ctx, appended, probes } = fakeCtx({ scope: ["example.com"] });
-    const r = await dispatchTool(ctx, "recon", "recon", call("http_probe", { url: "https://evil.example/" }));
-    assert.match(r.result, /DENIED by scope/);
-    assert.equal(probes.length, 0, "no probe was sent");
-    assert.ok(appended.some((e) => e.action === "scope_violation"), "the refusal is a scope_violation audit event");
-  });
+  it('refuses an out-of-scope http_probe before the prober runs', async () => {
+    const { ctx, appended, probes } = fakeCtx({ scope: ['example.com'] })
+    const r = await dispatchTool(ctx, 'recon', 'recon', call('http_probe', { url: 'https://evil.example/' }))
+    assert.match(r.result, /DENIED by scope/)
+    assert.equal(probes.length, 0, 'no probe was sent')
+    assert.ok(appended.some(e => e.action === 'scope_violation'), 'the refusal is a scope_violation audit event')
+  })
 
-  it("refuses a deny-listed host that is inside the allow set (deny beats allow)", async () => {
-    const { ctx, appended, probes } = fakeCtx({ scope: ["acme.com"], outOfScope: ["status.acme.com"] });
-    const r = await dispatchTool(ctx, "recon", "recon", call("http_probe", { url: "https://status.acme.com/" }));
-    assert.match(r.result, /DENIED by scope/);
-    assert.match(r.result, /out-of-scope list/);
-    assert.equal(probes.length, 0);
-    assert.ok(appended.some((e) => e.action === "scope_violation" && e.target === "status.acme.com"));
-  });
+  it('refuses a deny-listed host that is inside the allow set (deny beats allow)', async () => {
+    const { ctx, appended, probes } = fakeCtx({ scope: ['acme.com'], outOfScope: ['status.acme.com'] })
+    const r = await dispatchTool(ctx, 'recon', 'recon', call('http_probe', { url: 'https://status.acme.com/' }))
+    assert.match(r.result, /DENIED by scope/)
+    assert.match(r.result, /out-of-scope list/)
+    assert.equal(probes.length, 0)
+    assert.ok(appended.some(e => e.action === 'scope_violation' && e.target === 'status.acme.com'))
+  })
 
-  it("lets an in-scope http_probe through untouched", async () => {
-    const { ctx, probes } = fakeCtx({ scope: ["example.com"] });
-    const r = await dispatchTool(ctx, "recon", "recon", call("http_probe", { url: "https://example.com/" }));
-    assert.match(r.result, /^HTTP 200/);
-    assert.equal(probes.length, 1);
-  });
+  it('lets an in-scope http_probe through untouched', async () => {
+    const { ctx, probes } = fakeCtx({ scope: ['example.com'] })
+    const r = await dispatchTool(ctx, 'recon', 'recon', call('http_probe', { url: 'https://example.com/' }))
+    assert.match(r.result, /^HTTP 200/)
+    assert.equal(probes.length, 1)
+  })
 
-  it("lets a subdomain of a listed domain through the dispatch gate", async () => {
+  it('lets a subdomain of a listed domain through the dispatch gate', async () => {
     // The guard's allow matching covers subdomains of a listed domain;
     // downstream per-tool checks still apply their own rules (the fake
     // prober here stands in for them and accepts).
-    const { ctx, probes } = fakeCtx({ scope: ["example.com"] });
-    const r = await dispatchTool(ctx, "recon", "recon", call("http_probe", { url: "https://api.example.com/" }));
-    assert.match(r.result, /^HTTP 200/);
-    assert.equal(probes.length, 1);
-  });
+    const { ctx, probes } = fakeCtx({ scope: ['example.com'] })
+    const r = await dispatchTool(ctx, 'recon', 'recon', call('http_probe', { url: 'https://api.example.com/' }))
+    assert.match(r.result, /^HTTP 200/)
+    assert.equal(probes.length, 1)
+  })
 
-  it("refuses an ssh_exec whose command reaches a deny-listed host, before the executor runs", async () => {
-    const { ctx, appended, sshCommands } = fakeCtx({ scope: ["app.example.com"], outOfScope: ["status.example.com"] });
+  it('refuses an ssh_exec whose command reaches a deny-listed host, before the executor runs', async () => {
+    const { ctx, appended, sshCommands } = fakeCtx({ scope: ['app.example.com'], outOfScope: ['status.example.com'] })
     const r = await dispatchTool(
       ctx,
-      "exploiter",
-      "exploit",
-      call("ssh_exec", { host: "app.example.com", targetProfile: "linux", command: "curl https://status.example.com/x" }),
-    );
-    assert.match(r.result, /DENIED by scope/);
-    assert.match(r.result, /status\.example\.com/);
-    assert.equal(sshCommands.length, 0, "the executor was never invoked");
-    assert.ok(appended.some((e) => e.action === "scope_violation"));
-  });
+      'exploiter',
+      'exploit',
+      call('ssh_exec', { host: 'app.example.com', targetProfile: 'linux', command: 'curl https://status.example.com/x' }),
+    )
+    assert.match(r.result, /DENIED by scope/)
+    assert.match(r.result, /status\.example\.com/)
+    assert.equal(sshCommands.length, 0, 'the executor was never invoked')
+    assert.ok(appended.some(e => e.action === 'scope_violation'))
+  })
 
-  it("lets an ssh_exec with a clean command through to the executor", async () => {
-    const { ctx, sshCommands } = fakeCtx({ scope: ["app.example.com"], outOfScope: ["status.example.com"] });
+  it('lets an ssh_exec with a clean command through to the executor', async () => {
+    const { ctx, sshCommands } = fakeCtx({ scope: ['app.example.com'], outOfScope: ['status.example.com'] })
     const r = await dispatchTool(
       ctx,
-      "exploiter",
-      "exploit",
-      call("ssh_exec", { host: "app.example.com", targetProfile: "linux", command: "uname -a" }),
-    );
-    assert.ok(!/DENIED by scope/.test(r.result), "the scope gate did not refuse it");
-    assert.deepEqual(sshCommands, ["uname -a"]);
-  });
+      'exploiter',
+      'exploit',
+      call('ssh_exec', { host: 'app.example.com', targetProfile: 'linux', command: 'uname -a' }),
+    )
+    assert.ok(!/DENIED by scope/.test(r.result), 'the scope gate did not refuse it')
+    assert.deepEqual(sshCommands, ['uname -a'])
+  })
 
-  it("record scope wins at dispatch: a host in the record but not the launch scope is allowed", async () => {
+  it('record scope wins at dispatch: a host in the record but not the launch scope is allowed', async () => {
     // The launch request declared launch.example.com; the AUTHORIZE
     // phase attested record.example.com instead. The record governs.
-    const { ctx, probes } = fakeCtx({ scope: ["launch.example.com"] }, { verifiedScope: ["record.example.com"] });
-    const r = await dispatchTool(ctx, "recon", "recon", call("http_probe", { url: "https://record.example.com/" }));
-    assert.match(r.result, /^HTTP 200/);
-    assert.equal(probes.length, 1);
-  });
+    const { ctx, probes } = fakeCtx({ scope: ['launch.example.com'] }, { verifiedScope: ['record.example.com'] })
+    const r = await dispatchTool(ctx, 'recon', 'recon', call('http_probe', { url: 'https://record.example.com/' }))
+    assert.match(r.result, /^HTTP 200/)
+    assert.equal(probes.length, 1)
+  })
 
-  it("record scope wins at dispatch: a host in the launch scope but NOT in the record is denied, zero dispatch", async () => {
-    const { ctx, appended, probes } = fakeCtx({ scope: ["launch.example.com"] }, { verifiedScope: ["record.example.com"] });
-    const r = await dispatchTool(ctx, "recon", "recon", call("http_probe", { url: "https://launch.example.com/" }));
-    assert.match(r.result, /DENIED by scope/);
-    assert.equal(probes.length, 0, "no probe was sent to the unattested host");
-    assert.ok(appended.some((e) => e.action === "scope_violation" && e.target === "launch.example.com"));
-  });
+  it('record scope wins at dispatch: a host in the launch scope but NOT in the record is denied, zero dispatch', async () => {
+    const { ctx, appended, probes } = fakeCtx({ scope: ['launch.example.com'] }, { verifiedScope: ['record.example.com'] })
+    const r = await dispatchTool(ctx, 'recon', 'recon', call('http_probe', { url: 'https://launch.example.com/' }))
+    assert.match(r.result, /DENIED by scope/)
+    assert.equal(probes.length, 0, 'no probe was sent to the unattested host')
+    assert.ok(appended.some(e => e.action === 'scope_violation' && e.target === 'launch.example.com'))
+  })
 
-  it("the ROE out-of-scope deny still beats the record allow set", async () => {
+  it('the ROE out-of-scope deny still beats the record allow set', async () => {
     const { ctx, probes } = fakeCtx(
-      { scope: ["acme.com"], outOfScope: ["status.acme.com"] },
-      { verifiedScope: ["acme.com"] },
-    );
-    const r = await dispatchTool(ctx, "recon", "recon", call("http_probe", { url: "https://status.acme.com/" }));
-    assert.match(r.result, /DENIED by scope/);
-    assert.match(r.result, /out-of-scope list/);
-    assert.equal(probes.length, 0);
-  });
+      { scope: ['acme.com'], outOfScope: ['status.acme.com'] },
+      { verifiedScope: ['acme.com'] },
+    )
+    const r = await dispatchTool(ctx, 'recon', 'recon', call('http_probe', { url: 'https://status.acme.com/' }))
+    assert.match(r.result, /DENIED by scope/)
+    assert.match(r.result, /out-of-scope list/)
+    assert.equal(probes.length, 0)
+  })
 
-  it("dispatches to the attested bare hostname a desktop local-host record carries", async () => {
+  it('dispatches to the attested bare hostname a desktop local-host record carries', async () => {
     // The desktop launch against the operator's own machine: the record
     // authorize stamped names the target by its bare machine hostname.
-    const { ctx, probes, sshCommands } = fakeCtx({ scope: ["Cho-zen1"] }, { verifiedScope: ["Cho-zen1"] });
-    const probe = await dispatchTool(ctx, "recon", "recon", call("http_probe", { url: "http://cho-zen1/" }));
-    assert.match(probe.result, /^HTTP 200/);
-    assert.equal(probes.length, 1, "the probe reached the attested host");
+    const { ctx, probes, sshCommands } = fakeCtx({ scope: ['Cho-zen1'] }, { verifiedScope: ['Cho-zen1'] })
+    const probe = await dispatchTool(ctx, 'recon', 'recon', call('http_probe', { url: 'http://cho-zen1/' }))
+    assert.match(probe.result, /^HTTP 200/)
+    assert.equal(probes.length, 1, 'the probe reached the attested host')
     const ssh = await dispatchTool(
       ctx,
-      "exploiter",
-      "exploit",
-      call("ssh_exec", { host: "cho-zen1", targetProfile: "linux", command: "hostname" }),
-    );
-    assert.ok(!/DENIED by scope/.test(ssh.result), "the executor call is not scope-denied");
-    assert.deepEqual(sshCommands, ["hostname"]);
-  });
+      'exploiter',
+      'exploit',
+      call('ssh_exec', { host: 'cho-zen1', targetProfile: 'linux', command: 'hostname' }),
+    )
+    assert.ok(!/DENIED by scope/.test(ssh.result), 'the executor call is not scope-denied')
+    assert.deepEqual(sshCommands, ['hostname'])
+  })
 
-  it("still refuses a bare hostname the record never attested, zero dispatch", async () => {
-    const { ctx, appended, probes } = fakeCtx({ scope: ["Cho-zen1"] }, { verifiedScope: ["Cho-zen1"] });
-    const r = await dispatchTool(ctx, "recon", "recon", call("http_probe", { url: "http://other-host/" }));
-    assert.match(r.result, /DENIED by scope/);
-    assert.match(r.result, /host not listed/);
-    assert.equal(probes.length, 0);
-    assert.ok(appended.some((e) => e.action === "scope_violation" && e.target === "other-host"));
-  });
-});
+  it('still refuses a bare hostname the record never attested, zero dispatch', async () => {
+    const { ctx, appended, probes } = fakeCtx({ scope: ['Cho-zen1'] }, { verifiedScope: ['Cho-zen1'] })
+    const r = await dispatchTool(ctx, 'recon', 'recon', call('http_probe', { url: 'http://other-host/' }))
+    assert.match(r.result, /DENIED by scope/)
+    assert.match(r.result, /host not listed/)
+    assert.equal(probes.length, 0)
+    assert.ok(appended.some(e => e.action === 'scope_violation' && e.target === 'other-host'))
+  })
+})
 
-describe("verified record — attested bare hostnames (the desktop local-host path)", () => {
-  it("fromEntries still cannot place a bare hostname (scope-file classification is unchanged)", () => {
-    const { set, skipped } = HostSet.fromEntries(["Cho-zen1"]);
-    assert.equal(set.size, 0);
-    assert.deepEqual(skipped, ["Cho-zen1"]);
-  });
+describe('verified record — attested bare hostnames (the desktop local-host path)', () => {
+  it('fromEntries still cannot place a bare hostname (scope-file classification is unchanged)', () => {
+    const { set, skipped } = HostSet.fromEntries(['Cho-zen1'])
+    assert.equal(set.size, 0)
+    assert.deepEqual(skipped, ['Cho-zen1'])
+  })
 
-  it("fromAttestedEntries places a bare hostname as a domain, case preserved by normalisation", () => {
-    const { set, skipped } = HostSet.fromAttestedEntries(["Cho-zen1"]);
-    assert.deepEqual(skipped, []);
-    assert.ok(set.domains.has("cho-zen1"));
-    assert.equal(set.contains("Cho-zen1").member, true);
-    assert.equal(set.contains("cho-zen1").member, true);
-  });
+  it('fromAttestedEntries places a bare hostname as a domain, case preserved by normalisation', () => {
+    const { set, skipped } = HostSet.fromAttestedEntries(['Cho-zen1'])
+    assert.deepEqual(skipped, [])
+    assert.ok(set.domains.has('cho-zen1'))
+    assert.equal(set.contains('Cho-zen1').member, true)
+    assert.equal(set.contains('cho-zen1').member, true)
+  })
 
-  it("fromAttestedEntries still reports entries that are not hostnames at all", () => {
-    const { set, skipped } = HostSet.fromAttestedEntries(["Acme iOS app", "999.1.1.1", "Cho-zen1"]);
-    assert.deepEqual(skipped, ["Acme iOS app", "999.1.1.1"]);
-    assert.ok(set.domains.has("cho-zen1"));
-  });
+  it('fromAttestedEntries still reports entries that are not hostnames at all', () => {
+    const { set, skipped } = HostSet.fromAttestedEntries(['Acme iOS app', '999.1.1.1', 'Cho-zen1'])
+    assert.deepEqual(skipped, ['Acme iOS app', '999.1.1.1'])
+    assert.ok(set.domains.has('cho-zen1'))
+  })
 
-  it("a guard built from the record allows the attested bare host in either case", () => {
-    const g = ScopeGuard.fromVerifiedRecord({ verifiedScope: ["Cho-zen1"] });
-    assert.equal(g.checkHost("Cho-zen1").allowed, true);
-    assert.equal(g.checkHost("cho-zen1").allowed, true);
-    assert.deepEqual(g.skippedEntries, []);
-  });
+  it('a guard built from the record allows the attested bare host in either case', () => {
+    const g = ScopeGuard.fromVerifiedRecord({ verifiedScope: ['Cho-zen1'] })
+    assert.equal(g.checkHost('Cho-zen1').allowed, true)
+    assert.equal(g.checkHost('cho-zen1').allowed, true)
+    assert.deepEqual(g.skippedEntries, [])
+  })
 
-  it("hosts the record never attested are still refused as not listed", () => {
-    const g = ScopeGuard.fromVerifiedRecord({ verifiedScope: ["Cho-zen1"] });
-    for (const h of ["other-host", "cho-zen2", "example.com"]) {
-      const v = g.checkHost(h);
-      assert.equal(v.allowed, false, h);
-      assert.equal(v.kind, "allow", h);
-      assert.match(v.reason, /host not listed/, h);
+  it('hosts the record never attested are still refused as not listed', () => {
+    const g = ScopeGuard.fromVerifiedRecord({ verifiedScope: ['Cho-zen1'] })
+    for (const h of ['other-host', 'cho-zen2', 'example.com']) {
+      const v = g.checkHost(h)
+      assert.equal(v.allowed, false, h)
+      assert.equal(v.kind, 'allow', h)
+      assert.match(v.reason, /host not listed/, h)
     }
-  });
+  })
 
-  it("the ROE deny list still beats the record allow set", () => {
+  it('the ROE deny list still beats the record allow set', () => {
     const g = ScopeGuard.fromVerifiedRecord({
-      verifiedScope: ["Cho-zen1", "acme.com"],
-      outOfScope: ["status.acme.com"] });
-    const v = g.checkHost("status.acme.com");
-    assert.equal(v.allowed, false);
-    assert.equal(v.kind, "deny");
-    assert.equal(g.checkHost("cho-zen1").allowed, true);
-  });
+      verifiedScope: ['Cho-zen1', 'acme.com'],
+      outOfScope: ['status.acme.com'] })
+    const v = g.checkHost('status.acme.com')
+    assert.equal(v.allowed, false)
+    assert.equal(v.kind, 'deny')
+    assert.equal(g.checkHost('cho-zen1').allowed, true)
+  })
 
-  it("a bare host in the ROE deny list denies the attested bare host (M2)", () => {
+  it('a bare host in the ROE deny list denies the attested bare host (M2)', () => {
     // Before the deny side went through the attested placement, the
     // bare deny entry was dropped by the scope-file classification's
     // dot requirement and this check came back ALLOWED — deny
     // silently failed for exactly the hosts the record path serves.
     const g = ScopeGuard.fromVerifiedRecord({
-      verifiedScope: ["Cho-zen1"],
-      outOfScope: ["Cho-zen1"] });
-    const v = g.checkHost("cho-zen1");
-    assert.equal(v.allowed, false);
-    assert.equal(v.kind, "deny");
-    assert.deepEqual(g.skippedEntries, [], "the bare deny entry is placed, not skipped");
-  });
+      verifiedScope: ['Cho-zen1'],
+      outOfScope: ['Cho-zen1'] })
+    const v = g.checkHost('cho-zen1')
+    assert.equal(v.allowed, false)
+    assert.equal(v.kind, 'deny')
+    assert.deepEqual(g.skippedEntries, [], 'the bare deny entry is placed, not skipped')
+  })
 
-  it("the declared path places a bare-host deny entry too (M2)", () => {
-    const g = ScopeGuard.fromRoe({ scope: ["example.com"], outOfScope: ["Cho-zen1"] });
-    assert.deepEqual(g.skippedEntries, []);
-    const v = g.checkHost("cho-zen1");
-    assert.equal(v.allowed, false);
-    assert.equal(v.kind, "deny");
-  });
+  it('the declared path places a bare-host deny entry too (M2)', () => {
+    const g = ScopeGuard.fromRoe({ scope: ['example.com'], outOfScope: ['Cho-zen1'] })
+    assert.deepEqual(g.skippedEntries, [])
+    const v = g.checkHost('cho-zen1')
+    assert.equal(v.allowed, false)
+    assert.equal(v.kind, 'deny')
+  })
 
-  it("the local-host literal-listing rule is unchanged on the record path", () => {
-    const unlisted = ScopeGuard.fromVerifiedRecord({ verifiedScope: ["Cho-zen1"] });
-    const v = unlisted.checkHost("localhost");
-    assert.equal(v.allowed, false);
-    assert.match(v.reason, /local host/);
-    const listed = ScopeGuard.fromVerifiedRecord({ verifiedScope: ["127.0.0.1"] });
-    assert.equal(listed.checkHost("127.0.0.1").allowed, true, "a literally listed local host stays allowed");
-  });
+  it('the local-host literal-listing rule is unchanged on the record path', () => {
+    const unlisted = ScopeGuard.fromVerifiedRecord({ verifiedScope: ['Cho-zen1'] })
+    const v = unlisted.checkHost('localhost')
+    assert.equal(v.allowed, false)
+    assert.match(v.reason, /local host/)
+    const listed = ScopeGuard.fromVerifiedRecord({ verifiedScope: ['127.0.0.1'] })
+    assert.equal(listed.checkHost('127.0.0.1').allowed, true, 'a literally listed local host stays allowed')
+  })
 
-  it("L8: an attested bare hostname matches exactly only — a subdomain of it is a different, unattested host", () => {
-    const { set, skipped } = HostSet.fromAttestedEntries(["Cho-zen1"]);
-    assert.deepEqual(skipped, []);
-    assert.ok(set.exactHosts.has("cho-zen1"), "the bare host is flagged exact-only at placement");
-    assert.equal(set.contains("x.cho-zen1").member, false);
-    assert.equal(set.contains("x.cho-zen1").reason, "host not listed");
-    assert.equal(set.contains("deep.x.cho-zen1").member, false);
+  it('L8: an attested bare hostname matches exactly only — a subdomain of it is a different, unattested host', () => {
+    const { set, skipped } = HostSet.fromAttestedEntries(['Cho-zen1'])
+    assert.deepEqual(skipped, [])
+    assert.ok(set.exactHosts.has('cho-zen1'), 'the bare host is flagged exact-only at placement')
+    assert.equal(set.contains('x.cho-zen1').member, false)
+    assert.equal(set.contains('x.cho-zen1').reason, 'host not listed')
+    assert.equal(set.contains('deep.x.cho-zen1').member, false)
 
-    const g = ScopeGuard.fromVerifiedRecord({ verifiedScope: ["Cho-zen1"] });
-    const v = g.checkHost("x.cho-zen1");
-    assert.equal(v.allowed, false, "x.cho-zen1 was never attested");
-    assert.equal(v.kind, "allow");
-    assert.match(v.reason, /host not listed/);
-    assert.equal(g.checkHost("cho-zen1").allowed, true, "the attested host itself stays allowed");
-  });
+    const g = ScopeGuard.fromVerifiedRecord({ verifiedScope: ['Cho-zen1'] })
+    const v = g.checkHost('x.cho-zen1')
+    assert.equal(v.allowed, false, 'x.cho-zen1 was never attested')
+    assert.equal(v.kind, 'allow')
+    assert.match(v.reason, /host not listed/)
+    assert.equal(g.checkHost('cho-zen1').allowed, true, 'the attested host itself stays allowed')
+  })
 
-  it("L8: the attested bare host still allows itself in the dd7e084a normalisation forms", () => {
+  it('L8: the attested bare host still allows itself in the dd7e084a normalisation forms', () => {
     // Case forms of the attested entry and of the checked host.
-    for (const entry of ["Cho-zen1", "CHO-ZEN1", "cho-zen1"]) {
-      const { set } = HostSet.fromAttestedEntries([entry]);
-      assert.equal(set.contains("Cho-zen1").member, true, entry);
-      assert.equal(set.contains("cho-zen1").member, true, entry);
-      assert.equal(set.contains("cho-zen1.").member, true, `${entry} (trailing root dot)`);
-      assert.equal(set.contains("x.cho-zen1").member, false, entry);
+    for (const entry of ['Cho-zen1', 'CHO-ZEN1', 'cho-zen1']) {
+      const { set } = HostSet.fromAttestedEntries([entry])
+      assert.equal(set.contains('Cho-zen1').member, true, entry)
+      assert.equal(set.contains('cho-zen1').member, true, entry)
+      assert.equal(set.contains('cho-zen1.').member, true, `${entry} (trailing root dot)`)
+      assert.equal(set.contains('x.cho-zen1').member, false, entry)
     }
     // Scheme / port / path forms of the attested entry place the same exact host.
-    for (const entry of ["https://Cho-zen1:8443/path", "Cho-zen1:3389", "http://cho-zen1/"]) {
-      const { set, skipped } = HostSet.fromAttestedEntries([entry]);
-      assert.deepEqual(skipped, [], entry);
-      assert.equal(set.contains("cho-zen1").member, true, entry);
-      assert.equal(set.contains("x.cho-zen1").member, false, entry);
+    for (const entry of ['https://Cho-zen1:8443/path', 'Cho-zen1:3389', 'http://cho-zen1/']) {
+      const { set, skipped } = HostSet.fromAttestedEntries([entry])
+      assert.deepEqual(skipped, [], entry)
+      assert.equal(set.contains('cho-zen1').member, true, entry)
+      assert.equal(set.contains('x.cho-zen1').member, false, entry)
     }
-  });
+  })
 
-  it("L8: an explicitly declared domain still allows its subdomains (attested dotted entries and ROE entries alike)", () => {
-    const attested = HostSet.fromAttestedEntries(["acme.com"]).set;
-    assert.equal(attested.exactHosts.has("acme.com"), false, "a dotted attested domain is not exact-only");
-    assert.equal(attested.contains("acme.com").member, true);
-    assert.equal(attested.contains("api.acme.com").member, true);
-    assert.equal(attested.contains("deep.api.acme.com").member, true);
+  it('L8: an explicitly declared domain still allows its subdomains (attested dotted entries and ROE entries alike)', () => {
+    const attested = HostSet.fromAttestedEntries(['acme.com']).set
+    assert.equal(attested.exactHosts.has('acme.com'), false, 'a dotted attested domain is not exact-only')
+    assert.equal(attested.contains('acme.com').member, true)
+    assert.equal(attested.contains('api.acme.com').member, true)
+    assert.equal(attested.contains('deep.api.acme.com').member, true)
 
-    const declared = HostSet.fromEntries(["acme.com"]).set;
-    assert.equal(declared.contains("api.acme.com").member, true);
+    const declared = HostSet.fromEntries(['acme.com']).set
+    assert.equal(declared.contains('api.acme.com').member, true)
 
-    const g = ScopeGuard.fromVerifiedRecord({ verifiedScope: ["acme.com"] });
-    assert.equal(g.checkHost("api.acme.com").allowed, true);
-  });
-});
+    const g = ScopeGuard.fromVerifiedRecord({ verifiedScope: ['acme.com'] })
+    assert.equal(g.checkHost('api.acme.com').allowed, true)
+  })
+})
 
-describe("verified record — attested underscore hostnames (L9)", () => {
-  it("fromAttestedEntries places an underscore hostname as a domain", () => {
-    const { set, skipped } = HostSet.fromAttestedEntries(["my_host"]);
-    assert.deepEqual(skipped, []);
-    assert.ok(set.domains.has("my_host"));
-    assert.equal(set.contains("my_host").member, true);
-    assert.equal(set.contains("MY_HOST").member, true);
-  });
+describe('verified record — attested underscore hostnames (L9)', () => {
+  it('fromAttestedEntries places an underscore hostname as a domain', () => {
+    const { set, skipped } = HostSet.fromAttestedEntries(['my_host'])
+    assert.deepEqual(skipped, [])
+    assert.ok(set.domains.has('my_host'))
+    assert.equal(set.contains('my_host').member, true)
+    assert.equal(set.contains('MY_HOST').member, true)
+  })
 
-  it("a guard built from the record allows the attested underscore host", () => {
-    const g = ScopeGuard.fromVerifiedRecord({ verifiedScope: ["my_host"] });
-    assert.equal(g.checkHost("my_host").allowed, true);
-    assert.equal(g.checkHost("MY_HOST").allowed, true);
-    assert.deepEqual(g.skippedEntries, []);
-  });
+  it('a guard built from the record allows the attested underscore host', () => {
+    const g = ScopeGuard.fromVerifiedRecord({ verifiedScope: ['my_host'] })
+    assert.equal(g.checkHost('my_host').allowed, true)
+    assert.equal(g.checkHost('MY_HOST').allowed, true)
+    assert.deepEqual(g.skippedEntries, [])
+  })
 
-  it("an underscore host in the deny list is denied (deny beats allow)", () => {
+  it('an underscore host in the deny list is denied (deny beats allow)', () => {
     const g = ScopeGuard.fromVerifiedRecord({
-      verifiedScope: ["my_host"],
-      outOfScope: ["my_host"] });
-    const v = g.checkHost("my_host");
-    assert.equal(v.allowed, false);
-    assert.equal(v.kind, "deny");
-  });
+      verifiedScope: ['my_host'],
+      outOfScope: ['my_host'] })
+    const v = g.checkHost('my_host')
+    assert.equal(v.allowed, false)
+    assert.equal(v.kind, 'deny')
+  })
 
-  it("an underscore host the record never attested is still refused as not listed", () => {
-    const g = ScopeGuard.fromVerifiedRecord({ verifiedScope: ["Cho-zen1"] });
-    const v = g.checkHost("my_host");
-    assert.equal(v.allowed, false);
-    assert.equal(v.kind, "allow");
-    assert.match(v.reason, /host not listed/);
-  });
+  it('an underscore host the record never attested is still refused as not listed', () => {
+    const g = ScopeGuard.fromVerifiedRecord({ verifiedScope: ['Cho-zen1'] })
+    const v = g.checkHost('my_host')
+    assert.equal(v.allowed, false)
+    assert.equal(v.kind, 'allow')
+    assert.match(v.reason, /host not listed/)
+  })
 
-  it("dotted underscore hostnames classify as domains on the declared path", () => {
-    assert.equal(classifyScopeEntry("my_host.example.com"), "domain");
-    const { set, skipped } = HostSet.fromEntries(["my_host.example.com"]);
-    assert.deepEqual(skipped, []);
-    assert.ok(set.domains.has("my_host.example.com"));
-  });
-});
+  it('dotted underscore hostnames classify as domains on the declared path', () => {
+    assert.equal(classifyScopeEntry('my_host.example.com'), 'domain')
+    const { set, skipped } = HostSet.fromEntries(['my_host.example.com'])
+    assert.deepEqual(skipped, [])
+    assert.ok(set.domains.has('my_host.example.com'))
+  })
+})
 
-describe("scopeGuardFor — the verified record is the allow source", () => {
-  it("builds from the launch ROE until authorize stamps the record, then rebuilds from the record", () => {
+describe('scopeGuardFor — the verified record is the allow source', () => {
+  it('builds from the launch ROE until authorize stamps the record, then rebuilds from the record', () => {
     const ctx: Parameters<typeof scopeGuardFor>[0] = {
-      input: { roe: { scope: ["launch.example.com"] } } };
-    const launchGuard = scopeGuardFor(ctx);
-    assert.equal(launchGuard.checkHost("launch.example.com").allowed, true);
-    assert.equal(launchGuard.checkHost("record.example.com").allowed, false);
+      input: { roe: { scope: ['launch.example.com'] } } }
+    const launchGuard = scopeGuardFor(ctx)
+    assert.equal(launchGuard.checkHost('launch.example.com').allowed, true)
+    assert.equal(launchGuard.checkHost('record.example.com').allowed, false)
 
-    ctx.verifiedScope = ["record.example.com"];
-    const recordGuard = scopeGuardFor(ctx);
-    assert.notEqual(recordGuard, launchGuard, "the cached launch guard is rebuilt once the record lands");
-    assert.equal(recordGuard.checkHost("record.example.com").allowed, true);
-    assert.equal(recordGuard.checkHost("launch.example.com").allowed, false, "launch scope no longer governs");
-  });
+    ctx.verifiedScope = ['record.example.com']
+    const recordGuard = scopeGuardFor(ctx)
+    assert.notEqual(recordGuard, launchGuard, 'the cached launch guard is rebuilt once the record lands')
+    assert.equal(recordGuard.checkHost('record.example.com').allowed, true)
+    assert.equal(recordGuard.checkHost('launch.example.com').allowed, false, 'launch scope no longer governs')
+  })
 
-  it("fromVerifiedRecord matches fromRoe membership for the same entries, deny included", () => {
+  it('fromVerifiedRecord matches fromRoe membership for the same entries, deny included', () => {
     const record = ScopeGuard.fromVerifiedRecord({
-      verifiedScope: ["acme.com", "10.0.0.0/24"],
-      outOfScope: ["status.acme.com"] });
-    assert.equal(record.checkHost("api.acme.com").allowed, true);
-    assert.equal(record.checkHost("10.0.0.9").allowed, true);
-    assert.equal(record.checkHost("status.acme.com").kind, "deny");
-    assert.equal(record.checkHost("other.example").allowed, false);
-  });
-});
+      verifiedScope: ['acme.com', '10.0.0.0/24'],
+      outOfScope: ['status.acme.com'] })
+    assert.equal(record.checkHost('api.acme.com').allowed, true)
+    assert.equal(record.checkHost('10.0.0.9').allowed, true)
+    assert.equal(record.checkHost('status.acme.com').kind, 'deny')
+    assert.equal(record.checkHost('other.example').allowed, false)
+  })
+})
 
-describe("authorize phase — stamps the verified record the guard derives from", () => {
-  it("on success, ctx.verifiedScope is the attested scope and a later launch-object edit does not move the guard", async () => {
-    const appended: Array<{ action: string; result: string }> = [];
+describe('authorize phase — stamps the verified record the guard derives from', () => {
+  const seededDirs: string[] = []
+  const priorVerifiedDomainsFile = process.env['REDTEAM_VERIFIED_DOMAINS_FILE']
+
+  afterEach(() => {
+    if (priorVerifiedDomainsFile === undefined) delete process.env['REDTEAM_VERIFIED_DOMAINS_FILE']
+    else process.env['REDTEAM_VERIFIED_DOMAINS_FILE'] = priorVerifiedDomainsFile
+    while (seededDirs.length > 0) rmSync(seededDirs.pop()!, { recursive: true, force: true })
+  })
+
+  /**
+   * Seeds the verified-domain store with a canonical record per domain and
+   * points `REDTEAM_VERIFIED_DOMAINS_FILE` at it. The fail-closed ownership
+   * gate denies a public domain without a verification record.
+   */
+  function seedVerifiedDomains(domains: string[]): void {
+    const dir = mkdtempSync(join(tmpdir(), 'scope-guard-verified-'))
+    seededDirs.push(dir)
+    const file = join(dir, 'verified-domains.json')
+    const verified: Record<string, { token: string; verifiedAt: string; method: string }> = {}
+    for (const d of domains) verified[d] = { token: 'fixture-token', verifiedAt: '2026-11-02T00:00:00.000Z', method: 'dns-txt' }
+    writeFileSync(file, JSON.stringify({ version: 1, pending: {}, verified }))
+    process.env['REDTEAM_VERIFIED_DOMAINS_FILE'] = file
+  }
+
+  it('on success, ctx.verifiedScope is the attested scope and a later launch-object edit does not move the guard', async () => {
+    seedVerifiedDomains(['example.com', 'api.example.com'])
+    const appended: Array<{ action: string; result: string }> = []
     const ctx = {
-      domain: "example.com",
-      hosts: ["example.com", "api.example.com"],
+      domain: 'example.com',
+      hosts: ['example.com', 'api.example.com'],
       input: {
-        mode: "red",
-        objective: "record-scope proof",
-        operatorName: "Test Operator",
-        roe: { scope: ["example.com", "api.example.com"], outOfScope: [] as string[] } },
+        mode: 'red',
+        objective: 'record-scope proof',
+        operatorName: 'Test Operator',
+        roe: { scope: ['example.com', 'api.example.com'], outOfScope: [] as string[] } },
       config: { testMode: false, localSandbox: false },
       deps: {},
       events: {
         append: (e: { action: string; result: string }) => appended.push(e),
-        updateState: () => undefined } } as unknown as Ctx;
+        updateState: () => undefined } } as unknown as Ctx
 
-    const verdict = await authorizePhase(ctx);
-    assert.equal(verdict.allowed, true);
-    assert.deepEqual(ctx.verifiedScope, ["example.com", "api.example.com"]);
-    assert.ok(appended.some((e) => e.action === "scope_guard"), "the guard state is in the audit log");
+    const verdict = await authorizePhase(ctx)
+    assert.equal(verdict.allowed, true)
+    assert.deepEqual(ctx.verifiedScope, ['example.com', 'api.example.com'])
+    assert.ok(appended.some(e => e.action === 'scope_guard'), 'the guard state is in the audit log')
 
     // The launch object is edited after authorize (a different scope
     // entirely): the guard keeps enforcing the attested record.
-    ctx.input.roe.scope = ["mutated.example.org"];
-    const guard = scopeGuardFor(ctx);
-    assert.equal(guard.checkHost("api.example.com").allowed, true, "the attested host stays in scope");
-    assert.equal(guard.checkHost("mutated.example.org").allowed, false, "the unattested host stays out of scope");
-  });
+    ctx.input.roe.scope = ['mutated.example.org']
+    const guard = scopeGuardFor(ctx)
+    assert.equal(guard.checkHost('api.example.com').allowed, true, 'the attested host stays in scope')
+    assert.equal(guard.checkHost('mutated.example.org').allowed, false, 'the unattested host stays out of scope')
+  })
 
-  it("L7: ROE entries authorize never checked are absent from the stamped verifiedScope, verified entries present", async () => {
+  it('L7: ROE entries authorize never checked are absent from the stamped verifiedScope, verified entries present', async () => {
+    seedVerifiedDomains(['example.com', 'api.example.com'])
     // ctx.hosts is the checked set (run.ts builds it with scopeHosts
     // over the ROE; checkScopeAuthorization runs over exactly it). The
     // ROE below carries two entries that never became checked hosts:
@@ -656,50 +685,51 @@ describe("authorize phase — stamps the verified record the guard derives from"
     // well-formed host that is not in the checked list. Neither was
     // verified, so neither may be stamped as attested.
     const ctx = {
-      domain: "example.com",
-      hosts: ["example.com", "api.example.com"],
+      domain: 'example.com',
+      hosts: ['example.com', 'api.example.com'],
       input: {
-        mode: "red",
-        objective: "stamp only checked entries",
-        operatorName: "Test Operator",
+        mode: 'red',
+        objective: 'stamp only checked entries',
+        operatorName: 'Test Operator',
         roe: {
-          scope: ["example.com", "api.example.com", "Acme iOS app", "never-checked.example.org"],
+          scope: ['example.com', 'api.example.com', 'Acme iOS app', 'never-checked.example.org'],
           outOfScope: [] as string[] } },
       config: { testMode: false, localSandbox: false },
       deps: {},
       events: {
         append: () => undefined,
-        updateState: () => undefined } } as unknown as Ctx;
+        updateState: () => undefined } } as unknown as Ctx
 
-    const verdict = await authorizePhase(ctx);
-    assert.equal(verdict.allowed, true);
-    assert.deepEqual(ctx.verifiedScope, ["example.com", "api.example.com"]);
-    assert.ok(!ctx.verifiedScope?.includes("Acme iOS app"), "the unparseable entry is not stamped");
-    assert.ok(!ctx.verifiedScope?.includes("never-checked.example.org"), "the unchecked host is not stamped");
+    const verdict = await authorizePhase(ctx)
+    assert.equal(verdict.allowed, true)
+    assert.deepEqual(ctx.verifiedScope, ['example.com', 'api.example.com'])
+    assert.ok(!ctx.verifiedScope?.includes('Acme iOS app'), 'the unparseable entry is not stamped')
+    assert.ok(!ctx.verifiedScope?.includes('never-checked.example.org'), 'the unchecked host is not stamped')
 
-    const guard = scopeGuardFor(ctx);
-    assert.equal(guard.checkHost("api.example.com").allowed, true, "a verified entry stays in scope");
-    assert.equal(guard.checkHost("never-checked.example.org").allowed, false, "the unchecked host does not enter the guard");
-  });
+    const guard = scopeGuardFor(ctx)
+    assert.equal(guard.checkHost('api.example.com').allowed, true, 'a verified entry stays in scope')
+    assert.equal(guard.checkHost('never-checked.example.org').allowed, false, 'the unchecked host does not enter the guard')
+  })
 
-  it("L7: kept entries stay in their raw ROE form (case preserved) when their host was checked", async () => {
+  it('L7: kept entries stay in their raw ROE form (case preserved) when their host was checked', async () => {
+    seedVerifiedDomains(['cho-zen1'])
     const ctx = {
-      domain: "cho-zen1",
-      hosts: ["cho-zen1"],
+      domain: 'cho-zen1',
+      hosts: ['cho-zen1'],
       input: {
-        mode: "red",
-        objective: "raw form preservation",
-        operatorName: "Test Operator",
-        roe: { scope: ["Cho-zen1"], outOfScope: [] as string[] } },
+        mode: 'red',
+        objective: 'raw form preservation',
+        operatorName: 'Test Operator',
+        roe: { scope: ['Cho-zen1'], outOfScope: [] as string[] } },
       config: { testMode: false, localSandbox: false },
       deps: {},
       events: {
         append: () => undefined,
-        updateState: () => undefined } } as unknown as Ctx;
+        updateState: () => undefined } } as unknown as Ctx
 
-    const verdict = await authorizePhase(ctx);
-    assert.equal(verdict.allowed, true);
-    assert.deepEqual(ctx.verifiedScope, ["Cho-zen1"]);
-  });
+    const verdict = await authorizePhase(ctx)
+    assert.equal(verdict.allowed, true)
+    assert.deepEqual(ctx.verifiedScope, ['Cho-zen1'])
+  })
 
-});
+})

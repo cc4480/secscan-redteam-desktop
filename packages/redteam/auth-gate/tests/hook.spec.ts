@@ -116,6 +116,7 @@ describe('isHostFamilyProbe', () => {
     expect(isHostFamilyProbe('mcp__secscan__scan_url', { targetProfile: 'windows' })).toBe(false)
     expect(isHostFamilyProbe('mcp__redteam__get_findings', { engagementId: 'eng-1' })).toBe(false)
     expect(isHostFamilyProbe('nmap_exec', { targetProfile: 'windows' })).toBe(false)
+    expect(isHostFamilyProbe('mcp__redteam__secscan_exec', { targetProfile: 'secscan' })).toBe(false)
     expect(isHostFamilyProbe('mcp__redteam__nmap_exec', { targetProfile: 7 })).toBe(false)
   })
 })
@@ -124,6 +125,64 @@ describe('isScanTool', () => {
   it('matches the scan tool in and out of the harness MCP namespace', () => {
     expect(isScanTool('scan_url')).toBe(true)
     expect(isScanTool('mcp__secscan__scan_url')).toBe(true)
+    expect(isScanTool('secscan_exec')).toBe(true)
+    expect(isScanTool('mcp__secscan__secscan_exec')).toBe(true)
     expect(isScanTool('mcp__secscan__get_report')).toBe(false)
+  })
+})
+
+describe('decide on secscan_exec', () => {
+  const call = (args: Record<string, unknown>) => ({ toolName: 'secscan_exec', arguments: args })
+
+  it('denies depth=deep on an unverified domain', async () => {
+    const decision = await decide(call({ url: 'https://acme.example', depth: 'deep' }), gate(false))
+    expect(decision.kind).toBe('deny')
+  })
+
+  it('allows depth=deep on a verified domain', async () => {
+    const ctx = gate(true)
+    await expect(decide(call({ url: 'https://acme.example', depth: 'deep' }), ctx)).resolves.toEqual({ kind: 'allow' })
+    expect(ctx.calls).toEqual(['acme.example'])
+  })
+
+  it('allows depth=passive and a missing depth without asking the verifier', async () => {
+    const ctx = gate(false)
+    await expect(decide(call({ url: 'https://acme.example', depth: 'passive' }), ctx)).resolves.toEqual({ kind: 'allow' })
+    await expect(decide(call({ url: 'https://acme.example' }), ctx)).resolves.toEqual({ kind: 'allow' })
+    expect(ctx.calls).toEqual([])
+  })
+
+  it('denies depth=deep with a missing or unparseable url', async () => {
+    const ctx = gate(true)
+    expect((await decide(call({ depth: 'deep' }), ctx)).kind).toBe('deny')
+    expect((await decide(call({ url: 'not a url', depth: 'deep' }), ctx)).kind).toBe('deny')
+    expect(ctx.calls).toEqual([])
+  })
+
+  it('does not let a passive flag or another url key redirect the active check', async () => {
+    const ctx = gate(false)
+    expect((await decide(call({ url: 'https://acme.example', depth: 'deep', passive: true }), ctx)).kind).toBe('deny')
+    expect(ctx.calls).toEqual(['acme.example'])
+    const ctx2 = gate(true)
+    expect((await decide(call({ url: 'not a url', target: 'https://other.example', depth: 'deep' }), ctx2)).kind).toBe('deny')
+    expect(ctx2.calls).toEqual([])
+  })
+
+  it('leaves the host-family pass-through unchanged', async () => {
+    const ctx = gate(false)
+    await expect(
+      decide({ toolName: 'mcp__redteam__nmap_exec', arguments: { targetProfile: 'secscan', depth: 'deep', url: 'https://acme.example' } }, ctx),
+    ).resolves.toEqual({ kind: 'allow' })
+    expect(ctx.calls).toEqual([])
+  })
+
+  it('still gates secscan_exec when it arrives under the engine namespace with a targetProfile', async () => {
+    const ctx = gate(false)
+    const decision = await decide(
+      { toolName: 'mcp__redteam__secscan_exec', arguments: { targetProfile: 'secscan', depth: 'deep', url: 'https://acme.example' } },
+      ctx,
+    )
+    expect(decision.kind).toBe('deny')
+    expect(ctx.calls).toEqual(['acme.example'])
   })
 })

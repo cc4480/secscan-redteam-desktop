@@ -191,7 +191,9 @@ describe('Python SDK dsh profile keyless smoke', () => {
       expect(log).toBeDefined()
       const compressed = await readFile(join(sessionsRoot, log!))
       expect(compressed.subarray(0, 4).toString('hex')).toBe('28b52ffd')
-      expect(JSON.parse((await decompress(compressed)).toString())).toMatchObject({ type: 'session', id: 'main' })
+      // The decompressed log is JSONL; line 1 is the session header.
+      const header = (await decompress(compressed)).toString().split('\n', 1)[0] ?? ''
+      expect(JSON.parse(header)).toMatchObject({ type: 'session', id: 'main' })
     } finally {
       // No-op after exit; reject: false settles on every outcome, so cleanup never races teardown.
       child.kill('SIGKILL')

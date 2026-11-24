@@ -12,29 +12,24 @@
  * never `true`.
  */
 
-import { readFile as fsReadFile, writeFile as fsWriteFile, mkdir as fsMkdir } from 'node:fs/promises'
+import { readFile as fsReadFile } from 'node:fs/promises'
 import { resolveTxt } from 'node:dns/promises'
 import { randomBytes } from 'node:crypto'
-import { homedir } from 'node:os'
 import path from 'node:path'
 
+import { coerceStore, defaultVerificationStoreFile, emptyStore, writeFileAtomic, type StoreDoc } from './local-store.js'
 import {
   extractDomain,
-  isDomainVerified,
+  normalizeDomain,
   SERVER_CHALLENGE_PREFIX,
   SERVER_TOKEN_PREFIX,
 } from './verify.js'
 
 /**
- * The shape persisted in the local verification store.
- *
- * `verified` holds normalized domains the app has confirmed. `pending` maps
- * a normalized domain to the challenge token awaiting publication/check.
+ * The document persisted in the local verification store: the same
+ * {@link StoreDoc} that `VerificationStore` and the launch gate read.
  */
-export interface VerificationRecord {
-  verified: string[]
-  pending: { [domain: string]: string }
-}
+export type VerificationRecord = StoreDoc
 
 /** IO surface for {@link LocalDomainVerifier}, injectable so tests need no network or disk. */
 export interface LocalVerifierDeps {
@@ -70,9 +65,12 @@ export function txtRecordsContainToken(records: string[][], token: string): bool
   return false
 }
 
-/** An empty verification record. */
+/**
+ * An empty verification record.
+ * @returns a store with nothing pending or verified.
+ */
 export function emptyRecord(): VerificationRecord {
-  return { verified: [], pending: {} }
+  return emptyStore()
 }
 
 /**
@@ -80,37 +78,46 @@ export function emptyRecord(): VerificationRecord {
  * @param rec - the current record.
  * @param domain - normalized domain (callers normalize via `extractDomain`).
  * @param token - the challenge token issued for the domain.
+ * @param now - ISO creation time; defaults to the current time.
  * @returns a new record with the pending entry set.
  */
-export function withPending(rec: VerificationRecord, domain: string, token: string): VerificationRecord {
-  return {
-    verified: rec.verified,
-    pending: { ...rec.pending, [domain]: token },
-  }
+export function withPending(
+  rec: VerificationRecord,
+  domain: string,
+  token: string,
+  now: string = new Date().toISOString(),
+): VerificationRecord {
+  return { ...rec, pending: { ...rec.pending, [domain]: { token, createdAt: now } } }
 }
 
 /**
- * Move `domain` from pending to verified.
+ * Move `domain` from pending to verified, keeping the pending token as proof.
  * @param rec - the current record.
  * @param domain - normalized domain.
- * @returns a new record with the domain verified and its pending entry removed.
+ * @param now - ISO verification time; defaults to the current time.
+ * @returns a new record with the domain verified (method `dns-txt`) and its pending entry removed,
+ * or `rec` unchanged when no challenge is pending for the domain.
  */
-export function withVerified(rec: VerificationRecord, domain: string): VerificationRecord {
-  const pending = { ...rec.pending }
-  delete pending[domain]
-  const verified = rec.verified.includes(domain) ? rec.verified : [...rec.verified, domain]
-  return { verified, pending }
+export function withVerified(
+  rec: VerificationRecord,
+  domain: string,
+  now: string = new Date().toISOString(),
+): VerificationRecord {
+  const token = rec.pending[domain]?.token
+  if (token === undefined) return rec // no pending proof: never create an approval
+  const pending = Object.fromEntries(Object.entries(rec.pending).filter(([key]) => key !== domain))
+  return { ...rec, pending, verified: { ...rec.verified, [domain]: { token, verifiedAt: now, method: 'dns-txt' } } }
 }
 
 /**
- * True iff `domain` is in the record's verified set (exact membership,
- * after normalization — the same rule as `isDomainVerified`).
+ * True iff `domain`, after normalization, is a key of the record's verified map.
  * @param rec - the current record.
  * @param domain - the domain to test.
  * @returns whether the domain is verified.
  */
 export function recordIsVerified(rec: VerificationRecord, domain: string): boolean {
-  return isDomainVerified(domain, rec.verified)
+  const key = normalizeDomain(domain)
+  return key !== null && Object.hasOwn(rec.verified, key)
 }
 
 /**
@@ -132,17 +139,12 @@ export class LocalDomainVerifier {
    * @returns a ready verifier.
    */
   static create(storePath?: string): LocalDomainVerifier {
-    const resolved =
-      storePath ??
-      process.env['REDTEAM_VERIFIED_DOMAINS_FILE'] ??
-      path.join(homedir(), '.secscan-redteam', 'verified-domains.json')
+    const resolved = storePath ?? defaultVerificationStoreFile()
     return new LocalDomainVerifier({
       storePath: resolved,
-      readFile: (p) => fsReadFile(p, 'utf8'),
-      writeFile: (p, data) => fsWriteFile(p, data, 'utf8'),
-      mkdir: async (p) => {
-        await fsMkdir(p, { recursive: true })
-      },
+      readFile: p => fsReadFile(p, 'utf8'),
+      writeFile: writeFileAtomic,
+      mkdir: async () => {}, // writeFileAtomic creates the directory at mode 0700
       resolveTxt,
       newToken: () => SERVER_TOKEN_PREFIX + randomBytes(16).toString('hex'),
     })
@@ -173,7 +175,7 @@ export class LocalDomainVerifier {
       const normalized = extractDomain(domain)
       const rec = await this.load()
       if (recordIsVerified(rec, normalized)) return true
-      const token = rec.pending[normalized]
+      const token = rec.pending[normalized]?.token
       if (!token) return false
       let answers: string[][]
       try {
@@ -201,7 +203,7 @@ export class LocalDomainVerifier {
       const normalized = extractDomain(domain)
       const rec = await this.load()
       if (recordIsVerified(rec, normalized)) return true
-      if (rec.pending[normalized]) return await this.checkVerification(normalized)
+      if (Object.hasOwn(rec.pending, normalized)) return await this.checkVerification(normalized)
       return false
     } catch {
       return false
@@ -213,24 +215,12 @@ export class LocalDomainVerifier {
     try {
       raw = await this.deps.readFile(this.deps.storePath)
     } catch {
-      return emptyRecord() // no store yet — nothing is verified
+      return emptyRecord() // no store yet: nothing is verified
     }
     try {
-      const parsed: unknown = JSON.parse(raw)
-      if (!parsed || typeof parsed !== 'object') return emptyRecord()
-      const obj = parsed as Partial<VerificationRecord>
-      const verified = Array.isArray(obj.verified)
-        ? obj.verified.filter((d): d is string => typeof d === 'string')
-        : []
-      const pending: { [domain: string]: string } = {}
-      if (obj.pending && typeof obj.pending === 'object') {
-        for (const [k, v] of Object.entries(obj.pending)) {
-          if (typeof v === 'string') pending[k] = v
-        }
-      }
-      return { verified, pending }
+      return coerceStore(JSON.parse(raw))
     } catch {
-      return emptyRecord() // corrupt store — fail closed, verify nothing
+      return emptyRecord() // corrupt store: fail closed, verify nothing
     }
   }
 

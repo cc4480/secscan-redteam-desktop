@@ -17,7 +17,6 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { UiStore } from '../src/ui/store.js'
 import { authorizePhase } from '../src/phases/authorize.js'
-import { scopeGuardFor } from '../src/safety/scope-guard.js'
 import type { Ctx } from '../src/context.js'
 import { TOOLS, TOOLS_BY_NAME } from '../src/ui/mcp-tools.js'
 import { EXEC_TOOLS } from '../src/ui/mcp-exec.js'
@@ -430,38 +429,46 @@ describe('the MCP surface a chat host consumes', () => {
 })
 
 describe("desktop creation path — a chat launch on the operator's own machine", () => {
-  it('authorizes into a guard that allows the attested bare hostname', async () => {
-    // The exact chain eng-2026-11-02-353925bd took: engagement_launch
-    // builds the body (scope defaults to the target's host — the bare
-    // machine name), authorize attests from the record and stamps
-    // verifiedScope, and the dispatch guard derives from that record.
+  it('refuses a bare machine name that has no verification record and no attestation', async () => {
+    // The chain eng-2026-11-02-353925bd took: engagement_launch builds the body
+    // (scope defaults to the target's host, the bare machine name). Authorize
+    // attests only when a verifier is injected (2dd2db3c removed the default),
+    // so a bare name with no DNS TXT record in the verified-domain store is
+    // refused and nothing is stamped onto the record.
     const built = buildLaunchBody({ target: 'Cho-zen1', objective: 'ADVERSARIAL PENTEST DEEPSCAN LOCAL HOST' })
     if ('error' in built) assert.fail(built.error)
     assert.deepEqual(built.body.scope, ['Cho-zen1'])
     assert.notEqual(built.body.operatorName, 'the desktop user')
     assert.ok((built.body.operatorName ?? '').trim().length > 0, 'no identity was recorded')
 
-    const ctx = {
-      domain: 'cho-zen1',
-      hosts: ['cho-zen1'],
-      input: {
-        mode: 'red',
-        objective: built.body.objective,
-        operatorName: built.body.operatorName,
-        roe: { scope: built.body.scope, outOfScope: [] as string[] } },
-      config: { testMode: false, localSandbox: false },
-      deps: {},
-      events: {
-        append: () => undefined,
-        updateState: () => undefined } } as unknown as Ctx
+    const dir = mkdtempSync(join(tmpdir(), 'rt-local-host-'))
+    const priorStore = process.env['REDTEAM_VERIFIED_DOMAINS_FILE']
+    const storeFile = join(dir, 'verified-domains.json')
+    writeFileSync(storeFile, JSON.stringify({ version: 1, pending: {}, verified: {} }))
+    process.env['REDTEAM_VERIFIED_DOMAINS_FILE'] = storeFile
+    try {
+      const ctx = {
+        domain: 'cho-zen1',
+        hosts: ['cho-zen1'],
+        input: {
+          mode: 'red',
+          objective: built.body.objective,
+          operatorName: built.body.operatorName,
+          roe: { scope: built.body.scope, outOfScope: [] as string[] } },
+        config: { testMode: false, localSandbox: false },
+        deps: {},
+        events: {
+          append: () => undefined,
+          updateState: () => undefined } } as unknown as Ctx
 
-    const verdict = await authorizePhase(ctx)
-    assert.equal(verdict.allowed, true)
-    assert.deepEqual(ctx.verifiedScope, ['Cho-zen1'])
-
-    const guard = scopeGuardFor(ctx)
-    assert.equal(guard.checkHost('Cho-zen1').allowed, true, 'the attested host as the record names it')
-    assert.equal(guard.checkHost('cho-zen1').allowed, true, 'the attested host as dispatch resolves it')
-    assert.equal(guard.checkHost('other-host').allowed, false, 'nothing beyond the attested host opens up')
+      const verdict = await authorizePhase(ctx)
+      assert.equal(verdict.allowed, false)
+      assert.match(verdict.reason ?? '', /cho-zen1 is not ownership-verified in the local app store/)
+      assert.equal(ctx.verifiedScope, undefined)
+    } finally {
+      if (priorStore === undefined) delete process.env['REDTEAM_VERIFIED_DOMAINS_FILE']
+      else process.env['REDTEAM_VERIFIED_DOMAINS_FILE'] = priorStore
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

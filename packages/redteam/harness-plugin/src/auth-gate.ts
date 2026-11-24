@@ -2,7 +2,7 @@
  * Auth gate: a `tools/pre-execute` hook that keeps active testing scoped.
  *
  * Scan tools exposed to the fleet are namespaced as
- * `mcp__<serverName>__<tool>` — e.g. `mcp__secscan__scan_url`. This gate is
+ * `mcp__<serverName>__<tool>` — e.g. `mcp__secscan__secscan_exec`. This gate is
  * the agent-layer backstop so an explicit active-testing request can never
  * dispatch without proof of domain ownership.
  *
@@ -16,9 +16,12 @@
  * is involved, matching the runner's own gate. Any check error fails
  * closed (deny).
  *
- * SCOPE OF THIS HOOK — the scan half only. Host-family probes (`mcp__redteam__*`
- * with a `targetProfile` of secscan, seclayer, windows or linux) pass through
- * here by design: host scope is the engagement engine's authority, and the
+ * SCOPE OF THIS HOOK — the scan half only. The active scan tool is
+ * `secscan_exec` (active at `depth: 'deep'`, target in `url`); `scan_url` is
+ * tolerated as a legacy name. Scan tools are gated under every namespace,
+ * including `mcp__redteam__secscan_exec`. Other host-family probes
+ * (`mcp__redteam__*` with a `targetProfile` of secscan, seclayer, windows or
+ * linux) pass through here by design: host scope is the engagement engine's authority, and the
  * engine is the runner those calls reach. A second scope check at this layer
  * would have to either duplicate the engine's in-scope host list — two sources
  * of truth about one authorization question — or assert nothing the model could
